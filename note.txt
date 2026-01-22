@@ -1,0 +1,6 @@
+//install
+python manage.py tailwind install
+
+//run
+python manage.py tailwind start
+python manage.py runserver
