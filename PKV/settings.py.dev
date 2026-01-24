@@ -37,12 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'theme',
-    'tailwind',
-    'PKV',
+    "tailwind",
 ]
-
-TAILWIND_APP_NAME = "theme"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -82,7 +78,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'django_db',
         'USER': 'django_user',
-        'PASSWORD': 'Htt@123456',
+        'PASSWORD': 'YourPassword',
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {
