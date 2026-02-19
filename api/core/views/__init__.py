@@ -37,6 +37,7 @@ from .learn_views import (
     ArticleCommentListCreateView,
     ArticleCommentReactionView,
 )
+from .scam_iq_views import ScamIQStartView, ScamIQStatusView, ScamIQSubmitView, ScamIQHistoryView
 
 __all__ = [
     'ChatStreamView', 'ScanAnalyzeSSEView',
@@ -65,4 +66,5 @@ __all__ = [
     'TicketListCreateView', 'AdminTicketListView',
     'UserCardView',
     'LessonReactionView', 'ArticleReactionView', 'ArticleCommentListCreateView', 'ArticleCommentReactionView',
+    'ScamIQStartView', 'ScamIQStatusView', 'ScamIQSubmitView', 'ScamIQHistoryView',
 ]

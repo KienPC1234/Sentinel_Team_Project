@@ -1134,6 +1134,12 @@
                                 </div>
                                 Hỏi đáp AI Assistant
                             </a>
+                            <a href="/scam-iq-exam/" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-purple-300 hover:bg-purple-400/10 transition-colors">
+                                <div class="w-7 h-7 rounded-lg bg-purple-400/10 flex items-center justify-center">
+                                    <i class="bi bi-patch-question-fill"></i>
+                                </div>
+                                Scam IQ Exam
+                            </a>
                             <a href="/my-reports/" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 transition-colors">
                                 <div class="w-7 h-7 rounded-lg bg-red-400/10 flex items-center justify-center text-red-400">
                                     <i class="bi bi-flag-fill"></i>
@@ -1202,6 +1208,7 @@
             <a href="/scam-radar/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-broadcast text-purple-400"></i> Radar</a>
             <a href="/forum/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-chat-dots-fill text-blue-400"></i> Diễn đàn</a>
             <a href="/learn/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-book-half text-yellow-400"></i> Cẩm nang</a>
+            <a href="/scam-iq-exam/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(179,136,255,0.10)'" onmouseout="this.style.background='transparent'"><i class="bi bi-patch-question-fill text-purple-400"></i> Scam IQ Exam</a>
             <a href="/ai-assistant/" class="flex items-center gap-3 p-3 rounded-xl text-cyan-400 font-bold" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(6,182,212,0.08)'" onmouseout="this.style.background='transparent'"><i class="bi bi-robot"></i> Hỏi AI Assistant</a>
             <a href="/emergency/" class="flex items-center gap-3 p-3 rounded-xl text-red-400" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,23,68,0.08)'" onmouseout="this.style.background='transparent'"><i class="bi bi-exclamation-triangle-fill"></i> Khẩn cấp</a>
 
@@ -1547,6 +1554,15 @@
             enable: function () { localStorage.setItem('sc_debug', '1'); this.enabled = true; console.log('%c[SC] Debug mode ON — reload page for full effect', 'color:#00e676;font-weight:bold'); },
             disable: function () { localStorage.removeItem('sc_debug'); this.enabled = false; console.log('[SC] Debug mode OFF'); }
         };
+
+        (function showConsoleSafetyWarning() {
+            try {
+                console.log('%c⚠️ CẢNH BÁO BẢO MẬT', 'color:#ff0000;font-size:48px;font-weight:900;line-height:1.2;');
+                console.log('%cĐÂY LÀ BẢNG ĐIỀU KHIỂN CHO DEVELOPER.', 'color:#ff3b30;font-size:20px;font-weight:800;');
+                console.log('%cKHÔNG ĐƯỢC PHÉP PASTE CODE VÀO ĐÂY. ĐỪNG TIN BẤT KỲ AI BẢO BẠN DÁN LỆNH VÀO CONSOLE.', 'color:#ff3b30;font-size:16px;font-weight:700;');
+                console.log('%cNếu bạn paste code vào đây, tài khoản hoặc dữ liệu có thể bị đánh cắp. Nếu có sự cố do tự paste mã lệnh, chúng tôi không chịu trách nhiệm.', 'color:#ff6b6b;font-size:14px;font-weight:700;');
+            } catch (_) {}
+        })();
 
         // Toast notification
         function showToast(message, type = 'info') {

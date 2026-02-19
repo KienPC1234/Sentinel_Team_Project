@@ -13,7 +13,7 @@ import logging
 import os
 import re
 from urllib.parse import quote, urljoin
-from typing import Optional, Dict, Any, Generator, List
+from typing import Optional, Dict, Any, Generator, List, Callable
 
 from django.conf import settings
 import ollama
@@ -386,6 +386,91 @@ def filter_hallucinations(text: str) -> str:
     return text
 
 
+def _process_outside_fenced_code(text: str, processor: Callable[[str], str]) -> str:
+    """
+    Apply processor only to non-code segments in markdown text.
+    Keeps fenced code blocks (```...```) unchanged to avoid corrupting code,
+    indentation, table formatting, and other markdown-sensitive content.
+    """
+    if not text or '```' not in text:
+        return processor(text)
+
+    parts = re.split(r'(```[\s\S]*?```)', text)
+    for idx, part in enumerate(parts):
+        if idx % 2 == 0:
+            parts[idx] = processor(part)
+    return ''.join(parts)
+
+
+def _is_markdown_table_separator(line: str) -> bool:
+    """Return True if line looks like a markdown table separator row."""
+    stripped = (line or '').strip()
+    if '|' not in stripped:
+        return False
+    # Example: | --- | :---: | ---: |
+    return bool(re.fullmatch(r'\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?', stripped))
+
+
+def _process_outside_markdown_tables(text: str, processor: Callable[[str], str]) -> str:
+    """
+    Apply processor to non-table text only.
+    Markdown tables are kept untouched to avoid breaking column layout.
+    """
+    if not text or '|' not in text:
+        return processor(text)
+
+    lines = text.splitlines(keepends=True)
+    output_parts: List[str] = []
+    buffer: List[str] = []
+    index = 0
+    total = len(lines)
+
+    def flush_buffer():
+        if buffer:
+            output_parts.append(processor(''.join(buffer)))
+            buffer.clear()
+
+    while index < total:
+        current = lines[index]
+        next_line = lines[index + 1] if index + 1 < total else ''
+
+        is_table_header = ('|' in current) and _is_markdown_table_separator(next_line)
+        if is_table_header:
+            flush_buffer()
+
+            table_block = [current, next_line]
+            index += 2
+
+            while index < total:
+                row = lines[index]
+                if row.strip() == '':
+                    table_block.append(row)
+                    index += 1
+                    break
+                if '|' not in row:
+                    break
+                table_block.append(row)
+                index += 1
+
+            output_parts.append(''.join(table_block))
+            continue
+
+        buffer.append(current)
+        index += 1
+
+    flush_buffer()
+    return ''.join(output_parts)
+
+
+def _process_markdown_safe(text: str, processor: Callable[[str], str]) -> str:
+    """Apply processor outside fenced code blocks and markdown tables."""
+
+    def _process_non_code_segment(segment: str) -> str:
+        return _process_outside_markdown_tables(segment, processor)
+
+    return _process_outside_fenced_code(text, _process_non_code_segment)
+
+
 def sanitize_user_facing_tool_text(text: str, preserve_edges: bool = False) -> str:
     """
     Replace internal tool/function identifiers with user-friendly phrasing
@@ -416,33 +501,32 @@ def sanitize_user_facing_tool_text(text: str, preserve_edges: bool = False) -> s
         'web_fetch': 'đọc nội dung trang web',
     }
 
-    # 🔹 Thay token an toàn bằng 1 regex duy nhất
+    # 🔹 Thay token an toàn và chuẩn hóa diễn đạt, chỉ áp dụng ngoài fenced code
     token_pattern = r'\b(' + '|'.join(map(re.escape, replacements.keys())) + r')\b'
 
-    def replace_token(match):
-        return replacements.get(match.group(0), match.group(0))
+    def _sanitize_segment(segment: str) -> str:
+        if not segment:
+            return segment
 
-    cleaned = re.sub(token_pattern, replace_token, cleaned)
+        def replace_token(match):
+            return replacements.get(match.group(0), match.group(0))
 
-    # 🔹 Chuẩn hóa cách diễn đạt gọi tool
-    cleaned = re.sub(
-        r'\b(gọi|dùng|sử dụng)\s+(tool|công cụ|function)\b',
-        'thực hiện kiểm tra',
-        cleaned,
-        flags=re.IGNORECASE,
-    )
+        segment = re.sub(token_pattern, replace_token, segment)
+        segment = re.sub(
+            r'\b(gọi|dùng|sử dụng)\s+(tool|công cụ|function)\b',
+            'thực hiện kiểm tra',
+            segment,
+            flags=re.IGNORECASE,
+        )
+        segment = re.sub(
+            r'\btool\b',
+            'bước kiểm tra',
+            segment,
+            flags=re.IGNORECASE,
+        )
+        return segment
 
-    cleaned = re.sub(
-        r'\btool\b',
-        'bước kiểm tra',
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-
-    # 🔹 Normalize spacing (KHÔNG xóa newline)
-    cleaned = re.sub(r'[ \t]+', ' ', cleaned)             # nhiều space → 1
-    cleaned = re.sub(r'\s+([,.!?])', r'\1', cleaned)     # bỏ space trước dấu câu
-    cleaned = re.sub(r'([.!?])([^\s])', r'\1 \2', cleaned)  # đảm bảo có space sau .!?
+    cleaned = _process_markdown_safe(cleaned, _sanitize_segment)
 
     if preserve_edges:
         return cleaned
@@ -462,23 +546,30 @@ def filter_tool_call_artifacts(text: str, preserve_edges: bool = False) -> str:
 
     cleaned = text
 
-    # Remove XML-like empty tool blocks emitted by some models.
-    cleaned = re.sub(r'<\s*tools\s*>\s*<\s*/\s*tools\s*>', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'</?\s*tools\s*>', '', cleaned, flags=re.IGNORECASE)
+    def _filter_segment(segment: str) -> str:
+        if not segment:
+            return segment
 
-    # Remove compact/raw tool call JSON objects (single or multiple objects).
-    cleaned = re.sub(
-        r'\{\s*"name"\s*:\s*"_tool_[^\"]+"\s*,\s*"arguments"\s*:\s*\{[^{}]*\}\s*\}\s*',
-        '',
-        cleaned,
-        flags=re.DOTALL,
-    )
+        # Remove XML-like empty tool blocks emitted by some models.
+        segment = re.sub(r'<\s*tools\s*>\s*<\s*/\s*tools\s*>', '', segment, flags=re.IGNORECASE)
+        segment = re.sub(r'</?\s*tools\s*>', '', segment, flags=re.IGNORECASE)
 
-    # Remove any line that still contains explicit tool invocations.
-    cleaned = "\n".join(
-        line for line in cleaned.splitlines()
-        if '_tool_' not in line and '"arguments"' not in line
-    )
+        # Remove compact/raw tool call JSON objects (single or multiple objects).
+        segment = re.sub(
+            r'\{\s*"name"\s*:\s*"_tool_[^\"]+"\s*,\s*"arguments"\s*:\s*\{[^{}]*\}\s*\}\s*',
+            '',
+            segment,
+            flags=re.DOTALL,
+        )
+
+        # Remove any line that still contains explicit tool invocations.
+        segment = "\n".join(
+            line for line in segment.splitlines()
+            if '_tool_' not in line and '"arguments"' not in line
+        )
+        return segment
+
+    cleaned = _process_markdown_safe(cleaned, _filter_segment)
 
     cleaned = sanitize_user_facing_tool_text(cleaned, preserve_edges=preserve_edges)
 
@@ -787,10 +878,8 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None, m
                 content = msg.get('content', '') or ''
 
             if content:
-                content = filter_tool_call_artifacts(content, preserve_edges=True)
-                if content:
-                    yield content
-                    full_response.append(content)
+                yield content
+                full_response.append(content)
 
         _log_llm(prompt, "".join(full_response), system_prompt)
 
@@ -919,11 +1008,8 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         content = msg.get('content', "")
                     
                     if content:
-                        content = filter_hallucinations(content)
-                        content = filter_tool_call_artifacts(content, preserve_edges=True)
-                        if content: # Could be empty after filtering
-                            yield content
-                            current_content.append(content)
+                        yield content
+                        current_content.append(content)
 
                     # Collect Tool Calls
                     tool_calls = getattr(msg, 'tool_calls', [])

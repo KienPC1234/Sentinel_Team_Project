@@ -29,6 +29,7 @@ from .page_views import (
     article_detail_view,
     scam_radar_list_view,
     demo_video_view,
+    scam_iq_exam_view,
     lesson_detail_view,
     scan_lookup_view,
     my_reports_view,

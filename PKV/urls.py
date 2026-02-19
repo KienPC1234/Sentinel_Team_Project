@@ -21,7 +21,7 @@ from .views import (
     profile_view, change_password_view, forum_view, forum_post_view,
     forum_create_view, forum_edit_view, public_profile_view, scan_file_view, scan_audio_view,
     article_detail_view, scam_radar_list_view, demo_video_view,
-    lesson_detail_view, scan_lookup_view,
+    lesson_detail_view, scan_lookup_view, scam_iq_exam_view,
     my_reports_view,
     announcements_view, tickets_view, inbox_view, admin_tickets_view,
 )
@@ -107,6 +107,7 @@ urlpatterns = [
     path("emergency/", emergency_view, name="emergency"),
     path("ai-assistant/", AssistantPageView.as_view(), name="ai-assistant"),
     path("ai-assistant/<uuid:session_id>/", AssistantPageView.as_view(), name="ai-assistant-session"),
+    path("scam-iq-exam/", scam_iq_exam_view, name="scam-iq-exam"),
     
     # Auth pages
     path("login/", login_view, name="login"),
