@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: 'Inter', -apple-system, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 40px auto; background: #0f172a; border-radius: 24px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #1e293b 0%, #020617 100%); padding: 40px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .logo { font-size: 24px; font-weight: 900; color: #22d3ee; text-transform: uppercase; letter-spacing: 2px; }
+        .content { padding: 40px; text-align: center; }
+        .title { font-size: 20px; font-weight: 800; color: #ffffff; margin-bottom: 16px; text-transform: uppercase; }
+        .description { font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 32px; }
+        .otp-box { background: rgba(34, 211, 238, 0.1); border: 1px solid rgba(34, 211, 238, 0.2); border-radius: 16px; padding: 24px; display: inline-block; margin-bottom: 32px; }
+        .otp-code { font-family: 'Monaco', monospace; font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #22d3ee; }
+        .footer { padding: 32px; background: rgba(255,255,255,0.02); text-align: center; font-size: 11px; color: #475569; }
+        .button { background: #22d3ee; color: #020617; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-weight: 900; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">ShieldCall VN</div>
+        </div>
+        <div class="content">
+            <div class="title">Xác thực OTP</div>
+            <p class="description">Xin chào, hình như bạn đang thực hiện một thao tác quan trọng trên tài khoản của mình. Vui lòng sử dụng mã bên dưới:</p>
+            <div class="otp-box">
+                <div class="otp-code">{{ token }}</div>
+            </div>
+            <p class="description">Mã này có hiệu lực trong vòng 5 phút. Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email hoặc đổi mật khẩu ngay lập tức.</p>
+        </div>
+        <div class="footer">
+            &copy; 2026 ShieldCall VN. All rights reserved.<br>
+            Nền tảng bảo vệ người dùng số tại Việt Nam.
+        </div>
+    </div>
+</body>
+</html>

@@ -1,28 +1,1359 @@
 {% load static tailwind_tags %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
+
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}My Site{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ShieldCall VN{% endblock %} | ShieldCall VN</title>
+    <meta name="description"
+        content="{% block meta_description %}Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo và các hình thức lừa đảo số{% endblock %}">
+
+    <!-- SVG Favicon -->
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%2318ffff'/%3E%3Cstop offset='100%25' stop-color='%23b388ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill='url(%23g)' d='M32 2L6 14v18c0 16.6 11.1 31.1 26 35 14.9-3.9 26-18.4 26-35V14L32 2zm0 8l20 9.5V32c0 13-8.7 24.3-20 27.8C19.7 56.3 12 45 12 32V19.5L32 10z'/%3E%3Cpath fill='url(%23g)' d='M28 38l-8-8 3-3 5 5 13-13 3 3z'/%3E%3C/svg%3E">
 
     {% tailwind_css %}
 
-    {% block css %}{% endblock %}
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <!-- Animate.css -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    {% block head_extra %}{% endblock %}
+    <style>
+        .ai-streaming::after {
+            content: '▋';
+            animation: blink 1s step-start infinite;
+            margin-left: 4px;
+            color: #18ffff;
+            vertical-align: bottom;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+    <script>
+        window.renderMd = function(text) {
+            if (!text) return '';
+            try { return marked.parse(text); } catch(e) { return text; }
+        };
+
+        // Premium Notification System
+        window.showAlert = function(title, text, icon = 'info') {
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: icon,
+                background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#161235' : '#fff',
+                color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#fff' : '#1a1a2e',
+                confirmButtonColor: '#18ffff',
+                borderRadius: '1.25rem',
+                customClass: {
+                    popup: 'liquid-card border-white/10'
+                }
+            });
+        };
+
+        window.showToast = function(message, type = 'info') {
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'bottom-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true,
+                background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#161235' : '#fff',
+                color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#fff' : '#1a1a2e',
+                didOpen: (toast) => {
+                    toast.addEventListener('mouseenter', Swal.stopTimer);
+                    toast.addEventListener('mouseleave', Swal.resumeTimer);
+                }
+            });
+            Toast.fire({
+                icon: type,
+                title: message
+            });
+        };
+    </script>
+
+    <style>
+        :root,
+        [data-theme="dark"] {
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.14);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+            --gradient-1: #0d0d1f;
+            --gradient-2: #161235;
+            --gradient-3: #111128;
+            --accent-cyan: #18ffff;
+            --accent-purple: #d1a3ff;
+            --accent-pink: #ff6090;
+            --accent-blue: #64b5f6;
+            --risk-green: #00e676;
+            --risk-yellow: #ffd740;
+            --risk-red: #ff1744;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-muted: rgba(255, 255, 255, 0.4);
+            --body-bg: linear-gradient(135deg, var(--gradient-1), var(--gradient-2), var(--gradient-3));
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(0, 0, 0, 0.03);
+            --glass-border: rgba(0, 0, 0, 0.08);
+            --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            --gradient-1: #f0f2f5;
+            --gradient-2: #e8eaf0;
+            --gradient-3: #f5f6fa;
+            --accent-cyan: #0097a7;
+            --accent-purple: #7c4dff;
+            --accent-pink: #e91e63;
+            --accent-blue: #1976d2;
+            --risk-green: #2e7d32;
+            --risk-yellow: #f9a825;
+            --risk-red: #d32f2f;
+            --text-primary: #1a1a2e;
+            --text-secondary: rgba(0, 0, 0, 0.65);
+            --text-muted: rgba(0, 0, 0, 0.4);
+            --body-bg: linear-gradient(135deg, #f0f2f5, #e8eaf0, #f5f6fa);
+        }
+
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: var(--body-bg);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        [data-theme="light"] .glass,
+        [data-theme="light"] .glass-card {
+            background: rgba(255, 255, 255, 0.75);
+            border-color: rgba(0, 0, 0, 0.08);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        }
+
+        [data-theme="light"] .glass-input {
+            background: rgba(0, 0, 0, 0.04);
+            border-color: rgba(0, 0, 0, 0.12);
+            color: #1a1a2e;
+        }
+
+        [data-theme="light"] .glass-btn {
+            background: rgba(0, 0, 0, 0.06);
+            border-color: rgba(0, 0, 0, 0.12);
+            color: #1a1a2e;
+        }
+
+        [data-theme="light"] .glow-text {
+            background: linear-gradient(135deg, #0097a7, #7c4dff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: none;
+        }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1rem;
+            box-shadow: var(--glass-shadow);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.09);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 1.25rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: #fff;
+            padding: 0.75rem 1rem;
+            width: 100%;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .glass-input:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .glass-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .glass-btn {
+            background: linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(179, 136, 255, 0.2));
+            border: 1px solid rgba(0, 229, 255, 0.3);
+            border-radius: 0.75rem;
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .glass-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 229, 255, 0.35), rgba(179, 136, 255, 0.35));
+            border-color: rgba(0, 229, 255, 0.5);
+            box-shadow: 0 0 25px rgba(0, 229, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .glass-btn-danger {
+            background: linear-gradient(135deg, rgba(255, 23, 68, 0.3), rgba(255, 96, 144, 0.2));
+            border-color: rgba(255, 23, 68, 0.4);
+        }
+
+        .glass-btn-danger:hover {
+            background: linear-gradient(135deg, rgba(255, 23, 68, 0.5), rgba(255, 96, 144, 0.35));
+            box-shadow: 0 0 25px rgba(255, 23, 68, 0.25);
+        }
+
+        .glass-btn-success {
+            background: linear-gradient(135deg, rgba(0, 230, 118, 0.2), rgba(0, 229, 255, 0.15));
+            border-color: rgba(0, 230, 118, 0.35);
+        }
+
+        .glass-btn-success:hover {
+            background: linear-gradient(135deg, rgba(0, 230, 118, 0.4), rgba(0, 229, 255, 0.25));
+            box-shadow: 0 0 25px rgba(0, 230, 118, 0.2);
+        }
+
+        .glow-text {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .risk-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .risk-safe {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--risk-green);
+            border: 1px solid rgba(0, 230, 118, 0.3);
+            box-shadow: 0 0 15px rgba(0, 230, 118, 0.1);
+        }
+
+        .risk-yellow {
+            background: rgba(255, 234, 0, 0.15);
+            color: var(--risk-yellow);
+            border: 1px solid rgba(255, 234, 0, 0.3);
+            box-shadow: 0 0 15px rgba(255, 234, 0, 0.1);
+        }
+
+        .risk-red {
+            background: rgba(255, 23, 68, 0.15);
+            color: var(--risk-red);
+            border: 1px solid rgba(255, 23, 68, 0.3);
+            box-shadow: 0 0 15px rgba(255, 23, 68, 0.1);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+
+            0%,
+            100% {
+                box-shadow: 0 0 15px rgba(255, 23, 68, 0.1);
+            }
+
+            50% {
+                box-shadow: 0 0 30px rgba(255, 23, 68, 0.3);
+            }
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fadein {
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        .animate-fadein-delay-1 {
+            animation-delay: 0.1s;
+            opacity: 0;
+        }
+
+        .animate-fadein-delay-2 {
+            animation-delay: 0.2s;
+            opacity: 0;
+        }
+
+        .animate-fadein-delay-3 {
+            animation-delay: 0.3s;
+            opacity: 0;
+        }
+
+        .animate-fadein-delay-4 {
+            animation-delay: 0.4s;
+            opacity: 0;
+        }
+
+        /* Risk meter */
+        .risk-meter {
+            height: 8px;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .risk-meter-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 1s ease-out;
+        }
+
+        /* Select styling */
+        .glass-select {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: #fff;
+            padding: 0.75rem 1rem;
+            width: 100%;
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+        }
+
+        .glass-select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .glass-textarea {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: #fff;
+            padding: 0.75rem 1rem;
+            width: 100%;
+            outline: none;
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .glass-textarea:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        /* Nav bar premium */
+        .nav-premium {
+            background: rgba(13,13,31,0.72);
+            backdrop-filter: blur(28px) saturate(1.4);
+            -webkit-backdrop-filter: blur(28px) saturate(1.4);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            position: sticky; top: 0; z-index: 50;
+        }
+        .nav-premium::after {
+            content: '';
+            position: absolute; bottom: -1px; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-purple), transparent);
+            opacity: 0.4; animation: navShimmer 6s linear infinite;
+        }
+        @keyframes navShimmer {
+            0%{background-position:-200% 0}100%{background-position:200% 0}
+        }
+        .nav-premium::after { background-size: 200% 100%; }
+
+        .nav-logo { transition: transform 0.3s, filter 0.3s; }
+        .nav-logo:hover { transform: scale(1.08); filter: drop-shadow(0 0 8px rgba(0,229,255,0.35)); }
+
+        .nav-link {
+            position: relative;
+            transition: color 0.25s, background 0.25s;
+            font-size: 0.82rem; font-weight: 600; letter-spacing: 0.01em;
+        }
+        .nav-link:hover {
+            color: var(--accent-cyan);
+            background: rgba(0,229,255,0.06);
+        }
+        .nav-link.active {
+            color: var(--accent-cyan);
+        }
+        .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px; left: 20%; right: 20%; height: 2px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: 1px;
+            box-shadow: 0 0 6px rgba(0,229,255,0.3);
+        }
+        .nav-scan-menu {
+            background: rgba(13,13,31,0.92);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 16px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .nav-scan-item {
+            transition: background 0.2s, padding-left 0.2s;
+        }
+        .nav-scan-item:hover {
+            background: rgba(0,229,255,0.08);
+            padding-left: 1.1rem;
+        }
+        .nav-emergency {
+            animation: emergencyPulse 2s ease-in-out infinite;
+        }
+        @keyframes emergencyPulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(255,23,68,0.3); }
+            50% { box-shadow: 0 0 12px 4px rgba(255,23,68,0.15); }
+        }
+
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            width: 2rem;
+            height: 2rem;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 6rem;
+            right: 2rem;
+            z-index: 9999;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            backdrop-filter: blur(20px);
+            animation: slideInRight 0.3s ease;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Stat card counter animation */
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        /* Step indicators */
+        .step-active {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+        }
+
+        .step-done {
+            background: var(--risk-green);
+        }
+
+        /* Tab styling */
+        .tab-btn {
+            padding: 0.5rem 1.25rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s;
+            cursor: pointer;
+            font-weight: 500;
+            border: 1px solid transparent;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .tab-btn.active {
+            background: rgba(0, 229, 255, 0.15);
+            border-color: rgba(0, 229, 255, 0.3);
+            color: var(--accent-cyan);
+        }
+        /* AI Markdown rendering */
+        .ai-markdown { font-size:0.85rem; color:rgba(255,255,255,0.85); line-height:1.7; }
+        .ai-markdown h1,.ai-markdown h2,.ai-markdown h3 { font-weight:700; margin:0.75rem 0 0.4rem; color:#fff; }
+        .ai-markdown h1 { font-size:1.1rem; } .ai-markdown h2 { font-size:1rem; } .ai-markdown h3 { font-size:0.9rem; }
+        .ai-markdown p { margin:0.3rem 0; }
+        .ai-markdown ul,.ai-markdown ol { padding-left:1.25rem; margin:0.3rem 0; }
+        .ai-markdown li { margin:0.15rem 0; }
+        .ai-markdown strong { color:var(--accent-cyan); font-weight:700; }
+        .ai-markdown code { background:rgba(0,229,255,0.1); padding:0.1rem 0.35rem; border-radius:0.25rem; font-size:0.8rem; }
+        .ai-markdown pre { background:rgba(0,0,0,0.3); border-radius:0.5rem; padding:0.75rem; overflow-x:auto; margin:0.5rem 0; }
+        .ai-markdown pre code { background:none; padding:0; }
+        .ai-markdown a { color:var(--accent-cyan); text-decoration:underline; }
+        .ai-markdown blockquote { border-left:3px solid var(--accent-purple); padding-left:0.75rem; margin:0.5rem 0; color:rgba(255,255,255,0.7); }
+        [data-theme="light"] .ai-markdown { color:rgba(0,0,0,0.75); }
+        [data-theme="light"] .ai-markdown h1,[data-theme="light"] .ai-markdown h2,[data-theme="light"] .ai-markdown h3 { color:#1a1a2e; }
+        [data-theme="light"] .ai-markdown strong { color:var(--accent-purple); }
+        [data-theme="light"] .ai-markdown code { background:rgba(0,0,0,0.06); }
+        [data-theme="light"] .ai-markdown pre { background:rgba(0,0,0,0.04); }
+
+        /* Liquid Glass System */
+        .liquid-glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(40px) saturate(1.8);
+            -webkit-backdrop-filter: blur(40px) saturate(1.8);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        
+        .liquid-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(30px) saturate(1.5);
+            -webkit-backdrop-filter: blur(30px) saturate(1.5);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Specular highlight at top edge */
+        .liquid-card::before {
+            content: "";
+            position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            z-index: 1;
+        }
+
+        .liquid-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 229, 255, 0.3);
+            box-shadow: 0 12px 40px rgba(0, 229, 255, 0.15);
+        }
+
+        .liquid-btn {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 9999px;
+            padding: 0.6rem 1.5rem;
+            color: #fff;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .liquid-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(0, 229, 255, 0.4);
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
+        }
+
+        .liquid-input {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 0.75rem 1.25rem;
+            color: #fff;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .liquid-input:focus {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 0, 0, 0.3);
+            box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.1);
+        }
+
+        /* Avatar Gradient Pill */
+        .avatar-pill {
+            width: 38px; height: 38px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        /* Responsive Two-Column Layout */
+        .forum-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .forum-grid { grid-template-columns: 1fr; }
+            .forum-sidebar { display: none; }
+        }
+
+        /* User Provided Liquid Glass */
+        .glass-v2 {
+            position: fixed; inset: 50% auto auto 50%; transform: translate(-50%,-50%);
+            width: 20rem; height: 20rem; border-radius: 50%;
+            background: rgba(255,255,255,.08); border: 2px solid transparent;
+            box-shadow: 0 0 0 2px rgba(255,255,255,.6), 0 16px 32px rgba(0,0,0,.12);
+            backdrop-filter: url(#frosted); -webkit-backdrop-filter: url(#frosted);
+            display: grid; place-items: center; cursor: pointer; outline: 0;
+            z-index: 100;
+        }
+        .glass-v2::before, .glass-v2::after {
+            content: ""; position: absolute; width: 40%; height: 10px; background: #fff; border-radius: 10px;
+        }
+        .glass-v2::after { transform: rotate(90deg); }
+    </style>
+    
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+    {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-gray-50">
 
-<header class="p-4 bg-gray-800 text-white">
-    HEADER
-</header>
+<body x-data="{ mobileMenu: false }">
 
-<main class="p-6">
-    {% block content %}{% endblock %}
-</main>
+    <!-- Ambient glow effects -->
+    <div
+        style="position:fixed;top:-200px;left:-200px;width:500px;height:500px;background:radial-gradient(circle,rgba(0,229,255,0.08) 0%,transparent 70%);pointer-events:none;z-index:0;">
+    </div>
+    <div
+        style="position:fixed;bottom:-200px;right:-200px;width:500px;height:500px;background:radial-gradient(circle,rgba(179,136,255,0.08) 0%,transparent 70%);pointer-events:none;z-index:0;">
+    </div>
 
-<footer class="p-4 bg-gray-200 text-center">
-    FOOTER
-</footer>
+    <!-- Frosted Filter SVG -->
+    <svg style="visibility: hidden; position: absolute;" width="0" height="0">
+        <filter id="frosted">
+            <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" result="noise" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur" />
+            <feComposite operator="in" in="blur" in2="SourceGraphic" result="composite" />
+            <feBlend mode="overlay" in="noise" in2="composite" />
+        </filter>
+    </svg>
 
-{% block js %}{% endblock %}
+    <!-- Navigation -->
+    <nav class="nav-premium">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16 sm:h-20">
+                <!-- Left: Logo & Links -->
+                <div class="flex items-center gap-8">
+                    <a href="/" class="flex items-center gap-3 group">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-110 transition-transform">
+                            <i class="bi bi-shield-lock-fill text-white text-xl"></i>
+                        </div>
+                        <div class="hidden sm:block">
+                            <h2 class="text-lg font-black text-white leading-none tracking-tight">ShieldCall <span class="text-cyan-400">VN</span></h2>
+                            <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">Community Guard</p>
+                        </div>
+                    </a>
+
+                    <!-- Desktop Links -->
+                    <div class="hidden lg:flex items-center gap-2">
+                        <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
+                            <button class="nav-link px-4 py-2 rounded-xl flex items-center gap-2" :class="open ? 'bg-white/5 text-cyan-400' : 'text-white/60'">
+                                <i class="bi bi-search"></i> Kiểm tra <i class="bi bi-chevron-down text-[10px] opacity-50"></i>
+                            </button>
+                            <div x-show="open" x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl">
+                                <a href="/scan/phone/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl">
+                                    <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center"><i class="bi bi-phone"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Số điện thoại</div>
+                                        <div class="text-[9px] text-white/40">Tra cứu SĐT rủi ro</div>
+                                    </div>
+                                </a>
+                                <a href="/scan/message/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-purple-400">
+                                    <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center"><i class="bi bi-chat-left-dots"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Tin nhắn</div>
+                                        <div class="text-[9px] text-white/40">Phân tích nội dung AI</div>
+                                    </div>
+                                </a>
+                                <a href="/scan/website/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-blue-400">
+                                    <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center"><i class="bi bi-globe2"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Website</div>
+                                        <div class="text-[9px] text-white/40">Phát hiện Phishing</div>
+                                    </div>
+                                </a>
+                                <a href="/scan/bank/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-yellow-400">
+                                    <div class="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center"><i class="bi bi-bank2"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Tài khoản</div>
+                                        <div class="text-[9px] text-white/40">Tra cứu bank lừa đảo</div>
+                                    </div>
+                                </a>
+                                <a href="/scan/email/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-pink-400">
+                                    <div class="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center"><i class="bi bi-envelope-check"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Email</div>
+                                        <div class="text-[9px] text-white/40">Phát hiện Email Scam</div>
+                                    </div>
+                                </a>
+                                <a href="/scan/qr/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-green-400">
+                                    <div class="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center"><i class="bi bi-qr-code-scan"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">QR / Ảnh</div>
+                                        <div class="text-[9px] text-white/40">OCR + Phân tích ảnh</div>
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+                        <a href="/report/" class="nav-link px-4 py-2 rounded-xl text-white/60">Báo cáo</a>
+                        <a href="/scam-radar/" class="nav-link px-4 py-2 rounded-xl text-white/60">Radar</a>
+                        <a href="/forum/" class="nav-link px-4 py-2 rounded-xl text-white/60">Diễn đàn</a>
+                        <a href="/learn/" class="nav-link px-4 py-2 rounded-xl text-white/60">Kiến thức</a>
+                    </div>
+                </div>
+
+                <!-- Right: Auth & Emergency -->
+                <div class="flex items-center gap-3">
+                    <a href="/emergency/" class="nav-emergency hidden sm:flex items-center gap-2 bg-red-500/10 text-red-500 border border-red-500/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Hỗ trợ khẩn cấp
+                    </a>
+
+                    <div class="h-8 w-[1px] bg-white/10 mx-1 hidden lg:block"></div>
+                    
+                    <button @click="toggleTheme" class="p-2.5 rounded-xl hover:bg-white/5 text-white/60 transition-colors">
+                        <i class="bi bi-sun-fill" x-show="document.documentElement.getAttribute('data-theme')==='light'"></i>
+                        <i class="bi bi-moon-stars-fill" x-show="document.documentElement.getAttribute('data-theme')==='dark'"></i>
+                    </button>
+
+                    {% if user.is_authenticated %}
+                    <div class="relative" x-data="{ open: false }" @click.away="open = false">
+                        <button @click="open = !open" class="avatar-pill text-xs flex items-center gap-2 group">
+                            {{ user.first_name|default:user.username|first|upper }}
+                            <i class="bi bi-chevron-down text-[8px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                        </button>
+                        
+                        <div x-show="open" 
+                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             class="absolute right-0 mt-2 w-48 glass-card border-white/10 z-50 overflow-hidden py-1">
+                            <a href="/dashboard/" class="flex items-center gap-3 px-4 py-3 text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 transition-colors">
+                                <i class="bi bi-speedometer2 text-cyan-400"></i> Bảng điều khiển
+                            </a>
+                            <a href="/profile/" class="flex items-center gap-3 px-4 py-3 text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 transition-colors">
+                                <i class="bi bi-person-gear text-purple-400"></i> Cài đặt tài khoản
+                            </a>
+                            <div class="h-[1px] bg-white/5 my-1 mx-4"></div>
+                            <form action="/logout/" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors">
+                                    <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% else %}
+                    <a href="/login/" class="hidden sm:block text-xs font-bold text-white/60 hover:text-white transition-colors">Đăng nhập</a>
+                    <a href="/register/" class="liquid-btn text-[11px] py-1.5 px-5 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Đăng ký</a>
+                    {% endif %}
+
+                    <!-- Mobile menu button -->
+                    <button @click="mobileMenu = !mobileMenu" class="lg:hidden p-2 rounded-lg" style="color:rgba(255,255,255,0.7);transition:color 0.3s;">
+                        <i class="bi" style="font-size:1.4rem;" :class="mobileMenu ? 'bi-x-lg' : 'bi-list'"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Nav -->
+        <div x-show="mobileMenu" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 -translate-y-4" x-transition:enter-end="opacity-100 translate-y-0"
+            style="background:rgba(13,13,31,0.95);backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.06);padding:0.75rem 1rem 1.5rem;" class="lg:hidden flex flex-col gap-0.5">
+            <a href="/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-house-door-fill text-cyan-400"></i> Trang chủ</a>
+            <div x-data="{ open: false }">
+                <button @click="open = !open" class="w-full flex items-center justify-between p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                    <span class="flex items-center gap-3"><i class="bi bi-search"></i> Kiểm tra</span>
+                    <i class="bi bi-chevron-down transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                </button>
+                <div x-show="open" x-transition class="pl-11 flex flex-col gap-0.5 py-1">
+                    <a href="/scan/phone/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#18ffff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-phone-fill mr-2 text-cyan-400"></i>Số điện thoại</a>
+                    <a href="/scan/message/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#b388ff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-chat-left-dots-fill mr-2 text-purple-400"></i>Tin nhắn</a>
+                    <a href="/scan/website/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#64b5f6'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-globe2 mr-2 text-blue-400"></i>Website</a>
+                    <a href="/scan/bank/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#ffd740'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-bank2 mr-2 text-yellow-400"></i>Tài khoản</a>
+                    <a href="/scan/email/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#f06292'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-envelope-exclamation-fill mr-2 text-pink-400"></i>Email Scam</a>
+                    <a href="/scan/qr/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#00e676'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-qr-code-scan mr-2 text-green-400"></i>QR / Ảnh</a>
+                </div>
+            </div>
+            <a href="/report/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-flag-fill text-red-400"></i> Báo cáo</a>
+            <a href="/scam-radar/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-broadcast text-purple-400"></i> Radar</a>
+            <a href="/forum/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-chat-dots-fill text-blue-400"></i> Diễn đàn</a>
+            <a href="/learn/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-book-half text-yellow-400"></i> Cẩm nang</a>
+            <a href="/emergency/" class="flex items-center gap-3 p-3 rounded-xl text-red-400" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,23,68,0.08)'" onmouseout="this.style.background='transparent'"><i class="bi bi-exclamation-triangle-fill"></i> Khẩn cấp</a>
+
+            <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:0.5rem;">
+                {% if user.is_authenticated %}
+                <a href="/profile/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                    <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;">{{ user.first_name|default:user.username|first|upper }}</div>
+                    Profile
+                </a>
+                <form action="/logout/" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="glass-btn w-full justify-center p-3" style="font-size:0.85rem;">Đăng xuất</button>
+                </form>
+                {% else %}
+                <a href="/login/" class="glass-btn w-full justify-center p-3" style="font-size:0.85rem;">Đăng nhập</a>
+                <a href="/register/" style="display:flex;justify-content:center;padding:0.75rem;border-radius:0.75rem;background:linear-gradient(135deg,rgba(0,229,255,0.15),rgba(179,136,255,0.15));border:1px solid rgba(0,229,255,0.25);color:var(--accent-cyan);font-weight:600;font-size:0.85rem;text-decoration:none;">Đăng ký</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="animate-fadein"
+        style="max-width:1280px;margin:0 auto;padding:2rem 1.5rem;position:relative;z-index:1;min-height:calc(100vh - 180px);">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer style="border-top:1px solid rgba(255,255,255,0.08);margin-top:4rem;background:rgba(0,0,0,0.1);">
+        <div style="max-width:1280px;margin:0 auto;padding:4rem 1.5rem;">
+            <div
+                style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:3rem;margin-bottom:3rem;">
+                <div>
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+                        <div
+                            class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                            <i class="bi bi-shield-lock-fill text-white text-sm"></i>
+                        </div>
+                        <span style="font-weight:800;font-size:1.25rem;" class="glow-text">ShieldCall VN</span>
+                    </div>
+                    <p style="font-size:0.9rem;color:var(--text-muted);line-height:1.7;">Bảo vệ người dùng Việt Nam
+                        khỏi các hình thức lừa đảo số bằng công nghệ AI tiên tiến.</p>
+                </div>
+                <div>
+                    <h4 style="font-weight:600;margin-bottom:0.75rem;font-size:0.9rem;color:rgba(255,255,255,0.7);">Scan
+                    </h4>
+                    <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.85rem;">
+                        <a href="/scan/phone/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-cyan)'"
+                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Scan Số điện thoại</a>
+                        <a href="/scan/message/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-cyan)'"
+                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Scan Tin nhắn</a>
+                        <a href="/scan/website/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-cyan)'"
+                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Scan Website</a>
+                        <a href="/scan/bank/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-cyan)'"
+                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Scan Tài khoản</a>
+                    </div>
+                </div>
+                <div>
+                    <h4 style="font-weight:600;margin-bottom:0.75rem;font-size:0.9rem;color:rgba(255,255,255,0.7);">Hỗ
+                        trợ</h4>
+                    <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.85rem;">
+                        <a href="/report/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-cyan)'"
+                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Báo cáo lừa đảo</a>
+                        <a href="/learn/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-cyan)'"
+                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Kiến thức phòng tránh</a>
+                        <a href="/emergency/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-cyan)'"
+                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Hỗ trợ khẩn cấp</a>
+                    </div>
+                </div>
+                <div>
+                    <h4 style="font-weight:600;margin-bottom:0.75rem;font-size:0.9rem;color:rgba(255,255,255,0.7);">
+                        Hotline</h4>
+                    <p style="font-size:1.25rem;font-weight:700;color:var(--accent-cyan);margin-bottom:0.5rem;">
+                        1900-0091</p>
+                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.4);">24/7 hỗ trợ khẩn cấp</p>
+                </div>
+            </div>
+            <div
+                style="border-top:1px solid rgba(255,255,255,0.08);padding-top:1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+                <p style="font-size:0.8rem;color:rgba(255,255,255,0.35);">© 2026 ShieldCall VN. Bảo vệ cộng đồng bằng
+                    công nghệ.</p>
+                <div style="display:flex;gap:1rem;font-size:0.8rem;">
+                    <a href="#" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.35)'">Điều khoản</a>
+                    <a href="#" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.35)'">Chính sách</a>
+                    <a href="/api/docs/" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.35)'">API Docs</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize theme on load
+        (function () {
+            const saved = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', saved);
+            document.addEventListener('DOMContentLoaded', function () { updateThemeIcons(saved); });
+        })();
+
+        // Lucide replacement (since we use Bootstrap Icons now)
+        // lucide.createIcons(); 
+
+        // CSRF token helper
+        function getCSRFToken() {
+            const cookies = document.cookie.split(';');
+            for (let c of cookies) {
+                c = c.trim();
+                if (c.startsWith('csrftoken=')) return c.substring('csrftoken='.length);
+            }
+            return '';
+        }
+
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme') || 'dark';
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+            updateThemeIcons(next);
+        }
+
+        function updateThemeIcons(theme) {
+            const sun = document.querySelector('.bi-sun-fill');
+            const moon = document.querySelector('.bi-moon-stars-fill');
+            // Theme toggle logic is handled by Alpine x-show in the template
+        }
+
+        // Client Debug Logger
+        window.SCDebug = {
+            enabled: localStorage.getItem('sc_debug') === '1',
+            log: function (...args) { if (window.SCDebug.enabled) console.log('%c[SC]', 'color:#18ffff;font-weight:bold', ...args); },
+            error: function (...args) { console.error('%c[SC:ERR]', 'color:#ff1744;font-weight:bold', ...args); },
+            warn: function (...args) { if (window.SCDebug.enabled) console.warn('%c[SC:WARN]', 'color:#ffd740;font-weight:bold', ...args); },
+            enable: function () { localStorage.setItem('sc_debug', '1'); this.enabled = true; console.log('%c[SC] Debug mode ON — reload page for full effect', 'color:#00e676;font-weight:bold'); },
+            disable: function () { localStorage.removeItem('sc_debug'); this.enabled = false; console.log('[SC] Debug mode OFF'); }
+        };
+        SCDebug.log('ShieldCall VN loaded. Theme:', localStorage.getItem('theme') || 'dark');
+
+        // Toast notification
+        function showToast(message, type = 'info') {
+            const colors = {
+                success: 'rgba(0,230,118,0.2)',
+                error: 'rgba(255,23,68,0.2)',
+                info: 'rgba(0,229,255,0.2)',
+                warning: 'rgba(255,234,0,0.2)'
+            };
+            const borderColors = {
+                success: 'rgba(0,230,118,0.4)',
+                error: 'rgba(255,23,68,0.4)',
+                info: 'rgba(0,229,255,0.4)',
+                warning: 'rgba(255,234,0,0.4)'
+            };
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.background = colors[type] || colors.info;
+            toast.style.border = `1px solid ${borderColors[type] || borderColors.info}`;
+            toast.style.color = '#fff';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 3000);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        // API helper
+        async function apiCall(url, options = {}) {
+            const defaults = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                },
+            };
+            const response = await fetch(url, { ...defaults, ...options });
+            return response.json();
+        }
+    </script>
+
+    <!-- AI Assistant Floating Button -->
+    <div x-data="chatWidget()" @start-contextual-chat.window="startContextualChat($event.detail.context)" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-4">
+        <!-- Chat Toggle Button -->
+        <button @click="open=!open"
+            style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));border:none;cursor:pointer;box-shadow:0 4px 20px rgba(24,255,255,0.3);display:flex;align-items:center;justify-content:center;transition:all 0.3s;position:relative;"
+            onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+            <svg x-show="!open" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0a0a1a" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <svg x-show="open" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0a1a"
+                stroke-width="2.5" stroke-linecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+            <span x-show="!open && !hasInteracted"
+                style="position:absolute;top:-2px;right:-2px;width:12px;height:12px;background:var(--risk-red);border-radius:50%;border:2px solid #0a0a1a;animation:pulse-red 2s infinite;"></span>
+        </button>
+
+        <!-- Chat Window -->
+        <div x-show="open" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+            x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+            x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
+            x-transition:leave-end="opacity-0 scale-95"
+            style="position:absolute;bottom:70px;right:0;width:380px;max-height:520px;border-radius:1.25rem;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,0.5);"
+            class="glass" @click.outside="open=false">
+            <!-- Header -->
+            <div
+                style="padding:1rem 1.25rem;background:linear-gradient(135deg,rgba(24,255,255,0.15),rgba(209,163,255,0.15));border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:0.75rem;">
+                <div
+                    style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;">
+                    <i class="bi bi-robot text-[#0a0a1a] text-lg"></i>
+                </div>
+                <div>
+                    <div style="font-weight:700;font-size:0.95rem;">ShieldCall AI</div>
+                    <div style="font-size:0.7rem;color:var(--accent-cyan);">● Online — Sẵn sàng hỗ trợ</div>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div x-ref="chatMessages"
+                style="height:320px;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:0.75rem;background:rgba(0,0,0,0.2);">
+                <template x-for="(msg, i) in messages" :key="i">
+                    <div
+                        :style="msg.from==='bot' ? 'align-self:flex-start;max-width:85%;' : 'align-self:flex-end;max-width:85%;'">
+                        <div :style="msg.from==='bot' ? 'background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:1rem 1rem 1rem 0.25rem;padding:0.75rem 1rem;' : 'background:linear-gradient(135deg,rgba(24,255,255,0.2),rgba(209,163,255,0.2));border:1px solid rgba(24,255,255,0.25);border-radius:1rem 1rem 0.25rem 1rem;padding:0.75rem 1rem;'"
+                            style="font-size:0.85rem;line-height:1.5;">
+                            <span x-html="msg.text"></span>
+                        </div>
+                        <div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:0.25rem;"
+                            :style="msg.from==='bot' ? 'text-align:left;padding-left:0.5rem;' : 'text-align:right;padding-right:0.5rem;'"
+                            x-text="msg.time"></div>
+                    </div>
+                </template>
+                <div x-show="typing" style="align-self:flex-start;">
+                    <div
+                        style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:1rem;padding:0.5rem 1rem;display:flex;gap:0.3rem;">
+                        <span
+                            style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.4);animation:dot-bounce 1.4s infinite ease-in-out;animation-delay:0s;"></span>
+                        <span
+                            style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.4);animation:dot-bounce 1.4s infinite ease-in-out;animation-delay:0.2s;"></span>
+                        <span
+                            style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.4);animation:dot-bounce 1.4s infinite ease-in-out;animation-delay:0.4s;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Replies -->
+            <div x-show="messages.length<=1"
+                style="padding:0.5rem 1rem;display:flex;gap:0.4rem;flex-wrap:wrap;background:rgba(0,0,0,0.15);border-top:1px solid rgba(255,255,255,0.05);">
+                <button @click="sendQuick('Kiểm tra số điện thoại')"
+                    style="background:rgba(24,255,255,0.1);border:1px solid rgba(24,255,255,0.2);border-radius:1rem;padding:0.3rem 0.75rem;font-size:0.75rem;color:var(--accent-cyan);cursor:pointer;"><i
+                        class="bi bi-telephone"></i>
+                    Kiểm tra SĐT</button>
+                <button @click="sendQuick('Tôi nhận được tin nhắn lạ')"
+                    style="background:rgba(209,163,255,0.1);border:1px solid rgba(209,163,255,0.2);border-radius:1rem;padding:0.3rem 0.75rem;font-size:0.75rem;color:var(--accent-purple);cursor:pointer;"><i
+                        class="bi bi-chat-left-dots"></i>
+                    Tin nhắn lạ</button>
+                <button @click="sendQuick('Cách nhận diện lừa đảo')"
+                    style="background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.2);border-radius:1rem;padding:0.3rem 0.75rem;font-size:0.75rem;color:var(--risk-green);cursor:pointer;"><i
+                        class="bi bi-book"></i>
+                    Cách phòng tránh</button>
+            </div>
+
+            <!-- Image Previews (horizontal scroll strip) -->
+            <div x-show="imagePreviews.length > 0"
+                style="padding:0.5rem 1rem;display:flex;gap:0.5rem;overflow-x:auto;overflow-y:hidden;white-space:nowrap;background:rgba(0,0,0,0.1);border-top:1px solid rgba(255,255,255,0.05);scrollbar-width:thin;">
+                <template x-for="(img, idx) in imagePreviews" :key="idx">
+                    <div
+                        style="position:relative;width:50px;height:50px;min-width:50px;border-radius:0.5rem;overflow:hidden;border:1px solid rgba(255,255,255,0.2);flex-shrink:0;">
+                        <img :src="img" style="width:100%;height:100%;object-fit:cover;">
+                        <button @click="removeImage(idx)"
+                            style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(255,23,68,0.8);border:none;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Input -->
+            <div
+                style="padding:0.75rem 1rem;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:0.5rem;align-items:center;background:rgba(0,0,0,0.1);">
+                <button @click="$refs.fileInput.click()" class="p-2 text-white/60 hover:text-cyan-400 transition-colors"
+                    title="Thêm ảnh">
+                    <i class="bi bi-image text-lg"></i>
+                </button>
+                <input type="file" x-ref="fileInput" @change="handleFileUpload" multiple accept="image/*"
+                    style="display:none;">
+
+                <input type="text" x-model="input" @keydown.enter="send()" placeholder="Nhập câu hỏi..."
+                    style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:0.75rem;padding:0.6rem 0.85rem;color:#fff;font-size:0.85rem;outline:none;"
+                    onfocus="this.style.borderColor='var(--accent-cyan)'"
+                    onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                <button @click="send()" :disabled="(!input.trim() && imageFiles.length===0) || typing"
+                    style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;"
+                    :style="((!input.trim() && imageFiles.length===0)||typing) ? 'opacity:0.4;cursor:not-allowed;' : 'opacity:1;'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a1a" stroke="none">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes dot-bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+    </style>
+
+    <script>
+        function chatWidget() {
+            return {
+                open: false,
+                hasInteracted: false,
+                input: '',
+                typing: false,
+                imagePreviews: [],
+                imageFiles: [],
+                messages: [
+                    { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là <strong>ShieldCall AI</strong>. Tôi có thể giúp bạn:<br>• Kiểm tra số điện thoại, tin nhắn đáng ngờ<br>• Hướng dẫn cách phòng tránh lừa đảo<br>• Giải đáp thắc mắc về an toàn mạng<br>• <strong>Mới:</strong> Gửi ảnh chụp màn hình để tôi phân tích!', time: new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }) }
+                ],
+                now() { return new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }); },
+                scrollDown() { this.$nextTick(() => { if (this.$refs.chatMessages) this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight; }); },
+                sendQuick(text) { this.input = text; this.send(); },
+                startContextualChat(systemContext, userMsg = 'Hãy giải thích thêm về kết quả này.') {
+                    this.open = true;
+                    this.hasInteracted = true;
+                    this.messages.push({ 
+                        from: 'bot', 
+                        text: '<i class="bi bi-info-circle text-cyan-400"></i> <strong>Đã nhận ngữ cảnh phân tích.</strong> Bạn có thể hỏi thêm về kết quả quét vừa rồi.',
+                        time: this.now() 
+                    });
+                    this.input = userMsg;
+                    // We can pre-send if we want, but let the user see the context first or just send it.
+                    // For now, just set the input to make it feel natural.
+                },
+                handleFileUpload(e) {
+                    const files = Array.from(e.target.files);
+                    SCDebug.log('File upload:', files.length, 'file(s)');
+                    files.forEach(file => {
+                        if (file.size > 5 * 1024 * 1024) {
+                            SCDebug.warn('File too large:', file.name, file.size);
+                            showToast('File ' + file.name + ' quá lớn (max 5MB)', 'warning');
+                            return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (ex) => {
+                            this.imagePreviews.push(ex.target.result);
+                            this.imageFiles.push(ex.target.result);
+                            SCDebug.log('Image loaded:', file.name);
+                        };
+                        reader.onerror = () => { SCDebug.error('FileReader error:', file.name); };
+                        reader.readAsDataURL(file);
+                    });
+                    // Reset file input so same file can be selected again
+                    e.target.value = '';
+                },
+                removeImage(idx) {
+                    this.imagePreviews.splice(idx, 1);
+                    this.imageFiles.splice(idx, 1);
+                },
+                async send() {
+                    const text = this.input.trim();
+                    if (!text && this.imageFiles.length === 0) return;
+                    if (this.typing) return;
+
+                    this.hasInteracted = true;
+                    const userDisplay = text || (this.imageFiles.length > 0 ? '<i class="bi bi-images"></i> Đã gửi ' + this.imageFiles.length + ' ảnh' : '');
+                    this.messages.push({ from: 'user', text: userDisplay, time: this.now() });
+
+                    const imagesToSend = [...this.imageFiles];
+                    const messageToSend = text || 'Hãy phân tích các hình ảnh tôi vừa gửi.';
+                    this.input = '';
+                    this.imagePreviews = [];
+                    this.imageFiles = [];
+
+                    this.scrollDown();
+                    this.typing = true;
+                    this.scrollDown();
+
+                    const sessionId = localStorage.getItem('chat_session_id') || crypto.randomUUID();
+                    localStorage.setItem('chat_session_id', sessionId);
+
+                    const payload = {
+                        user_message: messageToSend,
+                        session_id: sessionId,
+                        context: 'chat',
+                        images: imagesToSend
+                    };
+
+                    await this._tryStream(payload);
+
+                    this.typing = false;
+                    this.scrollDown();
+                },
+
+                async _tryStream(payload) {
+                    console.log('[Chat] Initiating consolidated stream...');
+                    const botMsg = { from: 'bot', text: '', time: this.now() };
+                    this.messages.push(botMsg);
+                    this.typing = false;
+                    this.scrollDown();
+
+                    try {
+                        const response = await fetch('/api/v1/chat/stream/', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            botMsg.text = '<i class="bi bi-exclamation-circle text-red-400"></i> Lỗi kết nối (HTTP ' + response.status + ')';
+                            return true;
+                        }
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        let buffer = '';
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop();
+
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(line.substring(6));
+                                        if (data.error) {
+                                            botMsg.text += '<br><span class="text-red-400 text-xs">[' + data.error + ']</span>';
+                                        }
+                                        if (data.chunk) {
+                                            botMsg.text += data.chunk;
+                                            this.scrollDown();
+                                        }
+                                    } catch (e) {}
+                                }
+                            }
+                        }
+                        return true;
+                    } catch (e) {
+                        console.error('Chat error:', e);
+                        botMsg.text = '<i class="bi bi-wifi-off text-red-500"></i> Lỗi kết nối mạng.';
+                        return true;
+                    }
+                }
+            }
+        }
+    </script>
+
+    {% block extra_js %}{% endblock %}
 </body>
+
 </html>

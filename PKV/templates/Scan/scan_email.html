@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Kiểm tra Email{% endblock %}
+
+{% block content %}
+<div class="animate-fadein max-w-4xl mx-auto space-y-10" x-data="{email:'', content:'', loading:false, result:null, error:'', aiText:'', aiLoading:false}">
+    <!-- Page Header -->
+    <div class="text-center space-y-4">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-pink-500/10 text-pink-400 mb-2 border border-pink-500/20 shadow-lg shadow-pink-500/10">
+            <i class="bi bi-envelope-exclamation text-4xl"></i>
+        </div>
+        <h1 class="text-4xl font-black text-white tracking-tight">
+            Kiểm tra <span class="glow-text">Email Scam</span>
+        </h1>
+        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed">
+            Phát hiện các email lừa đảo, giả mạo danh tíng hoặc chứa nội dung độc hại bằng công nghệ AI.
+        </p>
+    </div>
+
+    <!-- Input Area -->
+    <div class="liquid-card p-6 sm:p-8">
+        <form @submit.prevent="
+            if(!email.trim()){showToast('Vui lòng nhập Email', 'warning');return}
+            loading=true;result=null;aiText='';aiLoading=false;
+            fetch('/api/v1/scan/email/', {
+                method:'POST',
+                headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
+                body:JSON.stringify({email: email.trim(), content: content.trim()})
+            })
+            .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
+            .then(data=>{
+                result=data;loading=false;
+                aiLoading=true;aiText='';
+                fetch('/api/v1/scan/analyze-sse/', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
+                    body:JSON.stringify({scan_type:'email',scan_data:data,raw_input:email.trim()})
+                }).then(r=>{
+                    const reader=r.body.getReader();const decoder=new TextDecoder();let buf='';
+                    const pump=()=>reader.read().then(({done,value})=>{
+                        if(done){aiLoading=false;return}
+                        buf+=decoder.decode(value,{stream:true});
+                        const lines=buf.split('\n');buf=lines.pop();
+                        for(const line of lines){
+                            if(line.startsWith('data: ')){
+                                try{const d=JSON.parse(line.substring(6));if(d.chunk)aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
+                            }
+                        }
+                        pump();
+                    });pump();
+                }).catch(()=>{aiLoading=false; showToast('Không thể kết nối AI.', 'warning');});
+            })
+            .catch(e=>{showToast(e.error||'Có lỗi xảy ra.', 'error');loading=false;})
+        ">
+            <div class="space-y-4">
+                <div class="space-y-1.5">
+                    <label class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Địa chỉ Email người gửi</label>
+                    <input type="email" class="liquid-input w-full py-4 px-6 text-lg font-bold" 
+                        placeholder="sender@example.com" x-model="email" required>
+                </div>
+                
+                <div class="space-y-1.5">
+                    <label class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Nội dung Email (Nếu có)</label>
+                    <textarea class="liquid-input w-full py-4 px-6 min-h-[120px] text-sm" 
+                        placeholder="Dán nội dung tin nhắn email tại đây để AI phân tích kỹ hơn..." x-model="content"></textarea>
+                </div>
+ 
+                 <div class="pt-4">
+                    <button type="submit" class="liquid-btn w-full bg-pink-500 text-black py-5 font-black uppercase tracking-widest hover:bg-pink-400" :disabled="loading">
+                        <span x-show="!loading"><i class="bi bi-shield-shaded mr-2"></i> BẮT ĐẦU PHÂN TÍCH</span>
+                        <span x-show="loading" class="spinner w-5 h-5 border-black"></span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Result Display -->
+    <template x-if="result">
+        <div class="space-y-6">
+            <div class="liquid-card overflow-hidden">
+                <!-- Status Header -->
+                <div class="p-8 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
+                    <div class="absolute inset-0 opacity-10 -z-10 blur-[80px]"
+                        :class="result.risk_level==='RED'?'bg-red-500':result.risk_level==='YELLOW'?'bg-yellow-500':'bg-green-500'"></div>
+                    
+                    <div class="inline-block px-8 py-3 rounded-full text-xs font-black tracking-[0.3em] uppercase mb-6"
+                        :class="result.risk_level==='RED'?'bg-red-500/20 text-red-500 border border-red-500/30':result.risk_level==='YELLOW'?'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30':'bg-green-500/20 text-green-500 border border-green-500/30'"
+                        x-text="result.risk_level"></div>
+                    
+                    <div class="text-5xl font-black text-white mb-2" x-text="result.risk_score + '/100'"></div>
+                    <div class="text-[10px] text-white/30 font-black tracking-widest uppercase mb-8">Chỉ số rủi ro Email</div>
+                </div>
+
+                <!-- AI Insight -->
+                <div class="m-8 p-6 liquid-glass border-white/5 bg-pink-500/[0.02]">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center text-pink-400">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-black text-white uppercase tracking-wider">AI Phân tích chi tiết</h4>
+                            <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Psychological Pattern Detection</p>
+                        </div>
+                        <div x-show="aiLoading" class="ml-auto spinner w-4 h-4 text-pink-400"></div>
+                    </div>
+                    
+                    <div class="ai-markdown text-white/70 text-sm leading-relaxed" 
+                         :class="{'ai-streaming': aiLoading}"
+                         x-html="renderMd(aiText || 'Hệ thống đang phân tích các dấu hiệu lừa đảo...')"></div>
+                </div>
+
+                <!-- Actions -->
+                <div class="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
+                    <div class="flex gap-4">
+                        <button class="liquid-btn py-2 px-6 text-xs bg-white/5 text-white/60 border-white/10 hover:text-white"
+                            @click="navigator.clipboard.writeText(email);showToast('Đã copy Email!','success')">
+                            <i class="bi bi-copy"></i> Copy Email
+                        </button>
+                        <button class="liquid-btn py-2 px-6 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 transition-all font-black"
+                            @click="$dispatch('start-contextual-chat', { context: 'Email: ' + email + '\nAnalysis: ' + aiText })">
+                            <i class="bi bi-chat-dots-fill"></i> CHAT VỚI AI
+                        </button>
+                    </div>
+                    <a :href="'/report/?target_type=email&target_value='+encodeURIComponent(email)"
+                        class="liquid-btn py-2 px-8 text-xs bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30 transition-all font-black">
+                        <i class="bi bi-megaphone-fill"></i> TỐ CÁO EMAIL
+                    </a>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+{% endblock %}
