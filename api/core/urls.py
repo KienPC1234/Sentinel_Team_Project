@@ -10,6 +10,7 @@ app_name = 'core'
 
 urlpatterns = [
     # Auth
+    path('auth/register/request-otp/', views.RegisterRequestOTPView.as_view(), name='register-request-otp'),
     path('auth/register/', views.RegisterView.as_view(), name='register'),
     path('auth/login/', views.LoginView.as_view(), name='login'),
     path('auth/logout/', views.LogoutView.as_view(), name='logout'),
@@ -23,6 +24,9 @@ urlpatterns = [
     path('auth/mfa/deactivate/', views.MFADeactivateView.as_view(), name='mfa-deactivate'),
     path('auth/mfa/recovery/', views.MFARecoveryCodesView.as_view(), name='mfa-recovery'),
     path('auth/password/change/', views.PasswordChangeView.as_view(), name='api-password-change'),
+    path('auth/account/delete/', views.DeleteAccountView.as_view(), name='api-account-delete'),
+    path('auth/email-change/request/', views.EmailChangeRequestOTPView.as_view(), name='api-email-change-request'),
+    path('auth/email-change/verify/', views.EmailChangeVerifyOTPView.as_view(), name='api-email-change-verify'),
 
     # Scan
     path('scan/analyze-sse/', views.ScanAnalyzeSSEView.as_view(), name='scan-analyze-sse'),

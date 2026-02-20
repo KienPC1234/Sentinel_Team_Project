@@ -2,7 +2,7 @@
 {% block title %}Đăng nhập - ShieldCall VN{% endblock %}
 
 {% block content %}
-<div class="relative animate-fadein max-w-lg mx-auto py-12 px-4 space-y-8" 
+<div class="relative animate-fadein max-w-xl mx-auto py-12 px-4 space-y-8" 
      x-data="{
         email:'', 
         password:'', 
@@ -130,7 +130,11 @@
     </div>
 
     <!-- Main Login Card -->
-    <div class="liquid-card p-8 sm:p-10 border border-white/10 shadow-2xl shadow-cyan-500/5" data-aos="fade-up" data-aos-delay="400">
+    <div class="liquid-card p-8 sm:p-10 border border-cyan-400/15 bg-white/[0.03] backdrop-blur-2xl shadow-2xl shadow-cyan-500/10" data-aos="fade-up" data-aos-delay="400">
+        <div class="mb-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 flex items-center justify-between gap-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300/90">Liquid Glass Access</div>
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Captcha + MFA Ready</div>
+        </div>
         <!-- Google Login -->
         <a href="/accounts/google/login/?process=login" 
            class="liquid-btn w-full flex items-center justify-center gap-3 py-4 mb-8 bg-white/5 border-white/10 hover:bg-white/10 text-sm font-bold tracking-wide transition-all group">
