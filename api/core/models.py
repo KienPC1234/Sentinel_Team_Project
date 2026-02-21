@@ -4,11 +4,15 @@ Implements MVP spec Section 4: Database Schema
 """
 import hashlib
 import uuid
+import logging
 from django.db import models
 from django.conf import settings
+from martor.models import MartorField
+
+logger = logging.getLogger(__name__)
 from django.utils import timezone
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 # ─── User Profile Model ──────────────────────────────────────────────────────
@@ -16,10 +20,25 @@ from django.dispatch import receiver
 class UserProfile(models.Model):
     """Extended user data including avatar and preferences"""
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
-    avatar = models.ImageField(upload_to='avatars/%Y/%m/', null=True, blank=True)
+    display_name = models.CharField(max_length=100, blank=True)
+    avatar = models.ImageField(upload_to='profiles/avatars/', null=True, blank=True)
+    rank_points = models.IntegerField(default=0)
     bio = models.TextField(max_length=500, blank=True)
+    about = models.TextField(blank=True, help_text="Markdown supported bio/about section")
+    messenger_link = models.URLField(max_length=500, blank=True, null=True, help_text="Link to Facebook Messenger, Zalo, etc.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_super_admin = models.BooleanField(default=False)
+
+    @property
+    def rank_info(self):
+        """Returns rank name and icon based on points"""
+        p = self.rank_points
+        if p >= 5000: return {'name': 'Kim Cương', 'level': 'diamond', 'icon': 'bi-gem', 'color': 'text-cyan-400'}
+        if p >= 2000: return {'name': 'Bạch Kim', 'level': 'platinum', 'icon': 'bi-trophy-fill', 'color': 'text-purple-400'}
+        if p >= 1000: return {'name': 'Vàng', 'level': 'gold', 'icon': 'bi-award-fill', 'color': 'text-yellow-400'}
+        if p >= 300: return {'name': 'Bạc', 'level': 'silver', 'icon': 'bi-shield-shaded', 'color': 'text-slate-300'}
+        return {'name': 'Đồng', 'level': 'bronze', 'icon': 'bi-shield-fill', 'color': 'text-orange-400'}
 
     def __str__(self):
         return f"Profile of {self.user.username}"
@@ -85,6 +104,7 @@ class ScanType(models.TextChoices):
     DOMAIN = 'domain', 'Website/URL'
     ACCOUNT = 'account', 'Tài khoản ngân hàng'
     QR = 'qr', 'QR / Ảnh'
+    EMAIL = 'email', 'Email'
 
 
 class TargetType(models.TextChoices):
@@ -93,6 +113,7 @@ class TargetType(models.TextChoices):
     ACCOUNT = 'account', 'Tài khoản ngân hàng'
     MESSAGE = 'message', 'Tin nhắn'
     QR = 'qr', 'QR Code'
+    EMAIL = 'email', 'Email'
 
 
 # ─── Domain Model ───────────────────────────────────────────────────────────
@@ -183,6 +204,12 @@ class Report(models.Model):
     description = models.TextField()
     evidence_file = models.ImageField(upload_to='reports/evidence/%Y/%m/',
                                       null=True, blank=True)
+    
+    # New Scammer details fields
+    scammer_phone = models.CharField(max_length=20, blank=True)
+    scammer_bank_account = models.CharField(max_length=50, blank=True)
+    scammer_bank_name = models.CharField(max_length=100, blank=True)
+    scammer_name = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=10, choices=ReportStatus.choices,
                               default=ReportStatus.PENDING, db_index=True)
     moderator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
@@ -219,6 +246,13 @@ class ScanEvent(models.Model):
                               default=ScanStatus.COMPLETED, db_index=True)
     job_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # Email Security Fields (Enterprise Grade)
+    sender_domain = models.CharField(max_length=255, blank=True, null=True)
+    spf_status = models.CharField(max_length=50, blank=True, null=True)
+    dkim_status = models.CharField(max_length=50, blank=True, null=True)
+    dmarc_status = models.CharField(max_length=50, blank=True, null=True)
+    detected_urls = models.JSONField(default=list, blank=True, help_text="List of URLs found in email/message")
 
     class Meta:
         ordering = ['-created_at']
@@ -317,14 +351,19 @@ class ForumPost(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                related_name='forum_posts')
     title = models.CharField(max_length=300)
-    content = models.TextField()
+    content = MartorField()
     category = models.CharField(max_length=20, choices=ForumCategory.choices,
                                 default=ForumCategory.DISCUSSION)
     image = models.ImageField(upload_to='forum_images/', null=True, blank=True)
     views_count = models.IntegerField(default=0)
     likes_count = models.IntegerField(default=0)
+    helpful_count = models.IntegerField(default=0)
+    shares_count = models.IntegerField(default=0)
+    dislikes_count = models.IntegerField(default=0)
+    reports_count = models.IntegerField(default=0)
     comments_count = models.IntegerField(default=0)
     is_pinned = models.BooleanField(default=False)
+    is_locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -344,7 +383,8 @@ class ForumComment(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                related_name='forum_comments')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
-    content = models.TextField()
+    content = MartorField()
+    likes_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -366,9 +406,68 @@ class ForumLike(models.Model):
         unique_together = ['user', 'post']
 
     def __str__(self):
-        return f"{self.user} likes {self.post.title[:30]}"
+        return f"{self.user.username} liked {self.post.id}"
 
-# ─── Article Model (Admin CMS) ──────────────────────────────────────────────
+class ForumCommentLike(models.Model):
+    """Track user likes on forum comments"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    comment = models.ForeignKey(ForumComment, on_delete=models.CASCADE,
+                                related_name='likes')
+
+    class Meta:
+        unique_together = ['user', 'comment']
+
+    def __str__(self):
+        return f"{self.user.username} liked comment {self.comment.id}"
+
+class ForumReactionType(models.TextChoices):
+    HELPFUL = 'helpful', 'Hữu ích'
+    SHARE = 'share', 'Chia sẻ'
+    DISLIKE = 'dislike', 'Không thích'
+
+class ForumPostReaction(models.Model):
+    """Specific reactions like Helpful or Shared"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=10, choices=ForumReactionType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'post', 'reaction_type']
+
+class ForumPostReport(models.Model):
+    """Community reports for harmful/scam content"""
+    class ReportStatus(models.TextChoices):
+        PENDING = 'pending', 'Chờ xử lý'
+        APPROVED = 'approved', 'Đã duyệt (Vi phạm)'
+        REJECTED = 'rejected', 'Từ chối (Không vi phạm)'
+        AI_FLAGGED = 'ai_flagged', 'AI gắn cờ'
+
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE, related_name='post_reports')
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=ReportStatus.choices, default=ReportStatus.PENDING)
+    ai_analysis = models.JSONField(default=dict, blank=True)
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+class ForumCommentReport(models.Model):
+    """Community reports for harmful comments"""
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    comment = models.ForeignKey(ForumComment, on_delete=models.CASCADE, related_name='comment_reports')
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=ForumPostReport.ReportStatus.choices, default=ForumPostReport.ReportStatus.PENDING)
+    ai_analysis = models.JSONField(default=dict, blank=True)
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+# ─── Article & Learn Model (Admin CMS) ──────────────────────────────────────
 
 class ArticleCategory(models.TextChoices):
     NEWS = 'news', 'Tin tức'
@@ -381,7 +480,7 @@ class Article(models.Model):
     """Admin articles for educating users (CMS)"""
     title = models.CharField(max_length=300)
     slug = models.SlugField(max_length=350, unique=True, blank=True)
-    content = models.TextField()
+    content = MartorField()
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
     cover_image = models.ImageField(upload_to='articles/covers/', null=True, blank=True)
@@ -402,3 +501,89 @@ class Article(models.Model):
             from django.utils.text import slugify
             self.slug = slugify(self.title)
         super().save(*args, **kwargs)
+
+class LearnLesson(models.Model):
+    """Educational lessons for users"""
+    title = models.CharField(max_length=300)
+    slug = models.SlugField(max_length=350, unique=True, blank=True)
+    content = MartorField()
+    category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
+    cover_image = models.ImageField(upload_to='learn/covers/', null=True, blank=True)
+    is_published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)
+
+class LearnQuiz(models.Model):
+    """Quizzes attached to lessons"""
+    lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='quizzes')
+    question = models.TextField()
+    options = models.JSONField(help_text="List of choices")
+    correct_answer = models.CharField(max_length=200)
+    explanation = models.TextField(blank=True)
+
+class LearnScenario(models.Model):
+    """Interactive scam scenarios"""
+    title = models.CharField(max_length=300)
+    description = models.TextField()
+    content = models.JSONField(help_text="Scenario flow logic")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+# ─── Prestige Calculation & Signals ────────────────────────────────────────
+
+def update_user_prestige(user):
+    """Recalculate user rank points based on activity"""
+    try:
+        profile = user.profile
+        points = 0
+        
+        # 1. Activities by the user
+        points += ForumPost.objects.filter(author=user).count() * 10
+        points += ForumComment.objects.filter(author=user).count() * 5
+        
+        # 2. Reactions received on their posts
+        post_likes = ForumLike.objects.filter(post__author=user).count()
+        helpful_count = ForumPostReaction.objects.filter(post__author=user, reaction_type=ForumReactionType.HELPFUL).count()
+        share_count = ForumPostReaction.objects.filter(post__author=user, reaction_type=ForumReactionType.SHARE).count()
+        dislike_count = ForumPostReaction.objects.filter(post__author=user, reaction_type=ForumReactionType.DISLIKE).count()
+        
+        # 3. Likes received on comments
+        comment_likes = ForumCommentLike.objects.filter(comment__author=user).count()
+        
+        # 4. Community contributions (Reporting valid scams - we give small points for reporting)
+        reports_made = ForumPostReport.objects.filter(reporter=user).count()
+        
+        # 5. Post reports received (ONLY approved ones)
+        report_count = ForumPostReport.objects.filter(post__author=user, status='approved').count()
+        
+        points += (post_likes * 2)
+        points += (helpful_count * 2)
+        points += (share_count * 2)
+        points += (comment_likes * 2)
+        points += (reports_made * 5) # Reward for reporting
+        points += (dislike_count * -5)
+        points += (report_count * -50) # Heavy penalty for approved violations
+
+        profile.rank_points = max(0, points)
+        profile.save(update_fields=['rank_points'])
+    except Exception as e:
+        print(f"Prestige update error: {e}")
+
+@receiver([post_save, post_delete], sender=ForumPost)
+@receiver([post_save, post_delete], sender=ForumComment)
+@receiver([post_save, post_delete], sender=ForumLike)
+@receiver([post_save, post_delete], sender=ForumCommentLike)
+@receiver([post_save, post_delete], sender=ForumPostReaction)
+@receiver([post_save, post_delete], sender=ForumPostReport)
+def trigger_prestige_update(sender, instance, **kwargs):
+    if hasattr(instance, 'author'):
+        update_user_prestige(instance.author)
+    elif hasattr(instance, 'post'): # For reactions and reports
+        update_user_prestige(instance.post.author)
+    elif hasattr(instance, 'reporter'): # For reports
+        update_user_prestige(instance.reporter)
+        if instance.post: update_user_prestige(instance.post.author)

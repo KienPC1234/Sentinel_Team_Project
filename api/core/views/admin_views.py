@@ -23,7 +23,10 @@ from api.utils.ollama_client import analyze_text_for_scam, generate_response, st
 from api.core.models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
     EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
+    Article, LearnLesson
 )
+from api.utils.vector_db import vector_db
+from django.shortcuts import render
 from api.core.serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
     DomainSerializer, BankAccountSerializer,
@@ -109,5 +112,28 @@ class AdminStatsView(APIView):
             'domains_tracked': Domain.objects.count(),
             'accounts_tracked': BankAccount.objects.count(),
         })
+
+class AdminRAGManagementView(APIView):
+    """GET /api/admin/rag — Dashboard for RAG management"""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        # Trigger index loading if not already loaded
+        vector_db.load_index()
+        stats = {
+            'document_count': len(vector_db.metadata),
+        }
+        return render(request, 'Admin/rag_management.html', {'stats': stats})
+
+class AdminRAGRebuildView(APIView):
+    """POST /api/admin/rag/rebuild — Trigger vector index rebuild"""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        try:
+            vector_db.rebuild_index()
+            return Response({'message': 'Chỉ mục Vector đã được xây dựng lại thành công.'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

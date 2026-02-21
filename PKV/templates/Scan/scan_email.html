@@ -20,11 +20,13 @@
     <div class="liquid-card p-6 sm:p-8">
         <form @submit.prevent="
             if(!email.trim()){showToast('Vui lòng nhập Email', 'warning');return}
+            const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+            if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
             loading=true;result=null;aiText='';aiLoading=false;
             fetch('/api/v1/scan/email/', {
                 method:'POST',
                 headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
-                body:JSON.stringify({email: email.trim(), content: content.trim()})
+                body:JSON.stringify({email: email.trim(), content: content.trim(), 'cf-turnstile-response': tsToken})
             })
             .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
             .then(data=>{
@@ -63,7 +65,11 @@
                     <textarea class="liquid-input w-full py-4 px-6 min-h-[120px] text-sm" 
                         placeholder="Dán nội dung tin nhắn email tại đây để AI phân tích kỹ hơn..." x-model="content"></textarea>
                 </div>
- 
+                <!-- Turnstile Widget -->
+                <div class="flex justify-center">
+                    <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
+                </div>
+
                  <div class="pt-4">
                     <button type="submit" class="liquid-btn w-full bg-pink-500 text-black py-5 font-black uppercase tracking-widest hover:bg-pink-400" :disabled="loading">
                         <span x-show="!loading"><i class="bi bi-shield-shaded mr-2"></i> BẮT ĐẦU PHÂN TÍCH</span>

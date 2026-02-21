@@ -1,7 +1,7 @@
 # ShieldCall VN 🛡️ — Nền tảng Bảo vệ Người dùng Số Việt Nam
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
-[![Django](https://img.shields.io/badge/Django-6.0-green.svg)](https://www.djangoproject.com/)
+[![Django](https://img.shields.io/badge/Django-5.2.x-green.svg)](https://www.djangoproject.com/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-Glassmorphism-blueviolet.svg)](https://tailwindcss.com/)
 [![AI](https://img.shields.io/badge/AI-Ollama%20%2B%20OCR-orange.svg)](https://ollama.ai/)
 
@@ -31,7 +31,7 @@
 
 ## 🛠️ Công nghệ sử dụng
 
-*   **Backend:** Django 6.0, Django REST Framework (DRF)
+*   **Backend:** Django 5.2.x, Django REST Framework (DRF)
 *   **Frontend:** TailwindCSS v4 (Glassmorphism Design), Alpine.js
 *   **Database:** MySQL 8.0 (Primary), Redis 7 (Cache & Queue)
 *   **Asynchronous:** Celery & RabbitMQ/Redis (Xử lý OCR và AI dài hạn)
@@ -42,7 +42,7 @@
 
 ---
 
-## 🚀 Cài đặt & Khởi chạy
+## 🚀 Cài đặt & Khởi chạy (Dev)
 
 ### 1. Yêu cầu hệ thống
 - Python 3.12+
@@ -82,7 +82,7 @@ python manage.py collectstatic --noinput
 
 ### 5. Khởi chạy hệ thống
 
-Hệ thống cần 3 tiến trình chạy song song:
+Hệ thống cần các tiến trình sau (tùy tính năng):
 
 ```bash
 # 1. Django Server
@@ -91,19 +91,27 @@ python manage.py runserver 0.0.0.0:8000
 # 2. Celery Worker (Xử lý tác vụ ngầm)
 celery -A PKV worker -l info
 
-# 3. Ollama (Phục vụ AI)
-ollama run gemma2:2b  # Hoặc model bạn cấu hình trong utils/ollama_client.py
+# 3. Redis (cho cache, session, Celery, Channels)
+redis-server  # hoặc service tương đương
+
+# 4. Ollama (Phục vụ AI – nếu dùng tính năng AI/scan nâng cao)
+ollama run <model>  # Trùng với model cấu hình trong api/utils/ollama_client.py
 ```
 
 ---
 
 ## 📁 Cấu trúc thư mục Chính
 
-*   `api/core/`: Logic cốt lõi của hệ thống (Models, Views, Serializers).
-*   `api/utils/`: Các bộ máy phân tích (Ollama client, OCR, normalization).
-*   `PKV/templates/`: Giao diện người dùng theo phong cách Glassmorphism.
-*   `theme/`: Cấu hình TailwindCSS và Style hệ thống.
-*   `docs/`: Tài liệu chi tiết về API và hướng dẫn tích hợp.
+- api/core/: API cốt lõi (auth, MFA, scan, forum, trends, articles…).
+- api/sessions_api/: Check/khởi tạo session cho mobile.
+- api/phone_security/: API kiểm tra độ an toàn số điện thoại.
+- api/ai_chat/: Chat AI + SSE stream.
+- api/media_analysis/: Phân tích ảnh/audio (OCR, QR, risk).
+- api/maintenance/: Báo crash, log lỗi.
+- api/utils/: Ollama client, OCR/media utils, normalization, bảo mật, VT, email.
+- PKV/: cấu hình Django project, URL web, view và template.
+- theme/: TailwindCSS (Django-tailwind app).
+- docs/: tài liệu API & tích hợp.
 
 ---
 

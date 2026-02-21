@@ -9,38 +9,32 @@
     <meta name="description"
         content="{% block meta_description %}Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo và các hình thức lừa đảo số{% endblock %}">
 
-    <!-- SVG Favicon -->
     <link rel="icon" type="image/svg+xml"
         href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%2318ffff'/%3E%3Cstop offset='100%25' stop-color='%23b388ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill='url(%23g)' d='M32 2L6 14v18c0 16.6 11.1 31.1 26 35 14.9-3.9 26-18.4 26-35V14L32 2zm0 8l20 9.5V32c0 13-8.7 24.3-20 27.8C19.7 56.3 12 45 12 32V19.5L32 10z'/%3E%3Cpath fill='url(%23g)' d='M28 38l-8-8 3-3 5 5 13-13 3 3z'/%3E%3C/svg%3E">
 
     {% tailwind_css %}
 
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
 
-    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
-    <!-- Animate.css -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
 
-    <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
-    <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-    <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.ckeditor.com/ckeditor5/47.5.0/ckeditor5.css" crossorigin>
+    <script src="https://cdn.ckeditor.com/ckeditor5/47.5.0/ckeditor5.umd.js" crossorigin></script>
 
     {% block head_extra %}{% endblock %}
     <style>
@@ -52,11 +46,359 @@
             vertical-align: bottom;
         }
         @keyframes blink { 50% { opacity: 0; } }
+
+        /* AI Markdown Styles */
+        .ai-markdown h1 { font-size: 1.5em; font-weight: 800; margin-top: 1em; margin-bottom: 0.5em; color: white; }
+        .ai-markdown h2 { font-size: 1.25em; font-weight: 700; margin-top: 1em; margin-bottom: 0.5em; color: rgba(255,255,255,0.9); }
+        .ai-markdown h3 { font-size: 1.1em; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; color: rgba(255,255,255,0.8); }
+        .ai-markdown ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
+        .ai-markdown ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1em; }
+        .ai-markdown li { margin-bottom: 0.25em; }
+        .ai-markdown p { margin-bottom: 1em; line-height: 1.6; }
+        .ai-markdown strong { font-weight: 700; color: rgba(255,255,255,0.95); }
+        .ai-markdown em { font-style: italic; color: rgba(255,255,255,0.8); }
+        .ai-markdown blockquote { border-left: 4px solid rgba(59, 130, 246, 0.5); padding-left: 1em; margin-left: 0; margin-bottom: 1em; color: rgba(255,255,255,0.6); font-style: italic; }
+        .ai-markdown pre { background: rgba(0,0,0,0.3); padding: 1em; border-radius: 0.5em; overflow-x: auto; margin-bottom: 1em; border: 1px solid rgba(255,255,255,0.1); }
+        .ai-markdown code { font-family: monospace; background: rgba(255,255,255,0.1); padding: 0.1em 0.3em; rounded: 0.2em; border-radius: 4px; color: #a5f3fc; }
+        .ai-markdown pre code { background: transparent; padding: 0; color: inherit; }
+        .ai-markdown a { color: #22d3ee; text-decoration: underline; text-underline-offset: 4px; }
+        .ai-markdown a:hover { color: #67e8f9; }
+        .ai-markdown hr { border-color: rgba(255,255,255,0.1); margin: 2em 0; }
+        .ai-markdown table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+        .ai-markdown th, .ai-markdown td { border: 1px solid rgba(255,255,255,0.1); padding: 0.5em; text-align: left; }
+        .ai-markdown th { background: rgba(255,255,255,0.05); font-weight: 600; }
+
+        .ck-editor__editable_inline {
+            min-height: 240px;
+            color: #fff !important;
+            background: rgba(255, 255, 255, 0.02) !important;
+        }
+        .ck.ck-editor {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        .ck.ck-toolbar {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        .ck.ck-button {
+            color: rgba(255, 255, 255, 0.7) !important;
+            cursor: pointer !important;
+        }
+        .ck.ck-button:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
+        .ck.ck-button.ck-on {
+            background: rgba(24, 255, 255, 0.15) !important;
+            color: #18ffff !important;
+        }
+        .ck.ck-content {
+            color: #fff !important;
+        }
+        .ck.ck-reset_all * {
+            color: #fff !important;
+        }
+        /* Fix stretch issue */
+        .ck-editor__main {
+            width: 100% !important;
+            overflow: hidden !important;
+        }
+        /* Sticky toolbar for better UX */
+        .ck-toolbar_floating {
+            background: #0d0d1f !important;
+        }
+        .ck.ck-toolbar,
+        .ck.ck-editor__main>.ck-editor__editable {
+            background: rgba(10, 15, 24, 0.65) !important;
+        }
+        .ck.ck-button,
+        .ck.ck-button .ck-button__label,
+        .ck.ck-icon {
+            color: rgba(255, 255, 255, 0.85) !important;
+        }
+        .ck.ck-content a {
+            color: #18ffff;
+            text-decoration: underline;
+        }
+        
+        /* AI Markdown Styles (Fix Tailwind Reset) */
+        .ai-markdown > * + * { margin-top: 1em; }
+        .ai-markdown h1 { font-size: 1.8em; font-weight: 800; margin-top: 1.5em; margin-bottom: 0.8em; color: #fff; line-height: 1.2; }
+        .ai-markdown h2 { font-size: 1.5em; font-weight: 700; margin-top: 1.4em; margin-bottom: 0.6em; color: #e2e8f0; line-height: 1.3; }
+        .ai-markdown h3 { font-size: 1.25em; font-weight: 600; margin-top: 1.2em; margin-bottom: 0.5em; color: #cbd5e1; }
+        .ai-markdown h4 { font-size: 1.1em; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        .ai-markdown ul { list-style-type: disc !important; padding-left: 1.5em !important; margin-bottom: 1em; }
+        .ai-markdown ol { list-style-type: decimal !important; padding-left: 1.5em !important; margin-bottom: 1em; }
+        .ai-markdown li { margin-bottom: 0.4em; padding-left: 0.2em; position: relative; }
+        .ai-markdown ul ul, .ai-markdown ol ol, .ai-markdown ul ol, .ai-markdown ol ul { margin-top: 0.5em; margin-bottom: 0.5em; }
+        
+        .ai-markdown p { margin-bottom: 1em; line-height: 1.7; color: rgba(255,255,255,0.8); }
+        .ai-markdown strong { font-weight: 700; color: #fff; }
+        .ai-markdown em { font-style: italic; color: rgba(255,255,255,0.8); }
+        
+        .ai-markdown blockquote { border-left: 4px solid #06b6d4; padding: 0.5em 0 0.5em 1.2em; margin: 1.5em 0; background: rgba(6, 182, 212, 0.05); border-radius: 0 8px 8px 0; color: rgba(255,255,255,0.7); }
+        .ai-markdown blockquote p:last-child { margin-bottom: 0; }
+        
+        .ai-markdown code { background: rgba(255,255,255,0.1); padding: 0.2em 0.4em; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em; color: #facc15; }
+        .ai-markdown pre { background: rgba(0,0,0,0.3); padding: 1.2em; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; border: 1px solid rgba(255,255,255,0.1); }
+        .ai-markdown pre code { background: transparent; padding: 0; color: #e2e8f0; font-size: 0.85em; }
+        
+        .ai-markdown a { color: #22d3ee; text-decoration: none; border-bottom: 1px dotted #22d3ee; transition: all 0.2s; }
+        .ai-markdown a:hover { color: #67e8f9; border-bottom-style: solid; }
+        
+        .ai-markdown table { width: 100%; border-collapse: collapse; margin: 1.5em 0; font-size: 0.9em; }
+        .ai-markdown th { background: rgba(255,255,255,0.05); font-weight: 600; text-align: left; padding: 0.75em; border-bottom: 1px solid rgba(255,255,255,0.1); color: #fff; }
+        .ai-markdown td { padding: 0.75em; border-bottom: 1px solid rgba(255,255,255,0.05); color: rgba(255,255,255,0.7); }
+        .ai-markdown tr:last-child td { border-bottom: none; }
+        
+        .ai-markdown hr { margin: 2em 0; border: 0; border-top: 1px solid rgba(255,255,255,0.1); }
     </style>
     <script>
+        window.createCKEditor = async function(selector, initialData, placeholder = 'Nhập nội dung...') {
+            if (!window.CKEDITOR) {
+                console.error('CKEditor not loaded yet');
+                return null;
+            }
+
+            const {
+                ClassicEditor, Autosave, Essentials, Paragraph, ImageBlock, ImageToolbar,
+                Bold, CloudServices, ImageUpload, ImageInsertViaUrl, AutoImage, Table,
+                TableToolbar, ImageTextAlternative, ImageCaption, ImageStyle, ImageInline,
+                Italic, List, MediaEmbed, TableCaption, TodoList, Underline, ImageUtils,
+                ImageEditing, Mention, Superscript, Subscript, Strikethrough, Highlight,
+                Heading, Link, AutoLink, BlockQuote, HorizontalLine, CodeBlock, Indent,
+                IndentBlock, Alignment, Style, GeneralHtmlSupport
+            } = window.CKEDITOR;
+
+            const LICENSE_KEY = '{{ CKEDITOR_LICENSE_KEY|escapejs }}';
+            
+            const editorConfig = {
+                licenseKey: LICENSE_KEY || 'GPL', // Fallback to GPL if no key
+                placeholder,
+                initialData: initialData || '',
+                plugins: [
+                    Alignment, AutoImage, AutoLink, Autosave, BlockQuote, Bold,
+                    CloudServices, CodeBlock, Essentials, GeneralHtmlSupport, Heading,
+                    Highlight, HorizontalLine, ImageBlock, ImageCaption, ImageEditing,
+                    ImageInline, ImageInsertViaUrl, ImageStyle, ImageTextAlternative,
+                    ImageToolbar, ImageUpload, ImageUtils, Indent, IndentBlock, Italic,
+                    Link, List, MediaEmbed, Mention, Paragraph, Strikethrough,
+                    Style, Subscript, Superscript, Table, TableCaption, TableToolbar,
+                    TodoList, Underline
+                ],
+                toolbar: {
+                    items: [
+                        'undo', 'redo', '|',
+                        'heading', 'style', '|',
+                        'bold', 'italic', 'underline', 'strikethrough', 'subscript', 'superscript', '|',
+                        'horizontalLine', 'link', 'mediaEmbed', 'insertTable', 'highlight', 'blockQuote', 'codeBlock', '|',
+                        'alignment', '|',
+                        'bulletedList', 'numberedList', 'todoList', 'outdent', 'indent'
+                    ],
+                    shouldNotGroupWhenFull: false
+                },
+                heading: {
+                    options: [
+                        { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
+                        { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
+                        { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
+                        { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' },
+                        { model: 'heading4', view: 'h4', title: 'Heading 4', class: 'ck-heading_heading4' },
+                        { model: 'heading5', view: 'h5', title: 'Heading 5', class: 'ck-heading_heading5' },
+                        { model: 'heading6', view: 'h6', title: 'Heading 6', class: 'ck-heading_heading6' }
+                    ]
+                },
+                htmlSupport: {
+                    allow: [
+                        { name: /^.*$/, styles: true, attributes: true, classes: true }
+                    ]
+                },
+                image: {
+                    toolbar: ['toggleImageCaption', 'imageTextAlternative', '|', 'imageStyle:inline', 'imageStyle:wrapText', 'imageStyle:breakText']
+                },
+                link: {
+                    addTargetToExternalLinks: true,
+                    defaultProtocol: 'https://',
+                    decorators: {
+                        toggleDownloadable: {
+                            mode: 'manual',
+                            label: 'Downloadable',
+                            attributes: { download: 'file' }
+                        }
+                    }
+                },
+                mention: {
+                    feeds: [
+                        {
+                            marker: '@',
+                            feed: async (query) => {
+                                if (query.length < 1) return [];
+                                try {
+                                    const response = await fetch(`/api/v1/utils/mentions/?query=${encodeURIComponent(query)}`);
+                                    return await response.json();
+                                } catch (error) {
+                                    console.error('Mention fetch failed:', error);
+                                    return [];
+                                }
+                            },
+                            minimumCharacters: 1,
+                            itemRenderer: (item) => {
+                                const container = document.createElement('div');
+                                container.classList.add('flex', 'items-center', 'gap-3', 'p-1');
+                                
+                                const avatar = document.createElement('div');
+                                avatar.classList.add('w-8', 'h-8', 'rounded-lg', 'bg-white/5', 'overflow-hidden', 'flex-shrink-0');
+                                if (item.avatar) {
+                                    avatar.innerHTML = `<img src="${item.avatar}" class="w-full h-full object-cover">`;
+                                } else {
+                                    avatar.innerHTML = `<div class="w-full h-full flex items-center justify-center text-[10px] font-black bg-cyan-500/20 text-cyan-400">${item.name[0].toUpperCase()}</div>`;
+                                }
+                                
+                                const info = document.createElement('div');
+                                info.classList.add('flex', 'flex-col');
+                                info.innerHTML = `<span class="text-sm font-bold text-white">${item.name}</span><span class="text-[10px] text-white/40 font-medium">${item.id}</span>`;
+                                
+                                container.appendChild(avatar);
+                                container.appendChild(info);
+                                return container;
+                            }
+                        }
+                    ]
+                },
+                style: {
+                    definitions: [
+                        { name: 'Article category', element: 'h3', classes: ['category'] },
+                        { name: 'Title', element: 'h2', classes: ['document-title'] },
+                        { name: 'Subtitle', element: 'h3', classes: ['document-subtitle'] },
+                        { name: 'Info box', element: 'p', classes: ['info-box'] },
+                        { name: 'CTA Link Primary', element: 'a', classes: ['button', 'button--green'] },
+                        { name: 'CTA Link Secondary', element: 'a', classes: ['button', 'button--black'] },
+                        { name: 'Marker', element: 'span', classes: ['marker'] },
+                        { name: 'Spoiler', element: 'span', classes: ['spoiler'] }
+                    ]
+                },
+                table: {
+                    contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells']
+                }
+            };
+
+            const element = document.querySelector(selector);
+            if (!element) {
+                console.error('Editor element not found:', selector);
+                return null;
+            }
+            
+            return ClassicEditor.create(element, editorConfig);
+        };
+
         window.renderMd = function(text) {
             if (!text) return '';
-            try { return marked.parse(text); } catch(e) { return text; }
+            // Trim leading whitespace to prevent unintended code blocks, 
+            // but preserve internal formatting if possible
+            const cleanText = String(text).trim(); 
+            try { 
+                // Use built-in marked with breaks enabled for newlines
+                return marked.parse(cleanText, { 
+                    breaks: true, 
+                    gfm: true
+                }); 
+            } catch(e) { 
+                console.error('Markdown rendering error:', e);
+                return cleanText; 
+            }
+        };
+
+        window.renderRichText = function(data) {
+            if (!data) return '';
+            
+            // Check if it's Editor.js JSON
+            if (typeof data === 'string' && (data.trim().startsWith('{') || data.trim().startsWith('['))) {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.blocks) {
+                        return window.renderEditorJS(parsed);
+                    }
+                } catch(e) {}
+            }
+            
+            // Reverted to HTML output from CKEditor, so we return as is
+            return data;
+        };
+
+        window.renderEditorJS = function(data) {
+            if (!data) return '';
+            try {
+                let parsedData = data;
+                if (typeof data === 'string') {
+                    try { parsedData = JSON.parse(data); } catch(e) { return data; }
+                }
+                const blocks = parsedData.blocks;
+                if (!blocks || !Array.isArray(blocks)) return typeof data === 'string' ? data : '';
+                
+                let html = '';
+                blocks.forEach(block => {
+                    switch (block.type) {
+                        case 'header':
+                            html += `<h${block.data.level} class="text-white font-black my-4">${block.data.text}</h${block.data.level}>`;
+                            break;
+                        case 'paragraph':
+                            html += `<p class="my-3 text-white/70 leading-relaxed">${block.data.text}</p>`;
+                            break;
+                        case 'list':
+                            const tag = block.data.style === 'ordered' ? 'ol' : 'ul';
+                            const listClass = block.data.style === 'ordered' ? 'list-decimal' : 'list-disc';
+                            html += `<${tag} class="${listClass} ml-6 my-4 text-white/70">`;
+                            block.data.items.forEach(item => {
+                                html += `<li>${item}</li>`;
+                            });
+                            html += `</${tag}>`;
+                            break;
+                        case 'quote':
+                            html += `<blockquote class="border-l-4 border-cyan-500 pl-4 my-6 italic text-white/60 bg-white/5 py-4 rounded-r-xl">${block.data.text}${block.data.caption ? `<footer class="mt-2 text-xs font-black uppercase tracking-widest">— ${block.data.caption}</footer>` : ''}</blockquote>`;
+                            break;
+                        case 'raw':
+                            html += `<div class="raw-html my-6 p-4 rounded-xl bg-black/20 border border-white/5 text-xs text-white/40">${block.data.html}</div>`;
+                            break;
+                        case 'checklist':
+                            html += `<div class="my-4 space-y-2">`;
+                            block.data.items.forEach(item => {
+                                html += `<div class="flex items-center gap-2"><i class="bi ${item.checked ? 'bi-check-square-fill text-cyan-400' : 'bi-square text-white/20'}"></i> <span class="${item.checked ? 'text-white/40 line-through' : 'text-white/70'}">${item.text}</span></div>`;
+                            });
+                            html += `</div>`;
+                            break;
+                        case 'link':
+                            html += `<a href="${block.data.link}" target="_blank" class="block p-4 my-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all">
+                                <p class="text-sm font-bold text-white mb-1">${block.data.meta?.title || block.data.link}</p>
+                                <p class="text-xs text-white/40 truncate">${block.data.meta?.description || ''}</p>
+                            </a>`;
+                            break;
+                        case 'image':
+                            const imgClass = block.data.stretched ? 'w-full' : 'max-w-full mx-auto';
+                            const borderClass = block.data.withBorder ? 'border-4 border-white/10' : '';
+                            const bgClass = block.data.withBackground ? 'bg-white/5 p-4 rounded-3xl' : '';
+                            html += `<div class="my-8 ${bgClass}">
+                                <img src="${block.data.file.url}" class="${imgClass} ${borderClass} rounded-2xl shadow-2xl" alt="${block.data.caption || 'Image'}">
+                                ${block.data.caption ? `<p class="mt-3 text-center text-xs text-white/40 italic font-medium uppercase tracking-widest">${block.data.caption}</p>` : ''}
+                            </div>`;
+                            break;
+                        case 'embed':
+                            html += `<div class="my-8 rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-black/40">
+                                <div class="aspect-video">
+                                    <iframe src="${block.data.embed}" width="100%" height="100%" frameborder="0" allowfullscreen class="w-full h-full"></iframe>
+                                </div>
+                                ${block.data.caption ? `<div class="p-4 bg-white/5 border-t border-white/5 text-center text-xs text-white/40 italic font-medium uppercase tracking-widest">${block.data.caption}</div>` : ''}
+                            </div>`;
+                            break;
+                        default:
+                            console.log('Unknown block type', block.type);
+                    }
+                });
+                return html;
+            } catch (e) {
+                console.error('EditorJS Render Error:', e);
+                return typeof data === 'string' ? data : '';
+            }
         };
 
         // Premium Notification System
@@ -440,9 +782,9 @@
         /* Nav bar premium */
         .nav-premium {
             background: rgba(13,13,31,0.72);
-            backdrop-filter: blur(28px) saturate(1.4);
-            -webkit-backdrop-filter: blur(28px) saturate(1.4);
-            border-bottom: 1px solid rgba(255,255,255,0.06);
+            backdrop-filter: blur(32px) saturate(1.6);
+            -webkit-backdrop-filter: blur(32px) saturate(1.6);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
             position: sticky; top: 0; z-index: 50;
         }
         .nav-premium::after {
@@ -668,14 +1010,27 @@
 
         /* Avatar Gradient Pill */
         .avatar-pill {
-            width: 38px; height: 38px;
-            border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
-            color: #fff;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            border: 2px solid rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px;
+            padding: 4px 12px 4px 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .avatar-pill:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(24, 255, 255, 0.3);
+        }
+
+        /* Dropdown Blur Premium */
+        .dropdown-blur {
+            background: rgba(13, 13, 31, 0.85) !important;
+            backdrop-filter: blur(40px) saturate(1.8) !important;
+            -webkit-backdrop-filter: blur(40px) saturate(1.8) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
         }
 
         /* Responsive Two-Column Layout */
@@ -712,9 +1067,16 @@
     {% block extra_css %}{% endblock %}
 </head>
 
-<body x-data="{ mobileMenu: false }">
+<body x-data="{ 
+    mobileMenu: false, 
+    user: { 
+        username: '{{ user.username|escapejs }}', 
+        display_name: '{{ user.profile.display_name|escapejs }}',
+        avatar: '{% if user.profile.avatar %}{{ user.profile.avatar.url|escapejs }}{% endif %}',
+        rank: {{ user.profile.rank_info|safe|default:'{}' }}
+    } 
+}" @profile-updated.window="user = { ...user, ...$event.detail.user }">
 
-    <!-- Ambient glow effects -->
     <div
         style="position:fixed;top:-200px;left:-200px;width:500px;height:500px;background:radial-gradient(circle,rgba(0,229,255,0.08) 0%,transparent 70%);pointer-events:none;z-index:0;">
     </div>
@@ -722,7 +1084,6 @@
         style="position:fixed;bottom:-200px;right:-200px;width:500px;height:500px;background:radial-gradient(circle,rgba(179,136,255,0.08) 0%,transparent 70%);pointer-events:none;z-index:0;">
     </div>
 
-    <!-- Frosted Filter SVG -->
     <svg style="visibility: hidden; position: absolute;" width="0" height="0">
         <filter id="frosted">
             <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" result="noise" />
@@ -732,11 +1093,9 @@
         </filter>
     </svg>
 
-    <!-- Navigation -->
     <nav class="nav-premium">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16 sm:h-20">
-                <!-- Left: Logo & Links -->
                 <div class="flex items-center gap-8">
                     <a href="/" class="flex items-center gap-3 group">
                         <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-110 transition-transform">
@@ -748,13 +1107,12 @@
                         </div>
                     </a>
 
-                    <!-- Desktop Links -->
                     <div class="hidden lg:flex items-center gap-2">
                         <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
                             <button class="nav-link px-4 py-2 rounded-xl flex items-center gap-2" :class="open ? 'bg-white/5 text-cyan-400' : 'text-white/60'">
                                 <i class="bi bi-search"></i> Kiểm tra <i class="bi bi-chevron-down text-[10px] opacity-50"></i>
                             </button>
-                            <div x-show="open" x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl">
+                            <div x-show="open" x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl dropdown-blur">
                                 <a href="/scan/phone/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl">
                                     <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center"><i class="bi bi-phone"></i></div>
                                     <div>
@@ -797,16 +1155,23 @@
                                         <div class="text-[9px] text-white/40">OCR + Phân tích ảnh</div>
                                     </div>
                                 </a>
+                                <a href="/scan/file/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-teal-400">
+                                    <div class="w-8 h-8 rounded-lg bg-teal-500/10 flex items-center justify-center"><i class="bi bi-file-earmark-check"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Quét File</div>
+                                        <div class="text-[9px] text-white/40">Phân tích bằng VirusTotal</div>
+                                    </div>
+                                </a>
                             </div>
                         </div>
                         <a href="/report/" class="nav-link px-4 py-2 rounded-xl text-white/60">Báo cáo</a>
                         <a href="/scam-radar/" class="nav-link px-4 py-2 rounded-xl text-white/60">Radar</a>
                         <a href="/forum/" class="nav-link px-4 py-2 rounded-xl text-white/60">Diễn đàn</a>
                         <a href="/learn/" class="nav-link px-4 py-2 rounded-xl text-white/60">Kiến thức</a>
+                        <a href="/ai-assistant/" class="nav-link px-4 py-2 rounded-xl text-white/60 animate-pulse text-cyan-400 font-bold border border-cyan-500/20 bg-cyan-500/5 hover:bg-cyan-500/10"><i class="bi bi-robot mr-1"></i> Hỏi AI</a>
                     </div>
                 </div>
 
-                <!-- Right: Auth & Emergency -->
                 <div class="flex items-center gap-3">
                     <a href="/emergency/" class="nav-emergency hidden sm:flex items-center gap-2 bg-red-500/10 text-red-500 border border-red-500/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
                         <i class="bi bi-exclamation-triangle-fill"></i> Hỗ trợ khẩn cấp
@@ -820,38 +1185,84 @@
                     </button>
 
                     {% if user.is_authenticated %}
-                    <div class="relative" x-data="{ open: false }" @click.away="open = false">
-                        <button @click="open = !open" class="avatar-pill text-xs flex items-center gap-2 group">
-                            {{ user.first_name|default:user.username|first|upper }}
-                            <i class="bi bi-chevron-down text-[8px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                    <div class="relative group" x-data="{ open: false, timer: null }" 
+                         @mouseenter="clearTimeout(timer); open = true" 
+                         @mouseleave="timer = setTimeout(() => { open = false }, 300)">
+                        <button @click="open = !open" class="avatar-pill"
+                                :class="open ? 'ring-1 ring-cyan-500/30 shadow-[0_0_15px_rgba(0,229,255,0.15)]' : ''">
+                            <div class="flex items-center gap-2">
+                                <div class="relative">
+                                    <template x-if="user.avatar">
+                                        <img :src="user.avatar" class="w-7 h-7 rounded-lg object-cover ring-1 ring-white/10 group-hover:ring-cyan-500/50 transition-all">
+                                    </template>
+                                    <template x-if="!user.avatar">
+                                        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center text-[10px] font-black text-white shadow-sm shadow-black/20">
+                                            <span x-text="(user.display_name || user.username)[0].toUpperCase()"></span>
+                                        </div>
+                                    </template>
+                                    <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 border border-[#03030b]"></div>
+                                </div>
+                                <span class="text-[11px] font-bold text-white/80 group-hover:text-white transition-colors" x-text="user.display_name || user.username"></span>
+                                <i class="bi bi-chevron-down text-[8px] text-white/40 transition-transform duration-300" :class="open ? 'rotate-180' : ''"></i>
+                            </div>
                         </button>
                         
                         <div x-show="open" 
-                             x-transition:enter="transition ease-out duration-100"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             class="absolute right-0 mt-2 w-48 glass-card border-white/10 z-50 overflow-hidden py-1">
-                            <a href="/dashboard/" class="flex items-center gap-3 px-4 py-3 text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 transition-colors">
-                                <i class="bi bi-speedometer2 text-cyan-400"></i> Bảng điều khiển
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                             x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                             x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+                             class="absolute right-0 mt-2 w-52 dropdown-blur rounded-2xl z-50 overflow-hidden py-1.5 shadow-2xl"
+                             style="display: none;">
+                            <div class="px-4 py-2 border-b border-white/5 mb-1">
+                                <p class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Tài khoản công dân</p>
+                                <p class="text-[11px] font-bold text-white truncate">{{ user.email }}</p>
+                            </div>
+                            <a href="/dashboard/" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 transition-colors">
+                                <div class="w-7 h-7 rounded-lg bg-cyan-400/10 flex items-center justify-center text-cyan-400">
+                                    <i class="bi bi-speedometer2"></i>
+                                </div>
+                                Bảng điều khiển
                             </a>
-                            <a href="/profile/" class="flex items-center gap-3 px-4 py-3 text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 transition-colors">
-                                <i class="bi bi-person-gear text-purple-400"></i> Cài đặt tài khoản
+                            <a href="/profile/" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 transition-colors">
+                                <div class="w-7 h-7 rounded-lg bg-purple-400/10 flex items-center justify-center text-purple-400">
+                                    <i class="bi bi-person-gear"></i>
+                                </div>
+                                Cài đặt tài khoản
                             </a>
+                            {% if user.is_staff or user.profile.is_super_admin %}
+                            <a href="{% url 'admin-dashboard' %}" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-yellow-400 hover:bg-yellow-400/10 transition-colors">
+                                <div class="w-7 h-7 rounded-lg bg-yellow-400/10 flex items-center justify-center">
+                                    <i class="bi bi-shield-lock"></i>
+                                </div>
+                                Admin Control Panel
+                            </a>
+                            <a href="/admin/" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-orange-400 hover:bg-orange-400/10 transition-colors">
+                                <div class="w-7 h-7 rounded-lg bg-orange-400/10 flex items-center justify-center">
+                                    <i class="bi bi-gear-fill"></i>
+                                </div>
+                                Django Admin (Core)
+                            </a>
+                            {% endif %}
                             <div class="h-[1px] bg-white/5 my-1 mx-4"></div>
                             <form action="/logout/" method="post">
                                 {% csrf_token %}
-                                <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors">
-                                    <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                                <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors text-left">
+                                    <div class="w-7 h-7 rounded-lg bg-red-400/10 flex items-center justify-center">
+                                        <i class="bi bi-box-arrow-right"></i>
+                                    </div>
+                                    Đăng xuất
                                 </button>
                             </form>
                         </div>
                     </div>
                     {% else %}
                     <a href="/login/" class="hidden sm:block text-xs font-bold text-white/60 hover:text-white transition-colors">Đăng nhập</a>
-                    <a href="/register/" class="liquid-btn text-[11px] py-1.5 px-5 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Đăng ký</a>
+                    <a href="/register/" style="display:flex;justify-content:center;padding:0.75rem;border-radius:0.75rem;background:linear-gradient(135deg,rgba(0,229,255,0.15),rgba(179,136,255,0.15));border:1px solid rgba(0,229,255,0.25);color:var(--accent-cyan);font-weight:600;font-size:0.85rem;text-decoration:none;">Đăng ký</a>
                     {% endif %}
 
-                    <!-- Mobile menu button -->
                     <button @click="mobileMenu = !mobileMenu" class="lg:hidden p-2 rounded-lg" style="color:rgba(255,255,255,0.7);transition:color 0.3s;">
                         <i class="bi" style="font-size:1.4rem;" :class="mobileMenu ? 'bi-x-lg' : 'bi-list'"></i>
                     </button>
@@ -859,7 +1270,6 @@
             </div>
         </div>
 
-        <!-- Mobile Nav -->
         <div x-show="mobileMenu" x-transition:enter="transition ease-out duration-200"
             x-transition:enter-start="opacity-0 -translate-y-4" x-transition:enter-end="opacity-100 translate-y-0"
             style="background:rgba(13,13,31,0.95);backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.06);padding:0.75rem 1rem 1.5rem;" class="lg:hidden flex flex-col gap-0.5">
@@ -870,12 +1280,24 @@
                     <i class="bi bi-chevron-down transition-transform" :class="open ? 'rotate-180' : ''"></i>
                 </button>
                 <div x-show="open" x-transition class="pl-11 flex flex-col gap-0.5 py-1">
-                    <a href="/scan/phone/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#18ffff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-phone-fill mr-2 text-cyan-400"></i>Số điện thoại</a>
-                    <a href="/scan/message/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#b388ff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-chat-left-dots-fill mr-2 text-purple-400"></i>Tin nhắn</a>
-                    <a href="/scan/website/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#64b5f6'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-globe2 mr-2 text-blue-400"></i>Website</a>
-                    <a href="/scan/bank/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#ffd740'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-bank2 mr-2 text-yellow-400"></i>Tài khoản</a>
-                    <a href="/scan/email/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#f06292'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-envelope-exclamation-fill mr-2 text-pink-400"></i>Email Scam</a>
-                    <a href="/scan/qr/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#00e676'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-qr-code-scan mr-2 text-green-400"></i>QR / Ảnh</a>
+                    <a href="/scan/phone/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Số điện thoại</a>
+                    <a href="/scan/message/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Tin nhắn</a>
+                    <a href="/scan/website/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Website</a>
+                    <a href="/scan/bank/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Tài khoản</a>
+                    <a href="/scan/email/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Email Scam</a>
+                    <a href="/scan/qr/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
+                        onmouseover="this.style.color='var(--accent-cyan)'"
+                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan QR / Ảnh</a>
                 </div>
             </div>
             <a href="/report/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-flag-fill text-red-400"></i> Báo cáo</a>
@@ -887,7 +1309,7 @@
             <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:0.5rem;">
                 {% if user.is_authenticated %}
                 <a href="/profile/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
-                    <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;">{{ user.first_name|default:user.username|first|upper }}</div>
+                    <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;" x-text="(user.display_name || user.username)[0].toUpperCase()"></div>
                     Profile
                 </a>
                 <form action="/logout/" method="post">
@@ -902,13 +1324,11 @@
         </div>
     </nav>
 
-    <!-- Main content -->
     <main class="animate-fadein"
         style="max-width:1280px;margin:0 auto;padding:2rem 1.5rem;position:relative;z-index:1;min-height:calc(100vh - 180px);">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Footer -->
     <footer style="border-top:1px solid rgba(255,255,255,0.08);margin-top:4rem;background:rgba(0,0,0,0.1);">
         <div style="max-width:1280px;margin:0 auto;padding:4rem 1.5rem;">
             <div
@@ -961,7 +1381,7 @@
                     <h4 style="font-weight:600;margin-bottom:0.75rem;font-size:0.9rem;color:rgba(255,255,255,0.7);">
                         Hotline</h4>
                     <p style="font-size:1.25rem;font-weight:700;color:var(--accent-cyan);margin-bottom:0.5rem;">
-                        1900-0091</p>
+                        1800-1031</p>
                     <p style="font-size:0.8rem;color:rgba(255,255,255,0.4);">24/7 hỗ trợ khẩn cấp</p>
                 </div>
             </div>
@@ -992,9 +1412,6 @@
             document.addEventListener('DOMContentLoaded', function () { updateThemeIcons(saved); });
         })();
 
-        // Lucide replacement (since we use Bootstrap Icons now)
-        // lucide.createIcons(); 
-
         // CSRF token helper
         function getCSRFToken() {
             const cookies = document.cookie.split(';');
@@ -1016,9 +1433,7 @@
         }
 
         function updateThemeIcons(theme) {
-            const sun = document.querySelector('.bi-sun-fill');
-            const moon = document.querySelector('.bi-moon-stars-fill');
-            // Theme toggle logic is handled by Alpine x-show in the template
+            // Logic handled by Alpine x-show
         }
 
         // Client Debug Logger
@@ -1027,25 +1442,14 @@
             log: function (...args) { if (window.SCDebug.enabled) console.log('%c[SC]', 'color:#18ffff;font-weight:bold', ...args); },
             error: function (...args) { console.error('%c[SC:ERR]', 'color:#ff1744;font-weight:bold', ...args); },
             warn: function (...args) { if (window.SCDebug.enabled) console.warn('%c[SC:WARN]', 'color:#ffd740;font-weight:bold', ...args); },
-            enable: function () { localStorage.setItem('sc_debug', '1'); this.enabled = true; console.log('%c[SC] Debug mode ON — reload page for full effect', 'color:#00e676;font-weight:bold'); },
+            enable: function () { localStorage.setItem('sc_debug', '1'); this.enabled = true; console.log('%c[SC] Debug mode ON', 'color:#00e676;font-weight:bold'); },
             disable: function () { localStorage.removeItem('sc_debug'); this.enabled = false; console.log('[SC] Debug mode OFF'); }
         };
-        SCDebug.log('ShieldCall VN loaded. Theme:', localStorage.getItem('theme') || 'dark');
 
         // Toast notification
         function showToast(message, type = 'info') {
-            const colors = {
-                success: 'rgba(0,230,118,0.2)',
-                error: 'rgba(255,23,68,0.2)',
-                info: 'rgba(0,229,255,0.2)',
-                warning: 'rgba(255,234,0,0.2)'
-            };
-            const borderColors = {
-                success: 'rgba(0,230,118,0.4)',
-                error: 'rgba(255,23,68,0.4)',
-                info: 'rgba(0,229,255,0.4)',
-                warning: 'rgba(255,234,0,0.4)'
-            };
+            const colors = { success: 'rgba(0,230,118,0.2)', error: 'rgba(255,23,68,0.2)', info: 'rgba(0,229,255,0.2)', warning: 'rgba(255,234,0,0.2)' };
+            const borderColors = { success: 'rgba(0,230,118,0.4)', error: 'rgba(255,23,68,0.4)', info: 'rgba(0,229,255,0.4)', warning: 'rgba(255,234,0,0.4)' };
             const toast = document.createElement('div');
             toast.className = 'toast';
             toast.style.background = colors[type] || colors.info;
@@ -1057,25 +1461,17 @@
             setTimeout(() => toast.remove(), 3500);
         }
 
-        // API helper
         async function apiCall(url, options = {}) {
-            const defaults = {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken(),
-                },
-            };
+            const defaults = { headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() } };
             const response = await fetch(url, { ...defaults, ...options });
             return response.json();
         }
     </script>
 
-    <!-- AI Assistant Floating Button -->
     <div x-data="chatWidget()" @start-contextual-chat.window="startContextualChat($event.detail.context)" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-4">
-        <!-- Chat Toggle Button -->
         <button @click="open=!open"
-            style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));border:none;cursor:pointer;box-shadow:0 4px 20px rgba(24,255,255,0.3);display:flex;align-items:center;justify-content:center;transition:all 0.3s;position:relative;"
-            onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+            style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));border:none;cursor:pointer;box-shadow:0 4px 20px rgba(24,255,255,0.4);display:flex;align-items:center;justify-content:center;transition:all 0.3s;position:relative;"
+            onmouseover="this.style.transform='scale(1.1) rotate(5deg)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'">
             <svg x-show="!open" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0a0a1a" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -1088,126 +1484,78 @@
                 style="position:absolute;top:-2px;right:-2px;width:12px;height:12px;background:var(--risk-red);border-radius:50%;border:2px solid #0a0a1a;animation:pulse-red 2s infinite;"></span>
         </button>
 
-        <!-- Chat Window -->
         <div x-show="open" x-transition:enter="transition ease-out duration-200"
             x-transition:enter-start="opacity-0 translate-y-4 scale-95"
             x-transition:enter-end="opacity-100 translate-y-0 scale-100"
             x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
             x-transition:leave-end="opacity-0 scale-95"
-            style="position:absolute;bottom:70px;right:0;width:380px;max-height:520px;border-radius:1.25rem;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,0.5);"
-            class="glass" @click.outside="open=false">
-            <!-- Header -->
-            <div
-                style="padding:1rem 1.25rem;background:linear-gradient(135deg,rgba(24,255,255,0.15),rgba(209,163,255,0.15));border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:0.75rem;">
-                <div
-                    style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;">
+            style="position:absolute;bottom:70px;right:0;width:380px;max-height:580px;border-radius:1.5rem;overflow:hidden;"
+            class="dropdown-blur" @click.outside="open=false">
+            <div style="padding:1.15rem 1.25rem;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:0.75rem;">
+                <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(24,255,255,0.2);">
                     <i class="bi bi-robot text-[#0a0a1a] text-lg"></i>
                 </div>
-                <div>
-                    <div style="font-weight:700;font-size:0.95rem;">ShieldCall AI</div>
-                    <div style="font-size:0.7rem;color:var(--accent-cyan);">● Online — Sẵn sàng hỗ trợ</div>
+                <div class="flex-1">
+                    <div style="font-weight:800;font-size:0.95rem;letter-spacing:0.02em;">ShieldCall AI</div>
+                    <div style="font-size:0.65rem;color:var(--accent-cyan);font-weight:700;display:flex;align-items:center;gap:1.51px;">
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> Trực tuyến
+                    </div>
                 </div>
+                <button @click="open=false" class="text-white/20 hover:text-white transition-colors"><i class="bi bi-dash-lg"></i></button>
             </div>
 
-            <!-- Messages -->
             <div x-ref="chatMessages"
-                style="height:320px;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:0.75rem;background:rgba(0,0,0,0.2);">
+                style="height:340px;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem;background:rgba(0,0,0,0.15);scroll-behavior: smooth;">
                 <template x-for="(msg, i) in messages" :key="i">
-                    <div
-                        :style="msg.from==='bot' ? 'align-self:flex-start;max-width:85%;' : 'align-self:flex-end;max-width:85%;'">
-                        <div :style="msg.from==='bot' ? 'background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:1rem 1rem 1rem 0.25rem;padding:0.75rem 1rem;' : 'background:linear-gradient(135deg,rgba(24,255,255,0.2),rgba(209,163,255,0.2));border:1px solid rgba(24,255,255,0.25);border-radius:1rem 1rem 0.25rem 1rem;padding:0.75rem 1rem;'"
-                            style="font-size:0.85rem;line-height:1.5;">
-                            <span x-html="msg.text"></span>
+                    <div :class="msg.from==='bot' ? 'items-start' : 'items-end'" class="flex flex-col gap-1 w-full">
+                        <div :class="msg.from==='bot' ? 'bg-white/5 border-white/10 rounded-2xl rounded-bl-none' : 'bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border-cyan-500/20 rounded-2xl rounded-br-none shadow-sm'"
+                            class="max-w-[88%] border p-3.5 text-xs sm:text-[13px] leading-relaxed transition-all">
+                            <div class="ai-markdown" x-html="msg.html || msg.text"></div>
                         </div>
-                        <div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:0.25rem;"
-                            :style="msg.from==='bot' ? 'text-align:left;padding-left:0.5rem;' : 'text-align:right;padding-right:0.5rem;'"
-                            x-text="msg.time"></div>
+                        <div class="text-[9px] text-white/20 px-1 font-bold tracking-tight uppercase" x-text="msg.time"></div>
                     </div>
                 </template>
-                <div x-show="typing" style="align-self:flex-start;">
-                    <div
-                        style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:1rem;padding:0.5rem 1rem;display:flex;gap:0.3rem;">
-                        <span
-                            style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.4);animation:dot-bounce 1.4s infinite ease-in-out;animation-delay:0s;"></span>
-                        <span
-                            style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.4);animation:dot-bounce 1.4s infinite ease-in-out;animation-delay:0.2s;"></span>
-                        <span
-                            style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.4);animation:dot-bounce 1.4s infinite ease-in-out;animation-delay:0.4s;"></span>
-                    </div>
+                <div x-show="typing" class="flex gap-1.5 items-center p-2 bg-white/5 rounded-full w-max border border-white/5 ml-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce"></span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce [animation-delay:0.2s]"></span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce [animation-delay:0.4s]"></span>
                 </div>
             </div>
 
-            <!-- Quick Replies -->
-            <div x-show="messages.length<=1"
-                style="padding:0.5rem 1rem;display:flex;gap:0.4rem;flex-wrap:wrap;background:rgba(0,0,0,0.15);border-top:1px solid rgba(255,255,255,0.05);">
-                <button @click="sendQuick('Kiểm tra số điện thoại')"
-                    style="background:rgba(24,255,255,0.1);border:1px solid rgba(24,255,255,0.2);border-radius:1rem;padding:0.3rem 0.75rem;font-size:0.75rem;color:var(--accent-cyan);cursor:pointer;"><i
-                        class="bi bi-telephone"></i>
-                    Kiểm tra SĐT</button>
-                <button @click="sendQuick('Tôi nhận được tin nhắn lạ')"
-                    style="background:rgba(209,163,255,0.1);border:1px solid rgba(209,163,255,0.2);border-radius:1rem;padding:0.3rem 0.75rem;font-size:0.75rem;color:var(--accent-purple);cursor:pointer;"><i
-                        class="bi bi-chat-left-dots"></i>
-                    Tin nhắn lạ</button>
-                <button @click="sendQuick('Cách nhận diện lừa đảo')"
-                    style="background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.2);border-radius:1rem;padding:0.3rem 0.75rem;font-size:0.75rem;color:var(--risk-green);cursor:pointer;"><i
-                        class="bi bi-book"></i>
-                    Cách phòng tránh</button>
+            <div x-show="messages.length <= 1" class="p-3 flex gap-2 overflow-x-auto no-scrollbar bg-black/10 border-t border-white/5">
+                <button @click="sendQuick('Kiểm tra số điện thoại')" class="flex-none bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Kiểm tra SĐT</button>
+                <button @click="sendQuick('Cách nhận diện lừa đảo')" class="flex-none bg-white/5 hover:bg-purple-500/10 border border-white/10 hover:border-purple-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Cách phòng tránh</button>
             </div>
 
-            <!-- Image Previews (horizontal scroll strip) -->
-            <div x-show="imagePreviews.length > 0"
-                style="padding:0.5rem 1rem;display:flex;gap:0.5rem;overflow-x:auto;overflow-y:hidden;white-space:nowrap;background:rgba(0,0,0,0.1);border-top:1px solid rgba(255,255,255,0.05);scrollbar-width:thin;">
+            <div x-show="imagePreviews.length > 0" class="px-4 py-2 flex gap-2 bg-black/20 border-t border-white/5">
                 <template x-for="(img, idx) in imagePreviews" :key="idx">
-                    <div
-                        style="position:relative;width:50px;height:50px;min-width:50px;border-radius:0.5rem;overflow:hidden;border:1px solid rgba(255,255,255,0.2);flex-shrink:0;">
-                        <img :src="img" style="width:100%;height:100%;object-fit:cover;">
-                        <button @click="removeImage(idx)"
-                            style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(255,23,68,0.8);border:none;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;">
-                            <i class="bi bi-x"></i>
+                    <div class="relative w-12 h-12 rounded-lg overflow-hidden border border-white/20 group">
+                        <img :src="img" class="w-full h-full object-cover">
+                        <button @click="removeImage(idx)" class="absolute inset-0 bg-red-500/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                            <i class="bi bi-trash text-xs"></i>
                         </button>
                     </div>
                 </template>
             </div>
 
-            <!-- Input -->
-            <div
-                style="padding:0.75rem 1rem;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:0.5rem;align-items:center;background:rgba(0,0,0,0.1);">
-                <button @click="$refs.fileInput.click()" class="p-2 text-white/60 hover:text-cyan-400 transition-colors"
-                    title="Thêm ảnh">
-                    <i class="bi bi-image text-lg"></i>
+            <div class="p-4 bg-black/30 border-t border-white/10 flex gap-2 items-center">
+                <button @click="$refs.fileInput.click()" class="w-10 h-10 rounded-xl hover:bg-white/5 flex items-center justify-center text-white/40 hover:text-cyan-400 transition-all border border-transparent hover:border-white/10">
+                    <i class="bi bi-plus-circle text-lg"></i>
                 </button>
-                <input type="file" x-ref="fileInput" @change="handleFileUpload" multiple accept="image/*"
-                    style="display:none;">
+                <input type="file" x-ref="fileInput" @change="handleFileUpload" multiple accept="image/*" class="hidden">
 
-                <input type="text" x-model="input" @keydown.enter="send()" placeholder="Nhập câu hỏi..."
-                    style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:0.75rem;padding:0.6rem 0.85rem;color:#fff;font-size:0.85rem;outline:none;"
-                    onfocus="this.style.borderColor='var(--accent-cyan)'"
-                    onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                <div class="flex-1 relative">
+                    <input type="text" x-model="input" @keydown.enter="send()" placeholder="Nhập câu hỏi..." 
+                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[13px] text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-white/20">
+                </div>
+                
                 <button @click="send()" :disabled="(!input.trim() && imageFiles.length===0) || typing"
-                    style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;"
-                    :style="((!input.trim() && imageFiles.length===0)||typing) ? 'opacity:0.4;cursor:not-allowed;' : 'opacity:1;'">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a1a" stroke="none">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                    </svg>
+                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 disabled:opacity-30 disabled:grayscale transition-all hover:scale-105 active:scale-95">
+                    <i class="bi bi-send-fill text-white text-sm"></i>
                 </button>
             </div>
         </div>
     </div>
-
-    <style>
-        @keyframes dot-bounce {
-
-            0%,
-            80%,
-            100% {
-                transform: scale(0);
-            }
-
-            40% {
-                transform: scale(1);
-            }
-        }
-    </style>
 
     <script>
         function chatWidget() {
@@ -1219,29 +1567,34 @@
                 imagePreviews: [],
                 imageFiles: [],
                 messages: [
-                    { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là <strong>ShieldCall AI</strong>. Tôi có thể giúp bạn:<br>• Kiểm tra số điện thoại, tin nhắn đáng ngờ<br>• Hướng dẫn cách phòng tránh lừa đảo<br>• Giải đáp thắc mắc về an toàn mạng<br>• <strong>Mới:</strong> Gửi ảnh chụp màn hình để tôi phân tích!', time: new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }) }
+                    { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là **ShieldCall AI**. Hãy gửi số điện thoại hoặc tin nhắn lạ để tôi kiểm tra giúp bạn!', time: new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }), html: '' }
                 ],
+                init() {
+                    this.messages[0].html = window.renderMd(this.messages[0].text);
+                },
                 now() { return new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }); },
-                scrollDown() { this.$nextTick(() => { if (this.$refs.chatMessages) this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight; }); },
+                scrollDown() {
+                    this.$nextTick(() => {
+                        const el = this.$refs.chatMessages;
+                        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                    });
+                },
                 sendQuick(text) { this.input = text; this.send(); },
                 startContextualChat(systemContext, userMsg = 'Hãy giải thích thêm về kết quả này.') {
                     this.open = true;
                     this.hasInteracted = true;
                     this.messages.push({ 
                         from: 'bot', 
-                        text: '<i class="bi bi-info-circle text-cyan-400"></i> <strong>Đã nhận ngữ cảnh phân tích.</strong> Bạn có thể hỏi thêm về kết quả quét vừa rồi.',
+                        text: '<i class="bi bi-info-circle text-cyan-400"></i> **Đã nhận ngữ cảnh.** Tôi đã sẵn sàng phân tích kết quả trên cùng bạn.',
                         time: this.now() 
                     });
+                    this.messages[this.messages.length-1].html = window.renderMd(this.messages[this.messages.length-1].text);
                     this.input = userMsg;
-                    // We can pre-send if we want, but let the user see the context first or just send it.
-                    // For now, just set the input to make it feel natural.
                 },
                 handleFileUpload(e) {
                     const files = Array.from(e.target.files);
-                    SCDebug.log('File upload:', files.length, 'file(s)');
                     files.forEach(file => {
                         if (file.size > 5 * 1024 * 1024) {
-                            SCDebug.warn('File too large:', file.name, file.size);
                             showToast('File ' + file.name + ' quá lớn (max 5MB)', 'warning');
                             return;
                         }
@@ -1249,12 +1602,9 @@
                         reader.onload = (ex) => {
                             this.imagePreviews.push(ex.target.result);
                             this.imageFiles.push(ex.target.result);
-                            SCDebug.log('Image loaded:', file.name);
                         };
-                        reader.onerror = () => { SCDebug.error('FileReader error:', file.name); };
                         reader.readAsDataURL(file);
                     });
-                    // Reset file input so same file can be selected again
                     e.target.value = '';
                 },
                 removeImage(idx) {
@@ -1267,8 +1617,8 @@
                     if (this.typing) return;
 
                     this.hasInteracted = true;
-                    const userDisplay = text || (this.imageFiles.length > 0 ? '<i class="bi bi-images"></i> Đã gửi ' + this.imageFiles.length + ' ảnh' : '');
-                    this.messages.push({ from: 'user', text: userDisplay, time: this.now() });
+                    const userDisplay = text || (this.imageFiles.length > 0 ? 'Đã gửi ' + this.imageFiles.length + ' ảnh' : '');
+                    this.messages.push({ from: 'user', text: userDisplay, time: this.now(), html: text });
 
                     const imagesToSend = [...this.imageFiles];
                     const messageToSend = text || 'Hãy phân tích các hình ảnh tôi vừa gửi.';
@@ -1278,27 +1628,23 @@
 
                     this.scrollDown();
                     this.typing = true;
-                    this.scrollDown();
 
                     const sessionId = localStorage.getItem('chat_session_id') || crypto.randomUUID();
                     localStorage.setItem('chat_session_id', sessionId);
 
-                    const payload = {
+                    await this._tryStream({
                         user_message: messageToSend,
                         session_id: sessionId,
                         context: 'chat',
                         images: imagesToSend
-                    };
-
-                    await this._tryStream(payload);
+                    });
 
                     this.typing = false;
                     this.scrollDown();
                 },
 
                 async _tryStream(payload) {
-                    console.log('[Chat] Initiating consolidated stream...');
-                    const botMsg = { from: 'bot', text: '', time: this.now() };
+                    const botMsg = { from: 'bot', text: '', html: '', time: this.now() };
                     this.messages.push(botMsg);
                     this.typing = false;
                     this.scrollDown();
@@ -1311,8 +1657,8 @@
                         });
 
                         if (!response.ok) {
-                            botMsg.text = '<i class="bi bi-exclamation-circle text-red-400"></i> Lỗi kết nối (HTTP ' + response.status + ')';
-                            return true;
+                            botMsg.text = 'Lỗi kết nối (HTTP ' + response.status + ')';
+                            return;
                         }
 
                         const reader = response.body.getReader();
@@ -1331,22 +1677,18 @@
                                 if (line.startsWith('data: ')) {
                                     try {
                                         const data = JSON.parse(line.substring(6));
-                                        if (data.error) {
-                                            botMsg.text += '<br><span class="text-red-400 text-xs">[' + data.error + ']</span>';
-                                        }
                                         if (data.chunk) {
                                             botMsg.text += data.chunk;
+                                            botMsg.html = window.renderMd(botMsg.text);
                                             this.scrollDown();
                                         }
                                     } catch (e) {}
                                 }
                             }
                         }
-                        return true;
                     } catch (e) {
-                        console.error('Chat error:', e);
-                        botMsg.text = '<i class="bi bi-wifi-off text-red-500"></i> Lỗi kết nối mạng.';
-                        return true;
+                        botMsg.text = 'Lỗi kết nối mạng.';
+                        botMsg.html = botMsg.text;
                     }
                 }
             }

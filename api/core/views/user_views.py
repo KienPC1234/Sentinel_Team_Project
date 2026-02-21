@@ -31,6 +31,7 @@ from api.core.serializers import (
     ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
     ScanAccountSerializer, ScanImageSerializer, ScanEventListSerializer,
     TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
+    ForumPostSerializer,
 )
 
 User = get_user_model()
@@ -84,3 +85,21 @@ class UserAlertsView(APIView):
         return Response({'message': 'Đã xóa cảnh báo.'})
 
 
+class PublicProfileView(APIView):
+    """GET /api/user/profile/<username> — Public profile info"""
+    permission_classes = [AllowAny]
+
+    def get(self, request, username):
+        user = get_object_or_404(User.objects.select_related('profile'), username=username)
+        posts = ForumPost.objects.filter(author=user).order_by('-created_at')[:10]
+        
+        return Response({
+            'user': UserSerializer(user).data,
+            'posts': ForumPostSerializer(posts, many=True, context={'request': request}).data,
+            'stats': {
+                'total_posts': ForumPost.objects.filter(author=user).count(),
+                'total_reports': Report.objects.filter(reporter=user).count(),
+            }
+        })
+
+from django.shortcuts import get_object_or_404
