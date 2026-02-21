@@ -2,6 +2,24 @@
 
 {% block title %}Bài kiểm tra lừa đảo mới nhất{% endblock %}
 
+{% block head_extra %}
+<style>
+@keyframes scam-iq-shimmer {
+    0% { transform: translateX(-130%); }
+    100% { transform: translateX(330%); }
+}
+.scam-iq-shimmer {
+    animation: scam-iq-shimmer 1.8s linear infinite;
+    will-change: transform;
+}
+.scam-iq-wrap {
+    white-space: pre-wrap;
+    word-break: normal;
+    overflow-wrap: break-word;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="max-w-7xl mx-auto px-4 space-y-6" x-data="scamIQExam()" x-init="init()">
     <div class="liquid-card p-6 sm:p-8 border-cyan-500/20">
@@ -48,9 +66,29 @@
             <p x-show="!history.length" class="text-[12px] text-white/45 mt-3">Bạn chưa có lượt làm bài nào. Hoàn thành 1 bài để lịch sử hiển thị tại đây.</p>
         </div>
 
-        <div x-show="stage === 'loading'" class="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-            <p class="text-sm font-bold text-cyan-300">AI đang tạo bộ câu hỏi mới nhất...</p>
-            <p class="text-[11px] text-white/45 mt-1">Hệ thống đang tổng hợp tình huống lừa đảo mới từ nhiều nhóm chủ đề. Vui lòng đợi vài giây.</p>
+        <div x-show="stage === 'loading'" class="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-5 overflow-hidden relative">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_45%)] pointer-events-none"></div>
+            <div class="relative z-10 flex items-start gap-4">
+                <div class="w-12 h-12 rounded-2xl border border-cyan-400/40 bg-cyan-500/10 flex items-center justify-center shrink-0">
+                    <i class="bi bi-arrow-repeat text-cyan-300 text-lg animate-spin"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <p class="text-sm font-bold text-cyan-300">AI đang tạo bộ câu hỏi mới...</p>
+                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-white/10 text-white/70" x-text="`${progressCreated}/${progressTotal} câu`"></span>
+                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-cyan-500/15 text-cyan-200" x-text="progressPhaseLabel"></span>
+                    </div>
+                    <p class="text-[11px] text-white/50 mt-1" x-text="progressMessage"></p>
+
+                    <div class="mt-3 h-2.5 rounded-full bg-white/10 overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 transition-all duration-500"
+                             :style="`width:${Math.min(100, Math.round((progressCreated/Math.max(progressTotal,1))*100))}%`"></div>
+                    </div>
+                    <div class="mt-3 h-1.5 rounded-full overflow-hidden bg-white/5">
+                        <div class="h-full w-1/3 bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent scam-iq-shimmer"></div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div x-show="error" class="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 text-sm" x-text="error"></div>
@@ -63,53 +101,40 @@
                     <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-white/5 text-white/60" x-text="`Câu ${index + 1} / ${questions.length}`"></span>
                     <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 text-cyan-300" x-text="currentQuestion.difficulty_label"></span>
                     <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-300" x-text="typeLabel(currentQuestion.type)"></span>
-                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-yellow-500/10 text-yellow-300" x-text="currentQuestion.category"></span>
                 </div>
 
-                <h2 class="text-xl font-black text-white leading-relaxed" x-text="currentQuestion.question"></h2>
+                <h2 class="text-xl font-black text-white leading-relaxed scam-iq-wrap" x-text="cleanQuestionText(currentQuestion.question)"></h2>
 
                 <template x-if="isSimulationType(currentQuestion.type)">
                     <div class="space-y-4">
                         <template x-if="currentQuestion.type === 'simulation_sms'">
-                            <div class="rounded-3xl border border-white/10 bg-[#0b1020] p-4 max-w-xl">
+                            <div class="rounded-3xl border border-white/10 bg-gradient-to-br from-[#0b1020] to-[#121a2f] p-4 max-w-2xl shadow-[0_10px_35px_rgba(0,0,0,0.35)]">
                                 <div class="flex items-center justify-between text-[11px] text-white/50 mb-3">
-                                    <span x-text="(currentQuestion.simulation?.sender_name || 'Tin nhắn mới')"></span>
-                                    <span x-text="(currentQuestion.simulation?.time || '--:--')"></span>
+                                    <span class="inline-flex items-center gap-1.5"><i class="bi bi-phone"></i><span x-text="simField(currentQuestion, 'sender_name', 'Tin nhắn mới')"></span></span>
+                                    <span class="text-cyan-200/80" x-text="simField(currentQuestion, 'time', '--:--')"></span>
                                 </div>
-                                <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
-                                    <p class="text-[11px] text-cyan-300 font-mono" x-text="currentQuestion.simulation?.from || 'Unknown sender'"></p>
-                                    <p class="text-sm text-white/85 mt-2 whitespace-pre-line" x-text="currentQuestion.simulation?.body || ''"></p>
+                                <div class="rounded-2xl bg-white/[0.05] border border-white/10 p-4">
+                                    <p class="text-[11px] text-cyan-300 font-mono tracking-wide" x-text="simField(currentQuestion, 'from', 'Unknown sender')"></p>
+                                    <p class="text-sm text-white/90 mt-2 whitespace-pre-line leading-relaxed" x-text="simBody(currentQuestion)"></p>
+                                    <div class="mt-3 text-[11px] text-white/45 inline-flex items-center gap-1.5"><i class="bi bi-shield-exclamation"></i> Nội dung trên chỉ để mô phỏng luyện tập</div>
                                 </div>
-                                <template x-if="currentQuestion.simulation?.trap_signals && currentQuestion.simulation.trap_signals.length">
-                                    <div class="mt-3 flex flex-wrap gap-2">
-                                        <template x-for="sig in currentQuestion.simulation.trap_signals" :key="sig">
-                                            <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide bg-red-500/10 border border-red-500/20 text-red-300" x-text="sig"></span>
-                                        </template>
-                                    </div>
-                                </template>
                             </div>
                         </template>
 
                         <template x-if="currentQuestion.type === 'simulation_email'">
-                            <div class="rounded-3xl border border-white/10 bg-[#0a0d18] overflow-hidden">
-                                <div class="px-4 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
-                                    <p class="text-[11px] text-white/60">Inbox / Security Alerts</p>
+                            <div class="rounded-3xl border border-white/10 bg-gradient-to-br from-[#0b1020] to-[#15192b] overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.35)]">
+                                <div class="px-4 py-3 border-b border-white/10 bg-white/[0.03] flex items-center justify-between">
+                                    <p class="text-[11px] text-white/70 inline-flex items-center gap-1.5"><i class="bi bi-envelope-paper"></i> Security Inbox</p>
                                     <i class="bi bi-envelope-open text-cyan-300"></i>
                                 </div>
-                                <div class="p-4 space-y-2">
-                                    <p class="text-[11px] text-white/55"><span class="text-white/80 font-bold">From:</span> <span x-text="currentQuestion.simulation?.from || ''"></span></p>
-                                    <p class="text-[11px] text-white/55"><span class="text-white/80 font-bold">Subject:</span> <span x-text="currentQuestion.simulation?.subject || ''"></span></p>
-                                    <p class="text-[11px] text-white/55"><span class="text-white/80 font-bold">Preview:</span> <span x-text="currentQuestion.simulation?.preview || ''"></span></p>
-                                    <div class="rounded-2xl bg-white/[0.03] border border-white/10 p-4 mt-2">
-                                        <p class="text-sm text-white/85 whitespace-pre-line" x-text="currentQuestion.simulation?.body || ''"></p>
+                                <div class="p-4 space-y-2.5">
+                                    <p class="text-[11px] text-white/60"><span class="text-white/85 font-bold">From:</span> <span x-text="simField(currentQuestion, 'from', 'security-alert@unknown-domain')"></span></p>
+                                    <p class="text-[11px] text-white/60"><span class="text-white/85 font-bold">Subject:</span> <span x-text="simField(currentQuestion, 'subject', 'Security Alert')"></span></p>
+                                    <p class="text-[11px] text-white/60"><span class="text-white/85 font-bold">Preview:</span> <span x-text="simField(currentQuestion, 'preview', 'Không có preview')"></span></p>
+                                    <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4 mt-2">
+                                        <p class="text-sm text-white/90 whitespace-pre-line leading-relaxed" x-text="simBody(currentQuestion)"></p>
+                                        <div class="mt-3 text-[11px] text-white/45 inline-flex items-center gap-1.5"><i class="bi bi-shield-exclamation"></i> Nội dung trên chỉ để mô phỏng luyện tập</div>
                                     </div>
-                                    <template x-if="currentQuestion.simulation?.risk_clues && currentQuestion.simulation.risk_clues.length">
-                                        <div class="pt-2 flex flex-wrap gap-2">
-                                            <template x-for="c in currentQuestion.simulation.risk_clues" :key="c">
-                                                <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide bg-red-500/10 border border-red-500/20 text-red-300" x-text="c"></span>
-                                            </template>
-                                        </div>
-                                    </template>
                                 </div>
                             </div>
                         </template>
@@ -126,6 +151,9 @@
 
                 <template x-if="!isSimulationType(currentQuestion.type)">
                     <div class="space-y-3">
+                        <template x-if="currentQuestion.type === 'multi_select'">
+                            <p class="text-[11px] text-cyan-300 font-bold uppercase tracking-widest">Có nhiều đáp án đúng</p>
+                        </template>
                         <template x-for="opt in currentQuestion.options" :key="opt.id">
                             <label class="w-full flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 hover:border-cyan-400/30 cursor-pointer transition-all"
                                    :class="isChecked(opt.id) ? 'border-cyan-400/50 bg-cyan-500/[0.08]' : ''">
@@ -192,10 +220,32 @@
         <div class="liquid-card p-6 sm:p-8 space-y-6">
             <div class="rounded-2xl border border-cyan-500/25 bg-cyan-500/8 p-5">
                 <p class="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">Kết quả</p>
-                <h3 class="text-2xl font-black text-white mt-2" x-text="`${result.score} / ${result.max_score} điểm`"></h3>
+                <div class="flex items-center justify-between">
+                    <h3 class="text-2xl font-black text-white mt-2" x-text="`${result.score} / ${result.max_score} điểm`"></h3>
+                    <template x-if="isAIScoring">
+                        <span class="px-2 py-1 rounded bg-purple-500/20 text-purple-300 text-[10px] font-black animate-pulse">
+                            <i class="bi bi-robot mr-1"></i> AI ĐANG CHẤM...
+                        </span>
+                    </template>
+                </div>
                 <p class="text-sm text-white/65 mt-1" x-text="result.level.label"></p>
                 <p class="text-xs text-white/50 mt-2" x-text="result.level.description"></p>
                 <p class="text-xs text-white/45 mt-3" x-text="`Đúng ${result.correct_count}/${questions.length} câu • Sai ${result.wrong_count} câu`"></p>
+            </div>
+
+            <div x-show="isAIScoring" class="rounded-2xl border border-purple-500/30 bg-purple-500/10 p-5">
+                 <div class="flex items-center gap-3">
+                     <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0">
+                         <i class="bi bi-robot text-purple-300 text-lg animate-bounce"></i>
+                     </div>
+                     <div class="min-w-0 flex-1">
+                         <p class="text-sm font-bold text-purple-200">AI Giám khảo đang chấm các câu hỏi thực tế</p>
+                         <p class="text-[11px] text-purple-300/70 mt-1" x-text="aiProgressMessage || 'Đang kết nối với AI...'"></p>
+                         <div class="mt-2 h-1 rounded-full bg-white/10 overflow-hidden">
+                             <div class="h-full bg-purple-400 scam-iq-shimmer w-full"></div>
+                         </div>
+                     </div>
+                 </div>
             </div>
 
             <div class="overflow-x-auto rounded-2xl border border-white/10">
@@ -219,17 +269,36 @@
                 </table>
             </div>
 
+            <div x-show="result.ai_feedback && result.ai_feedback.length">
+                <h4 class="text-lg font-black text-white mt-6">Nhận xét từ AI cho các tình huống thực tế</h4>
+                <div class="mt-3 space-y-3">
+                    <template x-for="f in result.ai_feedback" :key="f.question_id">
+                        <div class="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4 transition-all">
+                            <div class="flex items-center justify-between">
+                                <p class="text-[11px] font-black text-purple-300 uppercase tracking-widest" x-text="f.question_id"></p>
+                                <span class="px-2 py-0.5 rounded-lg text-[10px] font-black" :class="f.is_correct ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'" x-text="`${f.ai_score}/10 điểm` "></span>
+                            </div>
+                            <p class="text-sm text-white mt-2 scam-iq-wrap" x-text="cleanQuestionText(f.question)"></p>
+                            <p class="text-xs text-white/55 mt-2"><span class="text-purple-300 font-bold">Câu trả lời:</span> <span x-text="f.user_answer"></span></p>
+                            <div class="mt-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                                <p class="text-xs text-purple-200"><i class="bi bi-robot mr-2"></i> <span x-text="f.ai_comment"></span></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
             <div>
                 <h4 class="text-lg font-black text-white">Các sai sót cần cải thiện</h4>
                 <template x-if="!result.mistakes.length">
-                    <p class="text-sm text-green-300 mt-2">Tuyệt vời! Bạn không có lỗi nào trong bài kiểm tra này.</p>
+                    <p class="text-sm text-green-300 mt-2">Tuyệt vời! Bạn không có lỗi nào trong phần trắc nghiệm.</p>
                 </template>
                 <div class="mt-3 space-y-3" x-show="result.mistakes.length">
                     <template x-for="m in result.mistakes" :key="m.question_id">
                         <div class="rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
-                            <p class="text-[11px] font-black text-red-300 uppercase tracking-widest" x-text="`${m.question_id} • ${m.category} • ${m.difficulty}`"></p>
-                            <p class="text-sm text-white mt-2" x-text="m.question"></p>
-                            <p class="text-xs text-white/55 mt-2" x-text="`Bạn chọn: ${m.selected.length ? m.selected.join(', ') : 'Chưa trả lời'} | Đáp án đúng: ${m.expected.join(', ')}`"></p>
+                            <p class="text-[11px] font-black text-red-300 uppercase tracking-widest" x-text="`${m.question_id} • ${m.difficulty}`"></p>
+                            <p class="text-sm text-white mt-2 scam-iq-wrap" x-text="cleanQuestionText(m.question)"></p>
+                            <p class="text-xs text-white/55 mt-2" x-text="`Bạn chọn: ${m.selected && m.selected.length ? m.selected.join(', ') : 'Chưa trả lời'} | Đáp án đúng: ${m.expected ? m.expected.join(', ') : '—'}`"></p>
                             <p class="text-xs text-white/65 mt-2" x-text="m.explanation"></p>
                         </div>
                     </template>
@@ -258,6 +327,15 @@ function scamIQExam() {
         answers: {},
         result: null,
         history: [],
+        taskSocket: null,
+        progressMessage: 'Đang chuẩn bị...',
+        progressCreated: 0,
+        progressTotal: 30,
+        progressPhaseLabel: 'Khởi tạo',
+        taskIdAI: '',
+        aiProgressMessage: '',
+        isAIScoring: false,
+        aiSocket: null,
 
         init() {
             this.loadHistory();
@@ -278,6 +356,157 @@ function scamIQExam() {
 
         isSimulationType(type) {
             return ['simulation_sms', 'simulation_email', 'incident_response'].includes(type);
+        },
+
+        cleanQuestionText(question) {
+            return String(question || '').replace(/^\[[^\]]{1,140}\]\s*/, '').trim();
+        },
+
+        simField(question, key, fallback = '—') {
+            const derived = this.deriveSimulationFromQuestion(question);
+            const value = derived?.[key];
+            const normalized = String(value || '').trim();
+            return normalized || fallback;
+        },
+
+        simBody(question) {
+            const derived = this.deriveSimulationFromQuestion(question);
+            const body = String(derived?.body || '').trim();
+            return body || 'Nội dung email mô phỏng đang được chuẩn hóa. Hãy tập trung vào quy trình xác minh trước khi thao tác.';
+        },
+
+        deriveSimulationFromQuestion(question) {
+            const sim = { ...(question?.simulation || {}) };
+            const qType = String(question?.type || '').toLowerCase();
+            const qText = this.cleanQuestionText(question?.question || '');
+
+            const quotedChunks = Array.from(qText.matchAll(/["“](.{12,}?)["”]/g)).map(m => String(m[1] || '').trim());
+            const smsInline = (qText.match(/SMS\s*:\s*["“]([\s\S]{8,}?)["”]/i) || [])[1] || '';
+            const emailInline = (qText.match(/Email\s*:\s*["“]([\s\S]{8,}?)["”]/i) || [])[1] || '';
+
+            if (qType === 'simulation_sms') {
+                if (String(smsInline || '').trim()) {
+                    sim.body = String(smsInline).trim();
+                    const phoneFromInline = (sim.body.match(/(?:\+?84|0)\d[\d\s\-\.]{7,14}\d/) || [])[0];
+                    sim.from = String(phoneFromInline || 'Unknown sender').trim();
+                    sim.sender_name = 'Tin nhắn mới';
+                    sim.time = '--:--';
+                } else if (!String(sim.body || '').trim()) {
+                    sim.body = String(quotedChunks[0] || qText).trim();
+                }
+                if (!String(sim.sender_name || '').trim()) sim.sender_name = 'Tin nhắn mới';
+                if (!String(sim.time || '').trim()) sim.time = '--:--';
+                if (!String(sim.from || '').trim()) {
+                    const phone = (sim.body.match(/(?:\+?84|0)\d[\d\s\-\.]{7,14}\d/) || [])[0];
+                    sim.from = phone || 'Unknown sender';
+                }
+            }
+
+            if (qType === 'simulation_email') {
+                const fromMatch = qText.match(/email\s+từ\s*["“]([^"”]+)["”]/i);
+                const subjectMatch = qText.match(/tiêu đề\s*["“]([^"”]+)["”]/i);
+
+                if (String(emailInline || '').trim()) {
+                    sim.body = String(emailInline).trim();
+                    sim.from = String(fromMatch?.[1] || '').trim() || 'security-alert@unknown-domain';
+                    sim.subject = String(subjectMatch?.[1] || '').trim() || 'Security Alert';
+                    sim.preview = String(sim.body || '').trim().slice(0, 180) || 'Không có preview';
+                } else {
+                    if (!String(sim.from || '').trim()) {
+                        sim.from = String(fromMatch?.[1] || '').trim() || 'security-alert@unknown-domain';
+                    }
+                    if (!String(sim.subject || '').trim()) {
+                        sim.subject = String(subjectMatch?.[1] || '').trim() || 'Security Alert';
+                    }
+                    if (!String(sim.body || '').trim()) {
+                        sim.body = String(quotedChunks[0] || qText).trim();
+                    }
+                    if (!String(sim.preview || '').trim()) {
+                        sim.preview = String(sim.body || '').trim().slice(0, 180) || 'Không có preview';
+                    }
+                }
+            }
+
+            return sim;
+        },
+
+        connectTaskSocket() {
+            this.closeTaskSocket();
+            if (!this.taskId) return;
+            const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const wsUrl = `${proto}://${window.location.host}/ws/task/${this.taskId}/`;
+            try {
+                this.taskSocket = new WebSocket(wsUrl);
+                this.taskSocket.onmessage = (event) => {
+                    try {
+                        const payload = JSON.parse(event.data || '{}');
+                        if (payload.type && payload.type !== 'task_progress') return;
+                        const progress = payload.data || {};
+                        if (typeof progress.total_questions === 'number') this.progressTotal = progress.total_questions;
+                        if (typeof progress.created_questions === 'number') this.progressCreated = progress.created_questions;
+                        if (progress.phase_label) this.progressPhaseLabel = progress.phase_label;
+                        if (Array.isArray(progress.web_sources) && progress.web_sources.length) {
+                            console.groupCollapsed(`[ScamIQ][WebTool] ${progress.web_sources.length} nguồn web đã dùng`);
+                            progress.web_sources.forEach((url, idx) => console.log(`#${idx + 1}:`, url));
+                            console.groupEnd();
+                        }
+                        if (payload.message) this.progressMessage = payload.message;
+                    } catch (_) {}
+                };
+            } catch (_) {
+                this.taskSocket = null;
+            }
+        },
+
+        closeTaskSocket() {
+            if (this.taskSocket) {
+                try { this.taskSocket.close(); } catch (_) {}
+            }
+            this.taskSocket = null;
+        },
+
+        connectAISocket() {
+            this.closeAISocket();
+            if (!this.taskIdAI) return;
+            const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const wsUrl = `${proto}://${window.location.host}/ws/task/${this.taskIdAI}/`;
+            try {
+                this.aiSocket = new WebSocket(wsUrl);
+                this.aiSocket.onmessage = (event) => {
+                    try {
+                        const payload = JSON.parse(event.data || '{}');
+                        if (payload.type && payload.type !== 'task_progress') return;
+                        
+                        if (payload.status === 'processing') {
+                            this.aiProgressMessage = payload.message;
+                        } else if (payload.status === 'done') {
+                            this.aiProgressMessage = payload.message || 'Hoàn tất!';
+                            if (payload.data) {
+                                this.result.score = payload.data.score;
+                                this.result.level = payload.data.level;
+                                this.result.ai_feedback = payload.data.feedback;
+                                this.result.correct_count = payload.data.correct_count;
+                                this.result.is_ai_scored = true;
+                                this.isAIScoring = false;
+                            }
+                            this.closeAISocket();
+                        } else if (payload.status === 'failed') {
+                            this.aiProgressMessage = payload.message || 'Lỗi khi chấm điểm AI.';
+                            this.isAIScoring = false;
+                            this.closeAISocket();
+                        }
+                    } catch (_) {}
+                };
+            } catch (_) {
+                this.aiSocket = null;
+            }
+        },
+
+        closeAISocket() {
+            if (this.aiSocket) {
+                try { this.aiSocket.close(); } catch (_) {}
+            }
+            this.aiSocket = null;
         },
 
         jumpTo(i) {
@@ -385,6 +614,10 @@ function scamIQExam() {
             this.answers = {};
             this.questions = [];
             this.index = 0;
+            this.progressCreated = 0;
+            this.progressTotal = 30;
+            this.progressMessage = 'Đang khởi tạo pipeline tạo đề...';
+            this.progressPhaseLabel = 'Khởi tạo';
 
             try {
                 const resp = await fetch('/api/v1/scam-iq/start/', {
@@ -400,12 +633,14 @@ function scamIQExam() {
                 if (!resp.ok) throw new Error(data.error || 'Không thể khởi tạo bài kiểm tra.');
 
                 this.taskId = data.task_id;
+                this.connectTaskSocket();
                 await this.pollStatus();
             } catch (err) {
                 this.error = err?.message || 'Khởi tạo bài kiểm tra thất bại.';
                 this.stage = 'idle';
             } finally {
                 this.loading = false;
+                if (this.stage !== 'loading') this.closeTaskSocket();
             }
         },
 
@@ -427,6 +662,10 @@ function scamIQExam() {
                     this.questions = data.questions || [];
                     this.stage = 'ready';
                     this.index = 0;
+                    this.progressCreated = this.questions.length || 30;
+                    this.progressMessage = 'Bộ câu hỏi đã sẵn sàng.';
+                    this.progressPhaseLabel = 'Hoàn tất';
+                    this.closeTaskSocket();
                     return;
                 }
 
@@ -456,6 +695,14 @@ function scamIQExam() {
                 if (!resp.ok) throw new Error(data.error || 'Nộp bài thất bại.');
                 this.result = data;
                 this.stage = 'result';
+                
+                if (data.ai_task_id) {
+                    this.taskIdAI = data.ai_task_id;
+                    this.isAIScoring = true;
+                    this.aiProgressMessage = 'Đang kết nối AI giám khảo...';
+                    this.connectAISocket();
+                }
+
                 this.loadHistory();
             } catch (err) {
                 this.error = err?.message || 'Nộp bài thất bại.';
@@ -465,6 +712,7 @@ function scamIQExam() {
         },
 
         resetExam() {
+            this.closeTaskSocket();
             this.stage = 'idle';
             this.taskId = '';
             this.examId = '';
@@ -473,6 +721,10 @@ function scamIQExam() {
             this.answers = {};
             this.result = null;
             this.error = '';
+            this.taskIdAI = '';
+            this.aiProgressMessage = '';
+            this.isAIScoring = false;
+            this.closeAISocket();
         },
     }
 }

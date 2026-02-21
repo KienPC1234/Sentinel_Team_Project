@@ -380,7 +380,54 @@ class ScamIQAttempt(models.Model):
     level_label = models.CharField(max_length=120, blank=True)
     difficulty_breakdown = models.JSONField(default=dict, blank=True)
     mistakes = models.JSONField(default=list, blank=True)
+    ai_feedback = models.JSONField(default=dict, blank=True, help_text="AI evaluation for simulation questions")
+    is_ai_scored = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    @staticmethod
+    def calculate_level(score: int) -> dict:
+        """Categorize score into levels (Novice to Elite)."""
+        levels = [
+            {
+                'code': 'novice',
+                'label': 'Mức 1 - Cần củng cố',
+                'min': 0,
+                'max': 89,
+                'description': 'Bạn mới ở giai đoạn làm quen. Nên luyện thêm kỹ năng nhận diện lừa đảo.',
+            },
+            {
+                'code': 'aware',
+                'label': 'Mức 2 - Nhận diện cơ bản',
+                'min': 90,
+                'max': 149,
+                'description': 'Bạn đã có nền tảng cơ bản, nhưng vẫn dễ bị đánh lừa trong các tình huống áp lực cao.',
+            },
+            {
+                'code': 'defender',
+                'label': 'Mức 3 - Người phòng thủ',
+                'min': 150,
+                'max': 209,
+                'description': 'Bạn có năng lực phòng thủ tốt trước phần lớn tình huống lừa đảo phổ biến.',
+            },
+            {
+                'code': 'analyst',
+                'label': 'Mức 4 - Chuyên gia phân tích',
+                'min': 210,
+                'max': 269,
+                'description': 'Bạn phân tích được nhiều bẫy tinh vi như deepfake, quishing và giả mạo thương hiệu.',
+            },
+            {
+                'code': 'elite',
+                'label': 'Mức 5 - Scam Hunter Elite',
+                'min': 270,
+                'max': 9999,
+                'description': 'Bạn đạt năng lực rất cao trong nhận diện và phản ứng với các hình thức lừa đảo mới nhất.',
+            },
+        ]
+        for item in levels:
+            if item['min'] <= score <= item['max']:
+                return {'current': item, 'bands': levels}
+        return {'current': levels[0], 'bands': levels}
 
     class Meta:
         ordering = ['-created_at']

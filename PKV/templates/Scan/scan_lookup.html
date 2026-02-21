@@ -84,5 +84,67 @@
             </a>
         </div>
     </div>
+
+    <div class="liquid-card p-6 space-y-5" data-aos="fade-up" data-aos-delay="650">
+        <form action="/scan/lookup/" method="get" class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+            <div class="relative">
+                <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-white/35"></i>
+                <input type="text" name="q" value="{{ search_query }}" placeholder="Nhập từ khóa để tra cứu lịch sử scan..." class="w-full h-11 pl-10 pr-3 rounded-xl bg-white/[0.03] border border-white/10 text-white text-sm placeholder:text-white/35 focus:outline-none focus:border-cyan-500/40">
+                {% if selected_type %}
+                <input type="hidden" name="type" value="{{ selected_type }}">
+                {% endif %}
+            </div>
+            <button type="submit" class="h-11 px-5 rounded-xl bg-cyan-500 text-black text-sm font-black hover:bg-cyan-400 transition-colors">Tra cứu</button>
+        </form>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-sm font-black text-white uppercase tracking-wider">Bảng tra cứu scan theo loại</h3>
+            <a href="/scan/lookup/" class="text-[11px] font-bold text-cyan-300 hover:text-cyan-200">Xóa bộ lọc</a>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            <a href="/scan/lookup/{% if search_query %}?q={{ search_query|urlencode }}{% endif %}" class="px-3 py-1.5 rounded-lg text-[11px] font-black border {% if not selected_type %}bg-cyan-500/20 text-cyan-300 border-cyan-500/30{% else %}bg-white/5 text-white/60 border-white/10{% endif %}">Tất cả</a>
+            {% for t in type_counts %}
+            <a href="/scan/lookup/?type={{ t.code }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="px-3 py-1.5 rounded-lg text-[11px] font-black border {% if selected_type == t.code %}bg-cyan-500/20 text-cyan-300 border-cyan-500/30{% else %}bg-white/5 text-white/60 border-white/10 hover:border-cyan-500/30{% endif %}">
+                {{ t.label }} ({{ t.count }})
+            </a>
+            {% endfor %}
+        </div>
+
+        <div class="overflow-x-auto rounded-2xl border border-white/10">
+            <table class="w-full text-sm">
+                <thead class="bg-white/[0.03]">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-white/45">Thời gian</th>
+                        <th class="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-white/45">Loại scan</th>
+                        <th class="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-white/45">Nội dung</th>
+                        <th class="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-white/45">Rủi ro</th>
+                        <th class="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-white/45">Chi tiết</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in recent_scans %}
+                    <tr class="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <td class="px-4 py-3 text-white/60 text-[12px]">{{ s.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] font-bold text-white/75">{{ s.get_scan_type_display }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-white/75 max-w-[320px] truncate" title="{{ s.raw_input }}">{{ s.raw_input|default:'(trống)' }}</td>
+                        <td class="px-4 py-3">
+                            <span class="text-[11px] font-black {% if s.risk_level == 'RED' %}text-red-400{% elif s.risk_level == 'YELLOW' %}text-yellow-400{% elif s.risk_level == 'GREEN' %}text-green-400{% else %}text-cyan-300{% endif %}">{{ s.risk_level }} • {{ s.risk_score }}/100</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <a href="/scan/status/{{ s.id }}/" class="text-cyan-300 text-[11px] font-black hover:text-cyan-200">Mở kết quả</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-white/40 text-sm">Chưa có dữ liệu scan cho bộ lọc hiện tại.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 {% endblock %}

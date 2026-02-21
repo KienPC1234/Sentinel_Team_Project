@@ -268,9 +268,11 @@ SCAM_ANALYSIS_SCHEMA = {
         "risk_score": {"type": "integer"},
         "indicators": {"type": "array", "items": {"type": "string"}},
         "explanation": {"type": "string"},
+        "prevention_measures": {"type": "array", "items": {"type": "string"}},
+        "advice": {"type": "string"},
         "web_sources": {"type": "array", "items": {"type": "string"}}
     },
-    "required": ["is_scam", "risk_score", "indicators", "explanation", "web_sources"]
+    "required": ["is_scam", "risk_score", "indicators", "explanation", "prevention_measures", "advice", "web_sources"]
 }
 
 # Initialize client
@@ -2268,6 +2270,8 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"JSON phải có các trường sau:\n"
         f"  is_scam (bool), risk_score (số nguyên 0-100), "
         f"indicators (danh sách chuỗi), explanation (chuỗi), "
+        f"prevention_measures (danh sách các hành động phòng tránh cụ thể), "
+        f"advice (lời khuyên chuyên gia ngắn gọn), "
         f"web_sources (danh sách tên các nguồn đã tham chiếu, ví dụ: ['Google Search', 'ScamAdviser']).\n\n"
         f"HƯỚNG DẪN PHÂN TÍCH:\n"
         f"1. TRANG/NỘI DUNG CHÍNH THỨC/AN TOÀN: Nếu đây là trang chính thức của một tổ chức uy tín, đánh giá là an toàn.\n"
@@ -2279,7 +2283,9 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"1. Tóm tắt nội dung chính từ các nguồn tình báo (web_section) một cách ngắn gọn, súc tích.\n"
         f"2. Loại bỏ các thông tin rác từ giao diện web (nếu có trong dữ liệu thô) như 'Read Reviews', 'Log in', 'Follow on Facebook'.\n"
         f"3. Nếu nguồn tình báo KHÔNG có thông tin liên quan, chỉ ghi 'Không tìm thấy dữ liệu từ các nguồn uy tín'.\n"
-        f"4. Viết bằng TIẾNG VIỆT, tập trung vào kết luận rủi ro.\n\n"
+        f"4. Viết bằng TIẾNG VIỆT, tập trung vào kết luận rủi ro.\n"
+        f"5. 'prevention_measures': Đưa ra 3-5 bước hành động cụ thể để bảo vệ bản thân trước hình thức lừa đảo này.\n"
+        f"6. 'advice': Lời khuyên ngắn gọn, mang tính khích lệ và cảnh giác.\n\n"
         f"Nội dung cần phân tích:\n{text_snippet}"
     )
 
