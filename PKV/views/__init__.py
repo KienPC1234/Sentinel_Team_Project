@@ -1,1 +1,22 @@
-from .home import home_view
+from .page_views import (
+    home_view,
+    scan_phone_view,
+    scan_message_view,
+    scan_website_view,
+    scan_email_view,
+    scan_bank_view,
+    scan_qr_view,
+    report_view,
+    scam_radar_view,
+    learn_hub_view,
+    emergency_view,
+    login_view,
+    register_view,
+    logout_view,
+    dashboard_view,
+    admin_panel_view,
+    profile_view,
+    change_password_view,
+    forum_view,
+    forum_post_view,
+)

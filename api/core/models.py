@@ -1,0 +1,404 @@
+"""
+ShieldCall VN – Core Models
+Implements MVP spec Section 4: Database Schema
+"""
+import hashlib
+import uuid
+from django.db import models
+from django.conf import settings
+from django.utils import timezone
+from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+# ─── User Profile Model ──────────────────────────────────────────────────────
+
+class UserProfile(models.Model):
+    """Extended user data including avatar and preferences"""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    avatar = models.ImageField(upload_to='avatars/%Y/%m/', null=True, blank=True)
+    bio = models.TextField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Profile of {self.user.username}"
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.get_or_create(user=instance)
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def save_user_profile(sender, instance, **kwargs):
+    if hasattr(instance, 'profile'):
+        instance.profile.save()
+    else:
+        UserProfile.objects.get_or_create(user=instance)
+
+
+# ─── Scam type & severity enums ─────────────────────────────────────────────
+
+class ScamType(models.TextChoices):
+    POLICE_IMPERSONATION = 'police_impersonation', 'Giả danh công an'
+    BANK_IMPERSONATION = 'bank_impersonation', 'Giả mạo ngân hàng'
+    RECRUITMENT_SCAM = 'recruitment_scam', 'Lừa tuyển dụng'
+    INVESTMENT_SCAM = 'investment_scam', 'Lừa đầu tư'
+    DELIVERY_SCAM = 'delivery_scam', 'Giả mạo giao hàng'
+    LOAN_SCAM = 'loan_scam', 'Lừa vay tiền'
+    OTP_STEAL = 'otp_steal', 'Chiêu trò OTP/2FA'
+    PHISHING = 'phishing', 'Phishing link'
+    ROMANCE_SCAM = 'romance_scam', 'Lừa tình cảm'
+    OTHER = 'other', 'Khác'
+
+
+class Severity(models.TextChoices):
+    LOW = 'low', 'Thấp'
+    MEDIUM = 'medium', 'Trung bình'
+    HIGH = 'high', 'Cao'
+    CRITICAL = 'critical', 'Khẩn cấp'
+
+
+class RiskLevel(models.TextChoices):
+    SAFE = 'SAFE', 'An toàn'
+    GREEN = 'GREEN', 'Xanh'
+    YELLOW = 'YELLOW', 'Cảnh báo'
+    RED = 'RED', 'Nguy hiểm'
+
+
+class ReportStatus(models.TextChoices):
+    PENDING = 'pending', 'Chờ duyệt'
+    APPROVED = 'approved', 'Đã duyệt'
+    REJECTED = 'rejected', 'Từ chối'
+
+
+class ScanStatus(models.TextChoices):
+    PENDING = 'pending', 'Đang chờ'
+    PROCESSING = 'processing', 'Đang xử lý'
+    COMPLETED = 'completed', 'Hoàn thành'
+    FAILED = 'failed', 'Lỗi'
+
+
+class ScanType(models.TextChoices):
+    PHONE = 'phone', 'Số điện thoại'
+    MESSAGE = 'message', 'Tin nhắn'
+    DOMAIN = 'domain', 'Website/URL'
+    ACCOUNT = 'account', 'Tài khoản ngân hàng'
+    QR = 'qr', 'QR / Ảnh'
+
+
+class TargetType(models.TextChoices):
+    PHONE = 'phone', 'Số điện thoại'
+    DOMAIN = 'domain', 'Website/URL'
+    ACCOUNT = 'account', 'Tài khoản ngân hàng'
+    MESSAGE = 'message', 'Tin nhắn'
+    QR = 'qr', 'QR Code'
+
+
+# ─── Domain Model ───────────────────────────────────────────────────────────
+
+class Domain(models.Model):
+    """Tracked domains (phishing / scam websites)"""
+    domain_name = models.CharField(max_length=255, unique=True, db_index=True)
+    risk_score = models.IntegerField(default=0, db_index=True,
+                                     help_text='0-100 risk score')
+    domain_age_days = models.IntegerField(null=True, blank=True)
+    ssl_valid = models.BooleanField(default=False)
+    whois_snapshot = models.JSONField(default=dict, blank=True)
+    report_count = models.IntegerField(default=0)
+    scam_type = models.CharField(max_length=30, choices=ScamType.choices,
+                                 default=ScamType.PHISHING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-risk_score', '-created_at']
+        verbose_name = 'Domain'
+        verbose_name_plural = 'Domains'
+
+    def __str__(self):
+        return f"{self.domain_name} (risk={self.risk_score})"
+
+
+# ─── Bank Account Model ─────────────────────────────────────────────────────
+
+class BankAccount(models.Model):
+    """Tracked bank accounts reported as scam"""
+    BANK_CHOICES = [
+        ('Vietcombank', 'Vietcombank'), ('Techcombank', 'Techcombank'),
+        ('BIDV', 'BIDV'), ('VietinBank', 'VietinBank'),
+        ('Agribank', 'Agribank'), ('MBBank', 'MBBank'),
+        ('ACB', 'ACB'), ('VPBank', 'VPBank'), ('TPBank', 'TPBank'),
+        ('Sacombank', 'Sacombank'), ('HDBank', 'HDBank'), ('SHB', 'SHB'),
+        ('MSB', 'MSB'), ('VIB', 'VIB'), ('OCB', 'OCB'),
+        ('Momo', 'Ví Momo'), ('ZaloPay', 'ZaloPay'), ('VNPay', 'VNPay'),
+        ('Other', 'Khác'),
+    ]
+
+    bank_name = models.CharField(max_length=50, choices=BANK_CHOICES, db_index=True)
+    account_number_hash = models.CharField(max_length=64, db_index=True,
+                                           help_text='SHA-256 hash of account number')
+    account_number_masked = models.CharField(max_length=20, blank=True,
+                                             help_text='Masked display, e.g. ***456789')
+    risk_score = models.IntegerField(default=0, db_index=True)
+    report_count = models.IntegerField(default=0)
+    scam_type = models.CharField(max_length=30, choices=ScamType.choices,
+                                 default=ScamType.OTHER)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-risk_score', '-created_at']
+        unique_together = ['bank_name', 'account_number_hash']
+        verbose_name = 'Bank Account'
+        verbose_name_plural = 'Bank Accounts'
+
+    def __str__(self):
+        return f"{self.bank_name} {self.account_number_masked} (risk={self.risk_score})"
+
+    @staticmethod
+    def hash_account(account_number: str) -> str:
+        return hashlib.sha256(account_number.strip().encode()).hexdigest()
+
+    @staticmethod
+    def mask_account(account_number: str) -> str:
+        s = account_number.strip()
+        if len(s) <= 4:
+            return '***' + s
+        return '***' + s[-4:]
+
+
+# ─── Report Model ───────────────────────────────────────────────────────────
+
+class Report(models.Model):
+    """Community scam reports submitted by users"""
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                 null=True, blank=True, related_name='reports')
+    target_type = models.CharField(max_length=20, choices=TargetType.choices)
+    target_value = models.CharField(max_length=500,
+                                    help_text='Normalized: phone number, domain, account info')
+    scam_type = models.CharField(max_length=30, choices=ScamType.choices)
+    severity = models.CharField(max_length=10, choices=Severity.choices,
+                                default=Severity.MEDIUM)
+    description = models.TextField()
+    evidence_file = models.ImageField(upload_to='reports/evidence/%Y/%m/',
+                                      null=True, blank=True)
+    status = models.CharField(max_length=10, choices=ReportStatus.choices,
+                              default=ReportStatus.PENDING, db_index=True)
+    moderator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                  null=True, blank=True, related_name='moderated_reports')
+    moderation_note = models.TextField(blank=True)
+    scan_event = models.ForeignKey('ScanEvent', on_delete=models.SET_NULL, 
+                                 null=True, blank=True, related_name='linked_reports')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Report'
+        verbose_name_plural = 'Reports'
+
+    def __str__(self):
+        return f"Report #{self.pk} [{self.target_type}] {self.target_value[:30]} ({self.status})"
+
+
+# ─── Scan Event Model ───────────────────────────────────────────────────────
+
+class ScanEvent(models.Model):
+    """Every scan performed by users (history + analytics)"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                             null=True, blank=True, related_name='scans')
+    scan_type = models.CharField(max_length=20, choices=ScanType.choices)
+    raw_input = models.TextField(help_text='Original user input')
+    normalized_input = models.CharField(max_length=500, blank=True, db_index=True)
+    result_json = models.JSONField(default=dict, blank=True)
+    risk_score = models.IntegerField(default=0, db_index=True)
+    risk_level = models.CharField(max_length=10, choices=RiskLevel.choices,
+                                  default=RiskLevel.SAFE)
+    status = models.CharField(max_length=20, choices=ScanStatus.choices,
+                              default=ScanStatus.COMPLETED, db_index=True)
+    job_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Scan Event'
+        verbose_name_plural = 'Scan Events'
+
+    def __str__(self):
+        return f"Scan #{self.pk} [{self.scan_type}] {self.risk_level} at {self.created_at:%Y-%m-%d %H:%M}"
+
+
+# ─── Trend Daily Model ──────────────────────────────────────────────────────
+
+class TrendDaily(models.Model):
+    """Pre-computed daily scam trend stats (for Scam Radar)"""
+    date = models.DateField(db_index=True)
+    region = models.CharField(max_length=50, default='VN', blank=True)
+    scam_type = models.CharField(max_length=30, choices=ScamType.choices)
+    count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date']
+        unique_together = ['date', 'region', 'scam_type']
+        verbose_name = 'Trend Daily'
+        verbose_name_plural = 'Trend Daily'
+
+    def __str__(self):
+        return f"{self.date} | {self.scam_type}: {self.count}"
+
+
+# ─── Entity Link Model (Fraud Graph) ────────────────────────────────────────
+
+class EntityLink(models.Model):
+    """Links between entities for fraud graph / scam ring detection"""
+    ENTITY_TYPE_CHOICES = [
+        ('phone', 'Phone'), ('domain', 'Domain'), ('account', 'Account'),
+    ]
+    LINK_REASON_CHOICES = [
+        ('shared_text', 'Shared text'), ('shared_report', 'Shared report'),
+        ('shared_url', 'Shared URL'), ('ocr_match', 'OCR match'),
+        ('manual', 'Manual'),
+    ]
+
+    from_type = models.CharField(max_length=10, choices=ENTITY_TYPE_CHOICES)
+    from_entity_id = models.IntegerField()
+    to_type = models.CharField(max_length=10, choices=ENTITY_TYPE_CHOICES)
+    to_entity_id = models.IntegerField()
+    link_reason = models.CharField(max_length=20, choices=LINK_REASON_CHOICES)
+    confidence = models.FloatField(default=0.5,
+                                   help_text='0.0 to 1.0 confidence')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['from_type', 'from_entity_id']),
+            models.Index(fields=['to_type', 'to_entity_id']),
+        ]
+        verbose_name = 'Entity Link'
+        verbose_name_plural = 'Entity Links'
+
+    def __str__(self):
+        return f"{self.from_type}:{self.from_entity_id} -> {self.to_type}:{self.to_entity_id}"
+
+
+# ─── User Alert (Saved warnings) ────────────────────────────────────────────
+
+class UserAlert(models.Model):
+    """Saved alerts/bookmarks by users"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                             related_name='alerts')
+    target_type = models.CharField(max_length=20, choices=TargetType.choices)
+    target_value = models.CharField(max_length=500)
+    risk_level = models.CharField(max_length=10, choices=RiskLevel.choices,
+                                  default=RiskLevel.YELLOW)
+    note = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Alert: {self.target_type} {self.target_value[:30]}"
+
+
+# ─── Forum Models (Community Scam Discussion) ──────────────────────────────
+
+class ForumCategory(models.TextChoices):
+    WARNING = 'warning', 'Cảnh báo'
+    DISCUSSION = 'discussion', 'Thảo luận'
+    EXPERIENCE = 'experience', 'Kinh nghiệm'
+    QUESTION = 'question', 'Hỏi đáp'
+
+
+class ForumPost(models.Model):
+    """Community forum posts for scam discussions"""
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                               related_name='forum_posts')
+    title = models.CharField(max_length=300)
+    content = models.TextField()
+    category = models.CharField(max_length=20, choices=ForumCategory.choices,
+                                default=ForumCategory.DISCUSSION)
+    image = models.ImageField(upload_to='forum_images/', null=True, blank=True)
+    views_count = models.IntegerField(default=0)
+    likes_count = models.IntegerField(default=0)
+    comments_count = models.IntegerField(default=0)
+    is_pinned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_pinned', '-created_at']
+        verbose_name = 'Forum Post'
+        verbose_name_plural = 'Forum Posts'
+
+    def __str__(self):
+        return f"[{self.category}] {self.title[:50]}"
+
+
+class ForumComment(models.Model):
+    """Comments on forum posts"""
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE,
+                             related_name='comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                               related_name='forum_comments')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Forum Comment'
+        verbose_name_plural = 'Forum Comments'
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.post.title[:30]}"
+
+
+class ForumLike(models.Model):
+    """Track user likes on forum posts (prevent duplicates)"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE,
+                             related_name='likes')
+
+    class Meta:
+        unique_together = ['user', 'post']
+
+    def __str__(self):
+        return f"{self.user} likes {self.post.title[:30]}"
+
+# ─── Article Model (Admin CMS) ──────────────────────────────────────────────
+
+class ArticleCategory(models.TextChoices):
+    NEWS = 'news', 'Tin tức'
+    GUIDE = 'guide', 'Hướng dẫn'
+    ALERT = 'alert', 'Cảnh báo mới'
+    STORY = 'story', 'Chuyện cảnh giác'
+
+
+class Article(models.Model):
+    """Admin articles for educating users (CMS)"""
+    title = models.CharField(max_length=300)
+    slug = models.SlugField(max_length=350, unique=True, blank=True)
+    content = models.TextField()
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
+    cover_image = models.ImageField(upload_to='articles/covers/', null=True, blank=True)
+    is_published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Article'
+        verbose_name_plural = 'Articles'
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)

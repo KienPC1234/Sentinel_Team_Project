@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Đăng nhập - ShieldCall VN{% endblock %}
+
+{% block content %}
+<div class="animate-fadein max-w-md mx-auto py-12 px-4 space-y-8" 
+     x-data="{
+        email:'', 
+        password:'', 
+        loading:false, 
+        error:'', 
+        show2fa:false, 
+        mfaToken:'', 
+        mfaMethods:{}, 
+        mfaMethod:'totp',
+        mfaError: '',
+        async verifyMfa() {
+            if(this.mfaToken.length < 6) return;
+            this.loading = true;
+            try {
+                const r = await fetch('/api/v1/auth/mfa/verify/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    credentials: 'include',
+                    body: JSON.stringify({ token: this.mfaToken, method: this.mfaMethod })
+                });
+                const data = await r.json();
+                if (r.ok) {
+                    showToast('Đăng nhập thành công!', 'success');
+                    window.location.href = '/dashboard/';
+                } else {
+                    this.mfaError = data.error || 'Mã xác nhận không đúng';
+                    this.loading = false;
+                }
+            } catch (e) {
+                this.mfaError = 'Lỗi kết nối';
+                this.loading = false;
+            }
+        },
+        async resendEmail() {
+            try {
+                await fetch('/api/v1/auth/mfa/setup/email/', { credentials: 'include' });
+                showToast('Đã gửi lại mã OTP email', 'info');
+            } catch(e) { console.error(e); }
+        },
+        async handleLogin() {
+            if (!this.email.trim() || !this.password.trim()) {
+                this.error = 'Vui lòng điền đầy đủ thông tin';
+                return;
+            }
+            this.loading = true;
+            this.error = '';
+            
+            try {
+                const response = await fetch('/api/v1/auth/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        email: this.email,
+                        password: this.password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw data;
+                }
+                
+                if (data.mfa_required) {
+                    this.show2fa = true;
+                    this.mfaMethods = data.methods;
+                    this.mfaMethod = data.methods.totp ? 'totp' : 'email';
+                    if (this.mfaMethod === 'email' && data.methods.email) {
+                        this.resendEmail();
+                    }
+                    this.loading = false;
+                    this.mfaError = '';
+                    showToast('Yêu cầu mã xác thực 2 lớp', 'info');
+                } else {
+                    showToast('Đăng nhập thành công!', 'success');
+                    window.location.href = '/dashboard/';
+                }
+            } catch (e) {
+                this.error = e.error || 'Email hoặc mật khẩu không đúng';
+                this.loading = false;
+            }
+        }
+     }">
+    <!-- Brand/Icon Header -->
+    <div class="text-center space-y-3">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-[2.5rem] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-lg shadow-cyan-500/10 mb-2">
+            <i class="bi bi-shield-lock-fill text-4xl"></i>
+        </div>
+        <h1 class="text-3xl font-black text-white tracking-tight leading-none">Vào ShieldCall</h1>
+        <p class="text-white/40 text-sm font-medium tracking-wide">Bảo mật thông tin, bảo vệ cộng đồng</p>
+    </div>
+
+    <!-- Main Login Card -->
+    <div class="liquid-card p-8 sm:p-10">
+        <!-- Google Login -->
+        <a href="/accounts/google/login/?process=login" 
+           class="liquid-btn w-full flex items-center justify-center gap-3 py-4 mb-8 bg-white/5 border-white/10 hover:bg-white/10 text-sm font-bold tracking-wide transition-all group">
+            <svg class="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+            </svg>
+            <span class="text-white/90 uppercase text-[11px] font-black tracking-widest">Tiếp tục với Google</span>
+        </a>
+
+        <!-- Divider -->
+        <div class="flex items-center gap-4 mb-8">
+            <div class="flex-1 h-px bg-white/5"></div>
+            <span class="text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Hoặc email</span>
+            <div class="flex-1 h-px bg-white/5"></div>
+        </div>
+
+        <!-- Classic Login Form -->
+        <form x-show="!show2fa" @submit.prevent="handleLogin()" class="space-y-6">
+            <div class="space-y-2">
+                <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Email</label>
+                <input type="email" class="liquid-input w-full py-4 px-6 text-sm font-bold" placeholder="email@example.com" x-model="email" required>
+            </div>
+            
+            <div class="space-y-2">
+                <div class="flex justify-between items-center ml-2">
+                    <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em]">Mật khẩu</label>
+                    <a href="#" class="text-[10px] font-black text-cyan-400/60 hover:text-cyan-400 uppercase tracking-widest transition-colors">Quên mật khẩu?</a>
+                </div>
+                <input type="password" class="liquid-input w-full py-4 px-6 text-sm font-bold" placeholder="••••••••" x-model="password" required>
+            </div>
+
+            <!-- Cloudflare Turnstile -->
+            <div class="flex justify-center py-2">
+                <div class="cf-turnstile" data-sitekey="0x4AAAAAAA_B3d0Z1pOzYhPA"></div>
+            </div>
+
+            <button type="submit" class="liquid-btn w-full py-5 bg-cyan-500 text-black font-black uppercase tracking-[0.2em] text-sm hover:bg-cyan-400 transition-all shadow-lg shadow-cyan-500/20" :disabled="loading">
+                <span x-show="!loading">ĐĂNG NHẬP</span>
+                <span x-show="loading" class="flex items-center justify-center gap-2">
+                    <span class="spinner w-5 h-5 border-black"></span>
+                    <span class="text-xs">XÁC THỰC...</span>
+                </span>
+            </button>
+
+            <p x-show="error" x-text="error" class="text-red-400 text-[11px] font-bold text-center animate-pulse uppercase tracking-wider"></p>
+        </form>
+
+        <!-- 2FA Verification Form -->
+        <div x-show="show2fa" x-transition class="space-y-8 animate-fadein">
+            <div class="space-y-2 text-center">
+                <h3 class="text-sm font-black text-white uppercase tracking-widest">Xác thực 2 lớp</h3>
+                <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Nhập mã xác nhận để tiếp tục</p>
+            </div>
+
+            <!-- Method Switcher if both enabled -->
+            <template x-if="mfaMethods.totp && mfaMethods.email">
+                <div class="flex gap-2 p-1 bg-white/5 rounded-2xl">
+                    <button @click="mfaMethod='totp'; mfaToken=''; mfaError=''" class="flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+                            :class="mfaMethod==='totp' ? 'bg-cyan-500 text-black' : 'text-white/40'">APP</button>
+                    <button @click="mfaMethod='email'; mfaToken=''; mfaError=''; resendEmail()" class="flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+                            :class="mfaMethod==='email' ? 'bg-cyan-500 text-black' : 'text-white/40'">EMAIL</button>
+                </div>
+            </template>
+
+            <div class="space-y-4">
+                <div class="space-y-2 text-center">
+                    <p class="text-[11px] text-white/60 font-medium" x-show="mfaMethod==='totp'">Mở ứng dụng Authenticator của bạn</p>
+                    <p class="text-[11px] text-white/60 font-medium" x-show="mfaMethod==='email'">Kiểm tra hòm thư <span x-text="email"></span></p>
+                    
+                    <input type="text" x-model="mfaToken" maxlength="6" autofocus
+                           @keyup="if(mfaToken.length===6) verifyMfa()"
+                           class="liquid-input w-full py-5 text-center text-3xl font-black tracking-[0.5em] placeholder:tracking-normal" 
+                           placeholder="••••••">
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <button @click="verifyMfa()" :disabled="loading"
+                            class="liquid-btn w-full py-5 bg-cyan-500 text-black font-black uppercase tracking-[0.2em] shadow-lg shadow-cyan-500/20">
+                        <span x-show="!loading">XÁC MINH</span>
+                        <span x-show="loading" class="spinner w-5 h-5 border-black"></span>
+                    </button>
+                    
+                    <button @click="show2fa=false; mfaToken=''; error=''" class="text-[10px] font-black text-white/20 hover:text-white/40 uppercase tracking-widest transition-colors py-2">
+                        <i class="bi bi-arrow-left"></i> Quay lại đăng nhập
+                    </button>
+                </div>
+            </div>
+            
+            <p x-show="mfaError" x-text="mfaError" class="text-red-400 text-[11px] font-bold text-center uppercase tracking-wider"></p>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-10 pt-8 border-t border-white/5 text-center">
+            <p class="text-white/30 text-[11px] font-black uppercase tracking-widest">
+                Chưa có tài khoản? 
+                <a href="/register/" class="text-cyan-400 hover:text-cyan-300 ml-1 transition-colors underline underline-offset-4 decoration-cyan-400/30">Đăng ký ngay</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

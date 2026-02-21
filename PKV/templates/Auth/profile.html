@@ -1,0 +1,554 @@
+{% extends "base.html" %}
+{% block title %}Hồ sơ cá nhân - ShieldCall VN{% endblock %}
+
+{% block content %}
+<div class="animate-fadein max-w-2xl mx-auto space-y-10" x-data="{editing:false}">
+    <!-- Page Header -->
+    <div class="space-y-2">
+        <h1 class="text-4xl font-black text-white tracking-tight leading-none">
+            <span class="glow-text">Hồ sơ cá nhân</span>
+        </h1>
+        <p class="text-white/40 text-sm font-medium tracking-wide prose-sm">Quản lý và bảo mật thông tin định danh của bạn.</p>
+    </div>
+
+    <!-- Main Profile Card -->
+    <div class="liquid-card p-8 sm:p-10 space-y-8" x-data="profileManager()">
+        <!-- User Identity -->
+        <div class="flex flex-col sm:flex-row items-center gap-8 text-center sm:text-left">
+            <div class="relative group cursor-pointer" @click="$refs.avatarInput.click()">
+                <template x-if="user.avatar">
+                    <img :src="user.avatar" class="w-24 h-24 rounded-[2.5rem] object-cover shadow-2xl shadow-cyan-500/20 ring-4 ring-white/5 group-hover:scale-105 transition-transform">
+                </template>
+                <template x-if="!user.avatar">
+                    <div class="w-24 h-24 rounded-[2.5rem] bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center text-3xl font-black text-white shadow-2xl shadow-cyan-500/20 ring-4 ring-white/5 group-hover:scale-105 transition-transform">
+                        <span x-text="(user.first_name || user.username)[0].toUpperCase()"></span>
+                    </div>
+                </template>
+                <div class="absolute inset-0 bg-black/40 rounded-[2.5rem] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <i class="bi bi-camera-fill text-white text-xl"></i>
+                </div>
+                <input type="file" x-ref="avatarInput" class="hidden" accept="image/*" @change="uploadAvatar">
+                
+                <div class="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-slate-900 border-2 border-white/10 flex items-center justify-center text-cyan-400 shadow-xl">
+                    <i class="bi bi-patch-check-fill text-sm"></i>
+                </div>
+            </div>
+            <div class="space-y-1">
+                <h2 class="text-2xl font-black text-white/90" x-text="(user.first_name || user.last_name) ? user.first_name + ' ' + user.last_name : user.username">
+                </h2>
+                <p class="text-white/40 font-bold uppercase tracking-[0.2em] text-[10px]" x-text="user.email"></p>
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] text-white/40 font-black uppercase tracking-widest mt-2">
+                    <i class="bi bi-calendar3"></i> Đã tham gia: {{ user.date_joined|date:"d/m/Y" }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-3 gap-4">
+            <div class="p-4 rounded-3xl bg-white/[0.03] border border-white/5 text-center group hover:bg-white/[0.05] transition-all">
+                <div class="text-[10px] font-black text-cyan-400/60 uppercase tracking-widest mb-1">Scans</div>
+                <div class="text-2xl font-black text-white">{{ total_scans }}</div>
+            </div>
+            <div class="p-4 rounded-3xl bg-white/[0.03] border border-white/5 text-center group hover:bg-white/[0.05] transition-all">
+                <div class="text-[10px] font-black text-yellow-400/60 uppercase tracking-widest mb-1">Reports</div>
+                <div class="text-2xl font-black text-white">{{ total_reports }}</div>
+            </div>
+            <div class="p-4 rounded-3xl bg-white/[0.03] border border-white/5 text-center group hover:bg-white/[0.05] transition-all">
+                <div class="text-[10px] font-black text-purple-400/60 uppercase tracking-widest mb-1">Posts</div>
+                <div class="text-2xl font-black text-white">{{ total_posts }}</div>
+            </div>
+        </div>
+
+        <!-- Detailed Info Form -->
+        <div class="space-y-6 pt-4 border-t border-white/5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div class="space-y-2">
+                    <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Họ</label>
+                    <input type="text" x-model="formData.first_name" class="liquid-input w-full py-4 px-6 text-sm font-bold" 
+                           :disabled="!editing" :class="!editing && 'opacity-50 cursor-not-allowed'">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Tên</label>
+                    <input type="text" x-model="formData.last_name" class="liquid-input w-full py-4 px-6 text-sm font-bold" 
+                           :disabled="!editing" :class="!editing && 'opacity-50 cursor-not-allowed'">
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Tài khoản Email</label>
+                <div class="relative">
+                    <input type="email" class="liquid-input w-full py-4 px-6 text-sm font-bold opacity-30 cursor-not-allowed" :value="user.email" disabled>
+                    <i class="bi bi-lock absolute right-6 top-1/2 -translate-y-1/2 text-white/20"></i>
+                </div>
+                <p class="text-[9px] text-white/20 font-bold uppercase tracking-widest ml-2">Email bảo mật không thể thay đổi</p>
+            </div>
+
+            <div class="flex flex-wrap gap-4 pt-4">
+                <button type="button" class="liquid-btn flex-1 py-4 text-[11px] font-black tracking-widest uppercase bg-white/5 border-white/10 hover:bg-white/10 transition-all" @click="editing=!editing">
+                    <span x-show="!editing"><i class="bi bi-pencil-square mr-2"></i> CHỈNH SỬA HỒ SƠ</span>
+                    <span x-show="editing" class="text-red-400"><i class="bi bi-x-circle mr-2"></i> HỦY THAY ĐỔI</span>
+                </button>
+                <button type="button" @click="saveProfile()" class="liquid-btn flex-1 py-4 text-[11px] font-black tracking-widest uppercase bg-cyan-500 text-black shadow-lg shadow-cyan-500/20 hover:bg-cyan-400" x-show="editing" :disabled="loading">
+                    <span x-show="!loading"><i class="bi bi-check2-circle mr-2"></i> LƯU THÔNG TIN</span>
+                    <span x-show="loading" class="spinner w-4 h-4 border-black"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy & Settings Area -->
+    <div class="liquid-card overflow-hidden">
+        <div class="p-6 bg-white/[0.02] border-b border-white/5">
+            <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+                <i class="bi bi-shield-lock text-cyan-400"></i>
+                Bảo mật & Thiết lập
+            </h3>
+        </div>
+        <div class="divide-y divide-white/5">
+            <a href="javascript:void(0)" @click="$dispatch('open-password-modal')" class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
+                        <i class="bi bi-key-fill"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-black text-white uppercase tracking-wide">Đổi mật khẩu</div>
+                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Yêu cầu xác thực OTP Email</p>
+                    </div>
+                </div>
+                <i class="bi bi-chevron-right text-white/20 transition-transform group-hover:translate-x-1"></i>
+            </a>
+            
+            <!-- 2FA Section -->
+            <div class="p-6 bg-white/[0.01]" x-data="mfaManager()">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center transition-colors"
+                             :class="has2fa ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'">
+                            <i class="bi" :class="has2fa ? 'bi-shield-fill-check' : 'bi-shield-exclamation'"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-black text-white uppercase tracking-widest">Xác thực 2 lớp (2FA)</div>
+                            <p class="text-[10px] font-bold uppercase tracking-widest mt-1" 
+                               :class="has2fa ? 'text-green-500/60' : 'text-yellow-500/60'"
+                               x-text="has2fa ? 'Đã kích hoạt bảo mật' : 'Tài khoản chưa được bảo mật'"></p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2" x-show="!loadingStatus">
+                        <template x-if="!has2fa">
+                            <div class="flex gap-2">
+                                <button @click="startSetup('totp')" class="liquid-btn py-2 px-4 text-[10px] font-black bg-cyan-500 text-black hover:bg-cyan-400">
+                                    <i class="bi bi-phone mr-1"></i> BẬT TOTP
+                                </button>
+                                <button @click="startSetup('email')" class="liquid-btn py-2 px-4 text-[10px] font-black bg-white/5 border border-white/10 hover:bg-white/10">
+                                    <i class="bi bi-envelope mr-1"></i> BẬT EMAIL
+                                </button>
+                            </div>
+                        </template>
+                        <template x-if="has2fa">
+                            <button @click="showDeactivate = true" class="liquid-btn py-2 px-4 text-[10px] font-black bg-red-500/20 text-red-500 border border-red-500/30 hover:bg-red-500/40">
+                                <i class="bi bi-slash-circle mr-1"></i> VÔ HIỆU HÓA
+                            </button>
+                        </template>
+                    </div>
+                    <div x-show="loadingStatus" class="spinner w-5 h-5 border-white/20"></div>
+                </div>
+
+                <!-- MFA Deactivation Modal/Area -->
+                <div x-show="showDeactivate" x-transition class="mt-6 p-6 rounded-3xl bg-red-500/[0.03] border border-red-500/10 space-y-6 animate-fadein">
+                    <div class="flex items-start justify-between">
+                        <div class="space-y-1">
+                            <h4 class="text-xs font-black text-red-500 uppercase tracking-widest">Vô hiệu hóa Bảo vệ 2 lớp</h4>
+                            <p class="text-[11px] text-white/40 font-medium">Hành động này yêu cầu mật khẩu và mã OTP Email để xác nhận.</p>
+                        </div>
+                        <button @click="showDeactivate=false" class="text-white/20 hover:text-white"><i class="bi bi-x-lg"></i></button>
+                    </div>
+
+                    <div class="max-w-[400px] mx-auto space-y-4">
+                        <div class="space-y-4">
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-2">Mật khẩu hiện tại</label>
+                                <input type="password" x-model="deactivateData.password" 
+                                       class="liquid-input w-full py-4 px-6 text-sm font-bold" 
+                                       placeholder="••••••••">
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center ml-2">
+                                    <label class="text-[10px] font-black text-white/30 uppercase tracking-widest">Mã xác nhận Email</label>
+                                    <button @click="sendDeactivateOtp()" class="text-[9px] font-black text-cyan-400 uppercase tracking-widest hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline" :disabled="otpLoading || countdown > 0">
+                                        <span x-show="!otpLoading" x-text="countdown > 0 ? 'Gửi lại sau ' + (Math.floor(countdown / 60) + ':' + (countdown % 60).toString().padStart(2, '0')) : 'Gửi mã OTP'"></span>
+                                        <span x-show="otpLoading">Đang gửi...</span>
+                                    </button>
+                                </div>
+                                <input type="text" x-model="deactivateData.token" maxlength="6"
+                                       class="liquid-input w-full py-4 text-center text-xl font-black tracking-[0.5em]" 
+                                       placeholder="••••••">
+                            </div>
+                        </div>
+
+                        <button @click="confirmDeactivate()" class="liquid-btn w-full py-4 bg-red-500 text-white font-black hover:bg-red-600 shadow-lg shadow-red-500/20" :disabled="loading">
+                            <span x-show="!loading">XÁC NHẬN VÔ HIỆU HÓA</span>
+                            <span x-show="loading" class="spinner w-4 h-4 border-white"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TOTP Setup Area -->
+                <div x-show="setupMode === 'totp'" x-transition class="mt-6 p-6 rounded-3xl bg-white/[0.03] border border-white/5 space-y-6 animate-fadein">
+                    <div class="flex items-start justify-between">
+                        <div class="space-y-1">
+                            <h4 class="text-xs font-black text-cyan-400 uppercase tracking-widest">Xác thực bằng ứng dụng</h4>
+                            <p class="text-[11px] text-white/40 font-medium">Sử dụng Google/Microsoft Authenticator để quét mã.</p>
+                        </div>
+                        <button @click="setupMode=null" class="text-white/20 hover:text-white"><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    
+                    <div class="flex flex-col items-center justify-center py-4 space-y-6">
+                        <div class="p-4 bg-white rounded-[2rem] shadow-2xl shadow-cyan-500/20" x-html="qrCode"></div>
+                        
+                        <!-- Manual Entry Option -->
+                        <div class="bg-white/5 border border-white/10 rounded-2xl p-4 w-full max-w-[320px] text-center">
+                            <p class="text-[10px] font-black text-white/30 uppercase tracking-widest mb-2">Nhập mã thủ công (nếu không quét được)</p>
+                            <code class="text-cyan-400 font-mono font-bold tracking-widest text-sm break-all" x-text="otpSecret"></code>
+                        </div>
+
+                        <div class="w-full max-w-[240px] space-y-4">
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-2">Mã xác nhận 6 số</label>
+                                <input type="text" x-model="verifyToken" maxlength="6"
+                                       class="liquid-input w-full py-4 text-center text-xl font-black tracking-[0.5em] placeholder:tracking-normal" 
+                                       placeholder="••••••">
+                            </div>
+                            <button @click="confirmSetup()" class="liquid-btn w-full py-4 bg-cyan-500 text-black font-black hover:bg-cyan-400">
+                                KÍCH HOẠT NGAY
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Email Setup Area -->
+                <div x-show="setupMode === 'email'" x-transition class="mt-6 p-6 rounded-3xl bg-white/[0.03] border border-white/5 space-y-6 animate-fadein">
+                    <div class="flex items-start justify-between">
+                        <div class="space-y-1">
+                            <h4 class="text-xs font-black text-white uppercase tracking-widest">Xác thực bằng Email</h4>
+                            <p class="text-[11px] text-white/40 font-medium whitespace-pre-line">Đã gửi mã bảo mật đến: 
+                                <span class="text-cyan-400 opacity-80 underline">{{ user.email }}</span>
+                            </p>
+                        </div>
+                        <button @click="setupMode=null" class="text-white/20 hover:text-white"><i class="bi bi-x-lg"></i></button>
+                    </div>
+
+                    <div class="max-w-[320px] mx-auto space-y-4">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-2">Nhập mã từ hòm thư</label>
+                            <input type="text" x-model="verifyToken" maxlength="6"
+                                   class="liquid-input w-full py-4 text-center text-xl font-black tracking-[0.5em]" 
+                                   placeholder="••••••">
+                        </div>
+                        <button @click="confirmSetup()" class="liquid-btn w-full py-4 bg-green-500 text-black font-black hover:bg-green-400 shadow-lg shadow-green-500/20">
+                            XÁC MINH & BẬT
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <a href="/dashboard/" class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                        <i class="bi bi-activity"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-black text-white uppercase tracking-wide">Trung tâm điều khiển</div>
+                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Xem chi tiết hoạt động scan và report</p>
+                    </div>
+                </div>
+                <i class="bi bi-chevron-right text-white/20 transition-transform group-hover:translate-x-1"></i>
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            {% for message in messages %}
+            if (typeof showToast === 'function') {
+                showToast("{{ message|escapejs }}", "{{ message.tags|escapejs }}");
+            }
+            {% endfor %}
+        });
+    </script>
+    {% endif %}
+
+    <script>
+        function profileManager() {
+            return {
+                user: {
+                    username: '{{ user.username|escapejs }}',
+                    email: '{{ user.email|escapejs }}',
+                    first_name: '{{ user.first_name|escapejs }}',
+                    last_name: '{{ user.last_name|escapejs }}',
+                    avatar: '{% if user.profile.avatar %}{{ user.profile.avatar.url|escapejs }}{% endif %}'
+                },
+                formData: {
+                    first_name: '{{ user.first_name|escapejs }}',
+                    last_name: '{{ user.last_name|escapejs }}'
+                },
+                editing: false,
+                loading: false,
+                async uploadAvatar(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    const fd = new FormData();
+                    fd.append('avatar', file);
+                    
+                    try {
+                        const r = await fetch('/api/v1/auth/me/', {
+                            method: 'PATCH',
+                            headers: { 'X-CSRFToken': getCSRFToken() },
+                            body: fd
+                        });
+                        const data = await r.json();
+                        if (r.ok) {
+                            this.user.avatar = data.user.avatar;
+                            showToast('Đã cập nhật ảnh đại diện', 'success');
+                        } else {
+                            showToast(data.error || 'Lỗi upload ảnh', 'error');
+                        }
+                    } catch(e) { showToast('Lỗi kết nối', 'error'); }
+                },
+                async saveProfile() {
+                    this.loading = true;
+                    try {
+                        const r = await fetch('/api/v1/auth/me/', {
+                            method: 'PATCH',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken() 
+                            },
+                            body: JSON.stringify(this.formData)
+                        });
+                        const data = await r.json();
+                        if (r.ok) {
+                            this.user.first_name = data.user.first_name;
+                            this.user.last_name = data.user.last_name;
+                            this.editing = false;
+                            showToast('Đã lưu thông tin hồ sơ', 'success');
+                        } else {
+                            showToast(data.error || 'Lỗi cập nhật', 'error');
+                        }
+                    } catch(e) { showToast('Lỗi kết nối', 'error'); }
+                    this.loading = false;
+                }
+            }
+        }
+
+        function mfaManager() {
+            return {
+                has2fa: false,
+                loadingStatus: true,
+                setupMode: null, // 'totp' | 'email'
+                showDeactivate: false,
+                qrCode: '',
+                verifyToken: '',
+                deactivateData: { password: '', token: '' },
+                otpLoading: false,
+                loading: false,
+                countdown: 0,
+                timer: null,
+                startCountdown() {
+                    this.countdown = 120; // 2 minutes
+                    if(this.timer) clearInterval(this.timer);
+                    this.timer = setInterval(() => {
+                        this.countdown--;
+                        if(this.countdown <= 0) {
+                            clearInterval(this.timer);
+                        }
+                    }, 1000);
+                },
+                init() {
+                    this.fetchStatus();
+                },
+                otpSecret: '',
+                async fetchStatus() {
+                    this.loadingStatus = true;
+                    try {
+                        const r = await fetch('/api/v1/auth/mfa/status/');
+                        const data = await r.json();
+                        console.log('[MFA] Status:', data);
+                        this.has2fa = data.has_2fa;
+                    } catch (e) {
+                        console.error('MFA status fetch failed');
+                    } finally {
+                        this.loadingStatus = false;
+                    }
+                },
+                async startSetup(method) {
+                    this.setupMode = method;
+                    this.verifyToken = '';
+                    if (method === 'totp') {
+                        const r = await fetch('/api/v1/auth/mfa/setup/totp/');
+                        const data = await r.json();
+                        if (r.ok && data.qr_code) {
+                            this.qrCode = `<img src="${data.qr_code}" class="w-48 h-48 object-contain">`;
+                            this.otpSecret = data.secret;
+                        } else {
+                            showToast(data.error || 'Không thể tạo mã QR', 'error');
+                            if (!r.ok) this.setupMode = null;
+                        }
+                    } else {
+                        if (this.countdown > 0) return;
+                        this.otpLoading = true;
+                        try {
+                            const r = await fetch('/api/v1/auth/mfa/setup/email/');
+                            if (r.ok) {
+                                showToast('Mã OTP đã được gửi đến email của bạn', 'info');
+                                this.startCountdown();
+                            } else {
+                                const data = await r.json();
+                                showToast(data.error || 'Không thể gửi email OTP', 'error');
+                                this.setupMode = null;
+                            }
+                        } catch(e) {
+                            showToast('Lỗi kết nối', 'error');
+                            this.setupMode = null;
+                        } finally {
+                            this.otpLoading = false;
+                        }
+                    }
+                },
+                async confirmSetup() {
+                    if (this.verifyToken.length < 6) return showToast('Vui lòng nhập đủ 6 chữ số', 'warning');
+                    
+                    const url = this.setupMode === 'totp' ? '/api/v1/auth/mfa/setup/totp/' : '/api/v1/auth/mfa/setup/email/';
+                    try {
+                        const r = await fetch(url, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken() 
+                            },
+                            body: JSON.stringify({ token: this.verifyToken })
+                        });
+                        const data = await r.json();
+                        if (r.ok) {
+                            showToast('Cấu hình 2FA thành công!', 'success');
+                            this.setupMode = null;
+                            this.fetchStatus();
+                        } else {
+                            showToast(data.error || 'Xác nhận thất bại', 'error');
+                        }
+                    } catch (e) {
+                        showToast('Lỗi hệ thống, vui lòng thử lại', 'error');
+                    }
+                },
+                async sendDeactivateOtp() {
+                    if (this.countdown > 0) return;
+                    this.otpLoading = true;
+                    try {
+                        const r = await fetch('/api/v1/auth/mfa/setup/email/');
+                        if (r.ok) {
+                            showToast('Mã OTP đã được gửi đến email để vô hiệu hóa 2FA', 'info');
+                            this.startCountdown();
+                        } else {
+                            showToast('Không thể gửi mã OTP', 'error');
+                        }
+                    } catch(e) { showToast('Lỗi kết nối', 'error'); }
+                    this.otpLoading = false;
+                },
+                async confirmDeactivate() {
+                    if (!this.deactivateData.password || this.deactivateData.token.length < 6) {
+                        return showToast('Vui lòng nhập đầy đủ mật khẩu và mã OTP', 'warning');
+                    }
+                    this.loading = true;
+                    try {
+                        const r = await fetch('/api/v1/auth/mfa/deactivate/', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken() 
+                            },
+                            body: JSON.stringify(this.deactivateData)
+                        });
+                        const data = await r.json();
+                        if (r.ok) {
+                            showToast('Đã vô hiệu hóa 2FA thành công!', 'success');
+                            this.showDeactivate = false;
+                            this.deactivateData = { password: '', token: '' };
+                            this.fetchStatus();
+                        } else {
+                            showToast(data.error || 'Xác nhận thất bại', 'error');
+                        }
+                    } catch (e) {
+                        showToast('Lỗi hệ thống', 'error');
+                    }
+                    this.loading = false;
+                }
+            }
+        }
+
+        function passwordManager() {
+            return {
+                expanded: false,
+                loading: false,
+                otpLoading: false,
+                countdown: 0,
+                timer: null,
+                data: { old_password: '', new_password: '', token: '' },
+                
+                startCountdown() {
+                    this.countdown = 120; // 2 minutes
+                    if(this.timer) clearInterval(this.timer);
+                    this.timer = setInterval(() => {
+                        this.countdown--;
+                        if(this.countdown <= 0) {
+                            clearInterval(this.timer);
+                        }
+                    }, 1000);
+                },
+                
+                async sendOtp() {
+                    if (this.countdown > 0) return;
+                    this.otpLoading = true;
+                    try {
+                        const r = await fetch('/api/v1/auth/mfa/setup/email/');
+                        if (r.ok) {
+                            showToast('Mã OTP đã được gửi đến email của bạn', 'info');
+                            this.startCountdown();
+                        } else {
+                            showToast('Không thể gửi mã OTP. Vui lòng thử lại.', 'error');
+                        }
+                    } catch(e) { showToast('Lỗi kết nối', 'error'); }
+                    this.otpLoading = false;
+                },
+                async confirmChange() {
+                    if(!this.data.old_password || !this.data.new_password || this.data.token.length < 6) {
+                        return showToast('Vui lòng điền đầy đủ thông tin', 'warning');
+                    }
+                    this.loading = true;
+                    try {
+                        const r = await fetch('/api/v1/auth/password/change/', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken() 
+                            },
+                            body: JSON.stringify(this.data)
+                        });
+                        const res = await r.json();
+                        if (r.ok) {
+                            showToast('Đổi mật khẩu thành công!', 'success');
+                            this.show = false;
+                            this.data = { old_password: '', new_password: '', token: '' };
+                        } else {
+                            showToast(res.error || 'Lỗi khi đổi mật khẩu', 'error');
+                        }
+                    } catch(e) { showToast('Lỗi hệ thống', 'error'); }
+                    this.loading = false;
+                }
+            }
+        }
+    </script>
+</div>
+{% endblock %}
+```

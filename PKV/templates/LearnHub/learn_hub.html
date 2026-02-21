@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Kiến thức phòng tránh - ShieldCall VN{% endblock %}
+
+{% block content %}
+<div x-data="{activeTab:'articles', chatOpen:false, chatMsg:'', chatMessages:[], chatLoading:false}" class="animate-fadein max-w-6xl mx-auto space-y-10">
+    <!-- Page Header -->
+    <div class="text-center space-y-4">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-[2.5rem] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-lg shadow-cyan-500/10 mb-2">
+            <i class="bi bi-book-half text-4xl"></i>
+        </div>
+        <h1 class="text-4xl font-black text-white tracking-tight leading-none">
+            <span class="glow-text">Học cách phòng tránh</span>
+        </h1>
+        <p class="text-white/40 text-sm font-medium tracking-wide prose-sm">Kiến thức là vũ khí tốt nhất để bảo vệ bản thân và gia đình</p>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="flex justify-center gap-2 p-1.5 bg-white/5 border border-white/10 rounded-[2rem] w-fit mx-auto backdrop-blur-xl">
+        <button class="px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all" 
+                :class="activeTab==='articles' ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white/60'" @click="activeTab='articles'">
+            <i class="bi bi-journal-text mr-2"></i> Bài học
+        </button>
+        <button class="px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all" 
+                :class="activeTab==='quiz' ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white/60'" @click="activeTab='quiz'">
+            <i class="bi bi-patch-question mr-2"></i> Quiz
+        </button>
+        <button class="px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all" 
+                :class="activeTab==='scenarios' ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white/60'" @click="activeTab='scenarios'">
+            <i class="bi bi-masks mr-2"></i> Kịch bản
+        </button>
+    </div>
+
+    <!-- Articles Grid -->
+    <div x-show="activeTab==='articles'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for article in articles %}
+            <div class="liquid-card p-0 group overflow-hidden border border-white/5 hover:border-cyan-500/30 transition-all">
+                <div class="aspect-video bg-white/5 overflow-hidden">
+                    {% if article.cover_image %}
+                        <img src="{{ article.cover_image.url }}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+                    {% else %}
+                        <div class="w-full h-full flex items-center justify-center text-white/5 uppercase font-black text-xs">ShieldCall Edu</div>
+                    {% endif %}
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[9px] font-black uppercase tracking-widest">
+                            {{ article.get_category_display }}
+                        </span>
+                        <span class="text-[9px] font-bold text-white/20 uppercase tracking-widest">{{ article.created_at|date:"d/m/Y" }}</span>
+                    </div>
+                    <h3 class="text-base font-black text-white line-clamp-2 tracking-tight group-hover:text-cyan-400 transition-colors">
+                        {{ article.title }}
+                    </h3>
+                    <p class="text-white/40 text-[11px] font-medium leading-relaxed line-clamp-3">
+                        {{ article.content|striptags }}
+                    </p>
+                    <div class="pt-4 border-t border-white/5">
+                        <button @click="openArticle('{{ article.slug }}')" class="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center hover:gap-2 transition-all">
+                            ĐỌC TIẾP <i class="bi bi-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-span-3 py-20 text-center text-white/10 uppercase font-black tracking-widest">Đang soạn thảo nội dung...</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Article Detail Modal -->
+    <div x-data="{show:false, loading:false, art:null}" 
+         x-show="show" 
+         @open-article.window="show=true; art=$event.detail; $nextTick(() => $el.scrollTop=0)"
+         class="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100">
+        <div class="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" @click="show=false"></div>
+        <div class="liquid-card w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-slate-900/50 border-white/10 relative z-10 scrollbar-hide">
+            <button @click="show=false" class="absolute top-6 right-6 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition-colors z-20">
+                <i class="bi bi-x-lg"></i>
+            </button>
+            <template x-if="art">
+                <div class="space-y-8 p-10">
+                    <div class="aspect-[21/9] rounded-[2rem] overflow-hidden bg-white/5">
+                        <img x-show="art.cover_image" :src="art.cover_image" class="w-full h-full object-cover">
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-4">
+                             <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black uppercase tracking-widest" x-text="art.category_display"></span>
+                             <span class="text-[10px] font-bold text-white/20 uppercase tracking-widest" x-text="art.created_at"></span>
+                        </div>
+                        <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight" x-text="art.title"></h2>
+                        <div class="flex items-center gap-3 py-4 border-b border-white/5">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-500 flex items-center justify-center text-black font-black text-[10px]" x-text="art.author_name ? art.author_name[0].toUpperCase() : 'A'"></div>
+                            <div class="text-[10px] font-black text-white/60 uppercase tracking-widest" x-text="art.author_name || 'Admin'"></div>
+                        </div>
+                    </div>
+                    <div class="prose prose-invert prose-cyan max-w-none text-white/70 leading-relaxed font-medium text-sm sm:text-base selection:bg-cyan-500/20" x-html="art.content"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <script>
+        function openArticle(slug) {
+            fetch(`/api/v1/articles/${slug}/`)
+                .then(r => r.json())
+                .then(data => {
+                    window.dispatchEvent(new CustomEvent('open-article', { detail: data }));
+                });
+        }
+    </script>
+
+    <!-- Empty states for other tabs (Mock for now) -->
+    <div x-show="activeTab!=='articles'" class="liquid-card py-20 text-center space-y-4">
+        <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-white/20 mx-auto">
+            <i class="bi bi-hourglass-split text-3xl"></i>
+        </div>
+        <p class="text-white/40 text-xs font-black uppercase tracking-widest">Đang cập nhật nội dung...</p>
+    </div>
+
+</div>
+{% endblock %}

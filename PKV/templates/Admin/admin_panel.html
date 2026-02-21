@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel{% endblock %}
+
+{% block content %}
+<div style="max-width:1200px;margin:0 auto;" x-data="{activeTab:'overview', searchQ:''}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1rem;"
+        class="animate-fadein">
+        <div>
+            <h1 style="font-size:1.75rem;font-weight:800;"><span class="glow-text">Admin Panel</span></h1>
+            <p style="color:rgba(255,255,255,0.5);font-size:0.9rem;margin-top:0.25rem;">Quản lý hệ thống ShieldCall VN
+            </p>
+        </div>
+        <div style="display:flex;gap:0.5rem;">
+            <input type="text" class="glass-input" placeholder="Tìm kiếm..." x-model="searchQ"
+                style="width:250px;padding:0.5rem 0.75rem;font-size:0.85rem;">
+        </div>
+    </div>
+
+    <!-- System Stats -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:2rem;"
+        class="animate-fadein animate-fadein-delay-1">
+        <div class="glass-card" style="padding:1.25rem;">
+            <div style="font-size:0.8rem;color:rgba(255,255,255,0.4);">Users</div>
+            <div style="font-size:1.75rem;font-weight:800;color:var(--accent-cyan);">2,547</div>
+            <div style="font-size:0.75rem;color:var(--risk-green);margin-top:0.25rem;">↑ +12% tuần này</div>
+        </div>
+        <div class="glass-card" style="padding:1.25rem;">
+            <div style="font-size:0.8rem;color:rgba(255,255,255,0.4);">Tổng scans</div>
+            <div style="font-size:1.75rem;font-weight:800;">15,247</div>
+        </div>
+        <div class="glass-card" style="padding:1.25rem;">
+            <div style="font-size:0.8rem;color:rgba(255,255,255,0.4);">Reports chờ</div>
+            <div style="font-size:1.75rem;font-weight:800;color:var(--risk-yellow);">34</div>
+        </div>
+        <div class="glass-card" style="padding:1.25rem;">
+            <div style="font-size:0.8rem;color:rgba(255,255,255,0.4);">Uptime</div>
+            <div style="font-size:1.75rem;font-weight:800;color:var(--risk-green);">99.9%</div>
+        </div>
+        <div class="glass-card" style="padding:1.25rem;">
+            <div style="font-size:0.8rem;color:rgba(255,255,255,0.4);">API calls/h</div>
+            <div style="font-size:1.75rem;font-weight:800;color:var(--accent-purple);">1.2K</div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;"
+        class="animate-fadein animate-fadein-delay-2">
+        <button class="tab-btn" :class="activeTab==='overview'&&'active'" @click="activeTab='overview'"><i
+                class="bi bi-bar-chart-fill mr-1"></i> Tổng
+            quan</button>
+        <button class="tab-btn" :class="activeTab==='reports'&&'active'" @click="activeTab='reports'"><i
+                class="bi bi-clipboard-check-fill mr-1"></i>
+            Reports</button>
+        <button class="tab-btn" :class="activeTab==='numbers'&&'active'" @click="activeTab='numbers'"><i
+                class="bi bi-phone-fill mr-1"></i> Số ĐT</button>
+        <button class="tab-btn" :class="activeTab==='domains'&&'active'" @click="activeTab='domains'"><i
+                class="bi bi-globe2 mr-1"></i>
+            Domains</button>
+        <button class="tab-btn" :class="activeTab==='system'&&'active'" @click="activeTab='system'"><i
+                class="bi bi-gear-fill mr-1"></i> System</button>
+    </div>
+
+    <!-- Overview -->
+    <div x-show="activeTab==='overview'" x-transition>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            <div class="glass-card" style="padding:1.5rem;grid-column:span 2;">
+                <h3 style="font-weight:700;margin-bottom:1rem;"><i class="bi bi-graph-up mr-2 text-cyan-400"></i> System
+                    Activity (24h)</h3>
+                <canvas id="adminChart" height="200"></canvas>
+            </div>
+            <div class="glass-card" style="padding:1.5rem;">
+                <h3 style="font-weight:700;margin-bottom:1rem;"><i
+                        class="bi bi-lightning-fill mr-2 text-yellow-500"></i> Recent Activity</h3>
+                <div style="display:grid;gap:0.5rem;font-size:0.85rem;">
+                    <div
+                        style="padding:0.5rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);display:flex;gap:0.5rem;">
+                        <span style="color:var(--risk-green);">●</span> User registered: user@mail.com
+                    </div>
+                    <div
+                        style="padding:0.5rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);display:flex;gap:0.5rem;">
+                        <span style="color:var(--risk-red);">●</span> Phone 0379****56 flagged RED
+                    </div>
+                    <div
+                        style="padding:0.5rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);display:flex;gap:0.5rem;">
+                        <span style="color:var(--risk-yellow);">●</span> New report: phishing domain
+                    </div>
+                    <div
+                        style="padding:0.5rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);display:flex;gap:0.5rem;">
+                        <span style="color:var(--accent-cyan);">●</span> AI model health check: OK
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card" style="padding:1.5rem;">
+                <h3 style="font-weight:700;margin-bottom:1rem;"><i class="bi bi-heart-pulse-fill mr-2 text-red-500"></i>
+                    System Health</h3>
+                <div style="display:grid;gap:0.75rem;">
+                    <div>
+                        <div
+                            style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+                            <span>Database</span><span style="color:var(--risk-green);">OK</span>
+                        </div>
+                        <div class="risk-meter">
+                            <div class="risk-meter-fill" style="width:35%;background:var(--risk-green);"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div
+                            style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+                            <span>Redis Cache</span><span style="color:var(--risk-green);">OK</span>
+                        </div>
+                        <div class="risk-meter">
+                            <div class="risk-meter-fill" style="width:42%;background:var(--risk-green);"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div
+                            style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+                            <span>Celery Workers</span><span style="color:var(--risk-green);">3/3</span>
+                        </div>
+                        <div class="risk-meter">
+                            <div class="risk-meter-fill" style="width:100%;background:var(--risk-green);"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div
+                            style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+                            <span>Ollama AI</span><span style="color:var(--risk-green);">Connected</span>
+                        </div>
+                        <div class="risk-meter">
+                            <div class="risk-meter-fill" style="width:20%;background:var(--risk-green);"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Management -->
+    <div x-show="activeTab==='reports'" x-transition>
+        <div class="glass-card" style="padding:1.5rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <h3 style="font-weight:700;"><i class="bi bi-clipboard-check-fill mr-2 text-purple-400"></i> Pending
+                    Reports (34)</h3>
+                <div style="display:flex;gap:0.5rem;">
+                    <button class="tab-btn active" style="font-size:0.75rem;">Pending</button>
+                    <button class="tab-btn" style="font-size:0.75rem;">Verified</button>
+                    <button class="tab-btn" style="font-size:0.75rem;">Rejected</button>
+                </div>
+            </div>
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                    <thead>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                            <th style="text-align:left;padding:0.75rem;color:rgba(255,255,255,0.5);">ID</th>
+                            <th style="text-align:left;padding:0.75rem;color:rgba(255,255,255,0.5);">Type</th>
+                            <th style="text-align:left;padding:0.75rem;color:rgba(255,255,255,0.5);">Target</th>
+                            <th style="text-align:left;padding:0.75rem;color:rgba(255,255,255,0.5);">Scam</th>
+                            <th style="text-align:left;padding:0.75rem;color:rgba(255,255,255,0.5);">Time</th>
+                            <th style="text-align:center;padding:0.75rem;color:rgba(255,255,255,0.5);">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:0.75rem;">#1247</td>
+                            <td>Phone</td>
+                            <td style="font-weight:500;">0379456789</td>
+                            <td>Giả danh CA</td>
+                            <td style="color:rgba(255,255,255,0.5);">5m ago</td>
+                            <td style="text-align:center;">
+                                <button
+                                    style="background:rgba(0,230,118,0.15);color:var(--risk-green);border:none;padding:0.25rem 0.75rem;border-radius:0.25rem;cursor:pointer;margin-right:0.25rem;font-size:0.8rem;"
+                                    @click="showToast('Approved!','success')"><i
+                                        class="bi bi-check-circle-fill"></i></button>
+                                <button
+                                    style="background:rgba(255,23,68,0.15);color:var(--risk-red);border:none;padding:0.25rem 0.75rem;border-radius:0.25rem;cursor:pointer;font-size:0.8rem;"
+                                    @click="showToast('Rejected','error')"><i class="bi bi-x-circle-fill"></i></button>
+                            </td>
+                        </tr>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:0.75rem;">#1246</td>
+                            <td>🌐 Domain</td>
+                            <td style="font-weight:500;">vietc0mbank.net</td>
+                            <td>Phishing</td>
+                            <td style="color:rgba(255,255,255,0.5);">15m ago</td>
+                            <td style="text-align:center;">
+                                <button
+                                    style="background:rgba(0,230,118,0.15);color:var(--risk-green);border:none;padding:0.25rem 0.75rem;border-radius:0.25rem;cursor:pointer;margin-right:0.25rem;font-size:0.8rem;"
+                                    @click="showToast('Approved!','success')"><i
+                                        class="bi bi-check-circle-fill"></i></button>
+                                <button
+                                    style="background:rgba(255,23,68,0.15);color:var(--risk-red);border:none;padding:0.25rem 0.75rem;border-radius:0.25rem;cursor:pointer;font-size:0.8rem;"
+                                    @click="showToast('Rejected','error')"><i class="bi bi-x-circle-fill"></i></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Numbers -->
+    <div x-show="activeTab==='numbers'" x-transition>
+        <div class="glass-card" style="padding:1.5rem;">
+            <h3 style="font-weight:700;margin-bottom:1rem;">Phone Numbers Database</h3>
+            <p style="color:rgba(255,255,255,0.5);font-size:0.9rem;">Quản lý database số điện thoại và mức rủi ro. Sử
+                dụng Django Admin tại <a href="/admin/" style="color:var(--accent-cyan);">/admin/</a> để quản lý chi
+                tiết.</p>
+        </div>
+    </div>
+
+    <!-- Domains -->
+    <div x-show="activeTab==='domains'" x-transition>
+        <div class="glass-card" style="padding:1.5rem;">
+            <h3 style="font-weight:700;margin-bottom:1rem;">🌐 Domains Database</h3>
+            <p style="color:rgba(255,255,255,0.5);font-size:0.9rem;">Quản lý danh sách domain phishing/lừa đảo. Sử dụng
+                Django Admin tại <a href="/admin/" style="color:var(--accent-cyan);">/admin/</a>.</p>
+        </div>
+    </div>
+
+    <!-- System -->
+    <div x-show="activeTab==='system'" x-transition>
+        <div class="glass-card" style="padding:1.5rem;">
+            <h3 style="font-weight:700;margin-bottom:1rem;">⚙️ System Config</h3>
+            <div style="display:grid;gap:0.75rem;">
+                <div
+                    style="display:flex;justify-content:space-between;padding:0.75rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);font-size:0.9rem;">
+                    <span>Django Version</span><span style="font-weight:600;">5.1.8</span>
+                </div>
+                <div
+                    style="display:flex;justify-content:space-between;padding:0.75rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);font-size:0.9rem;">
+                    <span>Database</span><span style="font-weight:600;">MySQL</span>
+                </div>
+                <div
+                    style="display:flex;justify-content:space-between;padding:0.75rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);font-size:0.9rem;">
+                    <span>Cache</span><span style="font-weight:600;">Redis</span>
+                </div>
+                <div
+                    style="display:flex;justify-content:space-between;padding:0.75rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);font-size:0.9rem;">
+                    <span>AI Engine</span><span style="font-weight:600;">Ollama</span>
+                </div>
+                <div
+                    style="display:flex;justify-content:space-between;padding:0.75rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);font-size:0.9rem;">
+                    <span>Task Queue</span><span style="font-weight:600;">Celery + Redis</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const ctx = document.getElementById('adminChart');
+        if (ctx) {
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+                    datasets: [{
+                        label: 'API Calls',
+                        data: [120, 80, 200, 450, 380, 500, 320],
+                        borderColor: '#00e5ff',
+                        backgroundColor: 'rgba(0,229,255,0.1)',
+                        fill: true, tension: 0.4
+                    }, {
+                        label: 'Scans',
+                        data: [50, 30, 100, 250, 200, 280, 180],
+                        borderColor: '#b388ff',
+                        backgroundColor: 'rgba(179,136,255,0.1)',
+                        fill: true, tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { labels: { color: 'rgba(255,255,255,0.7)' } } },
+                    scales: {
+                        x: { ticks: { color: 'rgba(255,255,255,0.5)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: 'rgba(255,255,255,0.5)' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
