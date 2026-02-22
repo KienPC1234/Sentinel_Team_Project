@@ -3,11 +3,16 @@ import re
 import hashlib
 import logging
 import json
+import random
+import hmac
 from urllib.parse import urlparse
 
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.core.exceptions import ValidationError
+from django.core.cache import cache
+from django.conf import settings
+from django.core.validators import validate_email
 from django.db.models import Count, Sum, F, Q
 from django.utils import timezone
 from datetime import timedelta
@@ -39,13 +44,33 @@ from api.core.serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+EMAIL_CHANGE_CACHE_PREFIX = 'email_change_otp:'
+REGISTER_OTP_CACHE_PREFIX = 'register_otp:'
+
+
+def _email_change_cache_key(user_id: int, email: str) -> str:
+    return f"{EMAIL_CHANGE_CACHE_PREFIX}{user_id}:{email.lower()}"
+
+
+def _email_change_otp_hash(user_id: int, email: str, otp: str) -> str:
+    material = f"{user_id}:{email.lower()}:{otp}:{settings.SECRET_KEY}"
+    return hashlib.sha256(material.encode('utf-8')).hexdigest()
+
+
+def _register_otp_cache_key(email: str) -> str:
+    return f"{REGISTER_OTP_CACHE_PREFIX}{(email or '').strip().lower()}"
+
+
+def _register_otp_hash(email: str, otp: str) -> str:
+    material = f"{(email or '').strip().lower()}:{otp}:{settings.SECRET_KEY}"
+    return hashlib.sha256(material.encode('utf-8')).hexdigest()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTH APIs
 # ═══════════════════════════════════════════════════════════════════════════
 
-class RegisterView(APIView):
-    """POST /api/auth/register"""
+class RegisterRequestOTPView(APIView):
+    """POST /api/auth/register/request-otp — validate input then send OTP to email"""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -57,7 +82,70 @@ class RegisterView(APIView):
 
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        cache_key = _register_otp_cache_key(email)
+        cache.set(
+            cache_key,
+            {
+                'otp_hash': _register_otp_hash(email, otp),
+                'requested_at': timezone.now().isoformat(),
+            },
+            timeout=600,
+        )
+
+        from api.utils.email_utils import send_html_otp_email
+        send_html_otp_email(email, otp)
+
+        return Response({
+            'message': 'Đã gửi mã OTP đến email của bạn.',
+            'expires_in': 600,
+        }, status=status.HTTP_200_OK)
+
+
+class RegisterView(APIView):
+    """POST /api/auth/register — create account after OTP verification"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        otp = (request.data.get('otp') or '').strip()
+        email = (request.data.get('email') or '').strip().lower()
+        if len(otp) != 6 or not otp.isdigit():
+            return Response({'error': 'Vui lòng nhập mã OTP 6 chữ số.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        pending = cache.get(_register_otp_cache_key(email))
+        if not pending:
+            return Response({'error': 'OTP đã hết hạn hoặc chưa được yêu cầu.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        expected_hash = pending.get('otp_hash', '')
+        actual_hash = _register_otp_hash(email, otp)
+        if not hmac.compare_digest(expected_hash, actual_hash):
+            return Response({'error': 'Mã OTP không chính xác.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        cache.delete(_register_otp_cache_key(email))
+
+        try:
+            from api.utils.push_service import push_service
+            push_service.send_push(
+                user_id=user.id,
+                title='Chào mừng đến với ShieldCall VN',
+                message='Tài khoản đã tạo thành công. Hãy mở Dashboard để bắt đầu và theo dõi cảnh báo mới trong Hộp thư.',
+                url='/dashboard/',
+                notification_type='success',
+            )
+        except Exception:
+            logger.exception('Failed to create welcome inbox notification for user_id=%s', user.id)
+
+        try:
+            from api.utils.email_utils import send_welcome_email
+            send_welcome_email(user)
+        except Exception:
+            logger.exception('Failed to trigger welcome email for user_id=%s', user.id)
+
         token, _ = Token.objects.get_or_create(user=user)
         return Response({
             'message': 'Đăng ký thành công!',
@@ -67,7 +155,7 @@ class RegisterView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-from django.contrib.auth import authenticate, login as auth_login, get_user_model
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 
 class LoginView(APIView):
     """POST /api/auth/login"""
@@ -213,6 +301,12 @@ class MeView(APIView):
         if any(k in request.data for k in profile_fields):
             # If avatar is a string (URL), remove it from data to avoid ImageField validation error
             patch_data = request.data.copy() if hasattr(request.data, 'copy') else request.data
+            if 'messenger_link' in patch_data:
+                raw_link = patch_data.get('messenger_link')
+                normalized_link = '' if raw_link is None else str(raw_link).strip()
+                if normalized_link.lower() in {'none', 'null', 'undefined', 'nan', 'false', '0'}:
+                    normalized_link = ''
+                patch_data['messenger_link'] = normalized_link
             if 'avatar' in patch_data and isinstance(patch_data['avatar'], str):
                 if hasattr(patch_data, 'pop'):
                     patch_data.pop('avatar')
@@ -237,6 +331,128 @@ class MeView(APIView):
             'message': 'Cập nhật thông tin thành công!',
             'user': UserSerializer(user).data
         })
+
+
+class DeleteAccountView(APIView):
+    """POST /api/v1/auth/account/delete/ — permanently delete user account"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        password = (request.data.get('password') or '').strip()
+        confirmation_text = (request.data.get('confirmation_text') or '').strip().upper()
+        required_text = 'XOA TAI KHOAN'
+
+        if not password:
+            return Response({'error': 'Vui lòng nhập mật khẩu hiện tại.'}, status=status.HTTP_400_BAD_REQUEST)
+        if confirmation_text != required_text:
+            return Response({'error': f'Bạn cần nhập chính xác cụm từ "{required_text}" để xác nhận.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user.check_password(password):
+            return Response({'error': 'Mật khẩu hiện tại không chính xác.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_id = user.id
+        try:
+            try:
+                user.auth_token.delete()
+            except Exception:
+                pass
+            auth_logout(request)
+            user.delete()
+        except Exception:
+            logger.exception('Delete account failed for user_id=%s', user_id)
+            return Response({'error': 'Không thể xóa tài khoản lúc này. Vui lòng thử lại sau.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'message': 'Tài khoản đã được xóa vĩnh viễn.'}, status=status.HTTP_200_OK)
+
+
+class EmailChangeRequestOTPView(APIView):
+    """POST /api/v1/auth/email-change/request/ — verify password and send OTP to new email"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        password = (request.data.get('password') or '').strip()
+        new_email = (request.data.get('new_email') or '').strip().lower()
+
+        if not password:
+            return Response({'error': 'Vui lòng nhập mật khẩu hiện tại.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not new_email:
+            return Response({'error': 'Vui lòng nhập email mới.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user.check_password(password):
+            return Response({'error': 'Mật khẩu hiện tại không chính xác.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_email(new_email)
+        except ValidationError:
+            return Response({'error': 'Email mới không hợp lệ.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if new_email == (user.email or '').strip().lower():
+            return Response({'error': 'Email mới phải khác email hiện tại.'}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+            return Response({'error': 'Email này đã được sử dụng.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp = ''.join(str(random.randint(0, 9)) for _ in range(6))
+        cache_key = _email_change_cache_key(user.id, new_email)
+        cache.set(
+            cache_key,
+            {
+                'otp_hash': _email_change_otp_hash(user.id, new_email, otp),
+                'requested_at': timezone.now().isoformat(),
+            },
+            timeout=600,
+        )
+
+        from api.utils.email_utils import send_html_otp_email
+        send_html_otp_email(new_email, otp)
+
+        return Response({
+            'message': 'Đã gửi OTP xác nhận đến email mới của bạn.',
+            'expires_in': 600,
+        })
+
+
+class EmailChangeVerifyOTPView(APIView):
+    """POST /api/v1/auth/email-change/verify/ — verify OTP sent to new email and update account email"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        new_email = (request.data.get('new_email') or '').strip().lower()
+        otp = (request.data.get('otp') or '').strip()
+
+        if not new_email:
+            return Response({'error': 'Thiếu email mới để xác thực.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(otp) != 6 or not otp.isdigit():
+            return Response({'error': 'Mã OTP gồm 6 chữ số.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        cache_key = _email_change_cache_key(user.id, new_email)
+        pending = cache.get(cache_key)
+        if not pending:
+            return Response({'error': 'OTP đã hết hạn hoặc chưa được yêu cầu.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        expected_hash = pending.get('otp_hash', '')
+        actual_hash = _email_change_otp_hash(user.id, new_email, otp)
+        if not hmac.compare_digest(expected_hash, actual_hash):
+            return Response({'error': 'Mã OTP không hợp lệ.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+            return Response({'error': 'Email này đã được sử dụng bởi tài khoản khác.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.email = new_email
+        user.save(update_fields=['email'])
+
+        try:
+            from django_otp.plugins.otp_email.models import EmailDevice
+            EmailDevice.objects.filter(user=user).update(email=new_email)
+        except Exception:
+            logger.exception('Failed updating EmailDevice for user_id=%s', user.id)
+
+        cache.delete(cache_key)
+
+        return Response({
+            'message': 'Đổi email thành công.',
+            'user': UserSerializer(user).data,
+        }, status=status.HTTP_200_OK)
 
 
 class PasswordChangeView(APIView):

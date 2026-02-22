@@ -1,0 +1,14 @@
+Xin chào {{ name }},
+
+Chào mừng bạn đến với ShieldCall VN!
+Tài khoản của bạn đã được kích hoạt thành công.
+
+Bắt đầu nhanh:
+- Dashboard: {{ dashboard_url }}
+- Hộp thư: {{ inbox_url }}
+- Hồ sơ cá nhân: {{ profile_url }}
+
+Nếu bạn không thực hiện đăng ký này, hãy đổi mật khẩu ngay và liên hệ quản trị viên.
+
+{{ site_url }}
+ShieldCall VN Team

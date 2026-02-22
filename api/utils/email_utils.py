@@ -514,3 +514,60 @@ def send_new_lesson_email(user_emails, lesson_title, lesson_url):
     except Exception as e:
         logger.exception(f"Failed to send bulk lesson email to {user_emails}: {e}")
         return 0
+
+
+def send_welcome_email(user):
+    """Send a welcome email to newly registered user."""
+    if not getattr(user, 'email', None):
+        return
+
+    subject = "[ShieldCall VN] Chào mừng bạn đến với ShieldCall"
+    display_name = ''
+    try:
+        profile = getattr(user, 'profile', None)
+        display_name = (getattr(profile, 'display_name', '') or '').strip()
+    except Exception:
+        display_name = ''
+
+    name = display_name or (user.get_full_name() or '').strip() or user.username
+    site_url = (getattr(settings, 'SITE_URL', '') or '').rstrip('/')
+    dashboard_url = f"{site_url}/dashboard/" if site_url else '/dashboard/'
+    inbox_url = f"{site_url}/profile/inbox/" if site_url else '/profile/inbox/'
+    profile_url = f"{site_url}/profile/" if site_url else '/profile/'
+
+    context = {
+        'name': name,
+        'site_url': site_url or 'ShieldCall VN',
+        'dashboard_url': dashboard_url,
+        'inbox_url': inbox_url,
+        'profile_url': profile_url,
+    }
+
+    try:
+        html_message = render_to_string('Email/welcome_account.html', context)
+        plain_message = render_to_string('Email/welcome_account.txt', context)
+    except Exception:
+        plain_message = (
+            f"Xin chào {name},\n\n"
+            "Chào mừng bạn đến với ShieldCall VN!\n"
+            "Tài khoản của bạn đã sẵn sàng. Bạn có thể:\n"
+            f"- Dashboard: {dashboard_url}\n"
+            f"- Hộp thư: {inbox_url}\n"
+            f"- Hồ sơ: {profile_url}\n\n"
+            "Nếu bạn không thực hiện đăng ký này, hãy đổi mật khẩu ngay và liên hệ quản trị viên.\n\n"
+            "ShieldCall VN Team"
+        )
+        html_message = None
+
+    try:
+        send_mail(
+            subject,
+            plain_message,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        logger.info(f"Welcome email sent to {user.email}")
+    except Exception as e:
+        logger.exception(f"Failed to send welcome email to {user.email}: {e}")

@@ -2,7 +2,39 @@
 {% block title %}Tạo tài khoản - ShieldCall VN{% endblock %}
 
 {% block content %}
-<div class="relative animate-fadein max-w-lg mx-auto py-12 px-4 space-y-8" x-data="{name:'',email:'',password:'',password2:'',loading:false,error:''}">
+<div class="relative animate-fadein max-w-xl mx-auto py-12 px-4 space-y-8" x-data="{
+    name:'',email:'',password:'',password2:'',loading:false,error:'',
+    otpSent:false,otp:'',otpCooldown:0,otpTimer:null,
+    passwordScore(){
+        const value = this.password || '';
+        let score = 0;
+        if (value.length >= 8) score++;
+        if (value.length >= 12) score++;
+        if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score++;
+        if (/\d/.test(value)) score++;
+        if (/[^A-Za-z0-9]/.test(value)) score++;
+        return Math.min(4, score);
+    },
+    passwordStrength(){
+        const score = this.passwordScore();
+        if (!this.password) return {label:'Chưa nhập', bar:'w-0', color:'text-white/35', hint:'Dùng ít nhất 8 ký tự gồm chữ hoa, chữ thường, số, ký tự đặc biệt.'};
+        if (score <= 1) return {label:'Yếu', bar:'w-1/4', color:'text-red-400', hint:'Mật khẩu đang yếu, nên thêm chữ hoa/số/ký tự đặc biệt.'};
+        if (score === 2) return {label:'Trung bình', bar:'w-2/4', color:'text-yellow-300', hint:'Có thể dùng, nhưng nên tăng độ phức tạp để an toàn hơn.'};
+        if (score === 3) return {label:'Khá mạnh', bar:'w-3/4', color:'text-cyan-300', hint:'Tốt, bạn có thể thêm ký tự đặc biệt để mạnh hơn nữa.'};
+        return {label:'Mạnh', bar:'w-full', color:'text-green-300', hint:'Mật khẩu mạnh, đạt mức khuyến nghị.'};
+    },
+    startOtpCooldown(){
+        this.otpCooldown = 60;
+        if (this.otpTimer) clearInterval(this.otpTimer);
+        this.otpTimer = setInterval(() => {
+            this.otpCooldown -= 1;
+            if (this.otpCooldown <= 0) {
+                clearInterval(this.otpTimer);
+                this.otpTimer = null;
+            }
+        }, 1000);
+    }
+}">
     <div class="pointer-events-none absolute -top-6 -right-8 w-44 h-44 rounded-full bg-cyan-500/10 blur-3xl"></div>
     <div class="pointer-events-none absolute -bottom-8 -left-6 w-40 h-40 rounded-full bg-purple-500/10 blur-3xl"></div>
 
@@ -18,7 +50,11 @@
     </div>
 
     <!-- Main Register Card -->
-    <div class="liquid-card p-8 sm:p-10 border border-white/10 shadow-2xl shadow-cyan-500/5" data-aos="fade-up" data-aos-delay="400">
+    <div class="liquid-card p-8 sm:p-10 border border-cyan-400/15 bg-white/[0.03] backdrop-blur-2xl shadow-2xl shadow-cyan-500/10" data-aos="fade-up" data-aos-delay="400">
+        <div class="mb-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 flex items-center justify-between gap-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300/90">Liquid Glass Security</div>
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Turnstile + Password Guard</div>
+        </div>
         <!-- Google Signup -->
         <a href="/accounts/google/login/?process=login" 
            class="liquid-btn w-full flex items-center justify-center gap-3 py-4 mb-8 bg-white/5 border-white/10 hover:bg-white/10 text-sm font-bold tracking-wide transition-all group">
@@ -42,19 +78,34 @@
             if(!name.trim()||!email.trim()||!password.trim()){error='Vui lòng điền đầy đủ thông tin';return}
             if(password!==password2){error='Mật khẩu xác nhận không khớp';return}
             if(password.length<8){error='Mật khẩu tối thiểu 8 ký tự';return}
+            if(passwordScore()<2){error='Mật khẩu còn quá yếu, vui lòng tăng độ mạnh';return}
             const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value || '';
             if(!tsToken){error='Vui lòng hoàn thành captcha bảo mật';return}
             loading=true;error='';
-            fetch('/api/v1/auth/register/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()}, credentials:'include', body:JSON.stringify({username:name.trim(),email:email,password:password,'cf-turnstile-response': tsToken})})
+            if(!otpSent){
+                fetch('/api/v1/auth/register/request-otp/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()}, credentials:'include', body:JSON.stringify({full_name:name.trim(),email:email,password:password,'cf-turnstile-response': tsToken})})
+                .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
+                .then(()=>{
+                    otpSent=true;
+                    otp='';
+                    startOtpCooldown();
+                    showToast('Đã gửi OTP vào email của bạn. Nhập OTP để hoàn tất đăng ký.','success');
+                })
+                .catch(e=>{error=e.error||'Không thể gửi OTP';})
+                .finally(()=>{loading=false; if(window.turnstile){turnstile.reset();}})
+                return;
+            }
+            if(!/^\d{6}$/.test((otp||'').trim())){error='Vui lòng nhập OTP 6 chữ số';loading=false;return}
+            fetch('/api/v1/auth/register/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()}, credentials:'include', body:JSON.stringify({full_name:name.trim(),email:email,password:password,otp:(otp||'').trim()})})
             .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
             .then((res)=>{
                 const welcome = res.welcome_message || 'Xin chào! Đăng ký thành công, hãy đăng nhập để bắt đầu.';
                 sessionStorage.setItem('register_welcome_message', welcome);
-                showToast('Đăng ký thành công! Vui lòng đăng nhập.','success');
+                showToast('Xác thực OTP thành công! Vui lòng đăng nhập.','success');
                 setTimeout(()=>{window.location.href='/login/?from=register'}, 700);
             })
-            .catch(e=>{error=e.error||'Đăng ký thất bại';loading=false;})
-            .finally(()=>{if(window.turnstile){turnstile.reset();}})
+            .catch(e=>{error=e.error||'Đăng ký thất bại';})
+            .finally(()=>{loading=false;})
         " class="space-y-5">
             <div class="space-y-2">
                 <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Họ & Tên</label>
@@ -69,11 +120,42 @@
             <div class="space-y-2">
                 <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Mật khẩu</label>
                 <input type="password" class="liquid-input w-full py-4 px-6 text-sm font-bold" placeholder="Tối thiểu 8 ký tự" x-model="password" required>
+                <div class="space-y-2 px-2 pt-2">
+                    <div class="h-2 rounded-full bg-white/5 overflow-hidden border border-white/10">
+                        <div class="h-full rounded-full bg-gradient-to-r from-red-500 via-yellow-400 to-green-400 transition-all duration-300" :class="passwordStrength().bar"></div>
+                    </div>
+                    <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                        <span class="text-white/35">Độ mạnh mật khẩu</span>
+                        <span :class="passwordStrength().color" x-text="passwordStrength().label"></span>
+                    </div>
+                    <p class="text-[10px] text-white/40 font-medium leading-relaxed" x-text="passwordStrength().hint"></p>
+                </div>
             </div>
 
             <div class="space-y-2">
                 <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Xác nhận mật khẩu</label>
                 <input type="password" class="liquid-input w-full py-4 px-6 text-sm font-bold" placeholder="Nhập lại mật khẩu" x-model="password2" required>
+            </div>
+
+            <div class="space-y-2" x-show="otpSent">
+                <div class="flex items-center justify-between ml-2">
+                    <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em]">Mã OTP Email</label>
+                    <button type="button" @click="
+                        if(loading || otpCooldown>0) return;
+                        const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value || '';
+                        if(!tsToken){error='Vui lòng hoàn thành captcha để gửi lại OTP';return}
+                        loading=true;error='';
+                        fetch('/api/v1/auth/register/request-otp/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()}, credentials:'include', body:JSON.stringify({full_name:name.trim(),email:email,password:password,'cf-turnstile-response': tsToken})})
+                        .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
+                        .then(()=>{startOtpCooldown();showToast('Đã gửi lại OTP vào email của bạn.','info');})
+                        .catch(e=>{error=e.error||'Không thể gửi lại OTP';})
+                        .finally(()=>{loading=false; if(window.turnstile){turnstile.reset();}})
+                    " class="text-[10px] font-black uppercase tracking-widest text-cyan-300 hover:text-cyan-200 disabled:opacity-50" :disabled="loading || otpCooldown>0">
+                        <span x-show="otpCooldown<=0">Gửi lại OTP</span>
+                        <span x-show="otpCooldown>0" x-text="'Gửi lại sau ' + otpCooldown + 's'"></span>
+                    </button>
+                </div>
+                <input type="text" maxlength="6" class="liquid-input w-full py-4 px-6 text-center text-xl tracking-[0.45em] font-black" placeholder="••••••" x-model="otp">
             </div>
 
             <!-- Cloudflare Turnstile -->
@@ -82,7 +164,7 @@
             </div>
 
             <button type="submit" class="liquid-btn w-full py-5 bg-cyan-500 text-black font-black uppercase tracking-[0.2em] text-sm hover:bg-cyan-400 transition-all shadow-lg shadow-cyan-500/20" :disabled="loading">
-                <span x-show="!loading">TẠO TÀI KHOẢN</span>
+                <span x-show="!loading" x-text="otpSent ? 'XÁC THỰC OTP & TẠO TÀI KHOẢN' : 'GỬI OTP XÁC THỰC'"></span>
                 <span x-show="loading" class="flex items-center justify-center gap-3">
                     <span class="spinner w-5 h-5 border-black"></span>
                     <span class="text-xs">ĐANG XỬ LÝ...</span>
