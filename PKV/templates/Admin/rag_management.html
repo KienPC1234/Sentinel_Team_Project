@@ -1,129 +1,195 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% load static %}
 
-{% block title %}Quản lý RAG - Admin ShieldCall{% endblock %}
+{% block title %}Quản lý RAG / Kiến thức AI - ShieldCall VN Admin{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto py-12 px-6">
+<div class="container mx-auto px-4 py-10 mt-16">
     <div class="flex items-center justify-between mb-10">
-        <div>
-            <h1 class="text-3xl font-black italic glow-text mb-2 tracking-tight">HỆ THỐNG RAG & KNOWLEDGE BASE</h1>
-            <p class="text-slate-400 text-sm">Quản lý cơ sở dữ liệu tri thức và chỉ mục vector của ShieldCall AI.</p>
+        <div class="flex items-center gap-6">
+            <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                <i class="bi bi-database-fill-gear text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-3xl font-black text-white tracking-tight">RAG & Kiến thức AI</h1>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Quản lý đồng bộ hóa Vector Database</p>
+            </div>
         </div>
-        <div class="flex gap-3">
-            <button onclick="rebuildIndex()" class="glass-btn shadow-lg shadow-cyan-500/20 group">
-                <i class="bi bi-arrow-repeat group-hover:rotate-180 transition-transform duration-700"></i>
-                LÀM MỚI CHỈ MỤC
-            </button>
-        </div>
+        
+        <button onclick="reindexRAG()" class="px-8 py-3.5 rounded-2xl bg-cyan-500 text-black font-black uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2">
+            <i id="reindex-icon" class="bi bi-arrow-repeat text-lg"></i>
+            Quét lại kiến thức (Re-index)
+        </button>
     </div>
 
+    <script>
+        async function reindexRAG() {
+            const btn = document.querySelector('button[onclick="reindexRAG()"]');
+            const icon = document.getElementById('reindex-icon');
+            
+            if (btn.disabled) return;
+            
+            try {
+                btn.disabled = true;
+                icon.classList.add('animate-spin');
+                
+                const res = await fetch("{% url 'core:admin-rag-rebuild' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    Swal.fire({
+                        title: 'Thành công!',
+                        text: data.message,
+                        icon: 'success',
+                        background: '#0f172a', color: '#f1f5f9',
+                        confirmButtonColor: '#06b6d4'
+                    }).then(() => window.location.reload());
+                } else {
+                    throw new Error(data.error || 'Lỗi không xác định');
+                }
+            } catch (err) {
+                Swal.fire({
+                    title: 'Thất bại!',
+                    text: err.message,
+                    icon: 'error',
+                    background: '#0f172a', color: '#f1f5f9'
+                });
+            } finally {
+                btn.disabled = false;
+                icon.classList.remove('animate-spin');
+            }
+        }
+    </script>
+
+    <!-- Stats Banner -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <!-- Stats Card -->
-        <div class="glass-card p-6 flex flex-col items-center justify-center text-center">
-            <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-4 border border-cyan-500/20 shadow-inner">
-                <i class="bi bi-database-fill-check text-3xl"></i>
-            </div>
-            <p class="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Tài liệu đã Index</p>
-            <h3 id="doc-count" class="text-4xl font-black text-white italic">{{ stats.document_count }}</h3>
+        <div class="liquid-card p-6 bg-cyan-500/5 border-cyan-500/10">
+            <div class="text-[10px] font-black text-cyan-500/50 uppercase tracking-widest mb-1">Tổng số tài liệu</div>
+            <div class="text-3xl font-black text-white">{{ stats.total_items }}</div>
         </div>
-
-        <div class="glass-card p-6 flex flex-col items-center justify-center text-center">
-            <div class="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-4 border border-purple-500/20 shadow-inner">
-                <i class="bi bi-clock-history text-3xl"></i>
-            </div>
-            <p class="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Cập nhật lần cuối</p>
-            <h3 class="text-lg font-bold text-white italic">Hôm nay</h3>
+        <div class="liquid-card p-6 bg-purple-500/5 border-purple-500/10">
+            <div class="text-[10px] font-black text-purple-500/50 uppercase tracking-widest mb-1">Cập nhật lần cuối</div>
+            <div class="text-xl font-black text-white">{{ stats.last_sync|date:"d/m/Y H:i"|default:"Chưa có" }}</div>
         </div>
-
-        <div class="glass-card p-6 flex flex-col items-center justify-center text-center">
-            <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-4 border border-blue-500/20 shadow-inner">
-                <i class="bi bi-gpu-card text-3xl"></i>
+        <div class="liquid-card p-6 bg-green-500/5 border-green-500/10">
+            <div class="text-[10px] font-black text-green-500/50 uppercase tracking-widest mb-1">Trạng thái VectorDB</div>
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full {% if stats.is_ready %}bg-green-500 animate-pulse{% else %}bg-red-500{% endif %}"></span>
+                <span class="text-xl font-black text-white">{% if stats.is_ready %}Sẵn sàng{% else %}Chưa khởi tạo{% endif %}</span>
             </div>
-            <p class="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Model Nhúng</p>
-            <h3 class="text-xs font-bold text-slate-300 italic">MiniLM-L12-v2</h3>
         </div>
     </div>
 
-    <!-- Details and Logs -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div class="glass-card overflow-hidden">
-            <div class="p-5 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
-                <h2 class="text-xs font-black uppercase tracking-widest text-slate-200">Nguồn dữ liệu (Articles & Lessons)</h2>
-                <i class="bi bi-info-circle text-slate-500"></i>
-            </div>
-            <div class="p-6 space-y-4">
-                <p class="text-xs text-slate-400 leading-relaxed">
-                    Hệ thống tự động đồng bộ tất cả Bài báo (Articles) và Bài học (LearnLessons) có trạng thái <b>Đã xuất bản (Published)</b> vào FAISS Vector Index.
-                </p>
-                <div class="p-4 rounded-xl bg-black/20 border border-white/5 space-y-3">
-                    <div class="flex items-center justify-between text-[11px]">
-                        <span class="text-slate-400 italic">Tính năng RAG:</span>
-                        <span class="text-green-400 font-bold uppercase">Online</span>
+    <!-- Context Testing Section -->
+    <div class="liquid-card p-8 border-white/5 bg-slate-900/40 mb-10">
+        <h2 class="text-xl font-black text-white tracking-tight mb-6 flex items-center gap-2">
+            <i class="bi bi-search text-cyan-400"></i> Kiểm tra Context (RAG Search)
+        </h2>
+        <form method="get" class="flex gap-4 mb-8">
+            <input type="text" name="query" value="{{ query|default:'' }}" placeholder="Nhập câu hỏi để test tìm kiếm ngữ cảnh..." 
+                   class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-cyan-500/50 transition-all font-medium">
+            <button type="submit" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-white font-bold transition-all">
+                Kiểm tra
+            </button>
+        </form>
+
+        {% if query %}
+        <div class="space-y-4">
+            <h3 class="text-xs font-black text-white/40 uppercase tracking-widest">Kết quả tìm kiếm phù hợp nhất:</h3>
+            {% for res in test_results %}
+            <div class="p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-cyan-500/30 transition-all group">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center gap-3">
+                        <span class="px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-400 text-[10px] font-black uppercase">{{ res.type }}</span>
+                        <h4 class="font-bold text-white group-hover:text-cyan-400 transition-colors">{{ res.title }}</h4>
                     </div>
-                    <div class="flex items-center justify-between text-[11px]">
-                        <span class="text-slate-400 italic">Dung lượng index:</span>
-                        <span class="text-slate-200">~1.5 MB</span>
-                    </div>
+                    <span class="text-[10px] font-bold text-white/20 uppercase tracking-widest">Score: {{ res.score|stringformat:".4f" }}</span>
+                </div>
+                <div class="text-xs text-white/60 leading-relaxed line-clamp-3 italic">
+                    {{ res.text|truncatechars:500 }}
+                </div>
+                <div class="mt-3 flex justify-end">
+                    <a href="{{ res.url }}" target="_blank" class="text-[10px] font-bold text-cyan-500 hover:text-cyan-400 transition-all uppercase flex items-center gap-1">
+                        Xem chi tiết <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
                 </div>
             </div>
+            {% empty %}
+            <div class="py-10 text-center text-white/20 font-black uppercase tracking-widest italic text-xs">Không tìm thấy ngữ cảnh phù hợp</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 gap-8">
+        <!-- Status Card -->
+        <div class="liquid-card p-8 border-white/5 bg-slate-900/40">
+            <h2 class="text-xl font-black text-white tracking-tight mb-6">Lịch sử đồng bộ</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="border-b border-white/10">
+                            <th class="px-4 py-3 text-[10px] font-black text-white/40 uppercase tracking-widest">Thời gian</th>
+                            <th class="px-4 py-3 text-[10px] font-black text-white/40 uppercase tracking-widest">Trạng thái</th>
+                            <th class="px-4 py-3 text-[10px] font-black text-white/40 uppercase tracking-widest">Phương thức</th>
+                            <th class="px-4 py-3 text-[10px] font-black text-white/40 uppercase tracking-widest">Số tài liệu</th>
+                            <th class="px-4 py-3 text-[10px] font-black text-white/40 uppercase tracking-widest">Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/5">
+                        {% for log in logs %}
+                        <tr class="hover:bg-white/[0.02] transition-colors">
+                            <td class="px-4 py-4 text-xs text-white/60">{{ log.started_at|date:"d/m/Y H:i:s" }}</td>
+                            <td class="px-4 py-4">
+                                {% if log.status == 'SUCCESS' %}
+                                    <span class="px-2 py-1 rounded-lg bg-green-500/10 text-green-400 text-[9px] font-black uppercase border border-green-500/20">Thành công</span>
+                                {% elif log.status == 'RUNNING' %}
+                                    <span class="px-2 py-1 rounded-lg bg-blue-500/10 text-blue-400 text-[9px] font-black uppercase border border-blue-500/20">Đang chạy...</span>
+                                {% else %}
+                                    <span class="px-2 py-1 rounded-lg bg-red-500/10 text-red-400 text-[9px] font-black uppercase border border-red-500/20">Lỗi</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-4 text-[10px] font-bold text-white/40 uppercase">{{ log.trigger }}</td>
+                            <td class="px-4 py-4 text-xs font-black text-white">{{ log.documents_count }}</td>
+                            <td class="px-4 py-4 text-xs text-white/40 italic">
+                                {{ log.error_message|default:"" }}
+                                {% if log.completed_at %}
+                                    (Hoàn thành sau {{ log.completed_at|timesince:log.started_at }})
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-4 py-10 text-center text-white/20 uppercase font-black text-[10px] tracking-widest italic">Chưa có lịch sử đồng bộ</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <div class="glass-card overflow-hidden flex flex-col">
-            <div class="p-5 border-b border-white/10 bg-white/[0.02]">
-                <h2 class="text-xs font-black uppercase tracking-widest text-slate-200">Nhật ký hệ thống AI</h2>
+        <!-- Documentation Card -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="liquid-card p-8 border-white/5 bg-slate-900/40 space-y-4">
+                <h3 class="text-sm font-black text-cyan-400 uppercase tracking-widest">Tại sao cần Re-index?</h3>
+                <p class="text-xs text-white/60 leading-relaxed">
+                    Vector Database (FAISS) lưu trữ kiến thức dưới dạng toán học để AI có thể tìm kiếm nhanh. Khi bạn thêm/sửa bài viết, Quiz hoặc Kịch bản, hệ thống sẽ tự động cập nhật một phần. Tuy nhiên, nếu có lỗi đồng bộ hoặc bạn muốn làm mới toàn bộ index, hãy sử dụng tính năng Re-index.
+                </p>
             </div>
-            <div id="ai-logs" class="p-4 flex-1 h-48 overflow-y-auto font-mono text-[10px] text-cyan-400/70 space-y-1">
-                <p>[SYSTEM] Ready for indexing...</p>
-                <p>[KNOWLEDGE] FAISS Index loaded successfully.</p>
+            <div class="liquid-card p-8 border-white/5 bg-slate-900/40 space-y-4">
+                <h3 class="text-sm font-black text-purple-400 uppercase tracking-widest">Tiến trình Celery</h3>
+                <p class="text-xs text-white/60 leading-relaxed">
+                    Tiến trình quét lại được thực hiện ngầm thông qua Celery Worker. Bạn có thể tiếp tục làm việc khác trong khi hệ thống đang xử lý. Kết quả sẽ được ghi lại trong bảng lịch sử bên trên.
+                </p>
             </div>
         </div>
     </div>
 </div>
-
-<script>
-    async function rebuildIndex() {
-        const btn = event.currentTarget;
-        const originalText = btn.innerHTML;
-        const logContainer = document.getElementById('ai-logs');
-        
-        if (!confirm('Bạn có muốn xây dựng lại toàn bộ chỉ mục tìm kiếm? Việc này có thể tốn vài phút.')) return;
-
-        btn.disabled = true;
-        btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i> ĐANG XỬ LÝ...';
-        
-        const log = (msg) => {
-            const p = document.createElement('p');
-            p.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            logContainer.appendChild(p);
-            logContainer.scrollTop = logContainer.scrollHeight;
-        };
-
-        log("Bắt đầu quá trình rebuild index...");
-        
-        try {
-            const res = await fetch('/api/admin/rag/rebuild/', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                }
-            });
-            const data = await res.json();
-            
-            if (res.ok) {
-                log("THÀNH CÔNG: " + data.message);
-                showToast('Chỉ mục đã được cập nhật!', 'success');
-                setTimeout(() => location.reload(), 2000);
-            } else {
-                log("LỖI: " + (data.error || 'Unknown error'));
-            }
-        } catch (err) {
-            log("LỖI KẾT NỐI: " + err.message);
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-        }
-    }
-</script>
 {% endblock %}
