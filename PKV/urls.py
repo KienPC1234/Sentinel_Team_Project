@@ -7,6 +7,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from api.ai_chat.views import AssistantPageView
+from django.http import HttpResponse
+import os
 from .views import (
     home_view, scan_phone_view, scan_message_view, scan_website_view,
     scan_email_view, scan_bank_view, scan_qr_view, report_view,
@@ -17,6 +19,7 @@ from .views import (
 )
 from .views.admin_views import (
     admin_dashboard, 
+    admin_stats_api,
     manage_reports, 
     manage_forum, 
     manage_users, 
@@ -26,12 +29,26 @@ from .views.admin_views import (
     manage_articles,
     edit_article,
     edit_scenario,
+    manage_scenarios,
     delete_scenario,
     approve_report,
     reject_report
 )
 
+def service_worker(request):
+    # OneSignal expects these at root
+    filename = request.path.lstrip('/')
+    worker_path = os.path.join(settings.BASE_DIR, filename)
+    if os.path.exists(worker_path) and filename.endswith('.js'):
+        with open(worker_path, 'r') as f:
+            return HttpResponse(f.read(), content_type="application/javascript")
+    return HttpResponse("/* Service Worker Not Found */", status=404)
+
 urlpatterns = [
+    # OneSignal Service Workers (OneSignalSDKWorker.js and OneSignalSDK.sw.js)
+    path('OneSignalSDKWorker.js', service_worker),
+    path('OneSignalSDK.sw.js', service_worker),
+
     # Pages
     path("", home_view, name="root"), 
     path('admin/', admin.site.urls),
@@ -65,6 +82,7 @@ urlpatterns = [
     
     # Custom Admin Control Panel
     path("admin-cp/", admin_dashboard, name="admin-dashboard"),
+    path("admin-cp/api/stats/", admin_stats_api, name="admin-dashboard-stats"),
     path("admin-cp/reports/", manage_reports, name="admin-manage-reports"),
     path("admin-cp/reports/<int:report_id>/approve/", approve_report, name="admin-approve-report"),
     path("admin-cp/reports/<int:report_id>/reject/", reject_report, name="admin-reject-report"),
@@ -77,6 +95,8 @@ urlpatterns = [
     path("admin-cp/articles/", manage_articles, name="admin-manage-articles"),
     path("admin-cp/articles/add/", edit_article, name="admin-add-article"),
     path("admin-cp/articles/<int:article_id>/edit/", edit_article, name="admin-edit-article"),
+    path("admin-cp/scenarios/", manage_scenarios, name="admin-manage-scenarios"),
+    path("admin-cp/scenarios/add/", edit_scenario, name="admin-add-scenario-standalone"),
     path("admin-cp/articles/<int:article_id>/scenarios/add/", edit_scenario, name="admin-add-scenario"),
     path("admin-cp/scenarios/<int:scenario_id>/edit/", edit_scenario, name="admin-edit-scenario"),
     path("admin-cp/scenarios/<int:scenario_id>/delete/", delete_scenario, name="admin-delete-scenario"),

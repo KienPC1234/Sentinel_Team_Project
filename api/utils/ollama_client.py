@@ -29,6 +29,7 @@ OLLAMA_API_KEY = getattr(settings, 'OLLAMA_API_KEY', None)
 if OLLAMA_API_KEY:
     os.environ.setdefault('OLLAMA_API_KEY', OLLAMA_API_KEY)
 DEFAULT_MODEL = getattr(settings, 'LLM_MODEL', 'neural-chat')
+SMALL_MODEL = getattr(settings, 'SMALL_MODEL', DEFAULT_MODEL)
 LLM_TEMPERATURE = getattr(settings, 'LLM_TEMPERATURE', 0.3)
 LLM_MAX_TOKENS = getattr(settings, 'LLM_MAX_TOKENS', 1800)
 
@@ -80,8 +81,7 @@ def _tool_lookup_scamadviser(domain: str):
         A dict with title and content fields containing the ScamAdviser trust
         assessment and risk indicators for the domain.
     """
-    clean = re.sub(r'^https?://', '', domain).split('/')[0].strip()
-    return web_fetch_url(f"https://www.scamadviser.com/check-website/{clean}")
+    return lookup_scamadviser(domain)
 
 
 def _tool_lookup_scamwave(query: str):
@@ -129,6 +129,18 @@ def _tool_lookup_sitejabber(domain: str):
     return web_fetch_url(f"https://www.sitejabber.com/reviews/{clean}")
 
 
+def _tool_lookup_tranco(domain: str):
+    """Check a domain's popularity ranking on Tranco list.
+
+    Args:
+        domain: Domain name (e.g. 'example.com').
+
+    Returns:
+        A dict with rank and history if available.
+    """
+    return lookup_tranco(domain)
+
+
 # Map tool name -> our Python dispatcher (used in search_agent loop)
 WEB_TOOLS: Dict[str, Any] = {
     '_tool_web_search': _tool_web_search,
@@ -137,6 +149,7 @@ WEB_TOOLS: Dict[str, Any] = {
     '_tool_lookup_scamwave': _tool_lookup_scamwave,
     '_tool_lookup_trustpilot': _tool_lookup_trustpilot,
     '_tool_lookup_sitejabber': _tool_lookup_sitejabber,
+    '_tool_lookup_tranco': _tool_lookup_tranco,
 }
 
 # Tool definitions for ShieldCall AI
@@ -306,6 +319,38 @@ def filter_hallucinations(text: str) -> str:
     text = re.sub(r'[\u4e00-\u9fff]+', '', text)
     return text
 
+
+def filter_tool_call_artifacts(text: str) -> str:
+    """
+    Remove accidental tool-call JSON artifacts from agent textual output.
+
+    Some models occasionally emit raw objects like:
+    {"name":"_tool_lookup_scamadviser","arguments":{...}}
+    in plain content instead of structured ``tool_calls``.
+    """
+    if not text:
+        return ""
+
+    cleaned = text
+
+    # Remove compact/raw tool call JSON objects (single or multiple objects).
+    cleaned = re.sub(
+        r'\{\s*"name"\s*:\s*"_tool_[^\"]+"\s*,\s*"arguments"\s*:\s*\{[^{}]*\}\s*\}\s*',
+        '',
+        cleaned,
+        flags=re.DOTALL,
+    )
+
+    # Remove any line that still contains explicit tool invocations.
+    cleaned = "\n".join(
+        line for line in cleaned.splitlines()
+        if '_tool_' not in line and '"arguments"' not in line
+    )
+
+    # Normalize excessive blank lines.
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    return cleaned.strip()
+
 def _extract_json(text: str) -> Optional[dict]:
     """
     Extract and parse the first JSON object from an LLM response.
@@ -434,12 +479,7 @@ def generate_response(
     max_loop_iterations: int = 15,
 ) -> Optional[str]:
     """
-    Generate a non-streamed response from Ollama, following the official
-    chat-loop pattern from https://docs.ollama.com/capabilities/web-search.
-
-    The loop continues as long as the model emits tool_calls (it executes
-    each tool, appends the result, and re-calls the model).  It exits only
-    when the model returns a final answer with no tool_calls.
+    Generate a non-streamed response from Ollama.
 
     When ``format_schema`` is provided, the model is guaranteed to return
     valid JSON matching the schema, simplifying the loop logic.
@@ -482,10 +522,13 @@ def generate_response(
                 chat_kwargs['format'] = format_schema
 
             response = client.chat(**chat_kwargs)
-            messages.append(message_to_dict(response.message))
+            assistant_msg = message_to_dict(response.message)
+            messages.append(assistant_msg)
 
             part = response.message.content or ''
             tool_calls = response.message.tool_calls
+
+            iteration += 1
 
             if tool_calls:
                 for tool_call in tool_calls:
@@ -496,17 +539,10 @@ def generate_response(
                     messages.append({'role': 'tool', 'content': result_str, 'tool_name': tool_name})
                 iteration += 1
                 continue
-
-            if part:
-                part = part.strip()
-                if part[0] == "{" and part[:20].find("is_scam") != -1:
-                    reply = ''
-                reply += part
-                if part.rstrip()[-1] == '}':
-                    logger.info(f"[generate_response iter={iteration}] ✅ final answer, exiting loop")
-                    break
-
-            iteration += 1
+            elif part:
+                reply = part.strip()
+                logger.info(f"[generate_response iter={iteration}] ✅ final answer (no tools), exiting loop")
+                break
 
         if iteration >= max_loop_iterations:
             logger.warning(f"[generate_response] hit max_loop_iterations={max_loop_iterations}, returning best content so far")
@@ -595,6 +631,9 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
     all_dispatch = {
         'web_search': web_search_query,
         'web_fetch': web_fetch_url,
+        'scan_phone': _tool_lookup_scamwave,
+        'scan_url': _tool_lookup_scamadviser,
+        'scan_bank_account': _tool_lookup_scamwave,
     }
     all_dispatch.update(tool_dispatch)
 
@@ -810,16 +849,19 @@ SCAM_DB_URLS = {
     'scamwave':    'https://scamwave.com/scammers/',
     'trustpilot':  'https://www.trustpilot.com/review/',
     'sitejabber':  'https://www.sitejabber.com/reviews/',
+    'tranco':      'https://tranco-list.eu/api/ranks/domain/',
 }
 
 
 def lookup_scamadviser(domain: str) -> Optional[Dict]:
     """
-    Fetch the ScamAdviser trust-score report for a domain.
+    Fetch the ScamAdviser report for a domain.
 
-    Uses Ollama's web-fetch relay (requires OLLAMA_API_KEY).  The returned
-    dict includes the raw page content which contains the trust score,
-    registration info, hosting country, and risk flags extracted by the relay.
+    Prioritizes extracting ``ratingScore`` from the SPA bootstrap payload
+    embedded in ``<div id="app" data-page="...">``. This is the same source
+    used by client-side rendering and is more reliable than placeholder
+    progress bars in static HTML. Falls back to textual verdict extraction
+    (e.g. ``Very Likely Safe``, ``Caution Recommended``) when needed.
 
     Args:
         domain: Domain to look up (e.g. 'example.com').  Any leading scheme
@@ -833,10 +875,136 @@ def lookup_scamadviser(domain: str) -> Optional[Dict]:
     if not clean:
         return None
     url = f"{SCAM_DB_URLS['scamadviser']}{clean}"
-    result = web_fetch_url(url)
-    if result:
-        result['source'] = 'scamadviser'
-        result['query_url'] = url
+
+    trust_score_from_page = None
+    verdict_from_page = None
+    page_text = ""
+
+    # 1) Direct HTML fetch to extract data-page JSON + human-readable verdict.
+    try:
+        import html as _html
+        import requests
+        from bs4 import BeautifulSoup
+
+        response = requests.get(
+            url,
+            headers={
+                'User-Agent': (
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) '
+                    'Gecko/20100101 Firefox/137.0'
+                )
+            },
+            timeout=12,
+        )
+        if response.ok:
+            html_text = response.text or ''
+            page_text = BeautifulSoup(html_text, 'html.parser').get_text(' ', strip=True)[:6000]
+
+            # Parse <div id="app" data-page="..."> then read ratingScore.
+            app_data_match = re.search(
+                r'<div\s+id=["\']app["\']\s+data-page=["\']([^"\']+)["\']',
+                html_text,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if app_data_match:
+                data_page_escaped = app_data_match.group(1)
+                data_page_unescaped = _html.unescape(data_page_escaped)
+                try:
+                    data_page_obj = json.loads(data_page_unescaped)
+
+                    score_candidates = [
+                        data_page_obj.get('props', {}).get('score', {}).get('ratingScore'),
+                        data_page_obj.get('props', {}).get('ratingScore'),
+                        data_page_obj.get('ratingScore'),
+                    ]
+                    for candidate in score_candidates:
+                        if isinstance(candidate, (int, float)):
+                            numeric = int(candidate)
+                            if 0 <= numeric <= 100:
+                                trust_score_from_page = numeric
+                                break
+
+                    verdict_candidates = [
+                        data_page_obj.get('props', {}).get('score', {}).get('ratingText'),
+                        data_page_obj.get('props', {}).get('score', {}).get('ratingLabel'),
+                        data_page_obj.get('props', {}).get('score', {}).get('conclusion'),
+                        data_page_obj.get('props', {}).get('ratingText'),
+                        data_page_obj.get('ratingText'),
+                    ]
+                    for candidate in verdict_candidates:
+                        if isinstance(candidate, str) and candidate.strip():
+                            verdict_from_page = candidate.strip()
+                            break
+                except Exception:
+                    # Fallback: extract ratingScore directly from the unescaped data blob.
+                    score_match = re.search(r'"ratingScore"\s*:\s*(\d+)', data_page_unescaped)
+                    if score_match:
+                        trust_score_from_page = int(score_match.group(1))
+
+            # Secondary fallback: score may still appear in the HTML snapshot.
+            if trust_score_from_page is None:
+                score_match = re.search(r'"ratingScore"\s*:\s*(\d+)', html_text)
+                if score_match:
+                    trust_score_from_page = int(score_match.group(1))
+
+            # Known ScamAdviser-style conclusions to prioritize.
+            if not verdict_from_page:
+                verdict_patterns = [
+                    r'Very\s+Likely\s+Safe',
+                    r'Likely\s+Safe',
+                    r'Caution\s+Recommended',
+                    r'Suspicious',
+                    r'Unsafe',
+                    r'Scam',
+                ]
+                for pattern in verdict_patterns:
+                    match = re.search(pattern, page_text, flags=re.IGNORECASE)
+                    if match:
+                        verdict_from_page = match.group(0)
+                        break
+    except Exception as exc:
+        logger.debug(f"lookup_scamadviser: direct HTML parse failed ({exc})")
+
+    # 2) Keep existing web relay extraction as primary content source.
+    result = web_fetch_url(url) or {
+        'title': f'ScamAdviser report for {clean}',
+        'content': page_text,
+        'links': [],
+    }
+
+    # 2) If not found from direct page text, attempt extraction from relay content.
+    if not verdict_from_page:
+        relay_content = result.get('content', '') or ''
+        verdict_patterns = [
+            r'Very\s+Likely\s+Safe',
+            r'Likely\s+Safe',
+            r'Caution\s+Recommended',
+            r'Suspicious',
+            r'Unsafe',
+            r'Scam',
+        ]
+        for pattern in verdict_patterns:
+            match = re.search(pattern, relay_content, flags=re.IGNORECASE)
+            if match:
+                verdict_from_page = match.group(0)
+                break
+
+    existing_content = result.get('content', '') or ''
+    prefix_lines = []
+
+    if trust_score_from_page is not None:
+        prefix_lines.append(f"ScamAdviser Trust Score (ratingScore): {trust_score_from_page}/100")
+
+    if verdict_from_page:
+        prefix_lines.append(f"ScamAdviser Verdict: {verdict_from_page}")
+
+    if prefix_lines:
+        prefix = '\n'.join(prefix_lines)
+        if prefix not in existing_content:
+            result['content'] = f"{prefix}\n{existing_content}".strip()
+
+    result['source'] = 'scamadviser'
+    result['query_url'] = url
     return result
 
 
@@ -909,6 +1077,57 @@ def lookup_sitejabber(domain: str) -> Optional[Dict]:
     return result
 
 
+def lookup_tranco(domain: str) -> Optional[Dict]:
+    """
+    Look up a domain's popularity ranking on Tranco list.
+
+    Args:
+        domain: Domain name (e.g. 'example.com').
+
+    Returns:
+        Dict with keys ``source``, ``query_url``, ``title``, ``content``, and
+        ``links``; or ``None`` on failure.
+    """
+    import requests
+    clean = re.sub(r'^https?://', '', domain).split('/')[0].strip()
+    if not clean:
+        return None
+    url = f"{SCAM_DB_URLS['tranco']}{clean}"
+    try:
+        response = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/137.0"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            data = response.json()
+            ranks = data.get('ranks', [])
+            if ranks:
+                latest_rank = ranks[0].get('rank', 'N/A')
+                content = f"Popularity Rank: {latest_rank}\nHistory: {json.dumps(ranks[:5])}"
+            else:
+                content = "No ranking data found (likely low popularity)."
+            
+            return {
+                'source': 'tranco',
+                'query_url': url,
+                'title': f"Tranco Rank for {clean}",
+                'content': content,
+                'links': []
+            }
+        elif response.status_code == 404:
+             return {
+                'source': 'tranco',
+                'query_url': url,
+                'title': f"Tranco Rank for {clean}",
+                'content': "Domain not found in top 1M list (Low Popularity)",
+                'links': []
+            }
+    except Exception as e:
+        logger.error(f"lookup_tranco error: {e}")
+    return None
+
+
 
 def search_agent(
     query: str,
@@ -947,6 +1166,7 @@ def search_agent(
         '_tool_lookup_scamwave': _tool_lookup_scamwave,
         '_tool_lookup_trustpilot': _tool_lookup_trustpilot,
         '_tool_lookup_sitejabber': _tool_lookup_sitejabber,
+        '_tool_lookup_tranco': _tool_lookup_tranco,
     }
 
     logger.info(f"[search_agent] START query='{query[:120]}', model={model}, "
@@ -965,6 +1185,7 @@ def search_agent(
                     _tool_lookup_scamwave,
                     _tool_lookup_trustpilot,
                     _tool_lookup_sitejabber,
+                    _tool_lookup_tranco,
                     _tool_web_search,
                     _tool_web_fetch,
                 ],
@@ -1011,7 +1232,10 @@ def search_agent(
 
             # No tool calls — check whether we actually have a final answer
             if content:
-                filtered = filter_thinking(content)
+                filtered = filter_tool_call_artifacts(filter_thinking(content))
+                # If the model only emitted tool-call artifacts, keep iterating.
+                if not filtered:
+                    continue
                 _log_llm(query, filtered)
                 return filtered
             else:
@@ -1089,6 +1313,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
             ('ScamWave',    lookup_scamwave),
             ('Trustpilot',  lookup_trustpilot),
             ('Sitejabber',  lookup_sitejabber),
+            ('Tranco',      lookup_tranco),
         ]:
             try:
                 db_result = lookup_fn(subject)
@@ -1121,7 +1346,8 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                     f"2. _tool_lookup_scamwave    — tìm báo cáo lừa đảo về số điện thoại/tài khoản/tên trong văn bản\n"
                     f"3. _tool_lookup_trustpilot  — kiểm tra điểm số và đánh giá người dùng trên Trustpilot\n"
                     f"4. _tool_lookup_sitejabber  — kiểm tra điểm số và đánh giá người dùng trên Sitejabber\n"
-                    "5. _tool_web_search         — tìm đánh giá trên Reddit, v.v. (dùng query 'site:reddit.com <domain>', ...)\n"
+                    f"5. _tool_lookup_tranco      — kiểm tra thứ hạng mức độ phổ biến (Tranco Rank). Xếp hạng càng nhỏ (vd < 1000) càng uy tín.\n"
+                    "6. _tool_web_search         — tìm đánh giá trên Reddit, v.v. (dùng query 'site:reddit.com <domain>', ...)\n"
                     "QUAN TRỌNG: Tập trung vào việc kiểm tra chính trang/nội dung được cung cấp có phải là lừa đảo không.\n"
                     "Trình bày kết quả theo định dạng CHÍNH XÁC sau để hệ thống có thể phân tách:\n"
                     "### [Tên Nguồn]\n"
@@ -1143,12 +1369,19 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
             )
 
             if agent_answer:
-                web_context = agent_answer.strip()
-                web_search_used = True
-                logger.debug(
-                    f"analyze_text_for_scam: web context ({len(web_context)} chars): "
-                    f"{web_context[:150]}..."
-                )
+                cleaned_agent_answer = filter_tool_call_artifacts(agent_answer).strip()
+                if cleaned_agent_answer:
+                    web_context = cleaned_agent_answer
+                    web_search_used = True
+                    logger.debug(
+                        f"analyze_text_for_scam: web context ({len(web_context)} chars): "
+                        f"{web_context[:150]}..."
+                    )
+                else:
+                    logger.warning(
+                        "analyze_text_for_scam: agent output contained only tool-call artifacts; "
+                        "skipping web_context injection."
+                    )
         except Exception as exc:
             logger.warning(
                 f"analyze_text_for_scam: search_agent enrichment failed ({exc}), "
@@ -1195,6 +1428,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"1. TRANG/NỘI DUNG CHÍNH THỨC/AN TOÀN: Nếu đây là trang chính thức của một tổ chức uy tín, đánh giá là an toàn.\n"
         f"2. TRANG LỪA ĐẢO: Nếu trang này giả mạo, lừa đảo, hoặc có dấu hiệu gian lận, đánh giá rủi ro cao.\n"
         f"3. SỬ DỤNG THÔNG TIN TÌNH BÁO: Dựa vào kết quả từ ScamAdviser, ScamWave và các báo cáo để đưa ra kết luận.\n\n"
+        f"Lưu ý: 'indicators' chứa những dấu hiệu lừa đảo được tìm thấy, nếu thông tin không liên quan thì không ghi vào.\n"
         f"HƯỚNG DẪN cho 'explanation':\n"
         f"1. Viết bằng TIẾNG VIỆT, dành cho người dùng không chuyên kỹ thuật.\n"
         f"2. Nếu AN TOÀN: Chỉ nêu đây là trang chính thức/hợp lệ của tổ chức.\n"
@@ -1207,7 +1441,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         prompt, model, num_ctx=8192, max_tokens=2048, tools=[], format_schema=SCAM_ANALYSIS_SCHEMA
     )
 
-    db_sources_consulted = ['scamadviser', 'scamwave', 'trustpilot', 'sitejabber'] if db_context_parts else []
+    db_sources_consulted = ['scamadviser', 'scamwave', 'trustpilot', 'sitejabber', 'tranco'] if db_context_parts else []
 
     if response:
         result = json.loads(response)

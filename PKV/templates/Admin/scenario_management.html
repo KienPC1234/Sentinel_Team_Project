@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-8 mt-16">
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'admin-dashboard' %}" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+            <h1 class="text-2xl font-bold text-white">Quản Lý Kịch Bản Tương Tác</h1>
+        </div>
+<div class="container mx-auto px-4 py-10 mt-16 max-w-6xl">
+    <div class="flex items-center justify-between mb-12">
+        <div class="flex items-center gap-6">
+            <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/5">
+                <i class="bi bi-controller text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-3xl font-black text-white tracking-tight">Kịch Bản Tương Tác</h1>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Luyện tập kỹ năng phòng chống lừa đảo</p>
+            </div>
+        </div>
+        
+        <a href="{% url 'admin-add-scenario-standalone' %}" class="px-8 py-3.5 rounded-2xl bg-emerald-500 text-black font-black uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-xl shadow-emerald-500/20 flex items-center gap-2">
+            <i class="bi bi-plus-lg text-lg"></i>
+            Thêm kịch bản mới
+        </a>
+    </div>
+
+    <!-- Scenarios List -->
+    <div class="grid grid-cols-1 gap-6">
+        {% for s in scenarios %}
+        <div class="group relative overflow-hidden p-8 rounded-[2.5rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl hover:border-emerald-500/30 transition-all duration-500">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase border border-emerald-500/20 tracking-widest">
+                            Scenario #{{ s.id }}
+                        </span>
+                        {% if s.article %}
+                        <span class="text-[10px] font-bold text-white/20 uppercase tracking-widest flex items-center gap-1">
+                            <i class="bi bi-link-45deg"></i> Linked to Article
+                        </span>
+                        {% else %}
+                        <span class="text-[10px] font-bold text-amber-500/40 uppercase tracking-widest flex items-center gap-1">
+                            <i class="bi bi-layers"></i> Standalone
+                        </span>
+                        {% endif %}
+                    </div>
+                    <h3 class="text-xl font-black text-white group-hover:text-emerald-400 transition-colors mb-2 tracking-tight">{{ s.title }}</h3>
+                    <p class="text-xs text-white/40 leading-relaxed line-clamp-2 max-w-2xl">{{ s.description }}</p>
+                    
+                    {% if s.article %}
+                    <div class="mt-4 flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center text-[10px] text-white/40">
+                            <i class="bi bi-newspaper"></i>
+                        </div>
+                        <span class="text-[11px] font-medium text-white/30 italic">{{ s.article.title }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <a href="{% url 'admin-edit-scenario' s.id %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-emerald-500 hover:text-black hover:border-emerald-500 transition-all group/btn shadow-lg">
+                        <i class="bi bi-pencil-square text-lg"></i>
+                    </a>
+                    <form action="{% url 'admin-delete-scenario' s.id %}" method="post" onsubmit="return confirm('Bạn có chắc chắn muốn xóa kịch bản này?');" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all shadow-lg">
+                            <i class="bi bi-trash3 text-lg"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="py-20 text-center rounded-[3rem] bg-white/[0.02] border border-dashed border-white/10">
+            <div class="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center text-white/10 mx-auto mb-6">
+                <i class="bi bi-folder-x text-4xl"></i>
+            </div>
+            <h3 class="text-lg font-black text-white/40 uppercase tracking-widest">Chưa có kịch bản nào</h3>
+            <p class="text-xs text-white/20 mt-2">Hãy bắt đầu bằng cách thêm kịch bản tương tác đầu tiên của bạn.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

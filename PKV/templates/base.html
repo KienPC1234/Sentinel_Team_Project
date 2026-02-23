@@ -11,31 +11,42 @@
     <meta property="og:title" content="{% block og_title %}{{ title }}{% endblock %}">
     <meta property="og:description" content="{% block og_description %}Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo và các hình thức lừa đảo số{% endblock %}">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
-    <meta property="og:image" content="{% block og_image %}{% static 'logo.png' %}{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{% static 'icon.png' %}{% endblock %}">
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     {% endblock %}
 
     <link rel="icon" type="image/png" href="{% static 'logo.png' %}">
+    <style>#onesignal-bell-container { display: none !important; }</style>
+
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 
     {% tailwind_css %}
 
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
 
+    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
+    <!-- Animate.css -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
 
+    <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
+    <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
+    <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <link rel="stylesheet" href="https://cdn.ckeditor.com/ckeditor5/47.5.0/ckeditor5.css" crossorigin>
@@ -161,7 +172,7 @@
     </style>
     <script>
         window.createCKEditor = async function(selector, initialData, placeholder = 'Nhập nội dung...') {
-            if (!window.CKEditor5) {
+            if (!window.CKEDITOR) {
                 console.error('CKEditor not loaded yet');
                 return null;
             }
@@ -174,7 +185,7 @@
                 ImageEditing, Mention, Superscript, Subscript, Strikethrough, Highlight,
                 Heading, Link, AutoLink, BlockQuote, HorizontalLine, CodeBlock, Indent,
                 IndentBlock, Alignment, Style, GeneralHtmlSupport
-            } = window.CKEditor5;
+            } = window.CKEDITOR;
 
             const LICENSE_KEY = '{{ CKEDITOR_LICENSE_KEY|escapejs }}';
             
@@ -1068,56 +1079,6 @@
             content: ""; position: absolute; width: 40%; height: 10px; background: #fff; border-radius: 10px;
         }
         .glass-v2::after { transform: rotate(90deg); }
-
-        /* AI Thinking & Search Results Styles for Floating Chat */
-        .thinking-container {
-            margin-bottom: 0.75rem;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .thinking-container.collapsed .thinking-content {
-            display: none;
-        }
-        .thinking-header {
-            padding: 0.5rem 0.75rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            user-select: none;
-        }
-        .thinking-header:hover {
-            background: rgba(255, 255, 255, 0.02);
-        }
-        .thinking-content {
-            padding: 0.75rem;
-            font-size: 11px;
-            color: rgba(255, 255, 255, 0.4);
-            font-style: italic;
-            border-top: 1px solid rgba(255, 255, 255, 0.04);
-            line-height: 1.6;
-        }
-        .search-results-container {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .search-item {
-            display: block;
-            padding: 0.5rem 0.75rem;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            margin-bottom: 0.5rem;
-            transition: all 0.2s;
-        }
-        .search-item:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(6, 182, 212, 0.2);
-        }
     </style>
     
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -1142,6 +1103,7 @@
         style="position:fixed;bottom:-200px;right:-200px;width:500px;height:500px;background:radial-gradient(circle,rgba(179,136,255,0.08) 0%,transparent 70%);pointer-events:none;z-index:0;">
     </div>
 
+    <!-- Frosted Filter SVG -->
     <svg style="visibility: hidden; position: absolute;" width="0" height="0">
         <filter id="frosted">
             <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" result="noise" />
@@ -1151,9 +1113,11 @@
         </filter>
     </svg>
 
+    <!-- Navigation -->
     <nav class="nav-premium">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16 sm:h-20">
+                <!-- Left: Logo & Links -->
                 <div class="flex items-center gap-8">
                     <a href="/" class="flex items-center gap-3 group">
                         <div class="w-10 h-10 rounded-xl overflow-hidden bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-110 transition-transform">
@@ -1165,12 +1129,13 @@
                         </div>
                     </a>
 
+                    <!-- Desktop Links -->
                     <div class="hidden lg:flex items-center gap-2">
                         <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
                             <button class="nav-link px-4 py-2 rounded-xl flex items-center gap-2" :class="open ? 'bg-white/5 text-cyan-400' : 'text-white/60'">
                                 <i class="bi bi-search"></i> Kiểm tra <i class="bi bi-chevron-down text-[10px] opacity-50"></i>
                             </button>
-                            <div x-show="open" x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl dropdown-blur">
+                            <div x-show="open" x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl">
                                 <a href="/scan/phone/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl">
                                     <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center"><i class="bi bi-phone"></i></div>
                                     <div>
@@ -1229,6 +1194,7 @@
                     </div>
                 </div>
 
+                <!-- Right: Auth & Emergency -->
                 <div class="flex items-center gap-3">
                     <a href="/emergency/" class="nav-emergency hidden sm:flex items-center gap-2 bg-red-500/10 text-red-500 border border-red-500/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
                         <i class="bi bi-exclamation-triangle-fill"></i> Hỗ trợ khẩn cấp
@@ -1323,9 +1289,10 @@
                     </div>
                     {% else %}
                     <a href="/login/" class="hidden sm:block text-xs font-bold text-white/60 hover:text-white transition-colors">Đăng nhập</a>
-                    <a href="/register/" style="display:flex;justify-content:center;padding:0.75rem;border-radius:0.75rem;background:linear-gradient(135deg,rgba(0,229,255,0.15),rgba(179,136,255,0.15));border:1px solid rgba(0,229,255,0.25);color:var(--accent-cyan);font-weight:600;font-size:0.85rem;text-decoration:none;">Đăng ký</a>
+                    <a href="/register/" class="liquid-btn text-[11px] py-1.5 px-5 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Đăng ký</a>
                     {% endif %}
 
+                    <!-- Mobile menu button -->
                     <button @click="mobileMenu = !mobileMenu" class="lg:hidden p-2 rounded-lg" style="color:rgba(255,255,255,0.7);transition:color 0.3s;">
                         <i class="bi" style="font-size:1.4rem;" :class="mobileMenu ? 'bi-x-lg' : 'bi-list'"></i>
                     </button>
@@ -1333,6 +1300,7 @@
             </div>
         </div>
 
+        <!-- Mobile Nav -->
         <div x-show="mobileMenu" x-transition:enter="transition ease-out duration-200"
             x-transition:enter-start="opacity-0 -translate-y-4" x-transition:enter-end="opacity-100 translate-y-0"
             style="background:rgba(13,13,31,0.95);backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.06);padding:0.75rem 1rem 1.5rem;" class="lg:hidden flex flex-col gap-0.5">
@@ -1343,24 +1311,12 @@
                     <i class="bi bi-chevron-down transition-transform" :class="open ? 'rotate-180' : ''"></i>
                 </button>
                 <div x-show="open" x-transition class="pl-11 flex flex-col gap-0.5 py-1">
-                    <a href="/scan/phone/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Số điện thoại</a>
-                    <a href="/scan/message/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Tin nhắn</a>
-                    <a href="/scan/website/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Website</a>
-                    <a href="/scan/bank/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Tài khoản</a>
-                    <a href="/scan/email/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan Email Scam</a>
-                    <a href="/scan/qr/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.6)'">Scan QR / Ảnh</a>
+                    <a href="/scan/phone/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#18ffff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-phone-fill mr-2 text-cyan-400"></i>Số điện thoại</a>
+                    <a href="/scan/message/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#b388ff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-chat-left-dots-fill mr-2 text-purple-400"></i>Tin nhắn</a>
+                    <a href="/scan/website/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#64b5f6'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-globe2 mr-2 text-blue-400"></i>Website</a>
+                    <a href="/scan/bank/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#ffd740'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-bank2 mr-2 text-yellow-400"></i>Tài khoản</a>
+                    <a href="/scan/email/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#f06292'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-envelope-exclamation-fill mr-2 text-pink-400"></i>Email Scam</a>
+                    <a href="/scan/qr/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#00e676'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-qr-code-scan mr-2 text-green-400"></i>QR / Ảnh</a>
                 </div>
             </div>
             <a href="/report/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-flag-fill text-red-400"></i> Báo cáo</a>
@@ -1388,11 +1344,13 @@
         </div>
     </nav>
 
+    <!-- Main content -->
     <main class="animate-fadein"
         style="max-width:1280px;margin:0 auto;padding:2rem 1.5rem;position:relative;z-index:1;min-height:calc(100vh - 180px);">
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Footer -->
     <footer style="border-top:1px solid rgba(255,255,255,0.08);margin-top:4rem;background:rgba(0,0,0,0.1);">
         <div style="max-width:1280px;margin:0 auto;padding:4rem 1.5rem;">
             <div
@@ -1468,6 +1426,7 @@
         </div>
     </footer>
 
+    <script src="{% static 'js/notifications.js' %}"></script>
     <script>
         // Initialize theme on load
         (function () {
@@ -1475,6 +1434,9 @@
             document.documentElement.setAttribute('data-theme', saved);
             document.addEventListener('DOMContentLoaded', function () { updateThemeIcons(saved); });
         })();
+
+        // Lucide replacement (since we use Bootstrap Icons now)
+        // lucide.createIcons(); 
 
         // CSRF token helper
         function getCSRFToken() {
@@ -1497,7 +1459,9 @@
         }
 
         function updateThemeIcons(theme) {
-            // Logic handled by Alpine x-show
+            const sun = document.querySelector('.bi-sun-fill');
+            const moon = document.querySelector('.bi-moon-stars-fill');
+            // Theme toggle logic is handled by Alpine x-show in the template
         }
 
         // Client Debug Logger
@@ -1506,7 +1470,7 @@
             log: function (...args) { if (window.SCDebug.enabled) console.log('%c[SC]', 'color:#18ffff;font-weight:bold', ...args); },
             error: function (...args) { console.error('%c[SC:ERR]', 'color:#ff1744;font-weight:bold', ...args); },
             warn: function (...args) { if (window.SCDebug.enabled) console.warn('%c[SC:WARN]', 'color:#ffd740;font-weight:bold', ...args); },
-            enable: function () { localStorage.setItem('sc_debug', '1'); this.enabled = true; console.log('%c[SC] Debug mode ON', 'color:#00e676;font-weight:bold'); },
+            enable: function () { localStorage.setItem('sc_debug', '1'); this.enabled = true; console.log('%c[SC] Debug mode ON — reload page for full effect', 'color:#00e676;font-weight:bold'); },
             disable: function () { localStorage.removeItem('sc_debug'); this.enabled = false; console.log('[SC] Debug mode OFF'); }
         };
 
@@ -1526,361 +1490,59 @@
         }
 
         async function apiCall(url, options = {}) {
-            const defaults = { headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() } };
+            const defaults = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                },
+            };
             const response = await fetch(url, { ...defaults, ...options });
             return response.json();
         }
-    </script>
 
-    <div x-data="chatWidget()" @start-contextual-chat.window="startContextualChat($event.detail.context)" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-4">
-        <button @click="open=!open"
-            style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));border:none;cursor:pointer;box-shadow:0 4px 20px rgba(24,255,255,0.4);display:flex;align-items:center;justify-content:center;transition:all 0.3s;position:relative;"
-            onmouseover="this.style.transform='scale(1.1) rotate(5deg)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'">
-            <svg x-show="!open" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0a0a1a" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <svg x-show="open" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0a1a"
-                stroke-width="2.5" stroke-linecap="round">
-                <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-            <span x-show="!open && !hasInteracted"
-                style="position:absolute;top:-2px;right:-2px;width:12px;height:12px;background:var(--risk-red);border-radius:50%;border:2px solid #0a0a1a;animation:pulse-red 2s infinite;"></span>
-        </button>
+        // OneSignal Integration
+        window.is_authenticated = {{ user.is_authenticated|yesno:"true,false" }};
+        window.is_staff = {{ user.is_staff|yesno:"true,false" }};
 
-        <div x-show="open" x-transition:enter="transition ease-out duration-200"
-            x-transition:enter-start="opacity-0 translate-y-4 scale-95"
-            x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-            x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
-            x-transition:leave-end="opacity-0 scale-95"
-            style="position:absolute;bottom:70px;right:0;width:380px;max-height:580px;border-radius:1.5rem;overflow:hidden;"
-            class="dropdown-blur" @click.outside="open=false">
-            <div style="padding:1.15rem 1.25rem;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:0.75rem;">
-                <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(24,255,255,0.2);">
-                    <i class="bi bi-robot text-[#0a0a1a] text-lg"></i>
-                </div>
-                <div class="flex-1">
-                    <div style="font-weight:800;font-size:0.95rem;letter-spacing:0.02em;">ShieldCall AI</div>
-                    <div style="font-size:0.65rem;color:var(--accent-cyan);font-weight:700;display:flex;align-items:center;gap:1.51px;">
-                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> Trực tuyến
-                    </div>
-                </div>
-                <button @click="resetChat()" class="text-white/20 hover:text-cyan-400 transition-colors mr-2" title="Cuộc trò chuyện mới"><i class="bi bi-plus-square"></i></button>
-                <button @click="open=false" class="text-white/20 hover:text-white transition-colors"><i class="bi bi-dash-lg"></i></button>
-            </div>
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.init({
+                appId: "d76f50fc-cd24-4426-9847-208fce2c52cc",
+                safari_web_id: "web.onesignal.auto.6b1e0125-c07a-4d4d-8123-db80df1063df",
+                notifyButton: { enable: true },
+            });
 
-            <div x-ref="chatMessages"
-                style="height:340px;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem;background:rgba(0,0,0,0.15);scroll-behavior: smooth;">
-                <template x-for="(msg, i) in messages" :key="i">
-                    <div :class="msg.from==='bot' ? 'items-start' : 'items-end'" class="flex flex-col gap-1 w-full">
-                        <div :class="msg.from==='bot' ? 'bg-white/5 border-white/10 rounded-2xl rounded-bl-none' : 'bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border-cyan-500/20 rounded-2xl rounded-br-none shadow-sm'"
-                            class="max-w-[88%] border p-3.5 text-xs sm:text-[13px] leading-relaxed transition-all">
-                            
-                            <!-- Thinking Block -->
-                            <div x-show="msg.from==='bot' && (msg.isThinking || msg.thinkingContent)" 
-                                 class="thinking-container" :class="{'collapsed': !msg.isThinking && msg.thinkingContent}">
-                                <div class="thinking-header" @click="$el.parentElement.classList.toggle('collapsed')">
-                                    <i class="bi" :class="msg.isThinking ? 'bi-lightning-charge-fill animate-pulse text-cyan-400' : 'bi-chevron-down text-white/20'"></i>
-                                    <span class="text-[9px] font-black uppercase tracking-widest" :class="msg.isThinking ? 'text-cyan-400' : 'text-white/20'">
-                                        <span x-show="msg.isThinking">Đang suy luận...</span>
-                                        <span x-show="!msg.isThinking">Quá trình suy luận</span>
-                                    </span>
-                                </div>
-                                <div class="thinking-content" x-text="msg.thinkingContent"></div>
-                            </div>
-
-                            <div class="ai-markdown" x-html="msg.html || msg.text"></div>
-
-                            <!-- Search Results (Web Only) -->
-                            <div x-show="msg.from==='bot' && msg.metadata && msg.metadata.web_search" class="search-results-container">
-                                <template x-if="msg.metadata && msg.metadata.web_search">
-                                    <div>
-                                        <div class="text-[9px] font-black text-white/20 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                            <i class="bi bi-globe"></i> Nguồn tham khảo
-                                        </div>
-                                        <template x-for="res in msg.metadata.web_search" :key="res.url">
-                                            <a :href="res.url" target="_blank" class="search-item">
-                                                <div class="font-bold text-cyan-400 truncate text-[11px]" x-text="res.title"></div>
-                                                <div class="text-[9px] text-white/20 truncate" x-text="res.url"></div>
-                                            </a>
-                                        </template>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="text-[9px] text-white/20 px-1 font-bold tracking-tight uppercase" x-text="msg.time"></div>
-                    </div>
-                </template>
-                <div x-show="typing || (messages.length > 0 && messages[messages.length-1].status)" class="flex flex-col gap-2 ml-2">
-                    <div x-show="messages.length > 0 && messages[messages.length-1].status" class="flex items-center gap-2 text-[10px] text-cyan-400 font-bold animate-pulse">
-                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                        <span x-text="messages[messages.length-1].status"></span>
-                    </div>
-                    <div x-show="typing" class="flex gap-1.5 items-center p-2 bg-white/5 rounded-full w-max border border-white/5">
-                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce"></span>
-                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce [animation-delay:0.2s]"></span>
-                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce [animation-delay:0.4s]"></span>
-                    </div>
-                </div>
-            </div>
-
-            <div x-show="messages.length <= 1" class="p-3 flex gap-2 overflow-x-auto no-scrollbar bg-black/10 border-t border-white/5">
-                <button @click="sendQuick('Kiểm tra số điện thoại')" class="flex-none bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Kiểm tra SĐT</button>
-                <button @click="sendQuick('Cách nhận diện lừa đảo')" class="flex-none bg-white/5 hover:bg-purple-500/10 border border-white/10 hover:border-purple-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Cách phòng tránh</button>
-            </div>
-
-            <div x-show="imagePreviews.length > 0" class="px-4 py-2 flex gap-2 bg-black/20 border-t border-white/5">
-                <template x-for="(img, idx) in imagePreviews" :key="idx">
-                    <div class="relative w-12 h-12 rounded-lg overflow-hidden border border-white/20 group">
-                        <img :src="img" class="w-full h-full object-cover">
-                        <button @click="removeImage(idx)" class="absolute inset-0 bg-red-500/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                            <i class="bi bi-trash text-xs"></i>
-                        </button>
-                    </div>
-                </template>
-            </div>
-
-            <div class="p-4 bg-black/30 border-t border-white/10 flex gap-2 items-center">
-                <button @click="$refs.fileInput.click()" class="w-10 h-10 rounded-xl hover:bg-white/5 flex items-center justify-center text-white/40 hover:text-cyan-400 transition-all border border-transparent hover:border-white/10">
-                    <i class="bi bi-plus-circle text-lg"></i>
-                </button>
-                <input type="file" x-ref="fileInput" @change="handleFileUpload" multiple accept="image/*" class="hidden">
-
-                <div class="flex-1 relative">
-                    <input type="text" x-model="input" @keydown.enter="send()" placeholder="Nhập câu hỏi..." 
-                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[13px] text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-white/20">
-                </div>
-                
-                <button @click="send()" :disabled="(!input.trim() && imageFiles.length===0) || typing"
-                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 disabled:opacity-30 disabled:grayscale transition-all hover:scale-105 active:scale-95">
-                    <i class="bi bi-send-fill text-white text-sm"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function chatWidget() {
-            return {
-                open: false,
-                hasInteracted: false,
-                input: '',
-                typing: false,
-                imagePreviews: [],
-                imageFiles: [],
-                messages: [
-                    { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là **ShieldCall AI**. Hãy gửi số điện thoại hoặc tin nhắn lạ để tôi kiểm tra giúp bạn!', time: new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }), html: '' }
-                ],
-                init() {
-                    this.messages[0].html = window.renderMd(this.messages[0].text);
-                },
-                now() { return new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }); },
-                resetChat() {
-                    localStorage.removeItem('chat_session_id');
-                    this.messages = [
-                        { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là **ShieldCall AI**. Hãy gửi số điện thoại hoặc tin nhắn lạ để tôi kiểm tra giúp bạn!', time: this.now(), html: '' }
-                    ];
-                    this.messages[0].html = window.renderMd(this.messages[0].text);
-                    this.hasInteracted = false;
-                    this.input = '';
-                    this.imagePreviews = [];
-                    this.imageFiles = [];
-                    showToast('Đã bắt đầu cuộc trò chuyện mới', 'success');
-                },
-                scrollDown() {
-                    this.$nextTick(() => {
-                        const el = this.$refs.chatMessages;
-                        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+            const syncOneSignalId = async (playerId) => {
+                if (!playerId || !window.is_authenticated) return;
+                try {
+                    await fetch('/api/v1/notifications/onesignal-register/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                        body: JSON.stringify({ player_id: playerId })
                     });
-                },
-                sendQuick(text) { this.input = text; this.send(); },
-                startContextualChat(systemContext, userMsg = 'Hãy giải thích thêm về kết quả này.') {
-                    this.open = true;
-                    this.hasInteracted = true;
-                    this.messages.push({ 
-                        from: 'bot', 
-                        text: '<i class="bi bi-info-circle text-cyan-400"></i> **Đã nhận ngữ cảnh.** Tôi đã sẵn sàng phân tích kết quả trên cùng bạn.',
-                        time: this.now() 
-                    });
-                    this.messages[this.messages.length-1].html = window.renderMd(this.messages[this.messages.length-1].text);
-                    this.input = userMsg;
-                },
-                handleFileUpload(e) {
-                    const files = Array.from(e.target.files);
-                    files.forEach(file => {
-                        if (file.size > 5 * 1024 * 1024) {
-                            showToast('File ' + file.name + ' quá lớn (max 5MB)', 'warning');
-                            return;
-                        }
-                        const reader = new FileReader();
-                        reader.onload = (ex) => {
-                            this.imagePreviews.push(ex.target.result);
-                            this.imageFiles.push(ex.target.result);
-                        };
-                        reader.readAsDataURL(file);
-                    });
-                    e.target.value = '';
-                },
-                removeImage(idx) {
-                    this.imagePreviews.splice(idx, 1);
-                    this.imageFiles.splice(idx, 1);
-                },
-                async send() {
-                    const text = this.input.trim();
-                    if (!text && this.imageFiles.length === 0) return;
-                    if (this.typing) return;
+                } catch (e) { SCDebug.error("[OneSignal] Sync error:", e); }
+            };
 
-                    this.hasInteracted = true;
-                    const userDisplay = text || (this.imageFiles.length > 0 ? 'Đã gửi ' + this.imageFiles.length + ' ảnh' : '');
-                    this.messages.push({ from: 'user', text: userDisplay, time: this.now(), html: text });
+            OneSignal.User.PushSubscription.addEventListener("change", (event) => {
+                if (event.current.id) syncOneSignalId(event.current.id);
+            });
 
-                    const imagesToSend = [...this.imageFiles];
-                    const messageToSend = text || 'Hãy phân tích các hình ảnh tôi vừa gửi.';
-                    this.input = '';
-                    this.imagePreviews = [];
-                    this.imageFiles = [];
-
-                    this.scrollDown();
-                    this.typing = true;
-
-                    const sessionId = localStorage.getItem('chat_session_id') || crypto.randomUUID();
-                    // Don't set yet, wait for backend to confirm or provide a real UUID if guest
-                    
-                    await this._tryStream({
-                        user_message: messageToSend,
-                        session_id: sessionId,
-                        context: 'chat',
-                        images: imagesToSend
-                    });
-
-                    this.typing = false;
-                    this.scrollDown();
-                },
-
-                async _tryStream(payload) {
-                    const botMsg = { 
-                        from: 'bot', 
-                        text: '', 
-                        html: '', 
-                        time: this.now(),
-                        status: '',
-                        isThinking: false,
-                        thinkingContent: '',
-                        metadata: null
-                    };
-                    this.messages.push(botMsg);
-                    this.typing = false;
-                    this.scrollDown();
-
-                    try {
-                        const response = await fetch('/api/v1/chat/stream/', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                            body: JSON.stringify(payload)
-                        });
-
-                        if (!response.ok) {
-                            botMsg.text = 'Lỗi kết nối (HTTP ' + response.status + ')';
-                            return;
-                        }
-
-                        const reader = response.body.getReader();
-                        const decoder = new TextDecoder();
-                        let buffer = '';
-
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            if (done) break;
-
-                            buffer += decoder.decode(value, { stream: true });
-                            const lines = buffer.split('\n');
-                            buffer = lines.pop();
-
-                            for (const line of lines) {
-                                let trimmedLine = line.trim();
-                                if (!trimmedLine.startsWith('data: ')) continue;
-                                
-                                try {
-                                    const data = JSON.parse(trimmedLine.substring(6));
-                                    
-                                    if (data.session_id) {
-                                        localStorage.setItem('chat_session_id', data.session_id);
-                                    }
-
-                                    if (data.status) {
-                                        const statusMap = {
-                                            'searching_knowledge': 'Đang tra cứu kiến thức...',
-                                            'searching_web': 'Đang tìm kiếm thông tin...',
-                                            'checking_safety': 'Đang kiểm tra an toàn...',
-                                            'reasoning': 'Đang suy luận...',
-                                            'thinking': 'Đang suy luận...'
-                                        };
-                                        botMsg.status = statusMap[data.status] || data.status;
-                                        if (data.status === 'thinking' || data.status === 'reasoning') {
-                                            botMsg.isThinking = true;
-                                        }
-                                    }
-
-                                    if (data.chunk) {
-                                        const chunk = data.chunk;
-                                        
-                                        if (chunk.startsWith('__STATUS__:')) {
-                                            const statusVal = chunk.substring(11);
-                                            const statusMap = {
-                                                'searching_knowledge': 'Đang tra cứu kiến thức...',
-                                                'searching_web': 'Đang tìm kiếm thông tin...',
-                                                'checking_safety': 'Đang kiểm tra an toàn...',
-                                                'reasoning': 'Đang suy luận...',
-                                                'thinking': 'Đang suy luận...'
-                                            };
-                                            botMsg.status = statusMap[statusVal] || statusVal;
-                                            if (statusVal === 'thinking' || statusVal === 'reasoning') {
-                                                botMsg.isThinking = true;
-                                            }
-                                        } else if (chunk.startsWith('__THINK__:')) {
-                                            const thinkPart = chunk.substring(10);
-                                            botMsg.isThinking = true;
-                                            botMsg.thinkingContent += thinkPart;
-                                        } else if (chunk.startsWith('__SEARCH_RESULTS__:') || chunk.startsWith('__METADATA__:')) {
-                                            const marker = chunk.startsWith('__METADATA__:') ? '__METADATA__:' : '__SEARCH_RESULTS__:';
-                                            const mData = JSON.parse(chunk.substring(marker.length));
-                                            
-                                            // As requested: Only show web_search results in sources
-                                            if (marker === '__SEARCH_RESULTS__:') {
-                                                botMsg.metadata = { web_search: mData };
-                                            } else if (mData.web_search) {
-                                                botMsg.metadata = { web_search: mData.web_search };
-                                            }
-                                        } else {
-                                            // If we get actual content, stop showing "thinking" header as active
-                                            if (botMsg.isThinking && !chunk.startsWith('__')) {
-                                                // We don't necessarily stop "thinking" but we might want to collapse or mark as done if content starts
-                                                // However, usually think and content are separated.
-                                            }
-                                            botMsg.text += chunk;
-                                            botMsg.html = window.renderMd(botMsg.text);
-                                        }
-                                    }
-                                    
-                                    if (data.done) {
-                                        botMsg.status = "";
-                                        botMsg.isThinking = false;
-                                    }
-
-                                    this.scrollDown();
-                                } catch (e) {
-                                    console.warn("Parse error", e, trimmedLine);
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        botMsg.text = 'Lỗi kết nối mạng.';
-                        botMsg.html = botMsg.text;
-                    }
-                }
+            if (OneSignal.User.PushSubscription.id) {
+                syncOneSignalId(OneSignal.User.PushSubscription.id);
             }
-        }
+        });
+
+        // Initialize Global Notification Manager
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof NotificationManager !== 'undefined') {
+                NotificationManager.init(window.is_staff);
+            }
+        });
     </script>
+
+
+    <!-- AI Assistant -->
+    {% include 'ai_chat/chat_widget_inline.html' %}
 
     {% block extra_js %}{% endblock %}
 </body>

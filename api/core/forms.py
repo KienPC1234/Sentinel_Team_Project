@@ -25,9 +25,10 @@ from .models import LearnScenario
 class LearnScenarioForm(forms.ModelForm):
     class Meta:
         model = LearnScenario
-        fields = ['title', 'description', 'content']
+        fields = ['title', 'article', 'description', 'content']
         widgets = {
             'title': forms.TextInput(attrs={'class': 'admin-form-input', 'placeholder': 'Tiêu đề kịch bản...'}),
+            'article': forms.Select(attrs={'class': 'admin-form-input'}),
             'description': forms.Textarea(attrs={'class': 'admin-form-input', 'rows': 3, 'placeholder': 'Mô tả ngắn về kịch bản...'}),
-            'content': forms.Textarea(attrs={'class': 'admin-form-input', 'rows': 10, 'placeholder': 'JSON content for scenario flow...'}),
+            'content': forms.Textarea(attrs={'id': 'editor', 'placeholder': 'JSON content for scenario flow...'}),
         }

@@ -257,6 +257,10 @@ class ChatAIStreamView(APIView):
                 
                 action = classification.get('suggested_action', 'NONE')
                 
+                # Ensure session is refreshed for the final title
+                if agent.session:
+                    await sync_to_async(agent.session.refresh_from_db)()
+
                 yield f"data: {json.dumps({
                     'action_suggested': action, 
                     'session_id': str(agent.session.id) if agent.session else None,
