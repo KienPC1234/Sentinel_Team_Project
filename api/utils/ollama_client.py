@@ -32,6 +32,7 @@ DEFAULT_MODEL = getattr(settings, 'LLM_MODEL', 'neural-chat')
 SMALL_MODEL = getattr(settings, 'SMALL_MODEL', DEFAULT_MODEL)
 LLM_TEMPERATURE = getattr(settings, 'LLM_TEMPERATURE', 0.3)
 LLM_MAX_TOKENS = getattr(settings, 'LLM_MAX_TOKENS', 1800)
+DEBUG_LLM = getattr(settings, 'DEBUG_LLM', True)  # Default True for ShieldCall Debugging
 
 # ---------------------------------------------------------------------------
 # Custom tool schemas for the search agent.
@@ -99,8 +100,7 @@ def _tool_lookup_scamwave(query: str):
         A dict with title and content fields containing matching scam reports
         and listings from the ScamWave database.
     """
-    encoded = query.replace(' ', '+')
-    return web_fetch_url(f"https://scamwave.com/scammers/?s={encoded}")
+    return lookup_scamwave(query)
 
 
 def _tool_lookup_trustpilot(domain: str):
@@ -145,7 +145,6 @@ def _tool_lookup_tranco(domain: str):
 WEB_TOOLS: Dict[str, Any] = {
     '_tool_web_search': _tool_web_search,
     '_tool_web_fetch': _tool_web_fetch,
-    '_tool_lookup_scamadviser': _tool_lookup_scamadviser,
     '_tool_lookup_scamwave': _tool_lookup_scamwave,
     '_tool_lookup_trustpilot': _tool_lookup_trustpilot,
     '_tool_lookup_sitejabber': _tool_lookup_sitejabber,
@@ -275,6 +274,61 @@ if OLLAMA_API_KEY:
 
 client = ollama.Client(**client_kwargs)
 
+# ---------------------------------------------------------------------------
+# Retry helper — wraps client.chat() with automatic retries on 503 / network
+# errors.  Max 3 attempts with exponential backoff (2s, 4s).
+# ---------------------------------------------------------------------------
+import time as _time
+
+def _chat_with_retry(max_retries: int = 4, **chat_kwargs):
+    """Call client.chat() with retry on 503 / transient errors."""
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            return client.chat(**chat_kwargs)
+        except Exception as e:
+            last_exc = e
+            err_str = str(e)
+            # Match 503, 502, 504 (timeout), 429 (rate limit)
+            is_retryable = any(tok in err_str for tok in ['503', '502', '504', '429', 'Service Unavailable',
+                                                           'temporarily unavailable', 'overloaded',
+                                                           'Connection', 'Timeout', 'remote end closed'])
+            if is_retryable and attempt < max_retries:
+                wait = 2 ** attempt  # 2s, 4s, 8s
+                logger.warning(f"[Ollama] Attempt {attempt}/{max_retries} failed ({err_str[:120]}), "
+                               f"retrying in {wait}s...")
+                _time.sleep(wait)
+                continue
+            
+            logger.error(f"[Ollama] Final attempt {attempt} failed: {err_str}")
+            raise last_exc
+
+
+def _chat_stream_with_retry(max_retries: int = 4, **chat_kwargs):
+    """Call client.chat(stream=True) with retry on 503 / transient errors.
+    Returns the streaming iterator."""
+    chat_kwargs['stream'] = True
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            return client.chat(**chat_kwargs)
+        except Exception as e:
+            last_exc = e
+            err_str = str(e)
+            is_retryable = any(tok in err_str for tok in ['503', '502', '504', '429', 'Service Unavailable',
+                                                           'temporarily unavailable', 'overloaded',
+                                                           'Connection', 'Timeout', 'remote end closed'])
+            if is_retryable and attempt < max_retries:
+                wait = 2 ** attempt
+                logger.warning(f"[Ollama] Stream attempt {attempt}/{max_retries} failed ({err_str[:120]}), "
+                               f"retrying in {wait}s...")
+                _time.sleep(wait)
+                continue
+            
+            logger.error(f"[Ollama] Final stream attempt {attempt} failed: {err_str}")
+            raise last_exc
+
+
 # Specialized logger for LLM traffic
 llm_logger = logging.getLogger('pkv.llm')
 llm_logger.setLevel(logging.INFO)
@@ -332,6 +386,10 @@ def filter_tool_call_artifacts(text: str) -> str:
         return ""
 
     cleaned = text
+
+    # Remove XML-like empty tool blocks emitted by some models.
+    cleaned = re.sub(r'<\s*tools\s*>\s*<\s*/\s*tools\s*>', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'</?\s*tools\s*>', '', cleaned, flags=re.IGNORECASE)
 
     # Remove compact/raw tool call JSON objects (single or multiple objects).
     cleaned = re.sub(
@@ -475,7 +533,7 @@ def generate_response(
     max_tokens: int = None,
     tools: list = None,
     tool_dispatch: Dict[str, Any] = None,
-    format_schema: dict = None,  # NEW: Structured output schema
+    format_schema: dict = None,
     max_loop_iterations: int = 15,
 ) -> Optional[str]:
     """
@@ -521,7 +579,7 @@ def generate_response(
             if format_schema:
                 chat_kwargs['format'] = format_schema
 
-            response = client.chat(**chat_kwargs)
+            response = _chat_with_retry(**chat_kwargs)
             assistant_msg = message_to_dict(response.message)
             messages.append(assistant_msg)
 
@@ -565,14 +623,13 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None) -
     messages.append({'role': 'user', 'content': prompt})
 
     try:
-        stream = client.chat(
+        stream = _chat_stream_with_retry(
             model=model,
             messages=messages,
             options={
                 'temperature': LLM_TEMPERATURE,
                 'num_predict': LLM_MAX_TOKENS,
             },
-            stream=True
         )
 
         is_thinking = False
@@ -620,20 +677,73 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None) -
         logger.error(f"Error in Ollama stream: {e}")
         yield f"Lỗi kết nối AI: {str(e)}"
 
-def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None) -> Generator[str, None, None]:
+
+# ---------------------------------------------------------------------------
+# AI Assistant tool wrappers (parameter names match TOOLS definitions)
+# ---------------------------------------------------------------------------
+
+def _assistant_scan_phone(phone: str):
+    """Scan a phone number: check ScamWave then web search for reports."""
+    results = {}
+    sw = _tool_lookup_scamwave(query=phone)
+    if sw and sw.get('content'):
+        results['scamwave'] = sw['content'][:2000]
+    ws = web_search_query(f"lừa đảo số điện thoại {phone} scam report", max_results=3)
+    if ws:
+        results['web_results'] = ws
+    return results or f"Không tìm thấy báo cáo lừa đảo về số {phone}."
+
+
+def _assistant_scan_url(url: str):
+    """Scan a URL/domain: check ScamAdviser, Trustpilot, Tranco and web search."""
+    clean = re.sub(r'^https?://', '', url).split('/')[0].strip()
+    results = {}
+    sa = lookup_scamadviser(clean)
+    if sa and sa.get('content'):
+        results['scamadviser'] = sa['content'][:2000]
+    tp = _tool_lookup_trustpilot(domain=clean)
+    if tp and tp.get('content'):
+        results['trustpilot'] = tp['content'][:2000]
+    tr = lookup_tranco(clean)
+    if tr:
+        results['tranco'] = tr
+    ws = web_search_query(f"{clean} scam lừa đảo review", max_results=3)
+    if ws:
+        results['web_results'] = ws
+    return results or f"Không tìm thấy thông tin rủi ro về {url}."
+
+
+def _assistant_scan_bank_account(account_number: str, bank_name: str = ""):
+    """Scan a bank account number for fraud reports on ScamWave + web."""
+    query = f"{account_number} {bank_name}".strip()
+    results = {}
+    sw = _tool_lookup_scamwave(query=query)
+    if sw and sw.get('content'):
+        results['scamwave'] = sw['content'][:2000]
+    ws = web_search_query(f"lừa đảo tài khoản ngân hàng {query} scam", max_results=3)
+    if ws:
+        results['web_results'] = ws
+    return results or f"Không tìm thấy báo cáo lừa đảo về tài khoản {account_number}."
+
+
+def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None, debug: bool = False) -> Generator[str, None, None]:
     """
     Improved streaming chat for ShieldCall AI.
     Handles multi-turn tool loops, thinking streaming, and search result yielding.
     """
+    if debug or DEBUG_LLM:
+        yield f"__DEBUG_MODEL__:{model or DEFAULT_MODEL}"
+        # Small summary of history
+        yield f"__DEBUG_HISTORY_COUNT__:{len(messages)}"
     model = model or DEFAULT_MODEL
     tool_dispatch = tool_dispatch or {}
     # Combine with standard tools
     all_dispatch = {
         'web_search': web_search_query,
         'web_fetch': web_fetch_url,
-        'scan_phone': _tool_lookup_scamwave,
-        'scan_url': _tool_lookup_scamadviser,
-        'scan_bank_account': _tool_lookup_scamwave,
+        'scan_phone': _assistant_scan_phone,
+        'scan_url': _assistant_scan_url,
+        'scan_bank_account': _assistant_scan_bank_account,
     }
     all_dispatch.update(tool_dispatch)
 
@@ -655,7 +765,7 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
             if TOOLS:
                 chat_params['tools'] = TOOLS
 
-            stream = client.chat(**chat_params)
+            stream = _chat_stream_with_retry(**chat_params)
             
             current_tool_calls = []
             current_content = []
@@ -725,9 +835,17 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         if tool_name == 'web_search' and isinstance(result, list):
                             yield f"__SEARCH_RESULTS__:{json.dumps(result)}"
                         
-                        result_str = json.dumps(result, ensure_ascii=False)
+                        if result is None:
+                            result_str = "Không có kết quả."
+                        elif isinstance(result, (dict, list)):
+                            result_str = json.dumps(result, ensure_ascii=False)
+                            if len(result_str) > 8000:
+                                result_str = result_str[:8000] + "..."
+                        else:
+                            result_str = str(result)[:8000]
                     except Exception as e:
-                        result_str = f"Error: {str(e)}"
+                        logger.error(f"Tool {tool_name} execution error: {e}")
+                        result_str = f"Lỗi khi thực thi công cụ: {str(e)}"
                 else:
                     result_str = f"Tool '{tool_name}' not found."
 
@@ -742,8 +860,10 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
             continue
 
         except Exception as e:
-            logger.error(f"Error in stream_chat_ai: {e}")
+            logger.error(f"Error in stream_chat_ai: {e}", exc_info=True)
             yield f"Error: {str(e)}"
+            if debug or DEBUG_LLM:
+                yield f"__DEBUG_ERROR__:{str(e)}"
             break
 
 def classify_message(message: str, model: str = None) -> Dict[str, Any]:
@@ -758,7 +878,9 @@ Tin nhắn cần phân loại: {message}"""
     response = generate_response(prompt, model, tools=[], format_schema=CLASSIFICATION_SCHEMA)
 
     if response:
-        return json.loads(response)
+        parsed = _extract_json(response)
+        if parsed:
+            return parsed
 
     return {
         "classification": "unknown",
@@ -813,30 +935,98 @@ def web_search_query(query: str, max_results: int = 5) -> Optional[List[Dict]]:
 
 def web_fetch_url(url: str) -> Optional[Dict]:
     """
-    Fetch a single web page via Ollama's web fetch REST API.
-    (https://ollama.com/api/web_fetch)
-    Requires OLLAMA_API_KEY in Django settings.
+    Fetch a web page. Primary: Ollama web_fetch API. Fallback: local requests + BS4.
 
     Returns a dict with keys: title, content, links.
     """
     import requests as _requests
-    try:
-        resp = _requests.post(
-            f"{_OLLAMA_WEB_API_BASE}/web_fetch",
-            headers=_web_api_headers(),
-            json={"url": url},
-            timeout=20,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return {
-            'title': data.get('title', ''),
-            'content': data.get('content', ''),
-            'links': data.get('links', []),
-        }
-    except Exception as e:
-        logger.error(f"web_fetch_url error: {e}")
+    from bs4 import BeautifulSoup
+
+    if not url:
         return None
+
+    target_url = url.strip()
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', target_url):
+        target_url = f"https://{target_url}"
+
+    # Block requests to Ollama local server (prevent SSRF)
+    blocked = ('localhost:11434', '127.0.0.1:11434')
+    if any(b in target_url for b in blocked):
+        logger.warning(f"web_fetch_url blocked internal URL: {target_url}")
+        return None
+    
+    browser_headers = {
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/126.0.0.0 Safari/537.36'
+        ),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+    }
+
+    def _decode_response_text(resp):
+        text = resp.text or ''
+        if any(marker in text for marker in ('Ã', 'Â', 'á»', '�')):
+            try:
+                enc = resp.apparent_encoding or 'utf-8'
+                text = resp.content.decode(enc, errors='replace')
+            except Exception:
+                pass
+        return text
+
+    def _extract_payload(resp, requested_url):
+        html = _decode_response_text(resp)
+        soup = BeautifulSoup(html, 'html.parser')
+
+        for tag in soup(['script', 'style', 'noscript', 'iframe']):
+            tag.decompose()
+
+        title_tag = soup.find('title')
+        title = title_tag.get_text(' ', strip=True) if title_tag else ''
+
+        content = soup.get_text(separator='\n', strip=True)
+        if len(content) > 12000:
+            content = content[:12000]
+
+        links = []
+        for a in soup.find_all('a', href=True):
+            href = (a.get('href') or '').strip()
+            if not href:
+                continue
+            absolute = _requests.compat.urljoin(resp.url or requested_url, href)
+            if absolute not in links:
+                links.append(absolute)
+            if len(links) >= 30:
+                break
+
+        return {
+            'title': title,
+            'content': content,
+            'links': links,
+        }
+
+    try:
+        resp = _requests.get(target_url, headers=browser_headers, timeout=20, verify=True, allow_redirects=True)
+        resp.raise_for_status()
+        payload = _extract_payload(resp, target_url)
+        if payload.get('content'):
+            return payload
+    except Exception as e:
+        logger.warning(f"web_fetch_url local https failed ({target_url}): {e}")
+
+    if target_url.startswith('https://'):
+        try:
+            http_url = target_url.replace('https://', 'http://', 1)
+            resp = _requests.get(http_url, headers=browser_headers, timeout=20, verify=False, allow_redirects=True)
+            resp.raise_for_status()
+            payload = _extract_payload(resp, http_url)
+            if payload.get('content'):
+                return payload
+        except Exception as e:
+            logger.warning(f"web_fetch_url local http failed ({target_url}): {e}")
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1024,13 +1214,88 @@ def lookup_scamwave(query: str) -> Optional[Dict]:
         Dict with keys ``source``, ``query_url``, ``title``, ``content``, and
         ``links``; or ``None`` on failure.
     """
-    encoded = query.replace(' ', '+')
-    url = f"{SCAM_DB_URLS['scamwave']}?s={encoded}"
-    result = web_fetch_url(url)
-    if result:
-        result['source'] = 'scamwave'
-        result['query_url'] = url
-    return result
+    import requests
+    from bs4 import BeautifulSoup
+
+    base_url = SCAM_DB_URLS['scamwave']
+    clean_query = (query or '').strip()
+    if not clean_query:
+        return None
+
+    headers = {
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/126.0.0.0 Safari/537.36'
+        ),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+    }
+
+    try:
+        resp = requests.get(base_url, headers=headers, timeout=20)
+        resp.raise_for_status()
+
+        html = resp.text or ''
+        soup = BeautifulSoup(html, 'html.parser')
+        script_tag = soup.find('script', id='tableData')
+        if not script_tag or not script_tag.string:
+            return {
+                'source': 'scamwave',
+                'query_url': base_url,
+                'title': f"ScamWave lookup for {clean_query}",
+                'content': 'Không tìm thấy dữ liệu bảng ScamWave (script#tableData).',
+                'links': [base_url],
+            }
+
+        payload = json.loads(script_tag.string.strip())
+        columns = payload.get('columns', []) or []
+        data_rows = payload.get('data', []) or []
+
+        query_l = clean_query.lower()
+        query_compact = re.sub(r'[^a-z0-9]', '', query_l)
+
+        matches = []
+        for row in data_rows:
+            if not isinstance(row, list):
+                continue
+            row_text = ' | '.join(str(cell) for cell in row if cell is not None)
+            row_l = row_text.lower()
+            row_compact = re.sub(r'[^a-z0-9]', '', row_l)
+            if query_l in row_l or (query_compact and query_compact in row_compact):
+                matches.append(row)
+
+        if matches:
+            max_preview = 25
+            preview = matches[:max_preview]
+            lines = [
+                f"ScamWave tìm thấy {len(matches)} kết quả phù hợp cho '{clean_query}'.",
+                f"Columns: {', '.join(str(c) for c in columns)}",
+                "",
+                "Kết quả nổi bật:",
+            ]
+            for row in preview:
+                if columns and len(columns) == len(row):
+                    cells = [f"{col}={val}" for col, val in zip(columns, row)]
+                    lines.append(f"- {'; '.join(cells)}")
+                else:
+                    lines.append(f"- {' | '.join(str(v) for v in row)}")
+            if len(matches) > max_preview:
+                lines.append(f"- ... và {len(matches) - max_preview} kết quả khác")
+            content = '\n'.join(lines)
+        else:
+            content = f"Không tìm thấy kết quả phù hợp cho '{clean_query}' trong dữ liệu ScamWave."
+
+        return {
+            'source': 'scamwave',
+            'query_url': base_url,
+            'title': f"ScamWave lookup for {clean_query}",
+            'content': content,
+            'links': [base_url],
+        }
+    except Exception as e:
+        logger.error(f"lookup_scamwave error: {e}")
+        return None
 
 
 def lookup_trustpilot(domain: str) -> Optional[Dict]:
@@ -1135,7 +1400,7 @@ def search_agent(
     think=False,
     max_iterations: int = 10,
     max_context_chars: int = 8000,
-) -> Optional[str]:
+) -> Optional[Dict]:
     """
     Agentic search loop that gives the model access to web_search and web_fetch
     tools, following the pattern from https://docs.ollama.com/capabilities/web-search.
@@ -1147,17 +1412,13 @@ def search_agent(
     appending the useless assistant message to history — preventing context
     overflow from accumulated thinking text.
 
-    Args:
-        query:             The user's question or task.
-        model:             Ollama model to use (defaults to DEFAULT_MODEL).
-        think:             Passed directly as the ``think`` kwarg to client.chat
-                           (bool or 'low'/'medium'/'high').
-        max_iterations:    Safety cap on total loop iterations.
-        max_context_chars: Maximum characters of a single tool result kept in
-                           the message history.
+    Returns:
+        A dict with keys: ``answer`` (str or None) and ``searched_urls`` (list
+        of URLs the agent interacted with during tool calls).
     """
     model = model or DEFAULT_MODEL
     messages: List[Dict] = [{'role': 'user', 'content': query}]
+    searched_urls: List[str] = []
 
     agent_tools = {
         '_tool_web_search': _tool_web_search,
@@ -1197,7 +1458,7 @@ def search_agent(
             if think:
                 chat_kwargs['think'] = think
 
-            response = client.chat(**chat_kwargs)
+            response = _chat_with_retry(**chat_kwargs)
             msg = response.message
             messages.append(message_to_dict(msg))
 
@@ -1211,6 +1472,19 @@ def search_agent(
                     args = tool_call.function.arguments or {}
                     logger.debug(f"[search_agent iter={iteration}]   → tool '{tool_name}' "
                                 f"args={json.dumps(args, ensure_ascii=False)[:200]}")
+
+                    # Track URLs for frontend display
+                    if tool_name == '_tool_web_fetch' and args.get('url'):
+                        _u = args['url'].strip()
+                        if _u and _u not in searched_urls:
+                            searched_urls.append(_u)
+                    elif tool_name == '_tool_web_search' and args.get('query'):
+                        searched_urls.append(f"search:{args['query']}")
+                    elif tool_name.startswith('_tool_lookup_') and (args.get('domain') or args.get('query')):
+                        _lbl = tool_name.replace('_tool_lookup_', '')
+                        _val = args.get('domain') or args.get('query', '')
+                        searched_urls.append(f"{_lbl}:{_val}")
+
                     tool_func = agent_tools.get(tool_name)
                     if tool_func:
                         try:
@@ -1237,18 +1511,18 @@ def search_agent(
                 if not filtered:
                     continue
                 _log_llm(query, filtered)
-                return filtered
+                return {'answer': filtered, 'searched_urls': searched_urls}
             else:
                 # Thinking-only turn: discard (do NOT append to history) and retry
                 continue
 
         logger.warning(f"[search_agent] Reached max_iterations={max_iterations} "
                        f"without a final answer.")
-        return None
+        return {'answer': None, 'searched_urls': searched_urls}
 
     except Exception as e:
         logger.error(f"[search_agent] error: {e}", exc_info=True)
-        return None
+        return {'answer': None, 'searched_urls': searched_urls}
 
 
 def _extract_scam_subject(text: str) -> str:
@@ -1280,6 +1554,116 @@ def _extract_scam_subject(text: str) -> str:
     return text[:120]
 
 
+def _clean_db_snippet(db_name: str, content: str) -> str:
+    """
+    Clean and summarize raw content from scam databases to remove noise
+    (UI artifacts, social links, generic footers) and return meaningful signals.
+    """
+    if not content or len(content) < 50:
+        return ""
+
+    lines = [l.strip() for l in content.splitlines() if l.strip()]
+    cleaned_lines = []
+    
+    # Generic noise patterns to skip
+    skip_patterns = [
+        r'join on', r'write a review', r'latest communities', r'fighting ai scams',
+        r'is this your business', r'review guidelines', r'read undefined customer reviews',
+        r'smartcustomer', r'incentives or pay to remove', r'be the first to',
+        r'facebook', r'reddit', r'twitter', r'instagram'
+    ]
+    
+    for line in lines:
+        if any(re.search(p, line, re.IGNORECASE) for p in skip_patterns):
+            continue
+        cleaned_lines.append(line)
+
+    if not cleaned_lines:
+        return ""
+
+    # Re-join and take a meaningful snippet
+    cleaned_text = "\n".join(cleaned_lines[:15])
+    
+    # Heuristic for "empty" database results
+    if "0 reviews" in cleaned_text and "0 stars" in cleaned_text:
+        return ""
+    if len(cleaned_text) < 30:
+        return ""
+        
+    return cleaned_text
+
+
+def _sanitize_web_context(raw_context: str) -> str:
+    """
+    Normalize structured OSINT context from the agent:
+    - remove malformed headings like "[Nguồn: X] cho 'domain'"
+    - deduplicate repeated sources
+    - keep concise, structured bullets for frontend rendering
+    """
+    if not raw_context:
+        return ""
+
+    text = filter_tool_call_artifacts(raw_context).strip()
+    if not text:
+        return ""
+
+    if re.fullmatch(r'(?:<\s*tools\s*>\s*<\s*/\s*tools\s*>\s*)+', text, flags=re.IGNORECASE):
+        return ""
+
+    section_pattern = re.compile(r'###\s+\[(.*?)\]\s*\n([\s\S]*?)(?=\n###\s+\[|$)', re.IGNORECASE)
+    sections = section_pattern.findall(text)
+    if not sections:
+        return text
+
+    normalized_sections = {}
+    section_order = []
+
+    for raw_title, raw_body in sections:
+        title = (raw_title or '').strip()
+        body = (raw_body or '').strip()
+        if not title or not body:
+            continue
+
+        title = re.sub(r'^Nguồn\s*:\s*', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\]\s*cho\s*[\'\"][^\'\"]+[\'\"]\s*$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s+cho\s*[\'\"][^\'\"]+[\'\"]\s*$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s+', ' ', title).strip(' []')
+        if not title:
+            continue
+
+        structured = ('**Đánh giá' in body or '**Đánh giá/Điểm số' in body) and ('**Chi tiết' in body)
+        if not structured:
+            compact = re.sub(r'\s+', ' ', body).strip()
+            lower_compact = compact.lower()
+            if 'no ranking data found' in lower_compact or 'domain not found in top 1m' in lower_compact:
+                body = (
+                    "- **Đánh giá/Điểm số**: Không có dữ liệu\n"
+                    "- **Chi tiết quan trọng**: Không tìm thấy dữ liệu xếp hạng (có thể ít phổ biến)."
+                )
+            else:
+                body = (
+                    "- **Đánh giá/Điểm số**: Không có dữ liệu\n"
+                    "- **Chi tiết quan trọng**: Không tìm thấy thông tin cụ thể."
+                )
+            structured = True
+
+        if title not in normalized_sections:
+            section_order.append(title)
+            normalized_sections[title] = {'body': body, 'structured': structured}
+        else:
+            # Prefer structured/richer section over noisy duplicate
+            existing = normalized_sections[title]
+            if structured and not existing['structured']:
+                normalized_sections[title] = {'body': body, 'structured': structured}
+
+    blocks = []
+    for title in section_order:
+        body = normalized_sections[title]['body']
+        blocks.append(f"### [{title}]\n{body}")
+
+    return "\n\n".join(blocks).strip()
+
+
 def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = False) -> Dict[str, Any]:
     """
     Analyze text for scam indicators, optionally enriching with web search.
@@ -1287,18 +1671,19 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
     When ``use_web_search`` is ``True`` *and* ``OLLAMA_API_KEY`` is configured,
     the function performs two complementary enrichment steps:
 
-    1. **Direct database lookups** — queries ScamAdviser and ScamWave directly
-       for the primary subject (domain, phone, account) extracted from *text*.
-       These lookups run in parallel with the agent call and do not consume
-       extra agent iterations.
+    1. **Direct database lookups** — queries ScamWave, Trustpilot, Sitejabber,
+       and Tranco directly for the primary subject (domain, phone, account)
+       extracted from *text*.  These lookups run in parallel with the agent
+       call and do not consume extra agent iterations.
 
     2. **Search-agent enrichment** — runs the agentic loop with an extended
-       tool set that includes ``_tool_lookup_scamadviser`` and
-       ``_tool_lookup_scamwave`` so the model can proactively consult the same
-       databases for any additional entities it discovers.
+       tool set that includes ``_tool_lookup_scamwave`` and other lookup tools
+       so the model can proactively consult the same databases for any
+       additional entities it discovers.
     """
     web_context = ""
     web_search_used = False
+    agent_searched_urls: List[str] = []
     db_context_parts: List[str] = []
 
     if use_web_search and OLLAMA_API_KEY:
@@ -1309,7 +1694,6 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         logger.debug(f"analyze_text_for_scam: extracted subject for DB lookup: {subject!r}")
 
         for db_name, lookup_fn in [
-            ('ScamAdviser', lookup_scamadviser),
             ('ScamWave',    lookup_scamwave),
             ('Trustpilot',  lookup_trustpilot),
             ('Sitejabber',  lookup_sitejabber),
@@ -1318,9 +1702,10 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
             try:
                 db_result = lookup_fn(subject)
                 if db_result and db_result.get('content'):
-                    snippet = db_result['content'][:1200]
+                    raw_content = db_result.get('content', '')
+                    snippet = _clean_db_snippet(db_name, raw_content) or raw_content[:700]
                     db_context_parts.append(
-                        f"### Kết quả {db_name} cho '{subject}'\n{snippet}"
+                        f"### [Nguồn: {db_name}] cho '{subject}'\n{snippet}"
                     )
                     logger.debug(
                         f"analyze_text_for_scam: {db_name} returned "
@@ -1330,6 +1715,10 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                     logger.debug(f"analyze_text_for_scam: {db_name} returned no content")
             except Exception as exc:
                 logger.warning(f"analyze_text_for_scam: {db_name} lookup failed ({exc})")
+
+        # Fallback if ALL databases are empty
+        if not db_context_parts:
+            db_context_parts.append(f"Không tìm thấy báo cáo cụ thể về '{subject}' trong các cơ sở dữ liệu lừa đảo uy tín (ScamWave, Trustpilot, Sitejabber).")
 
         # ------------------------------------------------------------------
         # Step 2: Agentic web-search enrichment
@@ -1342,19 +1731,20 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                 query=(
                     f"Kiểm tra xem trang/nội dung sau có phải là lừa đảo không: {search_query}\n"
                     "Sử dụng các công cụ theo thứ tự sau:\n"
-                    f"1. _tool_lookup_scamadviser — kiểm tra độ tin cậy của tên miền chính trong văn bản\n"
-                    f"2. _tool_lookup_scamwave    — tìm báo cáo lừa đảo về số điện thoại/tài khoản/tên trong văn bản\n"
-                    f"3. _tool_lookup_trustpilot  — kiểm tra điểm số và đánh giá người dùng trên Trustpilot\n"
-                    f"4. _tool_lookup_sitejabber  — kiểm tra điểm số và đánh giá người dùng trên Sitejabber\n"
-                    f"5. _tool_lookup_tranco      — kiểm tra thứ hạng mức độ phổ biến (Tranco Rank). Xếp hạng càng nhỏ (vd < 1000) càng uy tín.\n"
-                    "6. _tool_web_search         — tìm đánh giá trên Reddit, v.v. (dùng query 'site:reddit.com <domain>', ...)\n"
+                    f"1. _tool_lookup_scamwave    — tìm báo cáo lừa đảo về số điện thoại/tài khoản/tên trong văn bản\n"
+                    f"2. _tool_lookup_trustpilot  — kiểm tra điểm số và đánh giá người dùng trên Trustpilot\n"
+                    f"3. _tool_lookup_sitejabber  — kiểm tra điểm số và đánh giá người dùng trên Sitejabber\n"
+                    f"4. _tool_lookup_tranco      — kiểm tra thứ hạng mức độ phổ biến (Tranco Rank). Xếp hạng càng nhỏ (vd < 1000) càng uy tín.\n"
+                    "5. _tool_web_search         — tìm đánh giá trên Reddit, v.v. (dùng query 'site:reddit.com <domain>', ...)\n"
                     "QUAN TRỌNG: Tập trung vào việc kiểm tra chính trang/nội dung được cung cấp có phải là lừa đảo không.\n"
+                    "KHÔNG được sao chép nguyên văn nội dung thô từ tool (menu, nút bấm, footer, danh sách link).\n"
+                    "KHÔNG xuất block có dạng '### [Nguồn: ...] cho ...'. Chỉ dùng '### [Tên Nguồn]'.\n"
                     "Trình bày kết quả theo định dạng CHÍNH XÁC sau để hệ thống có thể phân tách:\n"
                     "### [Tên Nguồn]\n"
                     "- **Đánh giá/Điểm số**: ...\n"
                     "- **Chi tiết quan trọng**: Tóm tắt ngắn gọn nhất.\n\n"
                     "Ví dụ:\n"
-                    "### [ScamAdviser]\n"
+                    "### [Trustpilot]\n"
                     "- **Đánh giá**: An toàn\n"
                     "- **Chi tiết**: ...\n\n"
                     "### [Reddit]\n"
@@ -1368,20 +1758,34 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                 max_context_chars=8000,
             )
 
-            if agent_answer:
-                cleaned_agent_answer = filter_tool_call_artifacts(agent_answer).strip()
-                if cleaned_agent_answer:
-                    web_context = cleaned_agent_answer
-                    web_search_used = True
-                    logger.debug(
-                        f"analyze_text_for_scam: web context ({len(web_context)} chars): "
-                        f"{web_context[:150]}..."
-                    )
+            if agent_answer and isinstance(agent_answer, dict):
+                agent_text = agent_answer.get('answer', '') or ''
+                agent_searched_urls = agent_answer.get('searched_urls', []) or []
+                if agent_text:
+                    cleaned_agent_answer = filter_tool_call_artifacts(agent_text).strip()
+                    if cleaned_agent_answer:
+                        sanitized_context = _sanitize_web_context(cleaned_agent_answer)
+                        if sanitized_context:
+                            web_context = sanitized_context
+                            web_search_used = True
+                            logger.debug(
+                                f"analyze_text_for_scam: web context ({len(web_context)} chars): "
+                                f"{web_context[:150]}..."
+                            )
+                        else:
+                            logger.warning(
+                                "analyze_text_for_scam: agent output had only tool artifacts/empty context; ignoring web_context."
+                            )
+                    else:
+                        logger.warning(
+                            "analyze_text_for_scam: agent output contained only tool-call artifacts; "
+                            "skipping web_context injection."
+                        )
                 else:
-                    logger.warning(
-                        "analyze_text_for_scam: agent output contained only tool-call artifacts; "
-                        "skipping web_context injection."
-                    )
+                    logger.debug("analyze_text_for_scam: search_agent returned no answer text.")
+            elif agent_answer:
+                # Legacy fallback: if search_agent somehow returns a string
+                logger.warning(f"analyze_text_for_scam: search_agent returned unexpected type {type(agent_answer).__name__}")
         except Exception as exc:
             logger.warning(
                 f"analyze_text_for_scam: search_agent enrichment failed ({exc}), "
@@ -1428,12 +1832,11 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"1. TRANG/NỘI DUNG CHÍNH THỨC/AN TOÀN: Nếu đây là trang chính thức của một tổ chức uy tín, đánh giá là an toàn.\n"
         f"2. TRANG LỪA ĐẢO: Nếu trang này giả mạo, lừa đảo, hoặc có dấu hiệu gian lận, đánh giá rủi ro cao.\n"
         f"3. SỬ DỤNG THÔNG TIN TÌNH BÁO: Dựa vào kết quả từ ScamAdviser, ScamWave và các báo cáo để đưa ra kết luận.\n\n"
-        f"Lưu ý: 'indicators' chứa những dấu hiệu lừa đảo được tìm thấy, nếu thông tin không liên quan thì không ghi vào.\n"
-        f"HƯỚNG DẪN cho 'explanation':\n"
-        f"1. Viết bằng TIẾNG VIỆT, dành cho người dùng không chuyên kỹ thuật.\n"
-        f"2. Nếu AN TOÀN: Chỉ nêu đây là trang chính thức/hợp lệ của tổ chức.\n"
-        f"3. Nếu LỪA ĐẢO: Giải thích rõ tại sao (giả mạo thương hiệu, yêu cầu thông tin nhạy cảm, v.v.).\n"
-        f"4. Tập trung vào CHÍNH TRANG này, không nhắc đến việc tìm kiếm trang giả mạo khác.\n\n"
+        f"QUY TẮC CHO 'explanation':\n"
+        f"1. Tóm tắt nội dung chính từ các nguồn tình báo (web_section) một cách ngắn gọn, súc tích.\n"
+        f"2. Loại bỏ các thông tin rác từ giao diện web (nếu có trong dữ liệu thô) như 'Read Reviews', 'Log in', 'Follow on Facebook'.\n"
+        f"3. Nếu nguồn tình báo KHÔNG có thông tin liên quan, chỉ ghi 'Không tìm thấy dữ liệu từ các nguồn uy tín'.\n"
+        f"4. Viết bằng TIẾNG VIỆT, tập trung vào kết luận rủi ro.\n\n"
         f"Nội dung cần phân tích:\n{text_snippet}"
     )
 
@@ -1443,23 +1846,106 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
 
     db_sources_consulted = ['scamadviser', 'scamwave', 'trustpilot', 'sitejabber', 'tranco'] if db_context_parts else []
 
-    if response:
-        result = json.loads(response)
-        if result:
-            result['web_context'] = web_context
-            result['web_search_used'] = web_search_used
-            result['db_sources_consulted'] = db_sources_consulted
-            return result
-        logger.warning("analyze_text_for_scam: _extract_json returned None — raw response: %s",
-                       response[:300])
+    # Frontend should display only structured intelligence context,
+    # not raw database page dumps (which can be noisy).
+    combined_web_context = (web_context or '').strip()
+    if not combined_web_context and db_context_parts:
+        combined_web_context = (
+            "### [Tổng hợp nguồn dữ liệu]\n"
+            "- **Đánh giá**: Không có dữ liệu tình báo trực tuyến rõ ràng\n"
+            "- **Chi tiết**: Không tìm thấy thông tin cụ thể từ các nguồn đã kiểm tra."
+        )
+
+    retry_notice = ''
+    retry_count = 0
+    parsed_result = _extract_json(response) if response else None
+
+    if response and not parsed_result:
+        retry_notice = "⏳ AI cần thêm chút thời gian để chuẩn hóa kết quả, vui lòng chờ trong giây lát."
+        logger.warning(
+            "analyze_text_for_scam: JSON parse failed on first pass; starting repair retry. Raw response: %s",
+            response[:300],
+        )
+        retry_count += 1
+        repair_prompt = (
+            "Bạn là bộ sửa JSON. Hãy chuyển nội dung sau thành JSON hợp lệ theo schema:\n"
+            "{is_scam: bool, risk_score: int 0-100, indicators: [string], explanation: string, web_sources: [string]}\n"
+            "Chỉ trả JSON thuần, không markdown, không giải thích.\n\n"
+            "Nội dung cần sửa:\n"
+            f"{response[:2500]}"
+        )
+        repaired = generate_response(
+            repair_prompt,
+            model,
+            num_ctx=4096,
+            max_tokens=1024,
+            tools=[],
+            format_schema=SCAM_ANALYSIS_SCHEMA,
+        )
+        parsed_result = _extract_json(repaired) if repaired else None
+
+    if not parsed_result:
+        retry_count += 1
+        logger.warning("analyze_text_for_scam: Repair retry failed; rerunning primary analysis once.")
+        response_retry = generate_response(
+            prompt,
+            model,
+            num_ctx=8192,
+            max_tokens=2048,
+            tools=[],
+            format_schema=SCAM_ANALYSIS_SCHEMA,
+        )
+        parsed_result = _extract_json(response_retry) if response_retry else None
+
+    if parsed_result:
+        result = parsed_result
+        result['risk_score'] = int(max(0, min(100, result.get('risk_score', 0) or 0)))
+        if not isinstance(result.get('indicators'), list):
+            result['indicators'] = []
+        if not isinstance(result.get('web_sources'), list):
+            result['web_sources'] = []
+        result['web_context'] = combined_web_context
+        result['web_search_used'] = web_search_used
+        result['searched_urls'] = agent_searched_urls
+        result['db_sources_consulted'] = db_sources_consulted
+
+        # Ensure web_sources includes db sources consulted
+        existing_sources = result.get('web_sources', []) or []
+        existing_sources_l = [str(s).lower() for s in existing_sources]
+        if db_sources_consulted:
+            for src in db_sources_consulted:
+                if src not in existing_sources_l:
+                    existing_sources.append(src.capitalize())
+            result['web_sources'] = existing_sources
+
+        if retry_notice and retry_count > 0:
+            result['ai_retry_used'] = True
+            result['ai_retry_count'] = retry_count
+            result['ai_notice'] = retry_notice
+            explanation = str(result.get('explanation', '') or '')
+            if retry_notice not in explanation:
+                result['explanation'] = f"{retry_notice} {explanation}".strip()
+        else:
+            result['ai_retry_used'] = False
+            result['ai_retry_count'] = 0
+
+        return result
+
+    logger.warning(
+        "analyze_text_for_scam: all JSON parsing/retry attempts failed; returning fallback payload."
+    )
 
     return {
         "is_scam": False,
         "risk_score": 0,
         "indicators": [],
-        "explanation": "Phân tích thất bại hoặc quá thời gian",
-        "web_sources": db_sources_consulted if db_sources_consulted else ["Offline Analysis"],
-        "web_context": web_context,
+        "explanation": "⏳ AI cần thêm chút thời gian. Hệ thống đang tạm trả kết quả an toàn để tránh treo phiên phân tích.",
+        "web_sources": [s.capitalize() for s in db_sources_consulted] if db_sources_consulted else ["Offline Analysis"],
+        "web_context": combined_web_context,
         "web_search_used": web_search_used,
+        "searched_urls": agent_searched_urls,
         "db_sources_consulted": db_sources_consulted,
+        "ai_retry_used": True,
+        "ai_retry_count": retry_count,
+        "ai_notice": "⏳ AI cần thêm chút thời gian để chuẩn hóa kết quả, vui lòng thử lại sau vài giây.",
     }

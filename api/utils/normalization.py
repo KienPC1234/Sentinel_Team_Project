@@ -1,15 +1,27 @@
 import re
 
 def normalize_phone(phone: str) -> str:
-    """Normalize Vietnamese phone number to 0xxx format"""
+    """Normalize Vietnamese phone number to 0xxx format (10 digits)"""
     if not phone:
         return ""
-    phone = re.sub(r'[^\d+]', '', phone.strip())
-    if phone.startswith('+84'):
-        phone = '0' + phone[3:]
-    elif phone.startswith('84') and len(phone) > 9:
-        phone = '0' + phone[2:]
-    return phone
+    # Strip all non-digits
+    digits = re.sub(r'\D', '', phone.strip())
+    
+    # +84... or 84...
+    if phone.startswith('+') and digits.startswith('84'):
+        digits = '0' + digits[2:]
+    elif digits.startswith('84') and len(digits) > 9:
+        digits = '0' + digits[2:]
+    
+    # If it's already 10 digits starting with 0, return as is
+    if len(digits) == 10 and digits.startswith('0'):
+        return digits
+    
+    # If 9 digits and was meant to be 0...
+    if len(digits) == 9 and not digits.startswith('0'):
+        return '0' + digits
+        
+    return digits
 
 
 def normalize_phone_e164(phone: str, default_country_code: str = '84', strict: bool = False) -> str:
@@ -76,3 +88,17 @@ def normalize_domain(url: str) -> str:
         return domain
     except Exception:
         return url
+
+def normalize_email(email: str) -> str:
+    """Normalize email address to lowercase and stripped"""
+    if not email:
+        return ""
+    return email.strip().lower()
+
+def is_valid_email(email: str) -> bool:
+    """Check if the string is a valid email address"""
+    if not email:
+        return False
+    # Simple regex for email validation
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email))

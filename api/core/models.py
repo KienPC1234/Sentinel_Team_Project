@@ -107,6 +107,8 @@ class ScanType(models.TextChoices):
     ACCOUNT = 'account', 'Tài khoản ngân hàng'
     QR = 'qr', 'QR / Ảnh'
     EMAIL = 'email', 'Email'
+    FILE = 'file', 'Tệp tin'
+    AUDIO = 'audio', 'Âm thanh'
 
 
 class TargetType(models.TextChoices):
@@ -219,6 +221,11 @@ class Report(models.Model):
     moderation_note = models.TextField(blank=True)
     scan_event = models.ForeignKey('ScanEvent', on_delete=models.SET_NULL, 
                                  null=True, blank=True, related_name='linked_reports')
+    
+    # AI and OCR results
+    ocr_text = models.TextField(blank=True, help_text="Text extracted from evidence_file via OCR")
+    ai_analysis = models.JSONField(default=dict, blank=True, help_text="AI analysis of the report and OCR text")
+    
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 

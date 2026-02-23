@@ -13,10 +13,13 @@ from .serializers import (
 )
 from api.utils.media_utils import (
     extract_ocr_text, 
+    extract_ocr_with_boxes,
     analyze_image_risk, 
     transcribe_audio, 
     analyze_audio_risk
 )
+from api.utils.ollama_client import generate_response
+from django.conf import settings
 
 class AnalyzeImagesView(APIView):
     """
@@ -41,15 +44,27 @@ class AnalyzeImagesView(APIView):
             return Response({'error': 'Invalid session_id format'}, status=status.HTTP_400_BAD_REQUEST)
         
         all_ocr_text = []
+        all_qr_data = []
+        annotated_images = []
         max_risk_level = 'SAFE'
         risk_details_list = []
         
+        small_model = getattr(settings, 'SMALL_MODEL', 'ministral-3:14b-cloud')
+
         for image_file in images:
             if not image_file.name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif')):
                 continue
             
-            ocr_text = extract_ocr_text(image_file)
+            # Use improved OCR with Boxes and QR extraction
+            ocr_result = extract_ocr_with_boxes(image_file)
+            ocr_text = ocr_result.get('text', '')
+            qr_contents = ocr_result.get('qr_contents', [])
+            annotated_img = ocr_result.get('annotated_image_b64', '')
+
             all_ocr_text.append(ocr_text)
+            all_qr_data.extend(qr_contents)
+            if annotated_img:
+                annotated_images.append(annotated_img)
             
             risk_analysis = analyze_image_risk(ocr_text, image_file)
             
@@ -69,10 +84,33 @@ class AnalyzeImagesView(APIView):
             )
         
         combined_ocr = '\n\n'.join(all_ocr_text)
+        combined_qr = '\n'.join(all_qr_data)
         combined_details = '\n'.join(risk_details_list)
+
+        # AI Small LLM Reformatting/Summary
+        ai_summary = combined_ocr
+        if combined_ocr or combined_qr:
+            prompt = f"""Hãy tóm tắt và định dạng lại nội dung văn bản (OCR) và mã QR thu thập được từ hình ảnh bằng chứng lừa đảo dưới đây.
+Mục tiêu: Làm cho thông tin dễ hiểu, mạch lạc nhưng KHÔNG LÀM MẤT bất kỳ dữ liệu quan trọng nào (số tiền, tên người, STK, SĐT, link...).
+Văn bản OCR:
+{combined_ocr}
+Dữ liệu QR:
+{combined_qr}
+Hãy trình bày theo dạng danh sách hoặc đoạn văn ngắn gọn, chuyên nghiệp nhất."""
+            
+            summary_response = generate_response(
+                prompt=prompt,
+                model=small_model,
+                system_prompt="Bạn là trợ lý an ninh mạng chuyên trích xuất và tóm tắt thông tin từ bằng chứng lừa đảo."
+            )
+            if summary_response:
+                ai_summary = summary_response
         
         return Response({
-            'ocr_text': combined_ocr,
+            'ocr_text': ai_summary,
+            'raw_ocr': combined_ocr,
+            'qr_data': all_qr_data,
+            'annotated_images': annotated_images,
             'risk_analysis': {
                 'is_safe': max_risk_level in ['SAFE', 'GREEN'],
                 'risk_level': max_risk_level,
@@ -106,7 +144,8 @@ class AnalyzeAudioView(APIView):
         if not audio_file.name.lower().endswith(('.mp3', '.m4a', '.wav', '.ogg')):
             return Response({'error': 'Unsupported audio format'}, status=status.HTTP_400_BAD_REQUEST)
         
-        transcript = transcribe_audio(audio_file)
+        transcript_result = transcribe_audio(audio_file)
+        transcript = transcript_result.get('transcript', '') if isinstance(transcript_result, dict) else str(transcript_result)
         audio_risk = analyze_audio_risk(transcript, phone_number)
         
         AudioAnalysis.objects.create(

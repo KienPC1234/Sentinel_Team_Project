@@ -4,6 +4,7 @@ MVP spec Section 9: Async tasks
 """
 import logging
 import re
+import json
 from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
@@ -111,7 +112,7 @@ def scan_domain_async(url: str, user_id: int = None):
     """
     Async domain scan for heavy analysis.
     """
-    from api.core.views import _analyze_domain
+    from api.core.views.scan_views import _analyze_domain
     from api.core.models import ScanEvent
 
     result = _analyze_domain(url)
@@ -151,6 +152,46 @@ def deduplicate_reports():
             seen[key] = report.pk
 
     logger.info(f'Found {duplicates} potential duplicate reports')
+
+
+def _notify_scan_complete(scan_event, title_suffix=''):
+    """
+    Send push notification (OneSignal + WebSocket) when a scan completes.
+    Only sends if the scan was initiated by an authenticated user.
+    """
+    try:
+        if not scan_event.user_id:
+            return  # Anonymous scan, no push target
+
+        from api.utils.push_service import push_service
+
+        risk_level = getattr(scan_event, 'risk_level', 'SAFE')
+        risk_score = getattr(scan_event, 'risk_score', 0)
+
+        level_labels = {
+            'RED': '🔴 Nguy hiểm',
+            'YELLOW': '🟡 Cẩn thận',
+            'GREEN': '🟢 An toàn',
+            'SAFE': '🟢 An toàn',
+        }
+        level_text = level_labels.get(risk_level, '🟢 An toàn')
+
+        title = f"Kết quả quét: {level_text}"
+        message = f"{title_suffix} — Điểm rủi ro: {risk_score}/100"
+        url = f"/scan/status/{scan_event.id}/" if hasattr(scan_event, 'id') else None
+
+        push_service.send_push(
+            user_id=scan_event.user_id,
+            title=title,
+            message=message,
+            url=url,
+            notification_type='scan_result'
+        )
+        logger.info(f"[Push] Sent scan notification to user {scan_event.user_id} for event {scan_event.id}")
+    except Exception as e:
+        logger.warning(f"[Push] Failed to send scan notification: {e}")
+
+
 @shared_task(name='core.perform_scan_task', bind=True)
 def perform_scan_task(self, scan_event_id):
     """
@@ -188,12 +229,19 @@ def perform_scan_task(self, scan_event_id):
                 logger.warning(f"perform_scan_task: AI analysis failed for email ({_ai_exc}), using fallback.")
             if not ai_res:
                 ai_res = {'risk_score': 0, 'risk_level': 'SAFE', 'explanation': 'AI không khả dụng.'}
+            ai_notice = ai_res.get('ai_notice')
+            details = [ai_res.get('explanation', 'Phân tích hoàn tất.')]
+            if ai_notice and ai_notice not in details:
+                details.insert(0, ai_notice)
             result = {
                 'email': email,
                 'risk_score': ai_res.get('risk_score', 0),
                 'risk_level': ai_res.get('risk_level', 'SAFE'),
-                'details': [ai_res.get('explanation', 'Phân tích hoàn tất.')],
+                'details': details,
                 'ai_available': ai_res.get('explanation') != 'AI không khả dụng.',
+                'ai_retry_used': ai_res.get('ai_retry_used', False),
+                'ai_retry_count': ai_res.get('ai_retry_count', 0),
+                'ai_notice': ai_notice,
             }
 
         scan_event.result_json = result
@@ -201,6 +249,9 @@ def perform_scan_task(self, scan_event_id):
         scan_event.risk_level = result.get('risk_level', RiskLevel.SAFE)
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
+
+        type_labels = {'phone': 'số điện thoại', 'message': 'tin nhắn', 'domain': 'website', 'email': 'email'}
+        _notify_scan_complete(scan_event, f"Quét {type_labels.get(scan_type, scan_type)} hoàn tất")
         return result
 
     except Exception as e:
@@ -287,6 +338,10 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             
             if not ai_res:
                  ai_res = {'risk_score': 0, 'risk_level': 'SAFE', 'explanation': 'Lỗi phân tích AI sau 3 lần thử.'}
+
+            ai_notice = ai_res.get('ai_notice')
+            if ai_notice:
+                send_progress(ai_notice, step="ai_retry_notice")
             
             send_progress("AI đã hoàn tất phân tích logic.", step="analyzing")
         else:
@@ -308,6 +363,9 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             'risk_score': score,
             'risk_level': level,
             'explanation': explanation,
+            'ai_notice': ai_res.get('ai_notice', ''),
+            'ai_retry_used': ai_res.get('ai_retry_used', False),
+            'ai_retry_count': ai_res.get('ai_retry_count', 0),
             'web_sources': ai_res.get('web_sources', []),
             'web_context': ai_res.get('web_context', '')
         }
@@ -319,6 +377,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         scan_event.save()
         
         send_progress("Hoàn tất quét hình ảnh!", step="completed", data=result)
+        _notify_scan_complete(scan_event, 'Quét hình ảnh/QR hoàn tất')
         return result
 
     except Exception as e:
@@ -329,6 +388,169 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             result_json={'error': str(e)}
         )
         return {'error': str(e)}
+
+
+@shared_task(name='core.perform_audio_scan_task', bind=True)
+def perform_audio_scan_task(self, scan_event_id, audio_file_path):
+    """
+    Background task for audio transcription + AI scam analysis.
+    Uses Faster-Whisper for speech-to-text, then Ollama for risk assessment.
+    Provides real-time progress updates via Channels.
+    """
+    from api.core.models import ScanEvent, ScanStatus, RiskLevel
+    from api.utils.media_utils import transcribe_audio, analyze_audio_risk
+    from api.utils.ollama_client import analyze_text_for_scam
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+    import os
+
+    channel_layer = get_channel_layer()
+    group_name = f'scan_{scan_event_id}'
+
+    def send_progress(message, step='processing', data=None):
+        logger.info(f"Audio [{scan_event_id}]: {message} ({step})")
+        if channel_layer:
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    group_name,
+                    {
+                        'type': 'scan_progress',
+                        'message': message,
+                        'status': 'processing',
+                        'step': step,
+                        'data': data,
+                    }
+                )
+            except Exception as e:
+                logger.error(f"WS send error for audio event {scan_event_id}: {e}")
+
+    try:
+        scan_event = ScanEvent.objects.get(id=scan_event_id)
+        scan_event.status = ScanStatus.PROCESSING
+        scan_event.job_id = self.request.id
+        scan_event.save()
+
+        send_progress("Đang tải mô hình nhận diện giọng nói...", step="init")
+
+        # ── Step 1: Transcribe audio ──
+        send_progress("Đang chuyển đổi giọng nói thành văn bản...", step="transcribing")
+
+        # Open the saved temp file for transcription
+        with open(audio_file_path, 'rb') as audio_fp:
+            from django.core.files.uploadedfile import InMemoryUploadedFile
+            import io
+            audio_bytes = audio_fp.read()
+            audio_file_obj = io.BytesIO(audio_bytes)
+            audio_file_obj.name = os.path.basename(audio_file_path)
+            transcription_result = transcribe_audio(audio_file_obj)
+
+        transcript = transcription_result.get('transcript', '')
+        language = transcription_result.get('language', 'unknown')
+        duration = transcription_result.get('duration', 0)
+        segments = transcription_result.get('segments', [])
+
+        if transcript:
+            send_progress(
+                f"Đã nhận diện {len(segments)} đoạn • {duration:.1f}s • Ngôn ngữ: {language}",
+                step="transcribed",
+                data={'transcript': transcript, 'language': language, 'duration': duration}
+            )
+        else:
+            send_progress("Không nhận diện được giọng nói trong file âm thanh.", step="transcribed")
+
+        # ── Step 2: AI Scam Analysis on transcript ──
+        if transcript:
+            send_progress("Đang phân tích nội dung bằng AI...", step="analyzing")
+
+            ai_res = None
+            for attempt in range(3):
+                try:
+                    ai_res = analyze_text_for_scam(transcript, use_web_search=True)
+                    if ai_res and ai_res.get('risk_score') is not None:
+                        break
+                except Exception:
+                    logger.warning(f"AI analysis attempt {attempt+1} failed for audio event {scan_event_id}")
+
+            if not ai_res:
+                ai_res = {
+                    'risk_score': 0,
+                    'risk_level': 'SAFE',
+                    'explanation': 'Lỗi phân tích AI sau 3 lần thử.',
+                }
+
+            ai_notice = ai_res.get('ai_notice')
+            if ai_notice:
+                send_progress(ai_notice, step="ai_retry_notice")
+
+            send_progress("AI đã hoàn tất phân tích.", step="analyzed")
+        else:
+            ai_res = {
+                'risk_score': 0,
+                'risk_level': 'SAFE',
+                'explanation': 'Không tìm thấy giọng nói để phân tích.',
+            }
+
+        # ── Step 3: Determine risk level and save ──
+        score = ai_res.get('risk_score', 0)
+        level = RiskLevel.SAFE
+        if score >= 80:
+            level = RiskLevel.RED
+        elif score >= 50:
+            level = RiskLevel.YELLOW
+        elif score >= 20:
+            level = RiskLevel.GREEN
+
+        explanation = ai_res.get('explanation') or ai_res.get('reason') or ''
+
+        result = {
+            'transcript': transcript,
+            'language': language,
+            'duration': duration,
+            'segments': segments,
+            'risk_score': score,
+            'risk_level': level,
+            'explanation': explanation,
+            'ai_notice': ai_res.get('ai_notice', ''),
+            'ai_retry_used': ai_res.get('ai_retry_used', False),
+            'ai_retry_count': ai_res.get('ai_retry_count', 0),
+            'web_sources': ai_res.get('web_sources', []),
+            'web_context': ai_res.get('web_context', ''),
+        }
+
+        scan_event.result_json = result
+        scan_event.risk_score = score
+        scan_event.risk_level = level
+        scan_event.status = ScanStatus.COMPLETED
+        scan_event.save()
+
+        send_progress("Hoàn tất quét âm thanh!", step="completed", data=result)
+        _notify_scan_complete(scan_event, 'Quét âm thanh hoàn tất')
+
+        # Cleanup temp file
+        try:
+            if os.path.exists(audio_file_path):
+                os.remove(audio_file_path)
+        except Exception:
+            pass
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Audio scan task {scan_event_id} failed: {e}")
+        send_progress(f"Lỗi hệ thống: {str(e)}", step="error")
+        ScanEvent.objects.filter(id=scan_event_id).update(
+            status=ScanStatus.FAILED,
+            result_json={'error': str(e)},
+        )
+        # Cleanup temp file
+        try:
+            if os.path.exists(audio_file_path):
+                os.remove(audio_file_path)
+        except Exception:
+            pass
+        return {'error': str(e)}
+
+
 @shared_task(name='core.perform_web_scrapping_task', bind=True)
 def perform_web_scrapping_task(self, scan_event_id, url):
     """
@@ -336,7 +558,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
     Provides real-time progress updates via Channels.
     """
     from api.core.models import ScanEvent, ScanStatus, RiskLevel
-    from api.utils.ollama_client import analyze_text_for_scam, web_fetch_url
+    from api.utils.ollama_client import analyze_text_for_scam
     import whois
     import dns.resolver
     from ipwhois import IPWhois, IPDefinedError
@@ -365,6 +587,29 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         except Exception as e:
             logger.warning(f"[WebScan] Event {scan_event_id}: Progress send failed: {e}")
 
+    def _decode_html_response(http_response):
+        html_text = http_response.text or ''
+        if any(marker in html_text for marker in ('Ã', 'Â', 'á»', '\ufffd')):
+            try:
+                encoding = http_response.apparent_encoding or 'utf-8'
+                html_text = http_response.content.decode(encoding, errors='replace')
+            except Exception:
+                pass
+        return html_text
+
+    def _repair_mojibake(text: str) -> str:
+        if not text:
+            return ''
+        repaired = text.strip()
+        if any(marker in repaired for marker in ('Ã', 'Â', 'á»', 'Ä')):
+            try:
+                repaired_candidate = repaired.encode('latin-1', errors='ignore').decode('utf-8', errors='ignore').strip()
+                if repaired_candidate:
+                    repaired = repaired_candidate
+            except Exception:
+                pass
+        return re.sub(r'\s+', ' ', repaired)
+
     try:
         scan_event = ScanEvent.objects.get(id=scan_event_id)
         scan_event.status = ScanStatus.PROCESSING
@@ -375,6 +620,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         
         domain = normalize_domain(url)
         logger.info(f"[WebScan] Event {scan_event_id}: Starting analysis for URL: {url};  Normalized: {domain}")
+        send_progress(f"Tên miền: {domain}", step="init")
 
         content = ""
         network_risk_score = 0
@@ -385,6 +631,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         try:
             # 1. WHOIS Age
             try:
+                send_progress("Đang tra cứu WHOIS (tuổi tên miền, chủ sở hữu)...", step="whois")
                 w = whois.whois(domain)
                 creation_date = w.creation_date
                 if isinstance(creation_date, list):
@@ -402,16 +649,21 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                     if age_days < 14:
                         network_risk_score = max(network_risk_score, 75) # Very high risk if new
                         network_details.append(f"Tên miền quá mới (đăng ký {age_days} ngày trước)")
+                        send_progress(f"⚠️ Tên miền rất mới: chỉ {age_days} ngày tuổi - dấu hiệu nghi ngờ!", step="whois_warning")
                         logger.info(f"[WebScan] Event {scan_event_id}: Domain too new ({age_days} days)")
                     elif age_days < 30:
                          network_risk_score += 10
                          network_details.append(f"Tên miền mới (đăng ký {age_days} ngày trước)")
+                         send_progress(f"Tên miền khá mới: {age_days} ngày tuổi", step="whois_info")
                          logger.info(f"[WebScan] Event {scan_event_id}: Domain new ({age_days} days)")
+                    else:
+                         send_progress(f"WHOIS: Tên miền {age_days} ngày tuổi", step="whois_ok")
             except Exception as e:
                 logger.warning(f"[WebScan] Event {scan_event_id}: WHOIS lookup failed: {e}")
 
             # 2. DNS Checks (Resolvers)
             try:
+                send_progress("Đang kiểm tra DNS (MX records)...", step="dns")
                 # Check for MX records (Phishing sites often lack email setup)
                 try:
                     dns.resolver.resolve(domain, 'MX')
@@ -430,6 +682,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
 
             # 3. ASN / IP Reputation
             try:
+                send_progress("Đang kiểm tra ASN / IP Reputation...", step="asn")
                 import socket
                 ip = socket.gethostbyname(domain)
                 obj = IPWhois(ip)
@@ -443,7 +696,10 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                         # Cheap hosting itself isn't bad, but phishing often uses it
                         network_risk_score += 7
                         network_details.append(f"Hosting provider: {asn_desc}")
+                        send_progress(f"Hosting: {asn_desc} (thường dùng cho phishing)", step="asn_warning")
                         logger.info(f"[WebScan] Event {scan_event_id}: Suspicious/Cheap hosting provider found: {asn_desc}")
+                    else:
+                        send_progress(f"IP/ASN: {asn_desc}", step="asn_ok")
                 except IPDefinedError:
                      pass
             except Exception as e:
@@ -456,7 +712,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             logger.error(f"[WebScan] Event {scan_event_id}: Deep network scan failed: {e}")
             send_progress(f"Lỗi kiểm tra mạng: {str(e)}", step="network_warning")
         
-        # 1. Fetch Content using Ollama Web Fetch API
+        # 1. Fetch Content using requests + BeautifulSoup (replacing Ollama web_fetch)
         send_progress(f"Đang thu thập nội dung từ {domain}...", step="scraping")
         
         # Build full URL if scheme not provided
@@ -469,22 +725,49 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         page_title = ""
         
         try:
-            fetch_result = web_fetch_url(target_url)
-            if fetch_result and fetch_result.get('content'):
-                content = fetch_result.get('content', '')
-                page_title = fetch_result.get('title', '')
+            import requests as http_requests
+            from bs4 import BeautifulSoup
+
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+            }
+            resp = http_requests.get(target_url, headers=headers, timeout=15, verify=True, allow_redirects=True)
+            resp.raise_for_status()
+
+            html_text = _decode_html_response(resp)
+            soup = BeautifulSoup(html_text, 'html.parser')
+
+            # Extract title
+            title_tag = soup.find('title')
+            page_title = _repair_mojibake(title_tag.get_text(strip=True) if title_tag else '')
+
+            # Remove script/style/nav/footer for cleaner content
+            for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'noscript', 'iframe']):
+                tag.decompose()
+
+            content = soup.get_text(separator='\n', strip=True)
+            if content:
                 fetch_success = True
-                logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via Ollama API ({len(content)} chars)")
-            else:
-                # Try HTTP fallback if HTTPS failed
-                if target_url.startswith('https://'):
-                    http_url = target_url.replace('https://', 'http://', 1)
-                    fetch_result = web_fetch_url(http_url)
-                    if fetch_result and fetch_result.get('content'):
-                        content = fetch_result.get('content', '')
-                        page_title = fetch_result.get('title', '')
-                        fetch_success = True
-                        logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via HTTP fallback ({len(content)} chars)")
+                send_progress(f"Đã tải nội dung website ({len(content)} ký tự)", step="scraping_ok")
+                logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via requests+BS4 ({len(content)} chars)")
+
+            # Try HTTP fallback if HTTPS failed and no content
+            if not fetch_success and target_url.startswith('https://'):
+                http_url = target_url.replace('https://', 'http://', 1)
+                resp = http_requests.get(http_url, headers=headers, timeout=15, verify=False, allow_redirects=True)
+                resp.raise_for_status()
+                html_text = _decode_html_response(resp)
+                soup = BeautifulSoup(html_text, 'html.parser')
+                title_tag = soup.find('title')
+                page_title = _repair_mojibake(title_tag.get_text(strip=True) if title_tag else '')
+                for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'noscript', 'iframe']):
+                    tag.decompose()
+                content = soup.get_text(separator='\n', strip=True)
+                if content:
+                    fetch_success = True
+                    logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via HTTP fallback ({len(content)} chars)")
         except Exception as e:
             logger.warning(f"[WebScan] Event {scan_event_id}: Web fetch failed: {e}")
 
@@ -514,7 +797,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             import time
             from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 
-            ai_timeout_seconds = 120
+            ai_timeout_seconds = 600
             keepalive_every_seconds = 10
             executor = ThreadPoolExecutor(max_workers=1)
             future = executor.submit(analyze_text_for_scam, ai_input, None, True)
@@ -548,6 +831,9 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             ai_res = {'is_scam': False, 'risk_score': 0, 'indicators': [], 'explanation': 'AI không khả dụng.'}
 
         logger.info(f"[WebScan] Event {scan_event_id}: AI Result: {ai_res}")
+        ai_notice = ai_res.get('ai_notice')
+        if ai_notice:
+            send_progress(ai_notice, step="ai_retry_notice")
         send_progress("AI đã hoàn tất phân tích.", step="analyzing")
 
         final_risk_score = max(ai_res.get('risk_score', 0), network_risk_score)
@@ -565,6 +851,9 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             'risk_score': final_risk_score,
             'risk_level': ai_res.get('risk_level', 'SAFE'),
             'explanation': explanation,
+            'ai_notice': ai_notice,
+            'ai_retry_used': ai_res.get('ai_retry_used', False),
+            'ai_retry_count': ai_res.get('ai_retry_count', 0),
             'scam_type': ai_res.get('scam_type') or ai_res.get('type') or 'other',
             'content_length': len(content) if content else 0,
             'network_details': network_details,
@@ -587,6 +876,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         scan_event.save()
         
         send_progress("Hoàn tất quét website!", step="completed", data=result)
+        _notify_scan_complete(scan_event, f"Quét website '{url}' hoàn tất")
         return result
 
     except Exception as e:
@@ -779,6 +1069,10 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
              current_details['reasons'] = []
              
         # Add AI explanation
+        ai_notice = ai_res.get('ai_notice')
+        if ai_notice:
+            current_details['ai_notice'] = ai_notice
+            current_details['reasons'].append(ai_notice)
         explanation = ai_res.get('explanation') or ai_res.get('reason')
         if explanation:
             current_details['ai_explanation'] = explanation
@@ -822,6 +1116,241 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
             scan.status = ScanStatus.FAILED
             scan.save()
 
+@shared_task(name='core.perform_message_scan_task', bind=True)
+def perform_message_scan_task(self, scan_event_id: int, message_text: str, images_b64: list):
+    """
+    Background task for message scan with real-time WS progress.
+    Processes OCR per image, pattern analysis, then AI analysis.
+    """
+    from api.core.models import ScanEvent, ScanStatus, RiskLevel
+    from api.utils.ollama_client import analyze_text_for_scam
+    from api.utils.normalization import normalize_domain
+    from api.utils.vt_client import VTClient
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+    import base64
+    import io
+
+    channel_layer = get_channel_layer()
+    group_name = f'scan_{scan_event_id}'
+
+    def send_progress(message, step='processing', data=None):
+        if not channel_layer:
+            return
+        try:
+            payload = {
+                'type': 'scan_progress',
+                'message': message,
+                'status': 'processing',
+                'step': step,
+            }
+            if data is not None:
+                payload['data'] = data
+            async_to_sync(channel_layer.group_send)(group_name, payload)
+        except Exception as e:
+            logger.warning(f"[MsgScan] Event {scan_event_id}: Progress send failed: {e}")
+
+    try:
+        scan_event = ScanEvent.objects.get(id=scan_event_id)
+        scan_event.status = ScanStatus.PROCESSING
+        scan_event.job_id = self.request.id
+        scan_event.save()
+
+        send_progress("Bắt đầu phân tích tin nhắn...", step="init")
+
+        # 1. OCR Processing
+        combined_ocr_text = []
+        annotated_images = []
+
+        if images_b64:
+            send_progress(f"Đang xử lý {len(images_b64)} ảnh bằng OCR...", step="ocr")
+            from api.utils.media_utils import extract_ocr_with_boxes
+            from django.core.files.uploadedfile import InMemoryUploadedFile
+
+            for idx, img_b64 in enumerate(images_b64):
+                send_progress(f"Đang nhận dạng text từ ảnh {idx+1}/{len(images_b64)}...", step="ocr")
+                try:
+                    img_bytes = base64.b64decode(img_b64)
+                    img_file = io.BytesIO(img_bytes)
+                    img_file.name = f"image_{idx}.png"
+                    img_file.size = len(img_bytes)
+
+                    ocr_result = extract_ocr_with_boxes(img_file)
+                    if ocr_result.get("text"):
+                        combined_ocr_text.append(ocr_result["text"])
+                        send_progress(f"Ảnh {idx+1}: Trích xuất {len(ocr_result['text'])} ký tự", step="ocr_ok")
+                    else:
+                        send_progress(f"Ảnh {idx+1}: Không phát hiện text", step="ocr_ok")
+                    if ocr_result.get("annotated_image_b64"):
+                        annotated_images.append(ocr_result["annotated_image_b64"])
+                except Exception as e:
+                    logger.error(f"[MsgScan] OCR Error for image {idx}: {e}")
+                    send_progress(f"Ảnh {idx+1}: Lỗi OCR - {str(e)[:50]}", step="ocr_warning")
+
+        # 2. Combine text
+        full_text = message_text or ''
+        if combined_ocr_text:
+            full_text = (full_text + '\n' + '\n'.join(combined_ocr_text)).strip()
+
+        if not full_text:
+            send_progress("Không có nội dung để phân tích.", step="error")
+            scan_event.status = ScanStatus.FAILED
+            scan_event.result_json = {'error': 'Không có nội dung để phân tích.'}
+            scan_event.save()
+            return
+
+        # 3. Pattern Analysis + Domain scan
+        send_progress("Đang phát hiện dấu hiệu scam (từ khóa, URL)...", step="pattern_analysis")
+
+        patterns_found = []
+        scam_keywords = {
+            r'otp|mã xác': 'Yêu cầu OTP',
+            r'chuyển khoản|chuyển tiền': 'Giao dịch tài chính',
+            r'công an|viện kiểm sát': 'Mạo danh cơ quan chức năng',
+            r'trúng thưởng|quà tặng': 'Dụ dỗ trúng thưởng',
+            r'khóa tài khoản|phong tỏa': 'Đe dọa tài khoản',
+        }
+        for pattern, label in scam_keywords.items():
+            if re.search(pattern, full_text.lower()):
+                patterns_found.append(label)
+
+        found_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', full_text)
+        domain_risks = []
+        max_domain_score = 0
+        vt = VTClient()
+        for url in found_urls:
+            domain = normalize_domain(url)
+            if domain:
+                send_progress(f"Đang kiểm tra domain: {domain}...", step="domain_check")
+                vt_res = vt.scan_url(url)
+                score = vt_res.get('risk_score', 0)
+                max_domain_score = max(max_domain_score, score)
+                if score > 0:
+                    domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
+
+        if patterns_found or domain_risks:
+            send_progress(f"Phát hiện {len(patterns_found) + len(domain_risks)} dấu hiệu đáng ngờ", step="pattern_done")
+        else:
+            send_progress("Không phát hiện dấu hiệu rõ ràng, đang chuyển sang AI...", step="pattern_done")
+
+        # 4. AI Analysis
+        send_progress("AI đang phân tích nội dung tin nhắn...", step="ai_analysis")
+        ai_score = 0
+        ai_explanation = ''
+        ai_available = True
+        ai_result_data = None
+        try:
+            import time
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+            ai_timeout_seconds = 90
+            keepalive_every_seconds = 8
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(analyze_text_for_scam, full_text)
+            start_time = time.time()
+            last_keepalive = 0
+            ai_result_data = None
+
+            while True:
+                try:
+                    ai_result_data = future.result(timeout=3)
+                    break
+                except FutureTimeout:
+                    elapsed = time.time() - start_time
+                    if elapsed - last_keepalive >= keepalive_every_seconds:
+                        send_progress("AI đang phân tích...", step="ping")
+                        last_keepalive = elapsed
+                    if elapsed >= ai_timeout_seconds:
+                        ai_result_data = None
+                        ai_available = False
+                        future.cancel()
+                        break
+            executor.shutdown(wait=False, cancel_futures=True)
+
+            if ai_result_data:
+                ai_score = ai_result_data.get('risk_score', 0) or 0
+                ai_explanation = ai_result_data.get('explanation') or ''
+                ai_notice = ai_result_data.get('ai_notice')
+                if ai_notice:
+                    send_progress(ai_notice, step="ai_retry_notice")
+                send_progress("AI đã hoàn tất phân tích.", step="ai_done")
+            else:
+                ai_available = False
+                send_progress("AI không khả dụng, sử dụng phân tích quy tắc.", step="ai_warning")
+        except Exception as exc:
+            ai_available = False
+            logger.warning(f"[MsgScan] AI error: {exc}")
+            send_progress("AI gặp lỗi, sử dụng phân tích quy tắc.", step="ai_warning")
+
+        # 5. Final scoring
+        send_progress("Đang tổng hợp kết quả...", step="finalizing")
+        rule_score = min(100, len(patterns_found) * 15 + max_domain_score)
+        final_score = max(ai_score, max_domain_score) if ai_available else rule_score
+        final_score = max(0, min(100, final_score))
+
+        if final_score >= 70:
+            level = 'RED'
+        elif final_score >= 40:
+            level = 'YELLOW'
+        elif final_score >= 10:
+            level = 'GREEN'
+        else:
+            level = 'SAFE'
+
+        scam_type = 'other'
+        if any('công an' in p for p in patterns_found):
+            scam_type = 'police_impersonation'
+        elif any('OTP' in p for p in patterns_found):
+            scam_type = 'otp_steal'
+        elif any('chuyển khoản' in p for p in patterns_found):
+            scam_type = 'investment_scam'
+        elif domain_risks:
+            scam_type = 'phishing'
+
+        if ai_available and ai_explanation:
+            explanation = ai_explanation
+        elif patterns_found or domain_risks:
+            explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu đáng ngờ (phân tích quy tắc).'
+        else:
+            explanation = 'Không phát hiện dấu hiệu lừa đảo rõ ràng.'
+
+        result = {
+            'risk_score': final_score,
+            'risk_level': level,
+            'scam_type': scam_type,
+            'patterns_found': list(set(patterns_found + domain_risks)),
+            'explanation': explanation,
+            'ai_insight': ai_explanation,
+            'ai_available': ai_available,
+            'ocr_text': '\n'.join(combined_ocr_text) if combined_ocr_text else '',
+            'annotated_images': annotated_images,
+            'annotated_image': annotated_images[0] if annotated_images else '',
+            'web_sources': (ai_result_data or {}).get('web_sources', []),
+            'web_context': (ai_result_data or {}).get('web_context', ''),
+        }
+
+        scan_event.result_json = {k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')}
+        scan_event.risk_score = final_score
+        scan_event.risk_level = level
+        scan_event.status = ScanStatus.COMPLETED
+        scan_event.save()
+
+        send_progress("Hoàn tất phân tích tin nhắn!", step="completed", data=result)
+        _notify_scan_complete(scan_event, 'Quét tin nhắn hoàn tất')
+        return result
+
+    except ScanEvent.DoesNotExist:
+        logger.error(f"[MsgScan] ScanEvent #{scan_event_id} not found.")
+    except Exception as e:
+        logger.error(f"[MsgScan] perform_message_scan_task failed: {e}", exc_info=True)
+        try:
+            send_progress(f"Lỗi hệ thống: {str(e)[:100]}", step="error")
+            scan_event = ScanEvent.objects.get(id=scan_event_id)
+            scan_event.status = ScanStatus.FAILED
+            scan_event.save()
+        except:
+            pass
+
+
 @shared_task(name='core.perform_email_deep_scan')
 def perform_email_deep_scan(scan_event_id: int, email_data: dict):
     """
@@ -830,6 +1359,27 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
     from api.core.models import ScanEvent, RiskLevel, ScanStatus
     from api.utils.ollama_client import analyze_text_for_scam
     from api.utils.email_utils import compute_eml_weighted_risk
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    channel_layer = get_channel_layer()
+    group_name = f'scan_{scan_event_id}'
+
+    def send_progress(message, step='processing', data=None):
+        if not channel_layer:
+            return
+        try:
+            payload = {
+                'type': 'scan_progress',
+                'message': message,
+                'status': 'processing',
+                'step': step,
+            }
+            if data is not None:
+                payload['data'] = data
+            async_to_sync(channel_layer.group_send)(group_name, payload)
+        except Exception as e:
+            logger.warning(f"[EmailScan] Event {scan_event_id}: Progress send failed: {e}")
     
     logger.info(f"[EmailScan] Event {scan_event_id}: Starting deep scan")
     
@@ -839,11 +1389,20 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
         analysis_type = (email_data.get('analysis_type') or 'text').lower()
         is_basic_mode = analysis_type != 'eml'
 
+        send_progress("Bắt đầu phân tích chuyên sâu email...", step="init")
+        send_progress(f"Chế độ: {'Phân tích cơ bản (text)' if is_basic_mode else 'Phân tích file .eml đầy đủ'}", step="init")
+        if email_data.get('from'):
+            send_progress(f"Người gửi: {email_data['from']}", step="init")
+        if email_data.get('subject'):
+            send_progress(f"Tiêu đề: {email_data['subject'][:120]}", step="init")
+
         # Use result_json instead of details
         result_json = scan_event.result_json or {}
-        details = [] if is_basic_mode else list(result_json.get('security_checks', []))
+        security_checks = list(result_json.get('security_checks', []))
+        details = list(security_checks)
 
         # 1) Scoring engine
+        send_progress("Đang tính điểm rủi ro email...", step="scoring")
         if is_basic_mode:
             eml_res = {
                 'risk_score': current_score,
@@ -855,11 +1414,28 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             }
             eml_score = current_score
             logger.info(f"[EmailScan] Event {scan_event_id}: BASIC mode score={eml_score}")
+            send_progress(f"Điểm rủi ro cơ bản: {eml_score}/100", step="scoring")
         else:
             eml_res = compute_eml_weighted_risk(email_data)
             eml_score = int(eml_res.get('risk_score', 0) or 0)
             details.extend(eml_res.get('details', []))
             logger.info(f"[EmailScan] Event {scan_event_id}: EML weighted score={eml_score}")
+            send_progress(f"Điểm EML weighted: {eml_score}/100", step="scoring")
+            # Show auth results
+            auth = eml_res.get('auth_results', {})
+            if auth:
+                auth_parts = []
+                for k, v in auth.items():
+                    status = '✅' if v in ('pass', True) else '❌'
+                    auth_parts.append(f"{k.upper()}: {status} {v}")
+                if auth_parts:
+                    send_progress(f"Xác thực: {' | '.join(auth_parts)}", step="auth_check")
+            # Show component breakdown
+            components = eml_res.get('components', {})
+            if components:
+                comp_parts = [f"{k}: {v}" for k, v in components.items() if v]
+                if comp_parts:
+                    send_progress(f"Thành phần: {', '.join(comp_parts[:6])}", step="scoring_detail")
 
         # 2) Content Analysis (LLM)
         body_text = email_data.get('body', '')
@@ -869,27 +1445,64 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
         ai_bonus = 0
 
         if body_text and len(body_text) > 20:
+            send_progress(f"Đang phân tích nội dung email bằng AI ({len(body_text)} ký tự)...", step="ai_analysis")
+            # Show detected URLs
+            detected_urls = email_data.get('urls', [])
+            if detected_urls:
+                send_progress(f"Phát hiện {len(detected_urls)} URL trong email", step="url_detect")
+            # Show detected attachments
+            detected_attachments = email_data.get('attachments', [])
+            if detected_attachments:
+                send_progress(f"Phát hiện {len(detected_attachments)} file đính kèm", step="attachment_detect")
+            security_lines = '\n'.join(f"- {item}" for item in security_checks[:20]) if security_checks else '- Không có dữ liệu kiểm tra bảo mật domain.'
+            security_context = (
+                "Kết quả kiểm tra bảo mật domain (hệ thống backend đã xác thực, có thể dùng trực tiếp):\n"
+                f"{security_lines}"
+            )
+
             # Build a Vietnamese-context enriched text block for the AI
             if is_basic_mode:
                 analysis_input = (
                     "CHẾ ĐỘ PHÂN TÍCH CƠ BẢN (TEXT-ONLY):\n"
                     "- Chỉ sử dụng dữ liệu được cung cấp bên dưới.\n"
-                    "- KHÔNG suy diễn hoặc kết luận về SPF/DKIM/DMARC, header email, metadata SMTP, "
+                    "- ĐƯỢC PHÉP dùng kết quả SPF/DKIM/DMARC/MX từ phần 'Kết quả kiểm tra bảo mật domain' bên dưới.\n"
+                    "- KHÔNG suy diễn hoặc kết luận về header email/metadata SMTP, "
                     "độ uy tín domain qua ScamAdviser/Trustpilot/Sitejabber nếu không có dữ liệu xác thực tương ứng.\n"
                     "- Không đưa nhận định về WHOIS/Tranco/ESP nếu không có bằng chứng trực tiếp trong input.\n\n"
                     f"Địa chỉ gửi: {sender}\n"
                     f"Tiêu đề: {subject}\n"
+                    f"{security_context}\n\n"
                     f"Nội dung:\n{body_text[:4000]}"
                 )
             else:
+                eml_components = json.dumps(eml_res.get('components', {}), ensure_ascii=False)
+                eml_auth = json.dumps(eml_res.get('auth_results', {}), ensure_ascii=False)
+                eml_detail_lines = '\n'.join(f"- {item}" for item in (eml_res.get('details') or [])[:20])
                 analysis_input = (
+                    "CHẾ ĐỘ PHÂN TÍCH .EML (FULL):\n"
                     f"Địa chỉ gửi: {sender}\n"
                     f"Tiêu đề: {subject}\n"
+                    f"{security_context}\n\n"
+                    "Kết quả phân tích EML weighted (hệ thống backend đã tính sẵn, có thể dùng trực tiếp):\n"
+                    f"- EML Weighted Risk Score: {eml_score}/100\n"
+                    f"- Components: {eml_components}\n"
+                    f"- Auth Results: {eml_auth}\n"
+                    f"- EML Details:\n{eml_detail_lines if eml_detail_lines else '- Không có chi tiết EML bổ sung.'}\n\n"
                     f"Nội dung:\n{body_text[:4000]}"
                 )
             logger.info(f"[EmailScan] Event {scan_event_id}: Analyzing body text ({len(body_text)} chars)")
+            if not is_basic_mode:
+                send_progress("Đang tra cứu cơ sở dữ liệu lừa đảo + tìm kiếm web...", step="web_search")
             analysis = analyze_text_for_scam(analysis_input, use_web_search=(not is_basic_mode))
             logger.info(f"[EmailScan] Event {scan_event_id}: AI Result: {analysis}")
+            ai_notice = analysis.get('ai_notice') if analysis else None
+            if ai_notice:
+                send_progress(ai_notice, step="ai_retry_notice")
+            # Show web sources found
+            if analysis and analysis.get('web_sources'):
+                src_list = ', '.join(str(s) for s in analysis['web_sources'][:5])
+                send_progress(f"Nguồn tình báo: {src_list}", step="web_sources_ok")
+            send_progress("AI đã hoàn tất phân tích nội dung.", step="ai_done")
             
             if analysis:
                 if analysis.get('is_scam'):
@@ -902,18 +1515,27 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
                     details.append(f"AI nhận định: {ai_explain}")
         else:
             logger.info(f"[EmailScan] Event {scan_event_id}: Body text too short, skipping AI")
-
-        # For basic mode, keep result concise and avoid metadata-heavy indicators.
-        if is_basic_mode:
-            details = [
-                item for item in details
-                if not re.search(r'(SPF|DKIM|DMARC|WHOIS|ScamAdviser|Trustpilot|Sitejabber|Tranco)', str(item), re.IGNORECASE)
-            ]
+            send_progress("Nội dung email quá ngắn, bỏ qua phân tích AI.", step="ai_skipped")
 
         # 3) Finalize - combine preliminary score, weighted EML score, and AI adjustment
+        send_progress("Đang tổng hợp kết quả phân tích...", step="finalizing")
         combined_base = max(current_score, eml_score)
         final_score = max(0, min(100, combined_base + ai_bonus))
         logger.info(f"[EmailScan] Event {scan_event_id}: Final Score: {final_score}")
+        send_progress(f"Điểm tổng kết: {final_score}/100 (base={combined_base}, AI adj={ai_bonus:+d})", step="score_final")
+
+        # Remove duplicated analysis lines (e.g., DMARC/SPF repeated by multiple analyzers)
+        deduped_details = []
+        seen_detail_keys = set()
+        for item in details:
+            text = str(item).strip()
+            if not text:
+                continue
+            normalized_key = re.sub(r'\s+', ' ', text).lower()
+            if normalized_key in seen_detail_keys:
+                continue
+            seen_detail_keys.add(normalized_key)
+            deduped_details.append(text)
         
         # Determine Risk Level
         if final_score >= 80:
@@ -924,7 +1546,7 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             scan_event.risk_level = RiskLevel.GREEN
             
         scan_event.risk_score = final_score
-        result_json['analysis_result'] = details[:40]
+        result_json['analysis_result'] = deduped_details[:40]
         result_json['eml_weighted_score'] = eml_score
         result_json['eml_score_components'] = eml_res.get('components', {})
         result_json['email_auth_results'] = eml_res.get('auth_results', {})
@@ -935,11 +1557,18 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
         if analysis:
             result_json['web_sources'] = analysis.get('web_sources', [])
             result_json['web_context'] = analysis.get('web_context', '')
+            result_json['searched_urls'] = analysis.get('searched_urls', [])
         scan_event.result_json = result_json
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
         
+        send_progress("Hoàn tất phân tích chuyên sâu email!", step="completed", data={
+            'risk_score': final_score,
+            'risk_level': str(scan_event.risk_level),
+            'result': result_json
+        })
         logger.info(f"[EmailScan] Event {scan_event_id}: Completed Successfully. Level: {scan_event.risk_level}")
+        _notify_scan_complete(scan_event, 'Quét email chuyên sâu hoàn tất')
         
     except ScanEvent.DoesNotExist:
         logger.error(f"[EmailScan] ScanEvent #{scan_event_id} not found.")
@@ -950,3 +1579,489 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
                         scan_event.status = ScanStatus.FAILED
                         scan_event.save()
         except: pass
+
+
+@shared_task(name='core.perform_file_scan_task', bind=True)
+def perform_file_scan_task(self, scan_event_id, file_path):
+    """
+    Background task to scan an uploaded file using VirusTotal.
+    Called from ScanFileView after saving the file to a temp location.
+    """
+    import os
+    import time
+    from api.core.models import ScanEvent, ScanStatus, RiskLevel
+    from api.utils.vt_client import VTClient
+
+    start_time = time.time()
+
+    try:
+        scan_event = ScanEvent.objects.get(id=scan_event_id)
+        scan_event.status = ScanStatus.PROCESSING
+        scan_event.job_id = self.request.id
+        scan_event.save()
+
+        file_name = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+        logger.info(f"[FileScan] Event {scan_event_id}: START — file='{file_name}', size={file_size} bytes")
+
+        # Scan with VirusTotal (timeout 5 min)
+        logger.info(f"[FileScan] Event {scan_event_id}: Uploading to VirusTotal...")
+        vt = VTClient()
+        vt_result = vt.scan_file(file_path, timeout=300)
+        elapsed = time.time() - start_time
+        logger.info(f"[FileScan] Event {scan_event_id}: VT scan returned after {elapsed:.1f}s — result={'OK' if vt_result else 'None'}")
+
+        if vt_result:
+            malicious = vt_result.get('malicious', 0)
+            suspicious = vt_result.get('suspicious', 0)
+            harmless = vt_result.get('harmless', 0)
+            undetected = vt_result.get('undetected', 0)
+            total = vt_result.get('total', 0) or (malicious + suspicious + harmless + undetected)
+
+            # Calculate risk score (0-100)
+            if total > 0:
+                risk_score = min(100, int(((malicious * 1.0 + suspicious * 0.5) / total) * 100))
+            else:
+                risk_score = 0
+
+            # Determine risk level
+            if malicious >= 5 or risk_score >= 70:
+                risk_level = RiskLevel.RED
+            elif malicious >= 1 or suspicious >= 3 or risk_score >= 30:
+                risk_level = RiskLevel.YELLOW
+            else:
+                risk_level = RiskLevel.GREEN
+
+            details = []
+            if malicious > 0:
+                details.append(f"⚠️ {malicious}/{total} engine phát hiện mã độc.")
+            if suspicious > 0:
+                details.append(f"🔍 {suspicious}/{total} engine đánh giá đáng ngờ.")
+            if harmless > 0:
+                details.append(f"✅ {harmless}/{total} engine đánh giá an toàn.")
+            if undetected > 0:
+                details.append(f"❔ {undetected}/{total} engine không phát hiện gì.")
+
+            scan_event.result_json = {
+                'file_name': file_name,
+                'file_size': file_size,
+                'malicious': malicious,
+                'suspicious': suspicious,
+                'harmless': harmless,
+                'undetected': undetected,
+                'total': total,
+                'risk_score': risk_score,
+                'risk_level': risk_level,
+                'details': details,
+                'summary': f"Kết quả quét: {malicious} mã độc, {suspicious} đáng ngờ trên tổng {total} engine.",
+            }
+            scan_event.risk_score = risk_score
+            scan_event.risk_level = risk_level
+        else:
+            # VT scan failed or returned None
+            logger.warning(f"[FileScan] Event {scan_event_id}: VirusTotal returned no result after {elapsed:.1f}s")
+            scan_event.result_json = {
+                'file_name': file_name,
+                'file_size': file_size,
+                'risk_score': 0,
+                'risk_level': RiskLevel.GREEN,
+                'details': ['Không thể quét file qua VirusTotal. Vui lòng thử lại sau.'],
+                'summary': 'Quét file thất bại. Không có kết quả từ VirusTotal.',
+            }
+            scan_event.risk_score = 0
+            scan_event.risk_level = RiskLevel.GREEN
+
+        scan_event.status = ScanStatus.COMPLETED
+        scan_event.save()
+        total_time = time.time() - start_time
+        logger.info(f"[FileScan] Event {scan_event_id}: COMPLETED in {total_time:.1f}s. Risk: {scan_event.risk_level}, Score: {scan_event.risk_score}")
+
+        # Send push notification to user
+        _notify_scan_complete(scan_event, f"Quét file '{file_name}' hoàn tất")
+
+    except ScanEvent.DoesNotExist:
+        logger.error(f"[FileScan] ScanEvent #{scan_event_id} not found.")
+    except Exception as e:
+        logger.error(f"[FileScan] perform_file_scan_task failed after {time.time() - start_time:.1f}s: {e}", exc_info=True)
+        try:
+            scan_event = ScanEvent.objects.get(id=scan_event_id)
+            scan_event.status = ScanStatus.FAILED
+            scan_event.result_json = {'error': str(e)}
+            scan_event.save()
+        except Exception:
+            pass
+    finally:
+        # Cleanup temp file
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"[FileScan] Cleaned up temp file: {file_path}")
+        except Exception as cleanup_err:
+            logger.warning(f"[FileScan] Failed to clean up temp file: {cleanup_err}")
+
+
+# ---------------------------------------------------------------------------
+# Magic Create Lesson — runs AI generation in Celery with WS progress
+# ---------------------------------------------------------------------------
+
+def _send_task_progress(task_id, status, message, step=None, data=None):
+    """Helper to send progress over WebSocket for a generic task."""
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        async_to_sync(channel_layer.group_send)(f'task_{task_id}', {
+            'type': 'task_progress',
+            'status': status,
+            'message': message,
+            'step': step,
+            'data': data,
+        })
+
+
+@shared_task(name='core.magic_create_lesson_task', bind=True, max_retries=1)
+def magic_create_lesson_task(self, task_id, raw_text):
+    """
+    AI-powered lesson generation via Celery.
+    Generates: lesson content (HTML), 5 quizzes, rich scenario (10+ steps with AI roleplay).
+    Sends PARTIAL progress updates via WebSocket at each stage.
+    """
+    import re as _re
+    import markdown as md
+    from api.utils.ollama_client import generate_response
+
+    def _md_to_html(text):
+        """Convert markdown to clean HTML for CKEditor."""
+        if not text:
+            return ''
+        # If it already looks like HTML, return as-is
+        if '<h2' in text or '<h3' in text or '<p>' in text:
+            return text
+        try:
+            html = md.markdown(text, extensions=['extra', 'nl2br', 'sane_lists'])
+        except Exception:
+            # Fallback manual conversion
+            html = text
+            html = _re.sub(r'^### (.+)$', r'<h3>\1</h3>', html, flags=_re.MULTILINE)
+            html = _re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=_re.MULTILINE)
+            html = _re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=_re.MULTILINE)
+            html = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+            html = _re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
+            html = _re.sub(r'^- (.+)$', r'<li>\1</li>', html, flags=_re.MULTILINE)
+            html = _re.sub(r'(<li>.*?</li>\n?)+', r'<ul>\g<0></ul>', html)
+            html = _re.sub(r'\n{2,}', '</p><p>', html)
+            html = '<p>' + html + '</p>'
+            html = html.replace('<p></p>', '')
+        return html
+
+    # ──── STAGE 1: Analyze ────
+    _send_task_progress(task_id, 'processing', 'Đang phân tích văn bản nguồn...', step=1)
+
+    # ──── STAGE 2: Generate lesson content ────
+    _send_task_progress(task_id, 'processing', 'AI đang tạo nội dung bài học...', step=2)
+
+    content_prompt = f"""Văn bản nguồn:
+---
+{raw_text}
+---
+
+Hãy tạo bài học giáo dục về an ninh mạng từ văn bản trên. Trả về JSON thuần với cấu trúc:
+{{
+  "title": "Tiêu đề hấp dẫn, mang tính giáo dục",
+  "content": "Nội dung bài học chi tiết, ít nhất 500 từ",
+  "category": "news|guide|alert|story"
+}}
+
+YÊU CẦU CONTENT:
+- Viết content bằng Markdown (## heading, ### sub, **bold**, - bullet, > blockquote).
+- Phải bao gồm các phần: Tổng quan, Thủ đoạn lừa đảo, Dấu hiệu nhận biết, Cách phòng tránh, Kết luận.
+- Mỗi phần phải có ít nhất 3 bullet points hoặc 2 đoạn văn.
+- Dùng ví dụ thực tế minh họa, ngôn ngữ dễ hiểu cho mọi lứa tuổi.
+- Tổng ít nhất 500 từ trở lên."""
+
+    CONTENT_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "content": {"type": "string"},
+            "category": {"type": "string", "enum": ["news", "guide", "alert", "story"]}
+        },
+        "required": ["title", "content", "category"]
+    }
+
+    try:
+        content_resp = generate_response(
+            prompt=content_prompt,
+            system_prompt="Bạn là chuyên gia an ninh mạng Việt Nam. Trả về JSON thuần, không markdown code block.",
+            format_schema=CONTENT_SCHEMA,
+        )
+
+        content_data = _parse_json_safe(content_resp)
+        if not content_data or not content_data.get('title'):
+            _send_task_progress(task_id, 'error', 'AI không tạo được nội dung bài học. Thử lại.')
+            return
+
+        # Convert markdown content → HTML for CKEditor
+        content_data['content'] = _md_to_html(content_data.get('content', ''))
+
+        # Send partial: title + content
+        _send_task_progress(task_id, 'processing', 'Nội dung bài học đã tạo xong!', step=2, data={
+            'title': content_data['title'],
+            'category': content_data.get('category', 'guide'),
+            'content': content_data['content']
+        })
+        logger.info(f"[MagicCreate] Task {task_id}: Content generated - {content_data['title']}")
+
+    except Exception as e:
+        logger.error(f"[MagicCreate] Task {task_id} content failed: {e}", exc_info=True)
+        _send_task_progress(task_id, 'error', f'Lỗi tạo nội dung: {str(e)}')
+        return
+
+    # ──── STAGE 3: Generate 5 quizzes ────
+    _send_task_progress(task_id, 'processing', 'AI đang tạo 5 câu hỏi quiz...', step=3)
+
+    quiz_prompt = f"""Dựa trên bài học "{content_data['title']}" với nội dung sau:
+---
+{raw_text[:2000]}
+---
+
+Hãy tạo CHÍNH XÁC 5 câu hỏi trắc nghiệm kiểm tra kiến thức. Mỗi câu hỏi PHẢI CÓ:
+- question: Câu hỏi rõ ràng, kiểm tra khả năng nhận biết lừa đảo
+- options: ĐÚNG 4 đáp án (rõ ràng, phân biệt được)
+- correct_answer: Phải CHÍNH XÁC trùng khớp một trong 4 options
+- explanation: Giải thích chi tiết (>50 từ) tại sao đáp án đó đúng và các đáp án khác sai
+
+5 câu hỏi phải đa dạng:
+1. Câu nhận biết dấu hiệu
+2. Câu xử lý tình huống 
+3. Câu kiến thức cơ bản
+4. Câu đánh giá rủi ro
+5. Câu phòng tránh thực tế
+
+Trả về JSON: {{"quizzes": [...]}}"""
+
+    QUIZ_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "quizzes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string"},
+                        "options": {"type": "array", "items": {"type": "string"}, "minItems": 4, "maxItems": 4},
+                        "correct_answer": {"type": "string"},
+                        "explanation": {"type": "string"}
+                    },
+                    "required": ["question", "options", "correct_answer", "explanation"]
+                },
+                "minItems": 5
+            }
+        },
+        "required": ["quizzes"]
+    }
+
+    try:
+        quiz_resp = generate_response(
+            prompt=quiz_prompt,
+            system_prompt="Bạn tạo quiz giáo dục. Trả về JSON thuần.",
+            format_schema=QUIZ_SCHEMA,
+        )
+        quiz_data = _parse_json_safe(quiz_resp)
+        quizzes = quiz_data.get('quizzes', []) if quiz_data else []
+
+        # Validate each quiz
+        valid_quizzes = []
+        for q in quizzes:
+            if q.get('question') and q.get('options') and len(q['options']) >= 4:
+                # Ensure correct_answer matches an option
+                if q.get('correct_answer') not in q['options']:
+                    q['correct_answer'] = q['options'][0]
+                if not q.get('explanation'):
+                    q['explanation'] = ''
+                valid_quizzes.append(q)
+
+        # Pad if fewer than 5
+        while len(valid_quizzes) < 5:
+            valid_quizzes.append({
+                'question': f'Câu hỏi bổ sung #{len(valid_quizzes)+1} về: {content_data["title"]}',
+                'options': ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'],
+                'correct_answer': 'Đáp án A',
+                'explanation': 'Vui lòng chỉnh sửa câu hỏi này.'
+            })
+
+        quizzes = valid_quizzes[:5]
+
+        # Send partial: quizzes
+        _send_task_progress(task_id, 'processing', f'Đã tạo {len(quizzes)} câu quiz!', step=3, data={'quizzes': quizzes})
+        logger.info(f"[MagicCreate] Task {task_id}: {len(quizzes)} quizzes generated")
+
+    except Exception as e:
+        logger.error(f"[MagicCreate] Task {task_id} quiz failed: {e}", exc_info=True)
+        quizzes = [{
+            'question': f'Câu hỏi về: {content_data["title"]}',
+            'options': ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'],
+            'correct_answer': 'Đáp án A',
+            'explanation': 'AI không tạo được quiz, vui lòng chỉnh sửa.'
+        }]
+        _send_task_progress(task_id, 'processing', 'Quiz gặp lỗi, đã tạo mẫu thay thế.', step=3, data={'quizzes': quizzes})
+
+    # ──── STAGE 4: Generate rich scenario ────
+    _send_task_progress(task_id, 'processing', 'AI đang tạo kịch bản hội thoại chi tiết...', step=4)
+
+    scenario_prompt = f"""Dựa trên bài học "{content_data['title']}" với nội dung:
+---
+{raw_text[:2000]}
+---
+
+Hãy tạo một KỊCH BẢN HỘI THOẠI sống động giữa kẻ lừa đảo và nạn nhân.
+
+YÊU CẦU KỊCH BẢN:
+- Kẻ lừa đảo (scammer) phải rất thuyết phục, dùng kỹ thuật tâm lý thực tế: tạo cảm giác cấp bách, giả danh uy tín, đe dọa nhẹ, tạo niềm tin giả
+- AI ĐÓNG VAI kẻ lừa đảo thật sống động (nhưng để giáo dục, mỗi bước có ghi chú phân tích thủ đoạn)
+- Nạn nhân ban đầu hoang mang, dần dần nhận ra dấu hiệu khả nghi
+- narrator (người kể) giải thích tâm lý, phân tích kỹ thuật
+- Ít nhất 10 bước hội thoại, bao gồm các giai đoạn:
+  • Tiếp cận (2 bước): Kẻ lừa đảo gọi/nhắn, xưng danh
+  • Tạo niềm tin (2 bước): Đọc thông tin cá nhân, gây tin tưởng
+  • Gây hoang (2 bước): Tạo tình huống cấp bách, đe dọa
+  • Yêu cầu hành động (2 bước): Đòi OTP, chuyển tiền, tải app
+  • Nhận diện (1 bước): Nạn nhân phát hiện dấu hiệu lạ
+  • Kết luận (1 bước): narrator tổng kết bài học
+
+Mỗi step PHẢI CÓ:
+- speaker: "scammer" | "victim" | "narrator"
+- text: Lời thoại CỤ THỂ, tự nhiên, giống thật (KHÔNG để trống, KHÔNG để placeholder)
+- note: Ghi chú phân tích (bắt buộc cho mọi bước)
+
+Trả về JSON:
+{{
+  "scenario": {{
+    "title": "Tiêu đề kịch bản",
+    "description": "Mô tả ngắn gọn tình huống (2-3 câu)",
+    "content_json": {{
+      "steps": [
+        {{"speaker": "scammer", "text": "Lời thoại cụ thể", "note": "Phân tích thủ đoạn"}}
+      ]
+    }}
+  }}
+}}"""
+
+    SCENARIO_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "scenario": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "content_json": {
+                        "type": "object",
+                        "properties": {
+                            "steps": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "speaker": {"type": "string", "enum": ["scammer", "victim", "narrator"]},
+                                        "text": {"type": "string"},
+                                        "note": {"type": "string"}
+                                    },
+                                    "required": ["speaker", "text", "note"]
+                                },
+                                "minItems": 10
+                            }
+                        },
+                        "required": ["steps"]
+                    }
+                },
+                "required": ["title", "description", "content_json"]
+            }
+        },
+        "required": ["scenario"]
+    }
+
+    try:
+        scenario_resp = generate_response(
+            prompt=scenario_prompt,
+            system_prompt="Bạn là nhà biên kịch an ninh mạng. Tạo kịch bản sống động, giáo dục, có phân tích chi tiết. Trả về JSON thuần.",
+            format_schema=SCENARIO_SCHEMA,
+        )
+        scenario_data = _parse_json_safe(scenario_resp)
+        scenario = scenario_data.get('scenario') if scenario_data else None
+
+        if scenario:
+            steps = scenario.get('content_json', {}).get('steps', [])
+            # Validate: every step must have non-empty text
+            valid_steps = [s for s in steps if s.get('text') and s['text'].strip()]
+            if len(valid_steps) < len(steps):
+                logger.warning(f"[MagicCreate] {len(steps) - len(valid_steps)} empty steps removed")
+            if valid_steps:
+                scenario['content_json']['steps'] = valid_steps
+            else:
+                logger.error(f"[MagicCreate] All scenario steps empty!")
+                scenario['content_json']['steps'] = [
+                    {'speaker': 'narrator', 'text': 'Kịch bản cần được chỉnh sửa - AI tạo không đủ nội dung.', 'note': 'Placeholder'}
+                ]
+        else:
+            scenario = {
+                'title': f'Kịch bản: {content_data["title"]}',
+                'description': 'Kịch bản cần chỉnh sửa',
+                'content_json': {'steps': [
+                    {'speaker': 'narrator', 'text': 'AI không tạo được kịch bản. Vui lòng chỉnh sửa.', 'note': 'Fallback'}
+                ]}
+            }
+
+        # Send partial: scenario
+        _send_task_progress(task_id, 'processing', f'Kịch bản {len(scenario["content_json"]["steps"])} bước đã tạo!', step=4, data={'scenario': scenario})
+        logger.info(f"[MagicCreate] Task {task_id}: Scenario generated with {len(scenario['content_json']['steps'])} steps")
+
+    except Exception as e:
+        logger.error(f"[MagicCreate] Task {task_id} scenario failed: {e}", exc_info=True)
+        scenario = {
+            'title': f'Kịch bản: {content_data["title"]}',
+            'description': 'Lỗi khi tạo kịch bản',
+            'content_json': {'steps': [
+                {'speaker': 'narrator', 'text': f'Lỗi: {str(e)}', 'note': 'Error fallback'}
+            ]}
+        }
+        _send_task_progress(task_id, 'processing', 'Kịch bản gặp lỗi, đã tạo mẫu thay thế.', step=4, data={'scenario': scenario})
+
+    # ──── STAGE 5: Finalize ────
+    final_data = {
+        'title': content_data['title'],
+        'content': content_data['content'],
+        'category': content_data.get('category', 'guide'),
+        'quizzes': quizzes,
+        'scenario': scenario,
+    }
+    _send_task_progress(task_id, 'done', 'Tạo bài học thành công!', step=5, data=final_data)
+    logger.info(f"[MagicCreate] Task {task_id} completed: {content_data['title']} | {len(quizzes)} quizzes | {len(scenario['content_json']['steps'])} scenario steps")
+
+    # ──── Push Notification to Admins ────
+    try:
+        from api.utils.push_service import PushNotificationService
+        PushNotificationService.broadcast_admin(
+            title='✨ Magic Create hoàn thành',
+            message=f'Bài học "{content_data["title"]}" đã được AI tạo xong ({len(quizzes)} quiz, {len(scenario["content_json"]["steps"])} bước kịch bản).',
+            url='/admin-cp/learn/magic-create/',
+            notification_type='success',
+        )
+    except Exception as push_err:
+        logger.warning(f"[MagicCreate] Push notification failed: {push_err}")
+
+
+def _parse_json_safe(text):
+    """Safely parse JSON from AI response, with repair attempts."""
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        match = re.search(r'\{[\s\S]*\}', text)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+    return None
