@@ -1,6 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Diễn đàn cộng đồng{% endblock %}
 {% block head_extra %}
+<style>
+    .forum-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .forum-card:hover {
+        border-color: rgba(24, 255, 255, 0.3);
+        transform: translateY(-4px);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    }
+    .verified-badge {
+        background: linear-gradient(135deg, #18ffff, #b388ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 0.9rem;
+    }
+    .reaction-btn {
+        transition: all 0.2s ease;
+    }
+    .reaction-btn:hover {
+        transform: scale(1.1);
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .reaction-btn.active {
+        color: var(--accent-cyan);
+        background: rgba(24, 255, 255, 0.1);
+    }
+    .reaction-btn.active-red {
+        color: #ff1744;
+        background: rgba(255, 23, 68, 0.1);
+    }
+    .category-tag {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -9,48 +51,20 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('forumApp', () => ({
         activeTab: 'all',
         searchQuery: '',
-        showCreate: false,
-        posts: {{ posts_json|safe }},
-        newPost: {title:'', content:'', category:'discussion', image: null},
+        posts: [],
         loading: false,
-        
-        async createPost() {
-            if(!this.newPost.title.trim() || !this.newPost.content.trim()) return;
-            this.loading = true;
-            
-            const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
-            if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
 
-            const formData = new FormData();
-            formData.append('title', this.newPost.title);
-            formData.append('content', this.newPost.content);
-            formData.append('category', this.newPost.category);
-            formData.append('cf-turnstile-response', tsToken);
-            if (this.$refs.postImage && this.$refs.postImage.files[0]) {
-                formData.append('image', this.$refs.postImage.files[0]);
-            }
-
+        init() {
             try {
-                const resp = await fetch('/api/v1/forum/posts/', {
-                    method: 'POST',
-                    headers: {'X-CSRFToken': getCSRFToken()},
-                    body: formData
-                });
-                if(resp.ok) {
-                    const post = await resp.json();
-                    this.posts.unshift(post);
-                    this.newPost = {title:'', content:'', category:'discussion', image: null};
-                    if(this.$refs.postImage) this.$refs.postImage.value = '';
-                    this.showCreate = false;
-                    showToast('Đăng bài thành công!', 'success');
-                } else { 
-                    const err = await resp.json();
-                    showToast(err.error || 'Lỗi khi đăng bài', 'error'); 
-                }
-            } catch(e) { showToast('Lỗi kết nối', 'error'); }
-            this.loading = false;
+                const dataEl = document.getElementById('forum-posts-data');
+                if (dataEl) this.posts = JSON.parse(dataEl.textContent);
+            } catch (e) {
+                console.error('Forum Data Error:', e);
+            }
         },
+        
         async toggleLike(post) {
+            if (!post.id) return;
             try {
                 const resp = await fetch('/api/v1/forum/posts/' + post.id + '/like/', {
                     method: 'POST',
@@ -63,33 +77,82 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch(e) {}
         },
+        async toggleReaction(post, type) {
+            if (!post.id) return;
+            try {
+                const resp = await fetch(`/api/v1/forum/posts/${post.id}/reaction/`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
+                    body: JSON.stringify({ reaction_type: type })
+                });
+                if(resp.ok) {
+                    const data = await resp.json();
+                    if(type === 'helpful') {
+                        post.helpful_count = data.helpful_count;
+                        post.user_helpful = data.reacted;
+                    } else if(type === 'share') {
+                        post.shares_count = data.shares_count;
+                        post.user_shared = data.reacted;
+                    }
+                }
+            } catch(e) {}
+        },
+        async reportPost(post) {
+            if (!post.id) return;
+            const { value: reason } = await Swal.fire({
+                title: 'Báo cáo bài viết',
+                input: 'textarea',
+                inputLabel: 'Lý do báo cáo',
+                inputPlaceholder: 'Tại sao bạn báo cáo bài viết này...',
+                showCancelButton: true,
+                confirmButtonColor: '#ff1744',
+                background: '#161235',
+                color: '#fff'
+            });
+            
+            if (reason) {
+                try {
+                    const resp = await fetch(`/api/v1/forum/posts/${post.id}/report/`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
+                        body: JSON.stringify({ reason: reason })
+                    });
+                    if(resp.ok) {
+                        showToast('Cảm ơn bạn đã báo cáo!', 'success');
+                    }
+                } catch(e) {}
+            }
+        },
         filteredPosts() {
+            if (!Array.isArray(this.posts)) return [];
             let filtered = this.posts;
             if(this.activeTab !== 'all') filtered = filtered.filter(p => p.category === this.activeTab);
             if(this.searchQuery.trim()) {
                 const q = this.searchQuery.toLowerCase();
-                filtered = filtered.filter(p => p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q));
+                filtered = filtered.filter(p => (p.title || '').toLowerCase().includes(q) || (p.content || '').toLowerCase().includes(q));
             }
             return filtered;
         },
         timeAgo(dt) {
+            if (!dt) return '';
             const diff = (Date.now() - new Date(dt)) / 1000;
+            if(isNaN(diff)) return '';
             if(diff < 60) return 'Vừa xong';
-            if(diff < 3600) return Math.floor(diff/60) + ' phút trước';
-            if(diff < 86400) return Math.floor(diff/3600) + ' giờ trước';
-            return Math.floor(diff/86400) + ' ngày trước';
+            if(diff < 3600) return Math.floor(diff/60) + ' phút';
+            if(diff < 86400) return Math.floor(diff/3600) + ' giờ';
+            return Math.floor(diff/86400) + ' ngày';
         },
-        categoryLabel(cat) {
-            const map = {warning:'Cảnh báo', discussion:'Thảo luận', experience:'Kinh nghiệm', question:'Hỏi đáp'};
-            return map[cat] || cat;
+        categoryInfo(cat) {
+            const map = {
+                warning: { label: 'Cảnh báo', color: 'bg-red-500/20 text-red-500', icon: 'bi-exclamation-triangle' },
+                discussion: { label: 'Thảo luận', color: 'bg-cyan-500/20 text-cyan-500', icon: 'bi-chat-dots' },
+                experience: { label: 'Kinh nghiệm', color: 'bg-purple-500/20 text-purple-500', icon: 'bi-lightbulb' },
+                question: { label: 'Hỏi đáp', color: 'bg-yellow-500/20 text-yellow-500', icon: 'bi-question-diamond' }
+            };
+            return map[cat] || { label: cat, color: 'bg-white/10 text-white/60', icon: 'bi-hash' };
         },
-        categoryIcon(cat) {
-            const map = {warning:'bi-exclamation-octagon-fill', discussion:'bi-chat-dots-fill', experience:'bi-book-half', question:'bi-question-circle-fill'};
-            return map[cat] || 'bi-chat-fill';
-        },
-        categoryColor(cat) {
-            const map = {warning:'var(--risk-red)', discussion:'var(--accent-cyan)', experience:'var(--accent-purple)', question:'var(--risk-yellow)'};
-            return map[cat] || 'var(--text-muted)';
+        getInitial(name) {
+            return name ? name.charAt(0).toUpperCase() : '?';
         }
     }));
 });
@@ -97,197 +160,153 @@ document.addEventListener('alpine:init', () => {
 {% endblock %}
 
 {% block content %}
-<div class="animate-fadein" x-data="forumApp">
-    <!-- Page Header -->
-    <div class="mb-8 text-center sm:text-left">
-        <h1 class="text-3xl font-extrabold flex items-center justify-center sm:justify-start gap-4">
-            <span class="avatar-pill"><i class="bi bi-people-fill"></i></span>
-            <span class="glow-text">Diễn đàn cộng đồng</span>
-        </h1>
-        <p class="text-white/60 mt-2 ml-1">Chia sẻ trải nghiệm, cảnh báo lừa đảo & chung tay bảo vệ cộng đồng</p>
+{{ posts_data|json_script:"forum-posts-data" }}
+<div x-data="forumApp" class="max-w-6xl mx-auto px-4 py-10">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row justify-between items-center gap-6 mb-12 animate__animated animate__fadeIn">
+        <div>
+            <h1 class="text-4xl font-black text-white mb-2">Trung Tâm <span class="text-cyan-400">Cộng Đồng</span></h1>
+            <p class="text-white/40">Nơi người dân chung tay đẩy lùi tội phạm công nghệ cao.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/forum/create/" class="bg-gradient-to-r from-cyan-400 to-blue-600 text-[#0d0d1f] px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:scale-105 transition-all shadow-xl shadow-cyan-500/20">
+                <i class="bi bi-pencil-fill"></i> Tạo chủ đề mới
+            </a>
+        </div>
     </div>
 
-    <!-- Forum Grid -->
-    <div class="forum-grid">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <!-- Sidebar Navigation -->
-        <aside class="forum-sidebar space-y-4">
-            <div class="liquid-card p-6">
-                <h3 class="font-bold text-white/90 mb-4 uppercase text-xs tracking-widest">Danh mục</h3>
-                <nav class="flex flex-col gap-1">
-                    <button @click="activeTab='all'" 
-                        :class="activeTab==='all' ? 'bg-white/10 text-cyan-400' : 'text-white/60 hover:bg-white/5'"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm">
-                        <i class="bi bi-grid-fill"></i> Tất cả bài viết
+        <div class="lg:col-span-3 space-y-6">
+            <div class="glass-dropdown rounded-3xl p-4 overflow-hidden border border-white/5">
+                <h3 class="text-[10px] uppercase font-black tracking-widest text-white/30 px-4 mb-4">Danh mục</h3>
+                <nav class="space-y-1">
+                    <button @click="activeTab='all'" :class="activeTab==='all' ? 'bg-white/10 text-cyan-400' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
+                        <i class="bi bi-grid-fill"></i> Tất cả
                     </button>
-                    <button @click="activeTab='warning'" 
-                        :class="activeTab==='warning' ? 'bg-white/10 text-red-400' : 'text-white/60 hover:bg-white/5'"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm">
-                        <i class="bi bi-exclamation-octagon-fill"></i> Cảnh báo lừa đảo
+                    <button @click="activeTab='warning'" :class="activeTab==='warning' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
+                        <i class="bi bi-shield-fill-exclamation"></i> Cảnh báo
                     </button>
-                    <button @click="activeTab='discussion'" 
-                        :class="activeTab==='discussion' ? 'bg-white/10 text-cyan-400' : 'text-white/60 hover:bg-white/5'"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm">
-                        <i class="bi bi-chat-dots-fill"></i> Thảo luận chung
+                    <button @click="activeTab='discussion'" :class="activeTab==='discussion' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
+                        <i class="bi bi-chat-text-fill"></i> Thảo luận
                     </button>
-                    <button @click="activeTab='experience'" 
-                        :class="activeTab==='experience' ? 'bg-white/10 text-purple-400' : 'text-white/60 hover:bg-white/5'"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm">
-                        <i class="bi bi-book-half"></i> Chia sẻ kinh nghiệm
+                    <button @click="activeTab='experience'" :class="activeTab==='experience' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
+                        <i class="bi bi-gem"></i> Kinh nghiệm
                     </button>
-                    <button @click="activeTab='question'" 
-                        :class="activeTab==='question' ? 'bg-white/10 text-yellow-400' : 'text-white/60 hover:bg-white/5'"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm">
-                        <i class="bi bi-question-circle-fill"></i> Hỏi đáp hỗ trợ
+                    <button @click="activeTab='question'" :class="activeTab==='question' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
+                        <i class="bi bi-patch-question-fill"></i> Hỏi đáp
                     </button>
                 </nav>
             </div>
-            
-            <div class="liquid-card p-6 bg-gradient-to-br from-cyan-500/10 to-transparent">
-                <h3 class="font-bold text-white/90 mb-2 uppercase text-xs tracking-widest">Hoạt động</h3>
-                <div class="flex items-center justify-between text-sm py-2 border-b border-white/5">
-                    <span class="text-white/50">Bài viết mới</span>
-                    <span class="text-white font-medium" x-text="posts.length"></span>
-                </div>
-                <div class="flex items-center justify-between text-sm py-2">
-                    <span class="text-white/50">Lượt tương tác</span>
-                    <span class="text-white font-medium" x-text="posts.reduce((a, b) => a + (b.likes_count || 0), 0)"></span>
-                </div>
-            </div>
-        </aside>
 
-        <!-- Main Feed -->
-        <div class="space-y-6">
-            <!-- Search & Actions -->
-            <div class="flex items-center gap-3">
-                <div class="relative flex-1 group">
-                    <i class="bi bi-search absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-cyan-400 transition-colors"></i>
-                    <input type="text" x-model="searchQuery" placeholder="Tìm kiếm kinh nghiệm, cảnh báo..." 
-                        class="liquid-input w-full pl-11 bg-white/5 border-white/10 focus:border-cyan-400/50">
-                </div>
-                {% if user.is_authenticated %}
-                <button @click="showCreate = !showCreate" 
-                    class="liquid-btn shrink-0" 
-                    :class="showCreate ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400'">
-                    <i class="bi" :class="showCreate ? 'bi-x-lg' : 'bi-plus-lg'"></i>
-                    <span x-text="showCreate ? 'Hủy' : 'Viết bài'"></span>
-                </button>
-                {% endif %}
-            </div>
-
-            <!-- Create Post Form -->
-            <div x-show="showCreate" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 -translate-y-4"
-                class="liquid-card p-6 border-cyan-500/20">
-                <h2 class="text-xl font-bold mb-6 flex items-center gap-3">
-                    <i class="bi bi-pencil-square text-cyan-400"></i> Chia sẻ với cộng đồng
-                </h2>
-                <div class="grid gap-4">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="space-y-1.5">
-                            <label class="text-xs font-bold text-white/50 ml-1">DANH MỤC</label>
-                            <select x-model="newPost.category" class="liquid-input w-full appearance-none">
-                                <option value="warning">⛔ Cảnh báo lừa đảo</option>
-                                <option value="discussion">Thảo luận chung</option>
-                                <option value="experience">Chia sẻ kinh nghiệm</option>
-                                <option value="question">Hỏi đáp hỗ trợ</option>
-                            </select>
-                        </div>
-                        <div class="space-y-1.5">
-                            <label class="text-xs font-bold text-white/50 ml-1">ẢNH MINH HỌA (TÙY CHỌN)</label>
-                            <input type="file" x-ref="postImage" accept="image/*" class="liquid-input w-full p-2 text-xs">
-                        </div>
+            <div class="glass-dropdown rounded-3xl p-6 border border-white/5 bg-gradient-to-br from-cyan-400/5 to-transparent">
+                <h4 class="text-xs font-black text-white/80 mb-4">THỐNG KÊ CỘNG ĐỒNG</h4>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] text-white/40 font-bold uppercase">Chủ đề</span>
+                        <span class="text-sm font-black text-white" x-text="posts.length"></span>
                     </div>
-                    <div class="space-y-1.5">
-                        <label class="text-xs font-bold text-white/50 ml-1">TIÊU ĐỀ</label>
-                        <input type="text" x-model="newPost.title" placeholder="Tiêu đề thu hút sự chú ý..." class="liquid-input w-full">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="text-xs font-bold text-white/50 ml-1">NỘI DUNG</label>
-                        <textarea x-model="newPost.content" placeholder="Mô tả kỹ chi tiết vụ việc hoặc chia sẻ của bạn..." class="liquid-input w-full min-height-[120px] resize-none"></textarea>
-                    </div>
-                    </div>
-                    <!-- Turnstile Widget -->
-                    <div class="mt-4 flex justify-center">
-                        <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
-                    </div>
-                    <div class="flex justify-end gap-3 mt-4">
-                        <button @click="showCreate = false" class="text-white/50 px-4 py-2 hover:text-white transition-colors">Hủy bỏ</button>
-                        <button @click="createPost()" :disabled="loading" class="liquid-btn bg-cyan-500/20 border-cyan-500/50 text-cyan-400 min-w-[140px] justify-center">
-                            <i x-show="!loading" class="bi bi-send-fill"></i>
-                            <span x-show="loading" class="spinner border-2 w-4 h-4"></span>
-                            <span x-text="loading ? 'Đang đăng...' : 'Đăng bài viết'"></span>
-                        </button>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] text-white/40 font-bold uppercase">Lượt tương tác</span>
+                        <span class="text-sm font-black text-white" x-text="Array.isArray(posts) ? posts.reduce((a, b) => a + (b.likes_count || 0), 0) : 0"></span>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Posts List -->
-            <div class="space-y-4">
+        <!-- Thread List Area -->
+        <div class="lg:col-span-9 space-y-6">
+            <!-- Search Bar -->
+            <div class="relative group">
+                <i class="bi bi-search absolute left-5 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-cyan-400 transition-colors"></i>
+                <input type="text" x-model="searchQuery" placeholder="Tìm kiếm kinh nghiệm, cảnh báo giả mạo..." 
+                    class="w-full bg-white/5 border border-white/10 rounded-3xl py-4 pl-14 pr-6 text-white focus:outline-none focus:border-cyan-400/30 transition-all font-medium">
+            </div>
+
+            <!-- Posts -->
+            <div class="grid gap-4">
                 <template x-for="post in filteredPosts()" :key="post.id">
-                    <div class="liquid-card hover:bg-white/[0.07]">
-                        <div class="p-6">
-                            <!-- Post Metadata -->
-                            <div class="flex justify-between items-start mb-4">
-                                <div class="flex items-center gap-3">
-                                    <div class="avatar-pill" x-text="post.author_name[0].toUpperCase()"></div>
+                    <div class="forum-card rounded-3xl p-6 relative overflow-hidden group">
+                        <div x-show="post.is_pinned" class="absolute top-0 right-0 px-4 py-1 bg-yellow-500/20 text-yellow-500 text-[9px] font-black uppercase tracking-widest border-b border-l border-yellow-500/20 rounded-bl-xl">
+                            <i class="bi bi-pin-angle-fill"></i> Đang ghim
+                        </div>
+                        
+                        <div class="flex flex-col sm:flex-row gap-6">
+                            <!-- Left Content -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-3 mb-4">
+                                    <a :href="'/profile/@' + post.author_username + '/'" class="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-400/20 to-purple-500/20 flex items-center justify-center border border-white/5 relative overflow-hidden shrink-0 hover:scale-110 transition-transform">
+                                        <template x-if="post.author_avatar">
+                                            <img :src="post.author_avatar" class="w-full h-full object-cover">
+                                        </template>
+                                        <template x-if="!post.author_avatar">
+                                            <span class="text-xs font-bold text-cyan-400" x-text="getInitial(post.author_name)"></span>
+                                        </template>
+                                    </a>
                                     <div>
-                                        <div class="font-bold text-white/90" x-text="post.author_name"></div>
-                                        <div class="text-[10px] text-white/40 flex items-center gap-2">
-                                            <span x-text="timeAgo(post.created_at)"></span>
+                                        <div class="flex items-center gap-2">
+                                            <a :href="'/profile/@' + post.author_username + '/'" class="text-sm font-bold text-white/90 hover:text-cyan-400 transition-colors" x-text="post.author_name"></a>
+                                            <i x-show="post.author_is_staff" class="bi bi-patch-check-fill verified-badge" title="Quản trị viên"></i>
+                                        </div>
+                                        <div class="flex items-center gap-2 text-[10px] font-medium text-white/30">
+                                            <span x-text="timeAgo(post.created_at) + ' trước'"></span>
                                             <span>•</span>
-                                            <span :style="'color:' + categoryColor(post.category)" class="uppercase font-bold tracking-tighter" x-text="categoryLabel(post.category)"></span>
+                                            <span :class="categoryInfo(post.category).color" class="category-tag" x-text="categoryInfo(post.category).label"></span>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="flex gap-1">
-                                    <span x-show="post.is_pinned" class="bg-yellow-500/20 text-yellow-500 px-2 py-1 rounded-full text-[10px] font-bold border border-yellow-500/30 flex items-center gap-1">
-                                        <i class="bi bi-pin-angle-fill"></i> NỔI BẬT
-                                    </span>
-                                </div>
-                            </div>
 
-                            <!-- Post Content -->
-                            <div class="flex gap-6">
-                                <div class="flex-1">
-                                    <a :href="'/forum/' + post.id + '/'" class="group">
-                                        <h3 class="text-xl font-bold text-white group-hover:text-cyan-400 transition-colors mb-2" x-text="post.title"></h3>
-                                        <p class="text-white/60 text-sm line-clamp-3 leading-relaxed mb-4" x-text="post.content"></p>
+                                <a :href="'/forum/' + post.id + '/'" class="inline-block group-hover:translate-x-1 transition-transform mb-4">
+                                    <h2 class="text-xl font-bold text-white mb-2 leading-tight group-hover:text-cyan-400 transition-colors" x-text="post.title"></h2>
+                                    <p class="text-sm text-white/50 line-clamp-2 leading-relaxed" x-text="post.content"></p>
+                                </a>
+
+                                <div class="flex flex-wrap items-center gap-4 mt-2 pt-4 border-t border-white/5">
+                                    <div class="flex items-center gap-1">
+                                        <button @click="toggleLike(post)" class="reaction-btn px-3 py-1.5 rounded-xl flex items-center gap-2" :class="post.user_liked ? 'active-red' : 'text-white/30'">
+                                            <i class="bi" :class="post.user_liked ? 'bi-heart-fill' : 'bi-heart'"></i>
+                                            <span class="text-xs font-black" x-text="post.likes_count"></span>
+                                        </button>
+                                        <button @click="toggleReaction(post, 'helpful')" class="reaction-btn px-3 py-1.5 rounded-xl flex items-center gap-2" :class="post.user_helpful ? 'active' : 'text-white/30'">
+                                            <i class="bi" :class="post.user_helpful ? 'bi-patch-check-fill' : 'bi-patch-check'"></i>
+                                            <span class="text-xs font-black" x-text="post.helpful_count"></span>
+                                        </button>
+                                        <button @click="toggleReaction(post, 'share')" class="reaction-btn px-3 py-1.5 rounded-xl flex items-center gap-2" :class="post.user_shared ? 'active' : 'text-white/30'">
+                                            <i class="bi bi-share-fill"></i>
+                                            <span class="text-xs font-black" x-text="post.shares_count"></span>
+                                        </button>
+                                    </div>
+
+                                    <div class="h-4 w-[1px] bg-white/5 mx-1"></div>
+
+                                    <a :href="'/forum/' + post.id + '/'" class="flex items-center gap-2 text-white/30 hover:text-white transition-colors">
+                                        <i class="bi bi-chat-left-text"></i>
+                                        <span class="text-[11px] font-bold" x-text="post.comments_count"></span>
                                     </a>
 
-                                    <!-- Actions & Stats -->
-                                    <div class="flex items-center gap-6 mt-auto">
-                                        <button @click="toggleLike(post)" class="flex items-center gap-2 transition-all hover:scale-110" :class="post.user_liked ? 'text-red-500' : 'text-white/40 hover:text-red-400'">
-                                            <i class="bi" :class="post.user_liked ? 'bi-heart-fill' : 'bi-heart'"></i>
-                                            <span class="text-xs font-bold" x-text="post.likes_count"></span>
-                                        </button>
-                                        <a :href="'/forum/' + post.id + '/'" class="flex items-center gap-2 text-white/40 hover:text-cyan-400 transition-all">
-                                            <i class="bi bi-chat-text"></i>
-                                            <span class="text-xs font-bold" x-text="post.comments_count + ' bình luận'"></span>
-                                        </a>
-                                        <div class="flex items-center gap-2 text-white/30 ml-auto">
-                                            <i class="bi bi-eye"></i>
-                                            <span class="text-[10px] font-bold" x-text="post.views_count"></span>
-                                        </div>
-                                    </div>
+                                    <button @click="reportPost(post)" class="ml-auto flex items-center gap-2 text-white/20 hover:text-red-500 transition-all text-[11px] font-bold">
+                                        <i class="bi bi-flag"></i> Báo cáo
+                                    </button>
                                 </div>
-                                
-                                <!-- Post Image Thumbnail -->
-                                <template x-if="post.image">
-                                    <div class="hidden sm:block w-32 h-32 rounded-2xl overflow-hidden shrink-0 border border-white/10 group-hover:border-white/20 transition-all">
-                                        <img :src="post.image" alt="Post thumbnail" class="w-full h-full object-cover">
-                                    </div>
-                                </template>
                             </div>
+
+                            <!-- Right Media -->
+                            <template x-if="post.image">
+                                <div class="sm:w-36 h-36 rounded-2xl overflow-hidden border border-white/5 flex-shrink-0">
+                                    <img :src="post.image" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </template>
 
                 <!-- Empty State -->
-                <div x-show="filteredPosts().length === 0" class="liquid-glass rounded-3xl p-12 text-center">
-                    <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i class="bi bi-mailbox2 text-4xl text-white/20"></i>
+                <div x-show="filteredPosts().length === 0" class="glass-dropdown rounded-[40px] p-20 text-center border border-white/5">
+                    <div class="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <i class="bi bi-search text-4xl text-white/20"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-white/80">Không tìm thấy bài viết nào</h3>
-                    <p class="text-white/40 mt-2">Dường như chưa có chia sẻ nào về nội dung này.</p>
+                    <h3 class="text-2xl font-black text-white/80">Không có dữ liệu</h3>
+                    <p class="text-white/40 mt-3 font-medium">Chúng tôi không tìm thấy kết quả nào phù hợp.</p>
                 </div>
             </div>
         </div>

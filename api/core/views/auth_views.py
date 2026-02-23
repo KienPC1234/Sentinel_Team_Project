@@ -22,7 +22,7 @@ from api.utils.ollama_client import analyze_text_for_scam, generate_response, st
 
 from api.core.models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
+    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, UserProfile,
 )
 from api.core.serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
@@ -140,13 +140,25 @@ class MeView(APIView):
     def patch(self, request):
         """Update profile (avatar, bio, etc.)"""
         user = request.user
-        # We handle both User and UserProfile updates here for simplicity
-        profile = user.profile
+        profile, created = UserProfile.objects.get_or_create(user=user)
         
-        # Profile data (avatar, bio)
-        if 'avatar' in request.FILES or 'bio' in request.data:
-            serializer = UserProfileSerializer(profile, data=request.data, partial=True)
-            serializer.is_valid(raise_exception=True)
+        # Profile data (avatar, bio, display_name, about, messenger_link)
+        profile_fields = ['avatar', 'bio', 'display_name', 'about', 'messenger_link']
+        if any(k in request.data for k in profile_fields):
+            # If avatar is a string (URL), remove it from data to avoid ImageField validation error
+            patch_data = request.data.copy() if hasattr(request.data, 'copy') else request.data
+            if 'avatar' in patch_data and isinstance(patch_data['avatar'], str):
+                if hasattr(patch_data, 'pop'):
+                    patch_data.pop('avatar')
+                else:
+                    del patch_data['avatar']
+                
+            serializer = UserProfileSerializer(profile, data=patch_data, partial=True)
+            if not serializer.is_valid():
+                return Response({
+                    'error': 'Lỗi dữ liệu hồ sơ',
+                    'details': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()
             
         # Basic user data (names)

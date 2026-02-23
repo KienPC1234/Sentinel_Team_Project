@@ -27,3 +27,6 @@ django-otp
 pyotp
 qrcode
 django-turnstile
+python-whois
+dnspython
+ipwhois

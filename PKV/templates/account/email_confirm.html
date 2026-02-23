@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load account socialaccount %}
+
+{% block title %}{% trans "Xác nhận Email" %}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-[60vh] animate-fadein">
+    <div class="liquid-card p-10 max-w-md w-full text-center space-y-8">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-[2.5rem] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-lg shadow-cyan-500/10">
+            <i class="bi bi-shield-check text-4xl"></i>
+        </div>
+        
+        <div class="space-y-4">
+            <h1 class="text-3xl font-black text-white tracking-tight">{% trans "Xác nhận Email" %}</h1>
+            {% if confirmation %}
+                {% user_display confirmation.email_address.user as user_display %}
+                <p class="text-white/40 text-sm font-medium tracking-wide">
+                    {% blocktrans with confirmation.email_address.email as email %}Vui lòng xác nhận rằng <span class="text-cyan-400 font-bold">{{ email }}</span> là địa chỉ email của tài khoản <span class="text-white font-bold">{{ user_display }}</span>.{% endblocktrans %}
+                </p>
+
+                <form method="post" action="{% url 'account_confirm_email' confirmation.key %}" class="pt-4">
+                    {% csrf_token %}
+                    <button type="submit" class="liquid-btn w-full py-5 bg-cyan-500 text-black font-black uppercase tracking-[0.2em] text-sm hover:bg-cyan-400 transition-all shadow-lg shadow-cyan-500/20">
+                        {% trans "Xác nhận ngay" %}
+                    </button>
+                </form>
+            {% else %}
+                <p class="text-red-400 text-sm font-medium tracking-wide">
+                    {% blocktrans %}Liên kết xác nhận này đã hết hạn hoặc không hợp lệ. Vui lòng yêu cầu một mã xác nhận mới.{% endblocktrans %}
+                </p>
+                <a href="{% url 'account_login' %}" class="liquid-btn w-full py-5 bg-white/5 border border-white/10 text-white font-black uppercase tracking-[0.2em] text-sm hover:bg-white/10 transition-all mt-4">
+                    {% trans "Quay lại Đăng nhập" %}
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

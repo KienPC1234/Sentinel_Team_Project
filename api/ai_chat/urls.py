@@ -1,7 +1,9 @@
 from django.urls import path
-from .views import ChatAIView, ChatAIStreamView
+from .views import ChatAIStreamView, ChatSessionListView, ChatSessionDetailView, ChatSessionClearAllView
 
 urlpatterns = [
-    path('chat-ai', ChatAIView.as_view(), name='chat-ai'),
-    path('chat-ai-stream', ChatAIStreamView.as_view(), name='chat-ai-stream'),
+    path('stream/', ChatAIStreamView.as_view(), name='chat-stream'),
+    path('sessions/', ChatSessionListView.as_view(), name='chat-sessions'),
+    path('sessions/<uuid:session_id>/', ChatSessionDetailView.as_view(), name='chat-session-detail'),
+    path('sessions/clear_all/', ChatSessionClearAllView.as_view(), name='chat-sessions-clear-all'),
 ]

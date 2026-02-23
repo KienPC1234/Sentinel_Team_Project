@@ -8,7 +8,9 @@ from rest_framework import serializers
 from .models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
     EntityLink, UserAlert, ScamType, Severity, TargetType, ScanType,
-    ForumPost, ForumComment, ForumLike, UserProfile,
+    ForumPost, ForumComment, ForumLike, ForumPostReaction, ForumPostReport, 
+    ForumCommentReport, ForumReactionType, UserProfile,
+    LearnLesson, LearnQuiz, LearnScenario,
 )
 
 User = get_user_model()
@@ -19,7 +21,6 @@ User = get_user_model()
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
-    password2 = serializers.CharField(write_only=True, min_length=8)
     first_name = serializers.CharField(max_length=150, required=False, default='')
     last_name = serializers.CharField(max_length=150, required=False, default='')
 
@@ -29,13 +30,10 @@ class RegisterSerializer(serializers.Serializer):
         return value.lower()
 
     def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({'password2': 'Mật khẩu xác nhận không khớp.'})
         validate_password(attrs['password'])
         return attrs
 
     def create(self, validated_data):
-        validated_data.pop('password2')
         user = User.objects.create_user(
             username=validated_data['email'],
             email=validated_data['email'],
@@ -52,16 +50,28 @@ class LoginSerializer(serializers.Serializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    rank_info = serializers.ReadOnlyField()
+    messenger_link = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    
     class Meta:
         model = UserProfile
-        fields = ['avatar', 'bio']
+        fields = ['display_name', 'avatar', 'bio', 'about', 'messenger_link', 'rank_points', 'rank_info']
+        read_only_fields = ['rank_points', 'rank_info']
+        extra_kwargs = {
+            'avatar': {'required': False, 'allow_null': True},
+            'display_name': {'required': False, 'allow_blank': True},
+        }
 
 class UserSerializer(serializers.ModelSerializer):
+    display_name = serializers.CharField(source='profile.display_name', read_only=True)
     avatar = serializers.ImageField(source='profile.avatar', read_only=True)
+    rank_info = serializers.ReadOnlyField(source='profile.rank_info')
+    about = serializers.CharField(source='profile.about', read_only=True)
+    messenger_link = serializers.URLField(source='profile.messenger_link', read_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'date_joined', 'is_staff', 'avatar']
+        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'display_name', 'date_joined', 'is_staff', 'avatar', 'rank_info', 'about', 'messenger_link']
         read_only_fields = fields
 
 
@@ -90,7 +100,8 @@ class ReportCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Report
         fields = ['target_type', 'target_value', 'scam_type', 'severity',
-                  'description', 'evidence_file']
+                  'description', 'evidence_file', 'scammer_phone', 
+                  'scammer_bank_account', 'scammer_bank_name', 'scammer_name']
 
     def create(self, validated_data):
         request = self.context.get('request')
@@ -120,6 +131,9 @@ class ReportModerateSerializer(serializers.Serializer):
 
 
 # ─── Scan Event Serializers ─────────────────────────────────────────────────
+
+class ScanFileSerializer(serializers.Serializer):
+    file = serializers.FileField()
 
 class ScanPhoneSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=20)
@@ -189,44 +203,119 @@ class UserAlertSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
     def create(self, validated_data):
-        validated_data['user'] = self.context['request'].user
+        request = self.context.get('request')
+        if request:
+            validated_data['user'] = request.user
         return super().create(validated_data)
 # ─── Forum Serializers ───────────────────────────────────────────────────────
 
 class ForumCommentSerializer(serializers.ModelSerializer):
-    author_name = serializers.CharField(source='author.username', read_only=True)
+    author_name = serializers.SerializerMethodField()
+    author_username = serializers.CharField(source='author.username', read_only=True)
+    author_avatar = serializers.ImageField(source='author.profile.avatar', read_only=True)
+    parent_author_name = serializers.SerializerMethodField()
+    user_liked = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
 
     class Meta:
         model = ForumComment
-        fields = ['id', 'author_name', 'content', 'parent', 'replies', 'created_at']
-        read_only_fields = ['id', 'author_name', 'created_at']
+        fields = ['id', 'author_name', 'author_username', 'author_avatar', 'content', 'parent', 'parent_author_name', 'replies', 'likes_count', 'user_liked', 'created_at']
+        read_only_fields = ['id', 'author_name', 'author_username', 'author_avatar', 'created_at', 'parent_author_name', 'likes_count']
+
+    def get_author_name(self, obj):
+        return obj.author.profile.display_name or obj.author.username
+
+    def get_parent_author_name(self, obj):
+        if obj.parent:
+            return obj.parent.author.profile.display_name or obj.parent.author.username
+        return None
 
     def get_replies(self, obj):
         if obj.replies.exists():
-            return ForumCommentSerializer(obj.replies.filter(parent=obj), many=True).data # parent=obj is redundant but safe
+            return ForumCommentSerializer(obj.replies.filter(parent=obj), many=True, context=self.context).data 
         return []
 
+    def get_user_liked(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.likes.filter(user=request.user).exists()
+
 class ForumPostSerializer(serializers.ModelSerializer):
-    author_name = serializers.CharField(source='author.username', read_only=True)
+    author_name = serializers.SerializerMethodField()
+    author_username = serializers.CharField(source='author.username', read_only=True)
+    author_is_staff = serializers.BooleanField(source='author.is_staff', read_only=True)
+    author_avatar = serializers.ImageField(source='author.profile.avatar', read_only=True)
     comments = serializers.SerializerMethodField()
     user_liked = serializers.SerializerMethodField()
+    user_helpful = serializers.SerializerMethodField()
+    user_shared = serializers.SerializerMethodField()
+    user_disliked = serializers.SerializerMethodField()
 
     class Meta:
         model = ForumPost
-        fields = ['id', 'author_name', 'title', 'content', 'category', 'image', 
-                  'views_count', 'likes_count', 'comments_count', 'is_pinned', 
-                  'user_liked', 'comments', 'created_at']
-        read_only_fields = ['id', 'author_name', 'views_count', 'likes_count', 
-                            'comments_count', 'created_at']
+        fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar', 'title', 'content', 'category', 'image', 
+                  'views_count', 'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
+                  'comments_count', 'is_pinned', 'is_locked', 'user_liked', 'user_helpful', 'user_shared', 'user_disliked',
+                  'comments', 'created_at']
+        read_only_fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar', 'views_count', 'likes_count', 
+                            'helpful_count', 'shares_count', 'dislikes_count', 'reports_count', 'comments_count', 'created_at']
 
     def get_comments(self, obj):
         # Only return top-level comments
         comments = obj.comments.filter(parent__isnull=True)
-        return ForumCommentSerializer(comments, many=True).data
+        return ForumCommentSerializer(comments, many=True, context=self.context).data
+
+    def get_author_name(self, obj):
+        return obj.author.profile.display_name or obj.author.username
 
     def get_user_liked(self, obj):
         request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            return obj.likes.filter(user=request.user).exists()
-        return False
+        if not request or not request.user.is_authenticated:
+            return False
+        return ForumLike.objects.filter(post=obj, user=request.user).exists()
+
+    def get_user_helpful(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return ForumPostReaction.objects.filter(post=obj, user=request.user, reaction_type=ForumReactionType.HELPFUL).exists()
+
+    def get_user_shared(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return ForumPostReaction.objects.filter(post=obj, user=request.user, reaction_type=ForumReactionType.SHARE).exists()
+
+    def get_user_disliked(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return ForumPostReaction.objects.filter(post=obj, user=request.user, reaction_type=ForumReactionType.DISLIKE).exists()
+
+class ForumPostReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ForumPostReport
+        fields = ['id', 'post', 'reason', 'status', 'ai_analysis', 'is_resolved', 'created_at']
+        read_only_fields = ['id', 'status', 'ai_analysis', 'is_resolved', 'created_at']
+
+class ForumCommentReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ForumCommentReport
+        fields = ['id', 'comment', 'reason', 'status', 'ai_analysis', 'is_resolved', 'created_at']
+        read_only_fields = ['id', 'status', 'ai_analysis', 'is_resolved', 'created_at']
+
+class LearnLessonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearnLesson
+        fields = '__all__'
+
+class LearnQuizSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearnQuiz
+        fields = '__all__'
+
+class LearnScenarioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearnScenario
+        fields = '__all__'
