@@ -273,6 +273,15 @@ def learn_hub_view(request):
     })
 
 
+def article_detail_view(request, slug):
+    """Article detail page by slug."""
+    article = get_object_or_404(Article, slug=slug, is_published=True)
+    return render(request, "Learning/article_detail.html", {
+        "title": article.title,
+        "article": article,
+    })
+
+
 def emergency_view(request):
     return render(request, "Emergency/emergency.html", {"title": "Hỗ trợ khẩn cấp"})
 

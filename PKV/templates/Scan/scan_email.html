@@ -2,7 +2,78 @@
 {% block title %}Kiểm tra Email{% endblock %}
 
 {% block content %}
-<div class="animate-fadein max-w-4xl mx-auto space-y-10" x-data="{email:'', content:'', loading:false, result:null, error:'', aiText:'', aiLoading:false}">
+<div class="animate-fadein max-w-4xl mx-auto space-y-10"
+     x-data="{
+        mode: 'text',
+        email: '', content: '',
+        emlFile: null, emlFileName: '', emlFileSize: '',
+        loading: false, result: null,
+        aiText: '', aiLoading: false,
+        displayEmail: '',
+        setFile(e) {
+            const f = e.target.files[0];
+            if (!f) return;
+            if (!f.name.endsWith('.eml')) { showToast('Chỉ hỗ trợ file .eml', 'warning'); e.target.value=''; return; }
+            if (f.size > 10 * 1024 * 1024) { showToast('File quá lớn (tối đa 10MB)', 'warning'); e.target.value=''; return; }
+            this.emlFile = f;
+            this.emlFileName = f.name;
+            this.emlFileSize = (f.size / 1024).toFixed(1) + ' KB';
+        },
+        clearFile() { this.emlFile=null; this.emlFileName=''; this.emlFileSize=''; $refs.emlInput.value=''; },
+        submitScan() {
+            const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value || '';
+            if (!tsToken) { showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning'); return; }
+
+            if (this.mode === 'text') {
+                if (!this.email.trim()) { showToast('Vui lòng nhập địa chỉ Email', 'warning'); return; }
+                this.displayEmail = this.email.trim();
+                this.loading = true; this.result = null; this.aiText = ''; this.aiLoading = false;
+                fetch('/api/v1/scan/email/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ email: this.email.trim(), content: this.content.trim(), 'cf-turnstile-response': tsToken })
+                })
+                .then(r => { if (!r.ok) return r.json().then(e => { throw e }); return r.json(); })
+                .then(data => this.handleResult(data))
+                .catch(e => { showToast(e.error || 'Có lỗi xảy ra.', 'error'); this.loading = false; });
+
+            } else {
+                if (!this.emlFile) { showToast('Vui lòng chọn file .eml', 'warning'); return; }
+                this.loading = true; this.result = null; this.aiText = ''; this.aiLoading = false;
+                const fd = new FormData();
+                fd.append('file', this.emlFile);
+                fd.append('cf-turnstile-response', tsToken);
+                fetch('/api/v1/scan/email/', { method: 'POST', headers: { 'X-CSRFToken': getCSRFToken() }, body: fd })
+                .then(r => { if (!r.ok) return r.json().then(e => { throw e }); return r.json(); })
+                .then(data => { this.displayEmail = data.extracted_info?.from || this.emlFileName; this.handleResult(data); })
+                .catch(e => { showToast(e.error || 'Có lỗi xử lý file.', 'error'); this.loading = false; });
+            }
+        },
+        handleResult(data) {
+            this.result = data; this.loading = false;
+            this.aiLoading = true; this.aiText = '';
+            fetch('/api/v1/scan/analyze-sse/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                body: JSON.stringify({ scan_type: 'email', scan_data: data, raw_input: this.displayEmail })
+            }).then(r => {
+                const reader = r.body.getReader(); const decoder = new TextDecoder(); let buf = '';
+                const me = this;
+                const pump = () => reader.read().then(({ done, value }) => {
+                    if (done) { me.aiLoading = false; return; }
+                    buf += decoder.decode(value, { stream: true });
+                    const lines = buf.split('\n'); buf = lines.pop();
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try { const d = JSON.parse(line.substring(6)); if (d.chunk) me.aiText += d.chunk; if (d.done) me.aiLoading = false; } catch(e) {}
+                        }
+                    }
+                    pump();
+                }); pump();
+            }).catch(() => { this.aiLoading = false; showToast('Không thể kết nối AI.', 'warning'); });
+        }
+     }">
+
     <!-- Page Header -->
     <div class="text-center space-y-4">
         <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-pink-500/10 text-pink-400 mb-2 border border-pink-500/20 shadow-lg shadow-pink-500/10">
@@ -12,90 +83,175 @@
             Kiểm tra <span class="glow-text">Email Scam</span>
         </h1>
         <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed">
-            Phát hiện các email lừa đảo, giả mạo danh tíng hoặc chứa nội dung độc hại bằng công nghệ AI.
+            Phát hiện email lừa đảo, giả mạo hoặc chứa nội dung độc hại bằng công nghệ AI.
         </p>
     </div>
 
-    <!-- Input Area -->
-    <div class="liquid-card p-6 sm:p-8">
-        <form @submit.prevent="
-            if(!email.trim()){showToast('Vui lòng nhập Email', 'warning');return}
-            const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
-            if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
-            loading=true;result=null;aiText='';aiLoading=false;
-            fetch('/api/v1/scan/email/', {
-                method:'POST',
-                headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
-                body:JSON.stringify({email: email.trim(), content: content.trim(), 'cf-turnstile-response': tsToken})
-            })
-            .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
-            .then(data=>{
-                result=data;loading=false;
-                aiLoading=true;aiText='';
-                fetch('/api/v1/scan/analyze-sse/', {
-                    method:'POST',
-                    headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
-                    body:JSON.stringify({scan_type:'email',scan_data:data,raw_input:email.trim()})
-                }).then(r=>{
-                    const reader=r.body.getReader();const decoder=new TextDecoder();let buf='';
-                    const pump=()=>reader.read().then(({done,value})=>{
-                        if(done){aiLoading=false;return}
-                        buf+=decoder.decode(value,{stream:true});
-                        const lines=buf.split('\n');buf=lines.pop();
-                        for(const line of lines){
-                            if(line.startsWith('data: ')){
-                                try{const d=JSON.parse(line.substring(6));if(d.chunk)aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
-                            }
-                        }
-                        pump();
-                    });pump();
-                }).catch(()=>{aiLoading=false; showToast('Không thể kết nối AI.', 'warning');});
-            })
-            .catch(e=>{showToast(e.error||'Có lỗi xảy ra.', 'error');loading=false;})
-        ">
-            <div class="space-y-4">
-                <div class="space-y-1.5">
-                    <label class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Địa chỉ Email người gửi</label>
-                    <input type="email" class="liquid-input w-full py-4 px-6 text-lg font-bold" 
-                        placeholder="sender@example.com" x-model="email" required>
-                </div>
-                
-                <div class="space-y-1.5">
-                    <label class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Nội dung Email (Nếu có)</label>
-                    <textarea class="liquid-input w-full py-4 px-6 min-h-[120px] text-sm" 
-                        placeholder="Dán nội dung tin nhắn email tại đây để AI phân tích kỹ hơn..." x-model="content"></textarea>
-                </div>
-                <!-- Turnstile Widget -->
-                <div class="flex justify-center">
-                    <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
-                </div>
+    <!-- Input Card -->
+    <div class="liquid-card p-6 sm:p-8 space-y-6">
 
-                 <div class="pt-4">
-                    <button type="submit" class="liquid-btn w-full bg-pink-500 text-black py-5 font-black uppercase tracking-widest hover:bg-pink-400" :disabled="loading">
-                        <span x-show="!loading"><i class="bi bi-shield-shaded mr-2"></i> BẮT ĐẦU PHÂN TÍCH</span>
-                        <span x-show="loading" class="spinner w-5 h-5 border-black"></span>
-                    </button>
+        <!-- Mode Tabs -->
+        <div class="flex gap-2 p-1 rounded-2xl bg-white/5 border border-white/10">
+            <button type="button"
+                class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                :class="mode==='text' ? 'bg-pink-500 text-black shadow-lg shadow-pink-500/30' : 'text-white/40 hover:text-white/70'"
+                @click="mode='text'; result=null; aiText=''">
+                <i class="bi bi-envelope-at text-sm"></i> Nhập Email
+            </button>
+            <button type="button"
+                class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                :class="mode==='eml' ? 'bg-pink-500 text-black shadow-lg shadow-pink-500/30' : 'text-white/40 hover:text-white/70'"
+                @click="mode='eml'; result=null; aiText=''">
+                <i class="bi bi-file-earmark-arrow-up text-sm"></i> Tải lên .eml
+            </button>
+        </div>
+
+        <!-- Text Mode -->
+        <div x-show="mode==='text'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-4">
+            <div class="space-y-1.5">
+                <label class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Địa chỉ Email người gửi <span class="text-pink-500">*</span></label>
+                <input type="email" class="liquid-input w-full py-4 px-6 text-lg font-bold"
+                    placeholder="sender@example.com" x-model="email" autocomplete="off">
+            </div>
+            <div class="space-y-1.5">
+                <label class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Nội dung Email <span class="text-white/20">(không bắt buộc)</span></label>
+                <textarea class="liquid-input w-full py-4 px-6 min-h-[130px] text-sm resize-none"
+                    placeholder="Dán tiêu đề, nội dung hoặc link trong email tại đây để AI phân tích chuyên sâu hơn..."
+                    x-model="content"></textarea>
+            </div>
+        </div>
+
+        <!-- EML Upload Mode -->
+        <div x-show="mode==='eml'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-4">
+
+            <!-- Drop Zone -->
+            <div class="relative"
+                 @dragover.prevent="$el.classList.add('border-pink-500/60','bg-pink-500/5')"
+                 @dragleave.prevent="$el.classList.remove('border-pink-500/60','bg-pink-500/5')"
+                 @drop.prevent="setFile({target:{files:$event.dataTransfer.files}})">
+                <input type="file" accept=".eml" x-ref="emlInput" class="hidden" @change="setFile($event)">
+
+                <!-- Empty state -->
+                <template x-if="!emlFile">
+                    <div class="border-2 border-dashed border-white/10 rounded-2xl p-10 text-center cursor-pointer hover:border-pink-500/40 hover:bg-pink-500/[0.03] transition-all"
+                         @click="$refs.emlInput.click()">
+                        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-pink-500/10 text-pink-400 mb-4 border border-pink-500/20">
+                            <i class="bi bi-cloud-arrow-up text-2xl"></i>
+                        </div>
+                        <p class="text-white/60 font-bold text-sm mb-1">Kéo thả file .eml vào đây</p>
+                        <p class="text-white/25 text-xs mb-4">hoặc nhấn để chọn từ thiết bị</p>
+                        <span class="inline-block px-4 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/40 text-xs font-bold">Chọn file .eml</span>
+                    </div>
+                </template>
+
+                <!-- File selected -->
+                <template x-if="emlFile">
+                    <div class="flex items-center gap-4 p-5 rounded-2xl border border-pink-500/20 bg-pink-500/[0.04]">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-pink-500/15 flex items-center justify-center text-pink-400 text-xl border border-pink-500/20">
+                            <i class="bi bi-file-earmark-text"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-white font-bold text-sm truncate" x-text="emlFileName"></p>
+                            <p class="text-white/40 text-xs font-bold mt-0.5" x-text="emlFileSize"></p>
+                        </div>
+                        <button type="button" @click="clearFile()"
+                            class="flex-shrink-0 w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-white/30 flex items-center justify-center transition-all text-xs">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </template>
+            </div>
+
+            <!-- What gets extracted -->
+            <div class="grid grid-cols-3 gap-3 text-center">
+                <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                    <i class="bi bi-person-circle text-pink-400 text-base block mb-1"></i>
+                    <span class="text-[10px] text-white/30 font-bold uppercase tracking-wider">Người gửi</span>
+                </div>
+                <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                    <i class="bi bi-link-45deg text-pink-400 text-base block mb-1"></i>
+                    <span class="text-[10px] text-white/30 font-bold uppercase tracking-wider">Đường dẫn</span>
+                </div>
+                <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                    <i class="bi bi-paperclip text-pink-400 text-base block mb-1"></i>
+                    <span class="text-[10px] text-white/30 font-bold uppercase tracking-wider">Đính kèm</span>
                 </div>
             </div>
-        </form>
+        </div>
+
+        <!-- Turnstile + Submit (shared) -->
+        <div class="space-y-4">
+            <div class="flex justify-center">
+                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
+            </div>
+            <button type="button"
+                class="liquid-btn w-full bg-pink-500 text-black py-5 font-black uppercase tracking-widest hover:bg-pink-400 transition-all"
+                :disabled="loading" @click="submitScan()">
+                <span x-show="!loading"><i class="bi bi-shield-shaded mr-2"></i>
+                    <span x-text="mode==='eml' ? 'PHÂN TÍCH FILE .EML' : 'BẮT ĐẦU PHÂN TÍCH'"></span>
+                </span>
+                <span x-show="loading" class="flex items-center justify-center gap-3">
+                    <span class="spinner w-5 h-5 border-black"></span>
+                    <span class="text-black/70">Đang phân tích...</span>
+                </span>
+            </button>
+        </div>
     </div>
 
     <!-- Result Display -->
     <template x-if="result">
         <div class="space-y-6">
             <div class="liquid-card overflow-hidden">
+
                 <!-- Status Header -->
                 <div class="p-8 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
                     <div class="absolute inset-0 opacity-10 -z-10 blur-[80px]"
                         :class="result.risk_level==='RED'?'bg-red-500':result.risk_level==='YELLOW'?'bg-yellow-500':'bg-green-500'"></div>
-                    
                     <div class="inline-block px-8 py-3 rounded-full text-xs font-black tracking-[0.3em] uppercase mb-6"
                         :class="result.risk_level==='RED'?'bg-red-500/20 text-red-500 border border-red-500/30':result.risk_level==='YELLOW'?'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30':'bg-green-500/20 text-green-500 border border-green-500/30'"
                         x-text="result.risk_level"></div>
-                    
-                    <div class="text-5xl font-black text-white mb-2" x-text="result.risk_score + '/100'"></div>
-                    <div class="text-[10px] text-white/30 font-black tracking-widest uppercase mb-8">Chỉ số rủi ro Email</div>
+                    <div class="text-5xl font-black text-white mb-2" x-text="(result.preliminary_score ?? result.risk_score ?? 0) + '/100'"></div>
+                    <div class="text-[10px] text-white/30 font-black tracking-widest uppercase mb-4">Chỉ số rủi ro Email</div>
+
+                    <!-- EML extracted metadata -->
+                    <template x-if="result.extracted_info && (result.extracted_info.subject || result.extracted_info.url_count > 0 || result.extracted_info.attachment_count > 0)">
+                        <div class="flex flex-wrap justify-center gap-3 mt-4">
+                            <template x-if="result.extracted_info.subject">
+                                <span class="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-white/50 text-xs font-bold">
+                                    <i class="bi bi-chat-square-text mr-1 text-pink-400"></i>
+                                    <span x-text="result.extracted_info.subject"></span>
+                                </span>
+                            </template>
+                            <template x-if="result.extracted_info.url_count > 0">
+                                <span class="px-3 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-bold">
+                                    <i class="bi bi-link-45deg mr-1"></i>
+                                    <span x-text="result.extracted_info.url_count + ' đường dẫn'"></span>
+                                </span>
+                            </template>
+                            <template x-if="result.extracted_info.attachment_count > 0">
+                                <span class="px-3 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold">
+                                    <i class="bi bi-paperclip mr-1"></i>
+                                    <span x-text="result.extracted_info.attachment_count + ' tệp đính kèm'"></span>
+                                </span>
+                            </template>
+                        </div>
+                    </template>
                 </div>
+
+                <!-- Security Checks -->
+                <template x-if="result.security_checks && result.security_checks.length > 0">
+                    <div class="mx-8 mt-6 p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                        <h4 class="text-[10px] font-black text-white/30 uppercase tracking-widest mb-3">Kiểm tra bảo mật DNS/SPF/DMARC</h4>
+                        <ul class="space-y-2">
+                            <template x-for="check in result.security_checks" :key="check">
+                                <li class="flex items-start gap-2 text-xs text-white/60">
+                                    <i class="bi bi-shield-check text-pink-400 mt-0.5 flex-shrink-0"></i>
+                                    <span x-text="check"></span>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </template>
 
                 <!-- AI Insight -->
                 <div class="m-8 p-6 liquid-glass border-white/5 bg-pink-500/[0.02]">
@@ -109,26 +265,120 @@
                         </div>
                         <div x-show="aiLoading" class="ml-auto spinner w-4 h-4 text-pink-400"></div>
                     </div>
-                    
-                    <div class="ai-markdown text-white/70 text-sm leading-relaxed" 
+                    <div class="ai-markdown text-white/70 text-sm leading-relaxed"
                          :class="{'ai-streaming': aiLoading}"
                          x-html="renderMd(aiText || 'Hệ thống đang phân tích các dấu hiệu lừa đảo...')"></div>
                 </div>
 
+                <!-- Grounded Intelligence / Proofs -->
+                <template x-if="result.web_context || (result.web_sources && result.web_sources.length > 0)">
+                    <div class="m-8 p-8 border-t border-white/5 bg-white/[0.01] liquid-glass">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                                <i class="bi bi-search"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-white uppercase tracking-wider">Thông tin tình báo (OSINT)</h4>
+                                <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Grounded Proofs & Sources</p>
+                            </div>
+                        </div>
+
+                        <!-- NEW: Structured Intelligence -->
+                        <div class="grid grid-cols-1 gap-6" x-data="{
+                            sources: [],
+                            parseContext() {
+                                if (!result || !result.web_context) { 
+                                    this.sources = []; 
+                                    return; 
+                                }
+                                const raw = result.web_context;
+                                
+                                // Clean up any 'thinking' artifacts if present
+                                const cleanRaw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+                                // Robust splitting logic to handle ### [Source] or ### Source
+                                // Matches: ### [Title] or ### Title followed by newline or end of string
+                                const parts = cleanRaw.split(/###\s+(?:\[)?(.*?)(?:\])?(?:\n|$)/);
+                                
+                                if (parts.length >= 3) {
+                                    // split results in [preamble, title1, content1, title2, content2...]
+                                    let newSources = [];
+                                    for (let i = 1; i < parts.length; i += 2) {
+                                        const title = (parts[i] || '').trim();
+                                        const content = (parts[i+1] || '').trim();
+                                        if (title && content) {
+                                            newSources.push({
+                                                title: title,
+                                                html: (window.marked && window.marked.parse) ? window.marked.parse(content) : content
+                                            });
+                                        }
+                                    }
+                                    this.sources = newSources;
+                                } else {
+                                    // Fallback for unstructured text
+                                    this.sources = [{ 
+                                        title: 'TỔNG HỢP TÌNH BÁO', 
+                                        html: (window.marked && window.marked.parse) ? window.marked.parse(cleanRaw) : cleanRaw 
+                                    }];
+                                }
+                            }
+                        }" x-effect="parseContext()">
+                            
+                            <!-- Sources Badges (Still useful for quick glance) -->
+                            <div class="flex flex-wrap gap-2 mb-2" x-show="result.web_sources && result.web_sources.length">
+                                <template x-for="source in result.web_sources" :key="source">
+                                    <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20 uppercase" x-text="source"></span>
+                                </template>
+                            </div>
+
+                            <!-- Structured Proof Cards -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <template x-for="item in sources">
+                                    <div class="p-5 rounded-xl bg-black/40 border border-white/10 hover:border-cyan-500/30 transition-all group relative overflow-hidden">
+                                        <!-- Header -->
+                                        <div class="flex items-center gap-3 mb-3 border-b border-white/5 pb-3">
+                                            <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400">
+                                                <i class="bi bi-shield-check text-xs"></i>
+                                            </div>
+                                            <h4 class="text-xs font-black text-cyan-100 uppercase tracking-wider" x-text="item.title"></h4>
+                                        </div>
+                                        
+                                        <!-- Content -->
+                                        <div class="prose prose-invert prose-sm text-xs text-gray-400 leading-relaxed font-mono [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>strong]:text-cyan-300" 
+                                             x-html="item.html"></div>
+                                             
+                                        <!-- Deco -->
+                                        <div class="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-10 transition-opacity">
+                                            <i class="bi bi-crosshair text-4xl text-cyan-500"></i>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <!-- Empty State -->
+                                <template x-if="sources.length === 0 && !result.web_context">
+                                    <div class="col-span-full p-6 text-center border dashed border-white/10 rounded-xl">
+                                        <p class="text-white/30 text-xs italic">Đang chờ dữ liệu tình báo...</p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
                 <!-- Actions -->
                 <div class="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
-                    <div class="flex gap-4">
-                        <button class="liquid-btn py-2 px-6 text-xs bg-white/5 text-white/60 border-white/10 hover:text-white"
-                            @click="navigator.clipboard.writeText(email);showToast('Đã copy Email!','success')">
+                    <div class="flex gap-3 flex-wrap">
+                        <button class="liquid-btn py-2 px-5 text-xs bg-white/5 text-white/60 border-white/10 hover:text-white"
+                            @click="navigator.clipboard.writeText(displayEmail); showToast('Đã copy!','success')">
                             <i class="bi bi-copy"></i> Copy Email
                         </button>
-                        <button class="liquid-btn py-2 px-6 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 transition-all font-black"
-                            @click="$dispatch('start-contextual-chat', { context: 'Email: ' + email + '\nAnalysis: ' + aiText })">
+                        <button class="liquid-btn py-2 px-5 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 font-black"
+                            @click="$dispatch('start-contextual-chat', { context: 'Email: ' + displayEmail + '\nAnalysis: ' + aiText })">
                             <i class="bi bi-chat-dots-fill"></i> CHAT VỚI AI
                         </button>
                     </div>
-                    <a :href="'/report/?target_type=email&target_value='+encodeURIComponent(email)"
-                        class="liquid-btn py-2 px-8 text-xs bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30 transition-all font-black">
+                    <a :href="'/report/?target_type=email&target_value='+encodeURIComponent(displayEmail)"
+                        class="liquid-btn py-2 px-8 text-xs bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30 font-black">
                         <i class="bi bi-megaphone-fill"></i> TỐ CÁO EMAIL
                     </a>
                 </div>

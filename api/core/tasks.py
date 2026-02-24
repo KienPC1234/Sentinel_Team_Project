@@ -15,6 +15,11 @@ from datetime import timedelta
 from django.db.models import Count, F
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    fh = logging.FileHandler('llm_access.log')
+    fh.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+    logger.addHandler(fh)
 
 @shared_task(name='core.rebuild_scam_vector_index')
 def rebuild_scam_vector_index():
@@ -175,12 +180,19 @@ def perform_scan_task(self, scan_event_id):
             # Basic email reputation check logic
             from api.utils.normalization import normalize_domain
             email = raw_input.lower().strip()
-            ai_res = analyze_text_for_scam(email)
+            ai_res = None
+            try:
+                ai_res = analyze_text_for_scam(email)
+            except Exception as _ai_exc:
+                logger.warning(f"perform_scan_task: AI analysis failed for email ({_ai_exc}), using fallback.")
+            if not ai_res:
+                ai_res = {'risk_score': 0, 'risk_level': 'SAFE', 'explanation': 'AI không khả dụng.'}
             result = {
                 'email': email,
                 'risk_score': ai_res.get('risk_score', 0),
                 'risk_level': ai_res.get('risk_level', 'SAFE'),
-                'details': ['AI Analysis complete']
+                'details': [ai_res.get('explanation', 'Phân tích hoàn tất.')],
+                'ai_available': ai_res.get('explanation') != 'AI không khả dụng.',
             }
 
         scan_event.result_json = result
@@ -266,7 +278,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             ai_res = None
             for attempt in range(3):
                 try:
-                    ai_res = analyze_text_for_scam(full_ocr)
+                    ai_res = analyze_text_for_scam(full_ocr, use_web_search=True)
                     if ai_res and (ai_res.get('risk_score') is not None):
                         break
                 except:
@@ -294,7 +306,9 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             'ocr_text': full_ocr,
             'risk_score': score,
             'risk_level': level,
-            'explanation': explanation
+            'explanation': explanation,
+            'web_sources': ai_res.get('web_sources', []),
+            'web_context': ai_res.get('web_context', '')
         }
 
         scan_event.result_json = result
@@ -321,12 +335,10 @@ def perform_web_scrapping_task(self, scan_event_id, url):
     Provides real-time progress updates via Channels.
     """
     from api.core.models import ScanEvent, ScanStatus, RiskLevel
-    from api.utils.ollama_client import analyze_text_for_scam
-    import requests
+    from api.utils.ollama_client import analyze_text_for_scam, web_fetch_url
     import whois
     import dns.resolver
     from ipwhois import IPWhois, IPDefinedError
-    from bs4 import BeautifulSoup
     from api.utils.normalization import normalize_domain
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
@@ -335,16 +347,22 @@ def perform_web_scrapping_task(self, scan_event_id, url):
     group_name = f'scan_{scan_event_id}'
 
     def send_progress(message, step='processing', data=None):
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {
-                'type': 'scan_progress',
-                'message': message,
-                'status': 'processing',
-                'step': step,
-                'data': data
-            }
-        )
+        if not channel_layer:
+            logger.warning(f"[WebScan] Event {scan_event_id}: No channel layer; progress not sent")
+            return
+        try:
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    'type': 'scan_progress',
+                    'message': message,
+                    'status': 'processing',
+                    'step': step,
+                    'data': data
+                }
+            )
+        except Exception as e:
+            logger.warning(f"[WebScan] Event {scan_event_id}: Progress send failed: {e}")
 
     try:
         scan_event = ScanEvent.objects.get(id=scan_event_id)
@@ -352,9 +370,11 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         scan_event.job_id = self.request.id
         scan_event.save()
 
-        send_progress("Bắt đầu phân tích website...", step="init")
+        send_progress(f"Bắt đầu phân tích website...", step="init")
         
         domain = normalize_domain(url)
+        logger.info(f"[WebScan] Event {scan_event_id}: Starting analysis for URL: {url};  Normalized: {domain}")
+
         content = ""
         network_risk_score = 0
         network_details = []
@@ -381,11 +401,13 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                     if age_days < 14:
                         network_risk_score = max(network_risk_score, 75) # Very high risk if new
                         network_details.append(f"Tên miền quá mới (đăng ký {age_days} ngày trước)")
+                        logger.info(f"[WebScan] Event {scan_event_id}: Domain too new ({age_days} days)")
                     elif age_days < 30:
                          network_risk_score += 10
                          network_details.append(f"Tên miền mới (đăng ký {age_days} ngày trước)")
+                         logger.info(f"[WebScan] Event {scan_event_id}: Domain new ({age_days} days)")
             except Exception as e:
-                logger.warning(f"WHOIS lookup failed: {e}")
+                logger.warning(f"[WebScan] Event {scan_event_id}: WHOIS lookup failed: {e}")
 
             # 2. DNS Checks (Resolvers)
             try:
@@ -393,11 +415,15 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                 try:
                     dns.resolver.resolve(domain, 'MX')
                     has_mx = True
+                    logger.info(f"[WebScan] Event {scan_event_id}: MX records found")
                 except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
                     has_mx = False
                     # Only penalize if it pretends to be a bank/corp
-                    # network_risk_score += 5 
-                    network_details.append("Không tìm thấy cấu hình Email server (MX)")
+                    network_risk_score += 5
+                    logger.info(f"[WebScan] Event {scan_event_id}: No MX records found")
+                    
+                if not has_mx:
+                    network_risk_score += 7
             except Exception:
                 pass
 
@@ -414,60 +440,113 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                     suspicious_keywords = ['Hetzner', 'DigitalOcean', 'Choopa', 'Namecheap', 'Vultr', 'Linode', 'Hostinger']
                     if any(k.lower() in asn_desc.lower() for k in suspicious_keywords):
                         # Cheap hosting itself isn't bad, but phishing often uses it
+                        network_risk_score += 7
                         network_details.append(f"Hosting provider: {asn_desc}")
+                        logger.info(f"[WebScan] Event {scan_event_id}: Suspicious/Cheap hosting provider found: {asn_desc}")
                 except IPDefinedError:
                      pass
             except Exception as e:
-                logger.warning(f"ASN lookup failed: {e}")
+                logger.warning(f"[WebScan] Event {scan_event_id}: ASN lookup failed: {e}")
 
             send_progress(f"Đã hoàn tất kiểm tra mạng. Điểm rủi ro mạng: {network_risk_score}", step="network_analysis")
+            logger.info(f"[WebScan] Event {scan_event_id}: Network scan complete. Score: {network_risk_score}")
 
         except Exception as e:
-            logger.error(f"Deep network scan failed: {e}")
+            logger.error(f"[WebScan] Event {scan_event_id}: Deep network scan failed: {e}")
             send_progress(f"Lỗi kiểm tra mạng: {str(e)}", step="network_warning")
         
-        # 1. Scrape Content with Retry (HTTPS -> HTTP)
+        # 1. Fetch Content using Ollama Web Fetch API
         send_progress(f"Đang thu thập nội dung từ {domain}...", step="scraping")
         
-        schemes = ['https://', 'http://']
-        if '://' in url:
-            # If user provided a scheme, try that first
-            base_url = url.split('://', 1)[1]
-            chosen_scheme = url.split('://', 1)[0] + '://'
-            schemes = [chosen_scheme] + [s for s in schemes if s != chosen_scheme]
+        # Build full URL if scheme not provided
+        if '://' not in url:
+            target_url = f"https://{url}"
         else:
-            base_url = url
+            target_url = url
 
-        success = False
-        last_error = ""
+        fetch_success = False
+        page_title = ""
+        
+        try:
+            fetch_result = web_fetch_url(target_url)
+            if fetch_result and fetch_result.get('content'):
+                content = fetch_result.get('content', '')
+                page_title = fetch_result.get('title', '')
+                fetch_success = True
+                logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via Ollama API ({len(content)} chars)")
+            else:
+                # Try HTTP fallback if HTTPS failed
+                if target_url.startswith('https://'):
+                    http_url = target_url.replace('https://', 'http://', 1)
+                    fetch_result = web_fetch_url(http_url)
+                    if fetch_result and fetch_result.get('content'):
+                        content = fetch_result.get('content', '')
+                        page_title = fetch_result.get('title', '')
+                        fetch_success = True
+                        logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via HTTP fallback ({len(content)} chars)")
+        except Exception as e:
+            logger.warning(f"[WebScan] Event {scan_event_id}: Web fetch failed: {e}")
 
-        for scheme in schemes:
-            target_url = scheme + base_url
-            try:
-                send_progress(f"Đang thử kết nối qua {scheme.upper()}...", step="scraping")
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-                resp = requests.get(target_url, headers=headers, timeout=10, verify=False)
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.text, 'html.parser')
-                    for s in soup(['script', 'style']): s.decompose()
-                    content = soup.get_text(separator=' ', strip=True)
-                    success = True
-                    send_progress(f"Đã lấy được nội dung qua {scheme.upper()}.", step="scraping")
-                    break
-                else:
-                    last_error = f"Status {resp.status_code}"
-            except Exception as e:
-                last_error = str(e)
-                logger.warning(f"Failed to scrape {target_url}: {e}")
-
-        if not success:
-            send_progress(f"Không thể truy cập website: {last_error}", step="error")
-            content = f"Could not fetch content. Last error: {last_error}"
+        if not fetch_success:
+            # ❌ Mark fetch failure but CONTINUE analysis
+            send_progress(f"❌ Không thể thu thập nội dung website (tiếp tục phân tích...)", step="scraping_warning")
+            content = ""
+            network_details.append("❌ Không thể truy cập nội dung website")
+            logger.warning(f"[WebScan] Event {scan_event_id}: Failed to fetch content, continuing with network analysis only")
 
         # 2. AI Analysis
         send_progress("Đang phân tích nội dung bằng Trí tuệ nhân tạo (AI)...", step="analyzing")
-        ai_input = f"Domain: {domain}\nURL: {url}\nAge Days: {network_details}\n\nPage Content Snapshot:\n{content[:5000]}"
-        ai_res = analyze_text_for_scam(ai_input)
+        # Keep the content snapshot short so the prompt stays within the local
+        # model's context window.  Web-search enrichment is skipped here because
+        # this task already performs dedicated network/WHOIS intelligence above.
+        content_section = f"Page Content Snapshot:\n{content[:2500]}" if content else "(Không có nội dung - không thể truy cập website)"
+        ai_input = (
+            f"Domain: {domain}\nURL: {url}\n"
+            f"Page Title: {page_title}\n" if page_title else f"Domain: {domain}\nURL: {url}\n"
+        ) + (
+            f"Network findings: {', '.join(network_details) if network_details else 'none'}\n\n"
+            f"{content_section}"
+        )
+        logger.info(f"[WebScan] Event {scan_event_id}: Sending to AI ({len(ai_input)} chars)")
+
+        try:
+            import time
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+
+            ai_timeout_seconds = 90
+            keepalive_every_seconds = 10
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(analyze_text_for_scam, ai_input, None, True)
+            start_time = time.time()
+            last_keepalive = 0
+            ai_res = None
+
+            while True:
+                try:
+                    ai_res = future.result(timeout=5)
+                    break
+                except FutureTimeout:
+                    elapsed = time.time() - start_time
+                    if elapsed - last_keepalive >= keepalive_every_seconds:
+                        send_progress("AI đang phân tích...", step="ping")
+                        last_keepalive = elapsed
+                    if elapsed >= ai_timeout_seconds:
+                        ai_res = {
+                            'is_scam': False,
+                            'risk_score': 0,
+                            'indicators': [],
+                            'explanation': 'AI phân tích quá thời gian cho phép.'
+                        }
+                        future.cancel()
+                        break
+            executor.shutdown(wait=False, cancel_futures=True)
+        except Exception as _ai_exc:
+            import traceback
+            logger.warning(traceback.format_exc())
+            logger.warning(f"[WebScan] Event {scan_event_id}: AI analysis failed ({_ai_exc}), using fallback.")
+            ai_res = {'is_scam': False, 'risk_score': 0, 'indicators': [], 'explanation': 'AI không khả dụng.'}
+
+        logger.info(f"[WebScan] Event {scan_event_id}: AI Result: {ai_res}")
         send_progress("AI đã hoàn tất phân tích.", step="analyzing")
 
         final_risk_score = max(ai_res.get('risk_score', 0), network_risk_score)
@@ -480,12 +559,16 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         result = {
             'domain': domain,
             'url': url,
+            'page_title': page_title,
+            'fetch_success': fetch_success,
             'risk_score': final_risk_score,
             'risk_level': ai_res.get('risk_level', 'SAFE'),
             'explanation': explanation,
             'scam_type': ai_res.get('scam_type') or ai_res.get('type') or 'other',
-            'content_length': len(content),
-            'network_details': network_details
+            'content_length': len(content) if content else 0,
+            'network_details': network_details,
+            'web_sources': ai_res.get('web_sources', []),
+            'web_context': ai_res.get('web_context', '')
         }
         
         # Adjust risk level based on network score
@@ -631,7 +714,7 @@ def send_bulk_lesson_email(lesson_id):
     """
     from api.core.models import LearnLesson, UserProfile
     from api.utils.email_utils import send_new_lesson_email
-    from data.PKV_TEAM.PKV.settings import SITE_URL # Assuming SITE_URL exists
+    from django.conf import settings
     
     try:
         lesson = LearnLesson.objects.get(id=lesson_id)
@@ -681,10 +764,10 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
         if urls:
             ai_input += f"\n\nContained URLs: {', '.join(urls)}"
             
-        ai_res = analyze_text_for_scam(ai_input)
+        ai_res = analyze_text_for_scam(ai_input, use_web_search=True)
         
         current_risk_score = scan.risk_score
-        current_details = scan.details or {}
+        current_details = scan.result_json or {}
         
         ai_score = ai_res.get('risk_score', 0)
         
@@ -700,6 +783,9 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
             current_details['ai_explanation'] = explanation
         
         current_details['ai_full_response'] = ai_res
+        # Include web sources and context at top level for frontend
+        current_details['web_sources'] = ai_res.get('web_sources', [])
+        current_details['web_context'] = ai_res.get('web_context', '')
         
         # 2. URL Analysis (Logic can be expanded here)
         if urls and final_score < 100:
@@ -721,7 +807,7 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
         # Update ScanEvent
         scan.risk_score = final_score
         scan.risk_level = level
-        scan.details = current_details
+        scan.result_json = current_details
         scan.status = ScanStatus.COMPLETED
         scan.save()
         
@@ -743,15 +829,19 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
     from api.core.models import ScanEvent, RiskLevel
     from api.utils.ollama_client import analyze_text_for_scam
     
-    logger.info(f"Starting deep email scan for ScanEvent #{scan_event_id}")
+    logger.info(f"[EmailScan] Event {scan_event_id}: Starting deep scan")
     
     try:
         scan_event = ScanEvent.objects.get(id=scan_event_id)
         current_score = scan_event.risk_score
-        details = list(scan_event.details.get('security_checks', []))
+        # Use result_json instead of details
+        result_json = scan_event.result_json or {}
+        details = list(result_json.get('security_checks', []))
         
         # 1. URL Analysis (Heuristic Mock for now, replace with VT later)
         urls = email_data.get('urls', [])
+        logger.info(f"[EmailScan] Event {scan_event_id}: Found {len(urls)} URLs")
+        
         malicious_urls = 0
         suspicious_keywords = ['login', 'verify', 'update', 'account', 'banking', 'secure', 'wallet']
         
@@ -760,15 +850,27 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             if any(k in normalized_url for k in suspicious_keywords):
                 malicious_urls += 1
                 details.append(f"URL đáng ngờ: {url[:50]}...")
+                logger.info(f"[EmailScan] Event {scan_event_id}: Suspicious URL: {url}")
         
         if malicious_urls > 0:
             current_score += (malicious_urls * 15)
+            logger.info(f"[EmailScan] Event {scan_event_id}: Score increased by {malicious_urls * 15} due to URLs")
             
         # 2. Content Analysis (LLM)
         body_text = email_data.get('body', '')
+        subject = email_data.get('subject', '')
+        sender = email_data.get('from', '')
+
         if body_text and len(body_text) > 20:
-            # Truncate to avoid token limits
-            analysis = analyze_text_for_scam(body_text[:4000])
+            # Build a Vietnamese-context enriched text block for the AI
+            analysis_input = (
+                f"Địa chỉ gửi: {sender}\n"
+                f"Tiêu đề: {subject}\n"
+                f"Nội dung:\n{body_text[:4000]}"
+            )
+            logger.info(f"[EmailScan] Event {scan_event_id}: Analyzing body text ({len(body_text)} chars)")
+            analysis = analyze_text_for_scam(analysis_input, use_web_search=True)
+            logger.info(f"[EmailScan] Event {scan_event_id}: AI Result: {analysis}")
             
             if analysis.get('is_scam'):
                 current_score += analysis.get('risk_score', 0)
@@ -778,9 +880,12 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
                 # If AI says safe, maybe reduce score slightly?
                 # current_score = max(0, current_score - 10)
                 pass
+        else:
+            logger.info(f"[EmailScan] Event {scan_event_id}: Body text too short, skipping AI")
 
         # 3. Finalize
         final_score = min(100, current_score)
+        logger.info(f"[EmailScan] Event {scan_event_id}: Final Score: {final_score}")
         
         # Determine Risk Level
         if final_score >= 80:
@@ -791,16 +896,21 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             scan_event.risk_level = RiskLevel.GREEN
             
         scan_event.risk_score = final_score
-        scan_event.details['analysis_result'] = details
+        result_json['analysis_result'] = details
+        # Include grounded intelligence from AI analysis
+        if 'analysis' in locals() and analysis:
+            result_json['web_sources'] = analysis.get('web_sources', [])
+            result_json['web_context'] = analysis.get('web_context', '')
+        scan_event.result_json = result_json
         scan_event.status = 'completed' # Use string matching ReportStatus
         scan_event.save()
         
-        logger.info(f"Email Scan #{scan_event_id} completed. Score: {final_score}")
+        logger.info(f"[EmailScan] Event {scan_event_id}: Completed Successfully. Level: {scan_event.risk_level}")
         
     except ScanEvent.DoesNotExist:
-        logger.error(f"ScanEvent #{scan_event_id} not found.")
+        logger.error(f"[EmailScan] ScanEvent #{scan_event_id} not found.")
     except Exception as e:
-        logger.error(f"perform_email_deep_scan failed: {e}")
+        logger.error(f"[EmailScan] perform_email_deep_scan failed: {e}", exc_info=True)
         try:
              scan_event = ScanEvent.objects.get(id=scan_event_id)
              scan_event.status = 'failed'

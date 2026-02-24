@@ -63,7 +63,8 @@ class ScamVectorDB:
 
     def rebuild_index(self):
         """
-        Fetches all published Articles and LearnLessons, embeds them, and creates a new FAISS index.
+        Fetches all published Articles, Lessons, Quizzes, and Scenarios,
+        embeds them, and creates a new FAISS index.
         """
         if self._model is None:
             self._load_model()
@@ -71,17 +72,18 @@ class ScamVectorDB:
         documents = []
         metadata = []
 
+        from api.core.models import Article, LearnLesson, LearnQuiz, LearnScenario
+
         # Fetch Articles
         articles = Article.objects.filter(is_published=True)
         for art in articles:
-            # Combine title and content for better context
             text = f"Tiêu đề: {art.title}\nNội dung: {art.content}"
             documents.append(text)
             metadata.append({
                 'id': art.id,
                 'type': 'article',
                 'title': art.title,
-                'url': f"/articles/{art.slug}/"
+                'url': f"/learn/{art.slug}/"
             })
 
         # Fetch Lessons
@@ -94,6 +96,30 @@ class ScamVectorDB:
                 'type': 'lesson',
                 'title': les.title,
                 'url': f"/learn/{les.slug}/"
+            })
+
+        # Fetch Quizzes
+        quizzes = LearnQuiz.objects.filter(article__is_published=True) | LearnQuiz.objects.filter(lesson__is_published=True)
+        for q in quizzes:
+            text = f"Câu hỏi: {q.question}\nGiải thích: {q.explanation}"
+            documents.append(text)
+            metadata.append({
+                'id': q.id,
+                'type': 'quiz',
+                'title': f"Quiz: {q.question[:50]}",
+                'url': f"/learn/{(q.article.slug if q.article else q.lesson.slug) if (q.article or q.lesson) else ''}/"
+            })
+
+        # Fetch Scenarios
+        scenarios = LearnScenario.objects.filter(article__is_published=True)
+        for s in scenarios:
+            text = f"Kịch bản: {s.title}\nMô tả: {s.description}"
+            documents.append(text)
+            metadata.append({
+                'id': s.id,
+                'type': 'scenario',
+                'title': s.title,
+                'url': f"/learn/{s.article.slug}/" if s.article else "/learn/"
             })
 
         if not documents:
@@ -143,14 +169,30 @@ class ScamVectorDB:
                     lesson_ids.append(res['id'])
 
         # Batch fetch objects to reduce DB hits
-        from api.core.models import Article, LearnLesson
+        from api.core.models import Article, LearnLesson, LearnQuiz, LearnScenario
         articles = {a.id: a for a in Article.objects.filter(id__in=article_ids)}
         lessons = {l.id: l for l in LearnLesson.objects.filter(id__in=lesson_ids)}
+        
+        quiz_ids = [res['id'] for res in raw_results if res['type'] == 'quiz']
+        quizzes = {q.id: q for q in LearnQuiz.objects.filter(id__in=quiz_ids)}
+        
+        scenario_ids = [res['id'] for res in raw_results if res['type'] == 'scenario']
+        scenarios = {s.id: s for s in LearnScenario.objects.filter(id__in=scenario_ids)}
 
         for res in raw_results:
-            obj = articles.get(res['id']) if res['type'] == 'article' else lessons.get(res['id'])
+            obj = None
+            if res['type'] == 'article': obj = articles.get(res['id'])
+            elif res['type'] == 'lesson': obj = lessons.get(res['id'])
+            elif res['type'] == 'quiz': obj = quizzes.get(res['id'])
+            elif res['type'] == 'scenario': obj = scenarios.get(res['id'])
+            
             if obj:
-                res['text'] = obj.content[:1000]
+                if res['type'] == 'quiz':
+                    res['text'] = f"Câu hỏi: {obj.question}\nGiải thích: {obj.explanation}"
+                elif res['type'] == 'scenario':
+                    res['text'] = f"Kịch bản: {obj.title}\nMô tả: {obj.description}"
+                else:
+                    res['text'] = obj.content[:1000]
                 results.append(res)
         
         return results

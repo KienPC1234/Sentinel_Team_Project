@@ -55,9 +55,16 @@ class ScanAnalyzeSSEView(APIView):
                 elif scan_type == 'message':
                     prompt = SCAN_MESSAGE_PROMPT.format(message=raw_input)
                 elif scan_type == 'email':
+                    extracted = scan_data.get('extracted_info', {})
+                    security_checks = scan_data.get('security_checks', [])
                     prompt = SCAN_EMAIL_PROMPT.format(
                         email=raw_input,
-                        content=scan_data.get('content', '')
+                        subject=extracted.get('subject', '(không có tiêu đề)'),
+                        url_count=extracted.get('url_count', 0),
+                        attachment_count=extracted.get('attachment_count', 0),
+                        preliminary_score=scan_data.get('preliminary_score', scan_data.get('risk_score', 0)),
+                        security_checks=', '.join(security_checks) if security_checks else 'Không có dữ liệu',
+                        content=scan_data.get('content_snippet', scan_data.get('content', '(không có nội dung)'))
                     )
                 elif scan_type == 'domain':
                     prompt = SCAN_DOMAIN_PROMPT.format(

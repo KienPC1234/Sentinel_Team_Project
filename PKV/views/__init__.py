@@ -22,4 +22,5 @@ from .page_views import (
     forum_create_view,
     public_profile_view,
     scan_file_view,
+    article_detail_view,
 )
