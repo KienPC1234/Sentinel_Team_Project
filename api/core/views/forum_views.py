@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # FORUM APIs
 # ═══════════════════════════════════════════════════════════════════════════
 
-from api.core.models import ForumPost, ForumComment, ForumLike, ForumCommentLike, ForumPostReaction, ForumPostReport, ForumCommentReport, ForumReactionType
+from api.core.models import ForumPost, ForumComment, ForumLike, ForumCommentLike, ForumPostReaction, ForumPostReport, ForumCommentReport, ForumReactionType, ForumCommentReaction, ForumPostView
 from api.core.serializers import ForumPostSerializer, ForumCommentSerializer, ForumPostReportSerializer, ForumCommentReportSerializer
 
 class ForumPostListCreateView(APIView):
@@ -78,13 +78,43 @@ class ForumPostDetailView(APIView):
     """GET /api/forum/posts/<id>/ — detail with comments"""
     permission_classes = [AllowAny]
 
+    def _get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
     def get(self, request, post_id):
         try:
             post = ForumPost.objects.select_related('author').get(id=post_id)
         except ForumPost.DoesNotExist:
             return Response({'error': 'Bài viết không tồn tại'}, status=404)
 
-        # Increment views
+        # Track unique views
+        user = request.user if request.user.is_authenticated else None
+        ip_address = self._get_client_ip(request)
+        session_key = request.session.session_key or ''
+        
+        # Check if this viewer already viewed (by user OR ip+session)
+        if user:
+            view_exists = ForumPostView.objects.filter(post=post, user=user).exists()
+        else:
+            view_exists = ForumPostView.objects.filter(
+                post=post, ip_address=ip_address, session_key=session_key
+            ).exists()
+        
+        # Create unique view record if new viewer
+        if not view_exists:
+            ForumPostView.objects.create(
+                post=post,
+                user=user,
+                ip_address=ip_address,
+                session_key=session_key
+            )
+        
+        # Always increment total views for legacy compatibility
         ForumPost.objects.filter(id=post_id).update(views_count=F('views_count') + 1)
         post.refresh_from_db()
 
@@ -281,3 +311,220 @@ class ForumCommentReportView(APIView):
             logger.error(f"Failed to trigger AI comment report task: {e}")
 
         return Response({'message': 'Báo cáo bình luận đã được gửi. AI đang phân tích nội dung.'}, status=201)
+
+
+class ForumCommentReactionView(APIView):
+    """POST /api/forum/comments/<id>/reaction/ — upvote, downvote, helpful
+    
+    Mutual exclusivity rules:
+    - Can't upvote AND downvote at the same time
+    - Can't have like/helpful AND downvote at the same time
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, comment_id):
+        reaction_type = request.data.get('reaction_type')
+        valid_types = ['upvote', 'downvote', 'helpful']
+        
+        if reaction_type not in valid_types:
+            return Response({'error': 'Loại tương tác không hợp lệ'}, status=400)
+
+        try:
+            comment = ForumComment.objects.get(id=comment_id)
+        except ForumComment.DoesNotExist:
+            return Response({'error': 'Bình luận không tồn tại'}, status=404)
+
+        user = request.user
+        
+        # Check if reaction exists
+        existing = ForumCommentReaction.objects.filter(
+            comment=comment, user=user, reaction_type=reaction_type
+        ).first()
+
+        if existing:
+            # Remove the reaction (toggle off)
+            existing.delete()
+            self._update_count(comment, reaction_type, -1)
+            action = 'removed'
+            reacted = False
+        else:
+            # Mutual exclusivity: remove conflicting reactions
+            if reaction_type == 'downvote':
+                # Remove upvote and helpful if exists
+                ForumCommentReaction.objects.filter(
+                    comment=comment, user=user, reaction_type='upvote'
+                ).delete()
+                ForumCommentReaction.objects.filter(
+                    comment=comment, user=user, reaction_type='helpful'
+                ).delete()
+                # Also remove like
+                like_deleted = ForumCommentLike.objects.filter(
+                    comment=comment, user=user
+                ).delete()[0]
+                if like_deleted:
+                    self._update_count(comment, 'upvote', -1)
+                    
+            elif reaction_type in ['upvote', 'helpful']:
+                # Remove downvote if exists
+                down_deleted = ForumCommentReaction.objects.filter(
+                    comment=comment, user=user, reaction_type='downvote'
+                ).delete()[0]
+                if down_deleted:
+                    self._update_count(comment, 'downvote', -1)
+            
+            # Create new reaction
+            ForumCommentReaction.objects.create(
+                comment=comment, user=user, reaction_type=reaction_type
+            )
+            self._update_count(comment, reaction_type, 1)
+            
+            # For upvote, also create a ForumCommentLike for backward compatibility
+            if reaction_type == 'upvote':
+                ForumCommentLike.objects.get_or_create(comment=comment, user=user)
+                
+            action = 'added'
+            reacted = True
+
+        comment.refresh_from_db()
+        
+        return Response({
+            'action': action,
+            'reaction_type': reaction_type,
+            'likes_count': comment.likes_count,
+            'dislikes_count': comment.dislikes_count,
+            'helpful_count': comment.helpful_count,
+            'reacted': reacted,
+            'user_liked': ForumCommentLike.objects.filter(comment=comment, user=user).exists(),
+            'user_disliked': ForumCommentReaction.objects.filter(comment=comment, user=user, reaction_type='downvote').exists(),
+            'user_helpful': ForumCommentReaction.objects.filter(comment=comment, user=user, reaction_type='helpful').exists(),
+        })
+
+    def _update_count(self, comment, reaction_type, delta):
+        if reaction_type == 'upvote':
+            ForumComment.objects.filter(id=comment.id).update(likes_count=F('likes_count') + delta)
+        elif reaction_type == 'downvote':
+            ForumComment.objects.filter(id=comment.id).update(dislikes_count=F('dislikes_count') + delta)
+        elif reaction_type == 'helpful':
+            ForumComment.objects.filter(id=comment.id).update(helpful_count=F('helpful_count') + delta)
+
+
+class ForumPostReactionMutualView(APIView):
+    """POST /api/forum/posts/<id>/reaction/mutual/ — with mutual exclusivity
+    
+    Ensures like/helpful can't coexist with dislike
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        rtype = request.data.get('reaction_type')
+        if rtype not in [ForumReactionType.HELPFUL, ForumReactionType.SHARE, ForumReactionType.DISLIKE]:
+            return Response({'error': 'Loại tương tác không hợp lệ'}, status=400)
+
+        try:
+            post = ForumPost.objects.get(id=post_id)
+        except ForumPost.DoesNotExist:
+            return Response({'error': 'Bài viết không tồn tại'}, status=404)
+
+        user = request.user
+        
+        # Check existing reaction of same type
+        existing = ForumPostReaction.objects.filter(
+            user=user, post=post, reaction_type=rtype
+        ).first()
+
+        if existing:
+            # Toggle off
+            existing.delete()
+            if rtype == ForumReactionType.HELPFUL:
+                ForumPost.objects.filter(id=post_id).update(helpful_count=F('helpful_count') - 1)
+            elif rtype == ForumReactionType.SHARE:
+                ForumPost.objects.filter(id=post_id).update(shares_count=F('shares_count') - 1)
+            else:
+                ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') - 1)
+            action = 'removed'
+            reacted = False
+        else:
+            # Mutual exclusivity
+            if rtype == ForumReactionType.DISLIKE:
+                # Remove like and helpful
+                like_deleted = ForumLike.objects.filter(post=post, user=user).delete()[0]
+                if like_deleted:
+                    ForumPost.objects.filter(id=post_id).update(likes_count=F('likes_count') - 1)
+                    
+                helpful_deleted = ForumPostReaction.objects.filter(
+                    post=post, user=user, reaction_type=ForumReactionType.HELPFUL
+                ).delete()[0]
+                if helpful_deleted:
+                    ForumPost.objects.filter(id=post_id).update(helpful_count=F('helpful_count') - 1)
+                    
+            elif rtype in [ForumReactionType.HELPFUL]:
+                # Remove dislike
+                dislike_deleted = ForumPostReaction.objects.filter(
+                    post=post, user=user, reaction_type=ForumReactionType.DISLIKE
+                ).delete()[0]
+                if dislike_deleted:
+                    ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') - 1)
+            
+            # Create reaction
+            ForumPostReaction.objects.create(user=user, post=post, reaction_type=rtype)
+            if rtype == ForumReactionType.HELPFUL:
+                ForumPost.objects.filter(id=post_id).update(helpful_count=F('helpful_count') + 1)
+            elif rtype == ForumReactionType.SHARE:
+                ForumPost.objects.filter(id=post_id).update(shares_count=F('shares_count') + 1)
+            else:
+                ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') + 1)
+            action = 'added'
+            reacted = True
+
+        post.refresh_from_db()
+        return Response({
+            'action': action,
+            'helpful_count': post.helpful_count,
+            'shares_count': post.shares_count,
+            'dislikes_count': post.dislikes_count,
+            'likes_count': post.likes_count,
+            'reacted': reacted,
+            'user_liked': ForumLike.objects.filter(post=post, user=user).exists(),
+            'user_helpful': ForumPostReaction.objects.filter(post=post, user=user, reaction_type=ForumReactionType.HELPFUL).exists(),
+            'user_disliked': ForumPostReaction.objects.filter(post=post, user=user, reaction_type=ForumReactionType.DISLIKE).exists(),
+        })
+
+
+class ForumPostLikeMutualView(APIView):
+    """POST /api/forum/posts/<id>/like/mutual/ — with mutual exclusivity"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        try:
+            post = ForumPost.objects.get(id=post_id)
+        except ForumPost.DoesNotExist:
+            return Response({'error': 'Bài viết không tồn tại'}, status=404)
+
+        user = request.user
+        like, created = ForumLike.objects.get_or_create(user=user, post=post)
+        
+        if not created:
+            # Toggle off
+            like.delete()
+            ForumPost.objects.filter(id=post_id).update(likes_count=F('likes_count') - 1)
+            action = 'unliked'
+            liked = False
+        else:
+            ForumPost.objects.filter(id=post_id).update(likes_count=F('likes_count') + 1)
+            # Remove dislike if exists (mutual exclusivity)
+            dislike_deleted = ForumPostReaction.objects.filter(
+                post=post, user=user, reaction_type=ForumReactionType.DISLIKE
+            ).delete()[0]
+            if dislike_deleted:
+                ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') - 1)
+            action = 'liked'
+            liked = True
+        
+        post.refresh_from_db()
+        return Response({
+            'action': action,
+            'likes_count': post.likes_count,
+            'dislikes_count': post.dislikes_count,
+            'liked': liked,
+            'user_disliked': ForumPostReaction.objects.filter(post=post, user=user, reaction_type=ForumReactionType.DISLIKE).exists(),
+        })

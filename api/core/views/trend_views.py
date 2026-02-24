@@ -1,47 +1,20 @@
 """ShieldCall VN – Trend Views"""
-import re
-import hashlib
 import logging
-import json
-from urllib.parse import urlparse
-
-from django.contrib.auth import authenticate, get_user_model
-from django.db.models import Count, Sum, F, Q
-from django.utils import timezone
 from datetime import timedelta
 
-from django.http import StreamingHttpResponse
-from rest_framework import status, permissions, generics
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from django.db.models import Count, Q
+from django.utils import timezone
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
 
-from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
+from api.core.models import Domain, Report, ReportStatus, RiskLevel, ScamType, ScanEvent, ScanStatus, TrendDaily
+from api.core.serializers import TrendDailySerializer
 
-from api.core.models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
-)
-from api.core.serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer,
-    DomainSerializer, BankAccountSerializer,
-    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer,
-    ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
-    ScanAccountSerializer, ScanImageSerializer, ScanEventListSerializer,
-    TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
-)
-
-User = get_user_model()
 logger = logging.getLogger(__name__)
 
-# ═══════════════════════════════════════════════════════════════════════════
-# TRENDS APIs
-# ═══════════════════════════════════════════════════════════════════════════
 
 class TrendDailyView(APIView):
-    """GET /api/trends/daily — Scam Radar daily trends"""
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -53,7 +26,6 @@ class TrendDailyView(APIView):
         if scam_type:
             qs = qs.filter(scam_type=scam_type)
 
-        # If no precomputed trends yet, compute from reports
         if not qs.exists():
             trends = (
                 Report.objects.filter(created_at__date__gte=since)
@@ -63,41 +35,32 @@ class TrendDailyView(APIView):
             )
             return Response({
                 'trends': [
-                    {'date': str(t['created_at__date']),
-                     'scam_type': t['scam_type'],
-                     'count': t['count']}
+                    {
+                        'date': str(t['created_at__date']),
+                        'scam_type': t['scam_type'],
+                        'count': t['count'],
+                    }
                     for t in trends
                 ],
                 'source': 'computed',
             })
 
-        return Response({
-            'trends': TrendDailySerializer(qs, many=True).data,
-            'source': 'precomputed',
-        })
+        return Response({'trends': TrendDailySerializer(qs, many=True).data, 'source': 'precomputed'})
 
 
 class TrendHotView(APIView):
-    """GET /api/trends/hot — Hot/rising scam targets"""
     permission_classes = [AllowAny]
 
     def get(self, request):
         since = timezone.now() - timedelta(days=7)
         hot_phones = (
-            Report.objects.filter(
-                target_type='phone',
-                created_at__gte=since,
-            )
+            Report.objects.filter(target_type='phone', created_at__gte=since)
             .values('target_value', 'scam_type')
             .annotate(report_count=Count('id'))
             .order_by('-report_count')[:10]
         )
-
         hot_domains = (
-            Report.objects.filter(
-                target_type='domain',
-                created_at__gte=since,
-            )
+            Report.objects.filter(target_type='domain', created_at__gte=since)
             .values('target_value', 'scam_type')
             .annotate(report_count=Count('id'))
             .order_by('-report_count')[:10]
@@ -126,7 +89,6 @@ class TrendHotView(APIView):
 
 
 class ScamRadarStatsView(APIView):
-    """GET /api/trends/radar-stats/ — Real-time stats for Scam Radar"""
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -135,212 +97,182 @@ class ScamRadarStatsView(APIView):
             time_range = request.query_params.get('timeRange', '7d')
             now = timezone.now()
 
-            # Determine timeframe
             if time_range == '24h':
                 start_date = now - timedelta(hours=24)
                 prev_start_date = now - timedelta(hours=48)
                 steps = 24
-                step_delta = timedelta(hours=1)
-                date_fmt = '%H:%M'
             elif time_range == '30d':
                 start_date = now - timedelta(days=30)
                 prev_start_date = now - timedelta(days=60)
                 steps = 30
-                step_delta = timedelta(days=1)
-                date_fmt = '%d/%m'
             elif time_range == '1y':
                 start_date = now - timedelta(days=365)
                 prev_start_date = now - timedelta(days=730)
                 steps = 12
-                # Special handling for month steps
-                step_delta = None 
-                date_fmt = '%m/%Y'
-            else: # 7d
+            else:
                 start_date = now - timedelta(days=7)
                 prev_start_date = now - timedelta(days=14)
                 steps = 7
-                step_delta = timedelta(days=1)
-                date_fmt = '%d/%m'
-            
-            # Base query
-            base_qs = Report.objects.all()
-            if filter_type == 'phone':
-                base_qs = base_qs.filter(target_type='phone')
-            elif filter_type == 'bank':
-                base_qs = base_qs.filter(target_type='account') # target_type is 'account' not 'bank'
-            elif filter_type == 'phishing':
-                base_qs = base_qs.filter(Q(target_type='domain') | Q(scam_type='phishing'))
-            # Filter 'all' does not need additional filtering
 
-            reports_this_period = base_qs.filter(created_at__gte=start_date).count()
-            reports_prev_period = base_qs.filter(
-                created_at__gte=prev_start_date, created_at__lt=start_date
-            ).count()
-            
+            reports_qs = Report.objects.filter(status=ReportStatus.APPROVED)
+            scans_qs = ScanEvent.objects.filter(status=ScanStatus.COMPLETED, risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW])
+
+            if filter_type == 'phone':
+                reports_qs = reports_qs.filter(target_type='phone')
+                scans_qs = scans_qs.filter(scan_type='phone')
+            elif filter_type == 'bank':
+                reports_qs = reports_qs.filter(target_type='account')
+                scans_qs = scans_qs.filter(scan_type='account')
+            elif filter_type == 'phishing':
+                reports_qs = reports_qs.filter(Q(target_type='domain') | Q(scam_type='phishing'))
+                scans_qs = scans_qs.filter(scan_type__in=['domain', 'email', 'qr'])
+
+            reports_this_period = reports_qs.filter(created_at__gte=start_date).count() + scans_qs.filter(created_at__gte=start_date).count()
+            reports_prev_period = reports_qs.filter(created_at__gte=prev_start_date, created_at__lt=start_date).count() + scans_qs.filter(created_at__gte=prev_start_date, created_at__lt=start_date).count()
+
             pct_change = 0
             if reports_prev_period > 0:
                 pct_change = int(((reports_this_period - reports_prev_period) / reports_prev_period) * 100)
 
-            # Metrics
-            # For specific metrics, we might want global stats or filtered stats?
-            # Let's keep them global for the top cards as they represent system health
-            # OR make them respect the filter? 
-            # The UI labels are "Báo cáo hôm nay/tuần này", "Số mới", "Domain". 
-            # If we filter by 'bank', showing 'new phones' might be irrelevant but showing 'new bank accounts' would be better.
-            # For simplicity, let's keep them global or semi-related.
-            
             from api.phone_security.models import PhoneNumber
             new_phones = PhoneNumber.objects.filter(created_at__gte=start_date).count() if hasattr(PhoneNumber, 'created_at') else 0
             phishing_domains = Domain.objects.filter(created_at__gte=start_date).count()
 
-            # Hot entities (respect filter)
-            # If filter is 'bank', show hot bank accounts.
-            target_filter = 'phone'
-            if filter_type == 'bank': target_filter = 'account'
-            if filter_type == 'phishing': target_filter = 'domain'
-            
-            # If filter is 'all', default to phone for hot list (or maybe mix?)
-            # The UI expects "hot_phones".
-            # Let's just stick to phone if 'all' or 'phone', else specific.
-            
-            hot_qs = Report.objects.filter(created_at__gte=start_date)
-            if filter_type == 'all':
-                hot_qs = hot_qs.filter(target_type='phone')
-            else:
-                hot_qs = hot_qs.filter(target_type=target_filter)
-
-            hot_items = (
-                hot_qs
-                .values('target_value', 'scam_type')
-                .annotate(count=Count('id'))
-                .order_by('-count')[:5]
-            )
-            
             scam_labels = dict(ScamType.choices)
-            processed_hot_items = []
-            for item in hot_items:
-                item['label'] = scam_labels.get(item['scam_type'], item['scam_type'])
-                v = item['target_value']
-                # Masking
-                if target_filter == 'phone':
-                     item['masked'] = v[:4] + '****' + v[-2:] if len(v) > 6 else v
-                elif target_filter == 'account':
-                     item['masked'] = v[:3] + '*****' + v[-3:] if len(v) > 6 else v
-                else:
-                     item['masked'] = v # Domains usually shown fully or truncated
-                
-                processed_hot_items.append(item)
+            hot_counter = {}
 
-            # Recent reports (respect filter)
+            def mask_target(target_type, value):
+                if target_type == 'phone':
+                    return value[:4] + '****' + value[-2:] if len(value) > 6 else value
+                if target_type == 'account':
+                    return value[:3] + '*****' + value[-3:] if len(value) > 6 else value
+                return value
+
+            for item in reports_qs.filter(created_at__gte=start_date).values('target_type', 'target_value', 'scam_type'):
+                target_type = item.get('target_type') or 'unknown'
+                target_value = (item.get('target_value') or '').strip()
+                if not target_value:
+                    continue
+                key = f"report:{target_type}:{target_value}"
+                if key not in hot_counter:
+                    hot_counter[key] = {
+                        'target_type': target_type,
+                        'target_value': target_value,
+                        'masked': mask_target(target_type, target_value),
+                        'count': 0,
+                        'label': scam_labels.get(item.get('scam_type'), item.get('scam_type') or 'Báo cáo xác nhận'),
+                        'source': 'report',
+                    }
+                hot_counter[key]['count'] += 1
+
+            for item in scans_qs.filter(created_at__gte=start_date).values('scan_type', 'normalized_input'):
+                scan_type = item.get('scan_type') or 'unknown'
+                normalized_input = (item.get('normalized_input') or '').strip()
+                if not normalized_input:
+                    continue
+                mapped_type = 'phone' if scan_type == 'phone' else ('account' if scan_type == 'account' else 'domain')
+                key = f"scan:{scan_type}:{normalized_input}"
+                if key not in hot_counter:
+                    hot_counter[key] = {
+                        'target_type': mapped_type,
+                        'target_value': normalized_input,
+                        'masked': mask_target(mapped_type, normalized_input),
+                        'count': 0,
+                        'label': f"AI scan {scan_type}",
+                        'source': 'scan_ai',
+                    }
+                hot_counter[key]['count'] += 1
+
+            processed_hot_items = sorted(hot_counter.values(), key=lambda x: x['count'], reverse=True)[:8]
+
+            from django.utils.timesince import timesince
             recent_data = []
-            # Get latest 5 reports matching the filter
-            recent_qs = base_qs.select_related('reporter').order_by('-created_at')[:5]
-            
-            for r in recent_qs:
-                # Use timesince for "X minutes ago"
-                from django.utils.timesince import timesince
+            for report in reports_qs.select_related('reporter').order_by('-created_at')[:10]:
                 recent_data.append({
-                    'id': r.id,
-                    'created_at': r.created_at.isoformat(),
-                    'created_at_display': f"{timesince(r.created_at, now).split(',')[0]} trước",
-                    'target_value': r.target_value,
-                    'target_type': r.target_type,
-                    'target_type_display': r.get_target_type_display(),
-                    'scam_type': r.scam_type,
-                    'scam_type_display': r.get_scam_type_display(),
-                    'severity': r.severity,
-                    'severity_display': r.get_severity_display(),
-                    'reporter_name': r.reporter.username if r.reporter else 'Ẩn danh'
+                    'id': f"report-{report.id}",
+                    'created_at': report.created_at,
+                    'created_at_display': f"{timesince(report.created_at, now).split(',')[0]} trước",
+                    'target_value': report.target_value,
+                    'target_type': report.target_type,
+                    'target_type_display': report.get_target_type_display(),
+                    'scam_type': report.scam_type,
+                    'scam_type_display': report.get_scam_type_display(),
+                    'severity': report.severity,
+                    'severity_display': report.get_severity_display(),
+                    'reporter_name': report.reporter.username if report.reporter else 'Ẩn danh',
+                    'source': 'report',
+                    'source_display': 'Báo cáo đã duyệt',
                 })
 
-            # Trend chart data
-            datasets = []
-            colors = ['#ff1744', '#ffea00', '#00e5ff']
-            
-            # Top 3 scam types in this filtered view
-            chart_scam_types = (
-                base_qs.filter(created_at__gte=start_date)
-                .values('scam_type')
-                .annotate(c=Count('id'))
-                .order_by('-c')[:3]
-            )
-            
-            # Generate labels
-            labels = []
+            scan_type_display = {
+                'phone': 'Số điện thoại',
+                'domain': 'Website/URL',
+                'account': 'Tài khoản ngân hàng',
+                'message': 'Tin nhắn',
+                'qr': 'QR Code',
+                'email': 'Email',
+                'audio': 'Âm thanh',
+                'file': 'Tệp tin',
+            }
+            for scan in scans_qs.select_related('user').order_by('-created_at')[:10]:
+                recent_data.append({
+                    'id': f"scan-{scan.id}",
+                    'created_at': scan.created_at,
+                    'created_at_display': f"{timesince(scan.created_at, now).split(',')[0]} trước",
+                    'target_value': scan.normalized_input or scan.raw_input,
+                    'target_type': scan.scan_type,
+                    'target_type_display': scan_type_display.get(scan.scan_type, scan.scan_type),
+                    'scam_type': 'ai_detected',
+                    'scam_type_display': 'AI phát hiện rủi ro',
+                    'severity': 'high' if scan.risk_level == RiskLevel.RED else 'medium',
+                    'severity_display': 'Nguy hiểm' if scan.risk_level == RiskLevel.RED else 'Cảnh báo',
+                    'reporter_name': scan.user.username if scan.user else 'Hệ thống',
+                    'source': 'scan_ai',
+                    'source_display': 'Kết quả quét AI',
+                })
+
+            recent_data = sorted(recent_data, key=lambda x: x['created_at'], reverse=True)[:8]
+            for item in recent_data:
+                item['created_at'] = item['created_at'].isoformat()
+
             if time_range == '24h':
-                # Use local time for display if possible, but server time is UTC usually.
-                # Assuming simple string format is enough.
                 labels = [(now - timedelta(hours=i)).strftime('%H:%M') for i in range(steps)][::-1]
             elif time_range == '30d':
                 labels = [(now - timedelta(days=i)).strftime('%d/%m') for i in range(steps)][::-1]
             elif time_range == '1y':
-                # Simplified 12 months
                 labels = []
                 for i in range(steps):
-                    # Go to 1st of month for consistency
-                    d = (now.replace(day=1) - timedelta(days=30*i)).replace(day=1)
+                    d = (now.replace(day=1) - timedelta(days=30 * i)).replace(day=1)
                     labels.append(d.strftime('%m/%Y'))
                 labels = labels[::-1]
-            else: # 7d
+            else:
                 labels = [(now - timedelta(days=i)).strftime('%d/%m') for i in range(steps)][::-1]
 
-            # Build datasets
-            chart_data_map = {} # Cache for query optimization if needed
-            
-            for i, tt in enumerate(chart_scam_types):
-                st = tt['scam_type']
-                data_points = []
-                
+            def count_interval(qs, interval_idx):
                 if time_range == '1y':
-                     for j in range(steps):
-                         # Logic matches labels generation: steps-1-j is index from 0..11 (oldest..newest)
-                         # But wait, label generation loop: i goes 0..11 (newest..oldest), then reversed.
-                         # So labels[0] corresponds to i=11 (oldest).
-                         # Here j goes 0..11.
-                         # We want data_points[0] to match labels[0].
-                         
-                         # index backward from now
-                         idx = steps - 1 - j
-                         d_curr = (now.replace(day=1) - timedelta(days=30*idx))
-                         
-                         m_start = d_curr.replace(day=1, hour=0, minute=0, second=0)
-                         # End of month
-                         if m_start.month == 12:
-                             m_end = m_start.replace(year=m_start.year+1, month=1)
-                         else:
-                             m_end = m_start.replace(month=m_start.month+1)
-                         
-                         cnt = base_qs.filter(created_at__gte=m_start, created_at__lt=m_end, scam_type=st).count()
-                         data_points.append(cnt)
-                elif time_range == '24h':
-                     for j in range(steps):
-                         # j=0 -> idx=23 (oldest hour)
-                         idx = steps - 1 - j
-                         h_end = now - timedelta(hours=idx) 
-                         h_start = h_end - timedelta(hours=1)
-                         cnt = base_qs.filter(created_at__gte=h_start, created_at__lt=h_end, scam_type=st).count()
-                         data_points.append(cnt)
-                else:
-                     # Days (7d, 30d)
-                     for j in range(steps):
-                         idx = steps - 1 - j
-                         # labels[j] is date for (now - idx days)
-                         # We need to filter by that specific date
-                         
-                         target_date = (now - timedelta(days=idx)).date()
-                         
-                         # Note: SQLite date lookup can be tricky with timezones, but Django usually handles __date well
-                         cnt = base_qs.filter(created_at__date=target_date, scam_type=st).count()
-                         data_points.append(cnt)
-                
-                datasets.append({
-                    'label': scam_labels.get(st, st),
-                    'data': data_points,
-                    'borderColor': colors[i % len(colors)],
-                })
+                    month_cursor = now.replace(day=1) - timedelta(days=30 * interval_idx)
+                    month_start = month_cursor.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                    if month_start.month == 12:
+                        month_end = month_start.replace(year=month_start.year + 1, month=1)
+                    else:
+                        month_end = month_start.replace(month=month_start.month + 1)
+                    return qs.filter(created_at__gte=month_start, created_at__lt=month_end).count()
+                if time_range == '24h':
+                    hour_end = now - timedelta(hours=interval_idx)
+                    hour_start = hour_end - timedelta(hours=1)
+                    return qs.filter(created_at__gte=hour_start, created_at__lt=hour_end).count()
+                target_day = (now - timedelta(days=interval_idx)).date()
+                return qs.filter(created_at__date=target_day).count()
+
+            confirmed_series = []
+            ai_series = []
+            for j in range(steps):
+                idx = steps - 1 - j
+                confirmed_series.append(count_interval(reports_qs, idx))
+                ai_series.append(count_interval(scans_qs, idx))
 
             return Response({
-                'reports_this_week': reports_this_period, # Label says week but it is "this period"
+                'reports_this_week': reports_this_period,
                 'pct_change': pct_change,
                 'new_phones': new_phones,
                 'phishing_domains': phishing_domains,
@@ -348,8 +280,11 @@ class ScamRadarStatsView(APIView):
                 'recent_reports': recent_data,
                 'trend_data': {
                     'labels': labels,
-                    'datasets': datasets
-                }
+                    'datasets': [
+                        {'label': 'Báo cáo đã xác nhận', 'data': confirmed_series, 'borderColor': '#ff1744'},
+                        {'label': 'Kết quả quét AI rủi ro', 'data': ai_series, 'borderColor': '#00e5ff'},
+                    ],
+                },
             })
         except Exception as e:
             logger.error(f"Error in ScamRadarStatsView: {e}")
