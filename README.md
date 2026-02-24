@@ -238,45 +238,23 @@ python manage.py createsuperuser
 
 ### Bước 4: Cấu hình Supervisor (Process Manager)
 
-```ini
-# /etc/supervisor/conf.d/shieldcall.conf
-
-[program:shieldcall-daphne]
-command=/home/shieldcall/PKV_TEAM/.venv/bin/daphne -b 127.0.0.1 -p 8001 PKV.asgi:application
-directory=/home/shieldcall/PKV_TEAM
-user=shieldcall
-autostart=true
-autorestart=true
-stdout_logfile=/var/log/shieldcall/daphne.log
-stderr_logfile=/var/log/shieldcall/daphne-error.log
-environment=DJANGO_SETTINGS_MODULE="PKV.settings"
-
-[program:shieldcall-celery]
-command=/home/shieldcall/PKV_TEAM/.venv/bin/celery -A PKV worker -l info --concurrency=4
-directory=/home/shieldcall/PKV_TEAM
-user=shieldcall
-autostart=true
-autorestart=true
-stdout_logfile=/var/log/shieldcall/celery.log
-stderr_logfile=/var/log/shieldcall/celery-error.log
-
-[program:shieldcall-beat]
-command=/home/shieldcall/PKV_TEAM/.venv/bin/celery -A PKV beat -l info
-directory=/home/shieldcall/PKV_TEAM
-user=shieldcall
-autostart=true
-autorestart=true
-stdout_logfile=/var/log/shieldcall/beat.log
-stderr_logfile=/var/log/shieldcall/beat-error.log
-```
+Sử dụng file cấu hình mẫu [supervisor_pkv.conf](supervisor_pkv.conf) có sẵn trong thư mục gốc. File này đã được tối ưu hóa cho môi trường production với cơ chế Group (pkv:*) giúp quản lý Daphne, Celery Worker và Celery Beat dễ dàng hơn.
 
 ```bash
-# Tạo thư mục log & khởi động
-sudo mkdir -p /var/log/shieldcall
-sudo chown shieldcall:shieldcall /var/log/shieldcall
+# 1. Copy file cấu hình vào thư mục của Supervisor
+sudo cp /data/PKV_TEAM/supervisor_pkv.conf /etc/supervisor/conf.d/pkv.conf
+
+# 2. Tạo thư mục log (nếu chưa có)
+sudo mkdir -p /var/log/supervisor
+sudo chown -R $USER:$USER /var/log/supervisor
+
+# 3. Cập nhật & Khởi động
 sudo supervisorctl reread
 sudo supervisorctl update
-sudo supervisorctl start all
+sudo supervisorctl start pkv:*
+
+# 4. Kiểm tra trạng thái
+sudo supervisorctl status pkv:*
 ```
 
 ### Bước 5: Cấu hình Nginx (Reverse Proxy + SSL)
@@ -449,7 +427,7 @@ PKV_TEAM/
 
 ## 👨‍💻 Đội ngũ phát triển
 Dự án được thực hiện bởi **SENTINEL TEAM** (tiền thân là PKV Team).
-- **Quy mô dự án:** ~40,000 dòng code tự viết.
+- **Quy mô dự án:** ~40,000 dòng code production.
 - **Phương trình phát triển:** **AI-Native Workflow**. Tận dụng mạng lưới **Multi-Agent Collaboration** (Đặc vụ AI cộng tác) và kỹ thuật **Prompt Engineering** nâng cao (Chain-of-Thought, Feedback Loop) để tối ưu hóa kiến trúc và đảm bảo độ ổn định của hệ thống.
 - **Kiến trúc:** Cloud-native, AI-integrated.
 
