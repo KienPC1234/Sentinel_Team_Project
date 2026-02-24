@@ -108,54 +108,106 @@ def manage_reports(request):
     sort_by = request.GET.get('sort', '-created_at')
     status_filter = request.GET.get('status', '')
     type_filter = request.GET.get('type', '')
+    severity_filter = request.GET.get('severity', '')
     query = request.GET.get('q', '').strip()
     
     allowed_sorts = [
         'created_at', '-created_at', 'status', '-status', 
-        'target_type', '-target_type', 'reporter__username', '-reporter__username'
+        'target_type', '-target_type', 'reporter__username', '-reporter__username',
+        'severity', '-severity'
     ]
     if sort_by not in allowed_sorts:
         sort_by = '-created_at'
         
-    reports = Report.objects.select_related('reporter').all()
+    reports = Report.objects.select_related('reporter').prefetch_related('evidence_images').all()
     
     if status_filter:
         reports = reports.filter(status=status_filter)
     if type_filter:
         reports = reports.filter(target_type=type_filter)
+    if severity_filter:
+        reports = reports.filter(severity=severity_filter)
     if query:
         reports = reports.filter(
             Q(target_value__icontains=query) |
             Q(description__icontains=query) |
             Q(scammer_name__icontains=query) |
             Q(scammer_phone__icontains=query) |
-            Q(scammer_bank_account__icontains=query)
+            Q(scammer_bank_account__icontains=query) |
+            Q(reporter__username__icontains=query)
         )
         
     reports = reports.order_by(sort_by)
     
+    # Stats
+    all_reports = Report.objects.all()
+    stats = {
+        'total': all_reports.count(),
+        'pending': all_reports.filter(status='pending').count(),
+        'approved': all_reports.filter(status='approved').count(),
+        'rejected': all_reports.filter(status='rejected').count(),
+        'high_severity': all_reports.filter(severity__in=['high', 'critical']).count(),
+        'has_ai': all_reports.exclude(ai_analysis={}).count(),
+    }
+    
+    # Build JSON data for JS (avoids Django template rendering issues with JSONField)
+    reports_list = []
+    for r in reports:
+        evidence_imgs = []
+        for img in r.evidence_images.all():
+            evidence_imgs.append({'url': img.image.url, 'caption': img.caption or ''})
+        reports_list.append({
+            'id': r.id,
+            'created_at': r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else '',
+            'reporter': r.reporter.username if r.reporter else 'N/A',
+            'target_type': r.target_type or '',
+            'target_type_display': r.get_target_type_display() if hasattr(r, 'get_target_type_display') else r.target_type,
+            'target_value': r.target_value or '',
+            'scam_type': r.get_scam_type_display() if hasattr(r, 'get_scam_type_display') else r.scam_type,
+            'severity': r.severity or '',
+            'status': r.status or '',
+            'description': r.description or '',
+            'scammer_name': r.scammer_name or '',
+            'scammer_phone': r.scammer_phone or '',
+            'scammer_bank_name': r.scammer_bank_name or '',
+            'scammer_bank_account': r.scammer_bank_account or '',
+            'evidence_url': r.evidence_file.url if r.evidence_file else '',
+            'evidence_images': evidence_imgs,
+            'ocr_text': r.ocr_text or '',
+            'ai_analysis': r.ai_analysis if isinstance(r.ai_analysis, dict) else {},
+            'moderation_note': r.moderation_note or '',
+        })
+    
     context = {
         "reports": reports,
+        "reports_json": json.dumps(reports_list, ensure_ascii=False, default=str),
+        "stats": stats,
         "current_sort": sort_by,
         "status_filter": status_filter,
         "type_filter": type_filter,
+        "severity_filter": severity_filter,
         "query": query,
     }
     return render(request, "Admin/reports.html", context)
 
 @admin_required
 def manage_forum(request):
-    """Manage forum posts and reports"""
+    """Manage forum posts, reports, members and bans"""
     posts = ForumPost.objects.select_related('author').order_by('-is_pinned', '-created_at')[:100]
     post_reports = ForumPostReport.objects.select_related('reporter', 'post', 'post__author').order_by('-created_at')
     comment_reports = ForumCommentReport.objects.select_related('reporter', 'comment', 'comment__author').order_by('-created_at')
 
     from django.utils.timesince import timesince
+    from django.contrib.auth.models import User
+    from django.db.models import Count, Q
+    from api.core.models import ForumBan, ForumComment
+
     posts_json = [
         {
             'id': p.id,
             'title': p.title,
             'author_name': p.author.get_full_name() or p.author.username,
+            'author_username': p.author.username,
             'category': p.category,
             'likes_count': p.likes_count,
             'comments_count': p.comments_count,
@@ -195,8 +247,101 @@ def manage_forum(request):
             'reason': r.reason,
             'status': r.status,
             'created_at_display': timesince(r.created_at) + ' trước',
+            **_report_ai_status(r),
         }
         for r in comment_reports
+    ]
+
+    # Forum members: users who have posted or commented
+    forum_members = User.objects.filter(
+        Q(forum_posts__isnull=False) | Q(forum_comments__isnull=False)
+    ).distinct().select_related('profile').annotate(
+        posts_count=Count('forum_posts', distinct=True),
+        comments_count=Count('forum_comments', distinct=True),
+    ).order_by('-posts_count')[:200]
+
+    members_json = []
+    for u in forum_members:
+        active_ban = ForumBan.objects.filter(user=u, is_active=True).first()
+        is_banned = bool(active_ban and not active_ban.is_expired)
+        members_json.append({
+            'id': u.id,
+            'username': u.username,
+            'display_name': u.profile.display_name or u.username,
+            'avatar': u.profile.avatar.url if u.profile.avatar else None,
+            'rank': u.profile.rank_info,
+            'posts_count': u.posts_count,
+            'comments_count': u.comments_count,
+            'is_staff': u.is_staff,
+            'is_banned': is_banned,
+            'ban_reason': active_ban.reason if is_banned else None,
+            'date_joined': u.date_joined.strftime('%d/%m/%Y'),
+        })
+
+    # Banned users
+    active_bans = ForumBan.objects.filter(is_active=True).select_related('user', 'user__profile', 'banned_by')
+    bans_json = [
+        {
+            'id': b.id,
+            'username': b.user.username,
+            'display_name': b.user.profile.display_name or b.user.username,
+            'banned_by': b.banned_by.username if b.banned_by else '—',
+            'reason': b.reason,
+            'ban_type': b.ban_type,
+            'expires_at': b.expires_at.strftime('%d/%m/%Y %H:%M') if b.expires_at else 'Vĩnh viễn',
+            'is_expired': b.is_expired,
+            'created_at_display': timesince(b.created_at) + ' trước',
+        }
+        for b in active_bans
+    ]
+
+    # Dashboard stats
+    from django.utils import timezone
+    from datetime import timedelta
+    today = timezone.now().date()
+    stats = {
+        'total_posts': ForumPost.objects.count(),
+        'total_comments': ForumComment.objects.count(),
+        'total_members': forum_members.count(),
+        'total_bans': active_bans.filter(is_active=True).count(),
+        'pending_reports': post_reports.filter(status='pending').count() + comment_reports.filter(status='pending').count(),
+        'posts_today': ForumPost.objects.filter(created_at__date=today).count(),
+    }
+
+    # Chart data: posts by category
+    category_data = list(
+        ForumPost.objects.values('category')
+        .annotate(count=Count('id'))
+        .order_by('-count')
+    )
+
+    # Chart data: posts per day (last 14 days)
+    daily_posts = []
+    for i in range(13, -1, -1):
+        d = today - timedelta(days=i)
+        cnt = ForumPost.objects.filter(created_at__date=d).count()
+        daily_posts.append({'date': d.strftime('%d/%m'), 'count': cnt})
+
+    # Chart data: reports by status
+    report_status_data = {
+        'pending': post_reports.filter(status='pending').count() + comment_reports.filter(status='pending').count(),
+        'approved': post_reports.filter(status='approved').count() + comment_reports.filter(status='approved').count(),
+        'rejected': post_reports.filter(status='rejected').count() + comment_reports.filter(status='rejected').count(),
+        'ai_flagged': post_reports.filter(status='ai_flagged').count() + comment_reports.filter(status='ai_flagged').count(),
+    }
+
+    # Moderators list
+    moderators = User.objects.filter(is_staff=True).select_related('profile')
+    moderators_json = [
+        {
+            'id': u.id,
+            'username': u.username,
+            'display_name': u.profile.display_name or u.username if hasattr(u, 'profile') else u.username,
+            'avatar': u.profile.avatar.url if hasattr(u, 'profile') and u.profile.avatar else None,
+            'is_superuser': u.is_superuser,
+            'date_joined': u.date_joined.strftime('%d/%m/%Y'),
+        }
+        for u in moderators
     ]
 
     return render(request, "Admin/forum_management.html", {
@@ -206,6 +351,13 @@ def manage_forum(request):
         "posts_json": posts_json,
         "post_reports_json": post_reports_json,
         "comment_reports_json": comment_reports_json,
+        "members_json": members_json,
+        "bans_json": bans_json,
+        "moderators_json": moderators_json,
+        "forum_stats": stats,
+        "category_chart": category_data,
+        "daily_chart": daily_posts,
+        "report_status_chart": report_status_data,
     })
 
 
@@ -291,6 +443,109 @@ def forum_post_admin_action(request, post_id):
     except ForumPost.DoesNotExist:
         return JsonResponse({'error': 'Bài viết không tồn tại'}, status=404)
 
+
+@admin_required
+def forum_ban_action(request):
+    """Ban or unban a user from the forum. Returns JSON."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    action = data.get('action')
+    username = data.get('username')
+
+    if not action or not username:
+        return JsonResponse({'error': 'Missing action or username'}, status=400)
+
+    try:
+        from api.core.models import ForumBan
+        target_user = User.objects.get(username=username)
+
+        if action == 'ban':
+            reason = data.get('reason', 'Vi phạm nội quy diễn đàn')
+            ban_type = data.get('ban_type', 'temporary')
+            days = int(data.get('days', 7))
+
+            # Deactivate existing bans
+            ForumBan.objects.filter(user=target_user, is_active=True).update(is_active=False)
+
+            from django.utils import timezone
+            from datetime import timedelta
+            expires = None
+            if ban_type == 'temporary':
+                expires = timezone.now() + timedelta(days=days)
+
+            ForumBan.objects.create(
+                user=target_user,
+                banned_by=request.user,
+                reason=reason,
+                ban_type=ban_type,
+                expires_at=expires,
+            )
+            return JsonResponse({'status': 'ok', 'message': f'Đã cấm {username} khỏi diễn đàn'})
+
+        elif action == 'unban':
+            ForumBan.objects.filter(user=target_user, is_active=True).update(is_active=False)
+            return JsonResponse({'status': 'ok', 'message': f'Đã gỡ cấm {username}'})
+
+        else:
+            return JsonResponse({'error': 'Unknown action'}, status=400)
+
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Người dùng không tồn tại'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@admin_required
+def forum_moderator_action(request):
+    """Promote or demote a user as forum moderator (is_staff). Returns JSON."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    action = data.get('action')  # 'promote' or 'demote'
+    username = data.get('username')
+
+    if not action or not username:
+        return JsonResponse({'error': 'Missing action or username'}, status=400)
+
+    try:
+        target_user = User.objects.get(username=username)
+
+        if target_user == request.user:
+            return JsonResponse({'error': 'Không thể thay đổi quyền của chính mình'}, status=400)
+
+        if target_user.is_superuser:
+            return JsonResponse({'error': 'Không thể thay đổi quyền của Super Admin'}, status=400)
+
+        if action == 'promote':
+            target_user.is_staff = True
+            target_user.save(update_fields=['is_staff'])
+            return JsonResponse({'status': 'ok', 'message': f'Đã bổ nhiệm {username} làm Kiểm duyệt viên', 'is_staff': True})
+
+        elif action == 'demote':
+            target_user.is_staff = False
+            target_user.save(update_fields=['is_staff'])
+            return JsonResponse({'status': 'ok', 'message': f'Đã gỡ quyền Kiểm duyệt viên của {username}', 'is_staff': False})
+
+        else:
+            return JsonResponse({'error': 'Unknown action'}, status=400)
+
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Người dùng không tồn tại'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 @super_admin_required
 def manage_users(request):
     """Super Admin only: manage users and roles"""
@@ -345,6 +600,80 @@ def reject_report(request, report_id):
     
     messages.info(request, f"Đã từ chối báo cáo #{report_id}.")
     return redirect('admin-manage-reports')
+
+@admin_required
+def analyze_report_ai(request, report_id):
+    """Run/re-run AI analysis on a report"""
+    from api.utils.ollama_client import analyze_text_for_scam
+    from api.utils.media_utils import extract_ocr_text
+    import traceback
+    
+    report = get_object_or_404(Report, id=report_id)
+    
+    try:
+        # Re-run OCR if evidence exists and no OCR text
+        if report.evidence_file and not report.ocr_text:
+            try:
+                ocr_text = extract_ocr_text(report.evidence_file)
+                if ocr_text:
+                    report.ocr_text = ocr_text
+                    report.save()
+            except Exception as e:
+                logger.error(f"[AdminReportOCR] Error: {e}")
+        
+        # Build context
+        full_context = f"Target Type: {report.target_type}\n"
+        full_context += f"Target Value: {report.target_value}\n"
+        full_context += f"Scam Type: {report.scam_type}\n"
+        full_context += f"Severity: {report.severity}\n"
+        full_context += f"Description: {report.description}\n"
+        if report.scammer_name:
+            full_context += f"Scammer Name: {report.scammer_name}\n"
+        if report.scammer_phone:
+            full_context += f"Scammer Phone: {report.scammer_phone}\n"
+        if report.scammer_bank_account:
+            full_context += f"Scammer Bank: {report.scammer_bank_name} - {report.scammer_bank_account}\n"
+        if report.ocr_text:
+            full_context += f"OCR Evidence Text: {report.ocr_text}\n"
+        
+        analysis = analyze_text_for_scam(full_context)
+        report.ai_analysis = analysis
+        report.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'AI phân tích hoàn tất',
+            'ai_analysis': analysis
+        })
+    except Exception as e:
+        logger.error(f"[AdminReportAI] Error: {e}\n{traceback.format_exc()}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Lỗi phân tích AI: {str(e)}'
+        }, status=500)
+
+@admin_required
+def update_report_note(request, report_id):
+    """Update moderation note for a report"""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Method not allowed'}, status=405)
+    
+    report = get_object_or_404(Report, id=report_id)
+    
+    try:
+        data = json.loads(request.body)
+        note = data.get('note', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        note = request.POST.get('note', '').strip()
+    
+    report.moderation_note = note
+    report.moderator = request.user
+    report.save()
+    
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Đã cập nhật ghi chú kiểm duyệt'
+    })
 
 @admin_required
 def edit_lesson(request, lesson_id=None):

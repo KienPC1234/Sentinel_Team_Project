@@ -124,7 +124,7 @@ class ScamVectorDB:
                 'id': les.id,
                 'type': 'lesson',
                 'title': les.title,
-                'url': f"/learn/{les.slug}/"
+                'url': f"/learn/lesson/{les.slug}/"
             })
 
         # Fetch Quizzes
@@ -133,11 +133,16 @@ class ScamVectorDB:
         for q in quizzes:
             text = f"Câu hỏi: {q.question}\nGiải thích: {q.explanation}"
             documents.append(text)
+            quiz_url = "/learn/"
+            if q.article:
+                quiz_url = f"/learn/{q.article.slug}/"
+            elif q.lesson:
+                quiz_url = f"/learn/lesson/{q.lesson.slug}/"
             metadata.append({
                 'id': q.id,
                 'type': 'quiz',
                 'title': f"Quiz: {q.question[:50]}",
-                'url': f"/learn/{(q.article.slug if q.article else q.lesson.slug) if (q.article or q.lesson) else ''}/"
+                'url': quiz_url
             })
 
         # Fetch Scenarios (include those without articles)

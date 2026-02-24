@@ -58,6 +58,7 @@ urlpatterns = [
     path('admin/stats/', views.AdminStatsView.as_view(), name='admin-stats'),
     path('admin/rag/', views.AdminRAGManagementView.as_view(), name='admin-rag'),
     path('admin/rag/rebuild/', views.AdminRAGRebuildView.as_view(), name='admin-rag-rebuild'),
+    path('admin/rag/clear-logs/', views.AdminRAGClearLogsView.as_view(), name='admin-rag-clear-logs'),
 
     # Forum
     path('forum/posts/', views.ForumPostListCreateView.as_view(), name='forum-posts'),

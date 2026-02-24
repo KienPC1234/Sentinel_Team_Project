@@ -320,19 +320,116 @@
                     Hội thoại mới
                 </button>
             </div>
-            
-            <div class="px-5 py-4 flex items-center justify-between">
-                <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-400/60">Lịch sử trò chuyện</h3>
-                <div class="flex items-center gap-2">
-                    <span id="session-count" class="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold">0</span>
-                    <button onclick="clearHistory()" title="Xóa toàn bộ lịch sử" class="text-slate-500 hover:text-red-400 transition-colors p-1">
-                        <i class="bi bi-trash-fill text-[10px]"></i>
+
+            <!-- Search Bar -->
+            <div class="px-4 py-3 border-b border-white/5">
+                <div class="relative">
+                    <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-white/20 text-xs"></i>
+                    <input type="text" id="chat-search-input" placeholder="Tìm kiếm lịch sử chat..."
+                        class="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/30 transition-all">
+                    <button id="chat-search-clear" class="absolute right-2 top-1/2 -translate-y-1/2 text-white/20 hover:text-red-400 transition-colors hidden">
+                        <i class="bi bi-x-lg text-xs"></i>
                     </button>
+                </div>
+                <div id="search-results-panel" class="hidden mt-2 max-h-60 overflow-y-auto custom-scrollbar space-y-1">
                 </div>
             </div>
 
-            <div id="history-container" class="flex-1 overflow-y-auto px-3 space-y-1.5 custom-scrollbar">
-                <!-- Sessions list will be loaded here -->
+            <!-- Sidebar Tabs: History / Saved / Settings -->
+            <div class="px-4 py-2 flex items-center gap-1 border-b border-white/5">
+                <button id="tab-history" onclick="switchSidebarTab('history')" class="flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all bg-white/10 text-white">
+                    <i class="bi bi-clock-history mr-1"></i> Lịch sử
+                </button>
+                <button id="tab-saved" onclick="switchSidebarTab('saved')" class="flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-white/60">
+                    <i class="bi bi-bookmark mr-1"></i> Đã lưu
+                </button>
+                <button id="tab-settings" onclick="switchSidebarTab('settings')" class="flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all text-white/40 hover:text-white/60">
+                    <i class="bi bi-gear mr-1"></i> Cài đặt
+                </button>
+            </div>
+            
+            <!-- Tab: History -->
+            <div id="panel-history" class="flex-1 flex flex-col overflow-hidden">
+                <div class="px-5 py-3 flex items-center justify-between">
+                    <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-400/60">Lịch sử trò chuyện</h3>
+                    <div class="flex items-center gap-2">
+                        <span id="session-count" class="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold">0</span>
+                        <button onclick="clearHistory()" title="Xóa toàn bộ lịch sử" class="text-slate-500 hover:text-red-400 transition-colors p-1">
+                            <i class="bi bi-trash-fill text-[10px]"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="history-container" class="flex-1 overflow-y-auto px-3 space-y-1.5 custom-scrollbar">
+                </div>
+            </div>
+
+            <!-- Tab: Saved Messages -->
+            <div id="panel-saved" class="flex-1 flex-col overflow-hidden hidden">
+                <div class="px-5 py-3 flex items-center justify-between">
+                    <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400/60">
+                        <i class="bi bi-bookmark-star-fill mr-1"></i> Tin nhắn đã lưu
+                    </h3>
+                    <span id="saved-count" class="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-bold">0</span>
+                </div>
+                <div id="saved-container" class="flex-1 overflow-y-auto px-3 space-y-2 custom-scrollbar">
+                    <div class="text-center py-8 text-white/10">
+                        <i class="bi bi-bookmark text-3xl block mb-2"></i>
+                        <p class="text-[10px] font-bold">Chưa có tin nhắn nào được lưu</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Settings (Chatbot Personalization) -->
+            <div id="panel-settings" class="flex-1 flex-col overflow-hidden hidden">
+                <div class="px-5 py-3">
+                    <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-purple-400/60">
+                        <i class="bi bi-sliders mr-1"></i> Cá nhân hóa AI
+                    </h3>
+                </div>
+                <div id="settings-container" class="flex-1 overflow-y-auto px-4 pb-4 custom-scrollbar space-y-4">
+                    <!-- Tone -->
+                    <div>
+                        <label class="text-[9px] font-black text-white/40 uppercase tracking-widest block mb-2">Giọng điệu</label>
+                        <select id="config-tone" onchange="saveConfig()" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/30 transition-all">
+                            <option value="professional">Chuyên nghiệp</option>
+                            <option value="friendly" selected>Thân thiện</option>
+                            <option value="casual">Thoải mái</option>
+                            <option value="formal">Trang trọng</option>
+                            <option value="humorous">Hài hước</option>
+                        </select>
+                    </div>
+                    <!-- Language Style -->
+                    <div>
+                        <label class="text-[9px] font-black text-white/40 uppercase tracking-widest block mb-2">Phong cách trả lời</label>
+                        <select id="config-style" onchange="saveConfig()" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/30 transition-all">
+                            <option value="simple" selected>Đơn giản, dễ hiểu</option>
+                            <option value="detailed">Chi tiết, chuyên sâu</option>
+                            <option value="concise">Ngắn gọn, súc tích</option>
+                        </select>
+                    </div>
+                    <!-- Custom Name -->
+                    <div>
+                        <label class="text-[9px] font-black text-white/40 uppercase tracking-widest block mb-2">Tên gọi cho AI</label>
+                        <input type="text" id="config-name" placeholder="VD: Shield, Trợ lý..." maxlength="50"
+                            onchange="saveConfig()"
+                            class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-cyan-500/30 transition-all">
+                    </div>
+                    <!-- Custom Instructions -->
+                    <div>
+                        <label class="text-[9px] font-black text-white/40 uppercase tracking-widest block mb-2">Hướng dẫn bổ sung</label>
+                        <textarea id="config-instructions" placeholder="VD: Luôn giải thích bằng ví dụ thực tế..." rows="3" maxlength="500"
+                            onchange="saveConfig()"
+                            class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-cyan-500/30 transition-all resize-none"></textarea>
+                        <div class="text-[8px] text-white/15 mt-1 text-right">
+                            <span id="config-instructions-count">0</span>/500
+                        </div>
+                    </div>
+                    <div class="pt-2">
+                        <div id="config-status" class="text-[9px] text-green-400/60 font-bold hidden">
+                            <i class="bi bi-check-circle-fill mr-1"></i> Đã lưu
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- User Profile Card -->
@@ -392,21 +489,70 @@
                             <p class="text-slate-400 text-sm max-w-lg mx-auto leading-relaxed">Trợ lý ảo thông minh sử dụng công nghệ RAG và dữ liệu bảo mật ShieldCall VN để bảo vệ bạn trong không gian số.</p>
                         </div>
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl px-4">
-                            <div onclick="setPrompt('Kiểm tra số điện thoại 0123456789 có lừa đảo không?')" class="group p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-cyan-500/30 transition-all cursor-pointer text-left">
-                                <i class="bi bi-search text-cyan-400 text-xl mb-3 block"></i>
-                                <p class="text-sm font-bold text-slate-200 mb-1">Truy vấn rủi ro</p>
-                                <p class="text-[10px] text-slate-500">Quét SĐT, URL hoặc tài khoản trực tiếp trong ô chat.</p>
+                        <!-- Quick Scan Feature Prompts -->
+                        <div class="w-full max-w-2xl px-4">
+                            <div class="text-[9px] font-black text-white/20 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <i class="bi bi-lightning-charge-fill text-cyan-500/40"></i> Thử ngay các tính năng quét
                             </div>
-                            <div onclick="setPrompt('Các kịch bản lừa đảo phổ biến nhất hiện nay là gì?')" class="group p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-cyan-500/30 transition-all cursor-pointer text-left">
-                                <i class="bi bi-journal-text text-cyan-400 text-xl mb-3 block"></i>
-                                <p class="text-sm font-bold text-slate-200 mb-1">Nhận diện mạo danh</p>
-                                <p class="text-[10px] text-slate-500">Tìm hiểu các kịch bản lừa đảo phổ biến nhất hiện nay.</p>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                                <div onclick="setPrompt('Quét số điện thoại 0373821456 xem có phải lừa đảo không')" class="group p-4 rounded-2xl bg-gradient-to-br from-cyan-500/[0.06] to-cyan-500/[0.02] border border-cyan-500/15 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all cursor-pointer text-left">
+                                    <div class="flex items-center gap-2.5 mb-2">
+                                        <div class="w-8 h-8 rounded-lg bg-cyan-500/15 flex items-center justify-center"><i class="bi bi-telephone-fill text-cyan-400 text-sm"></i></div>
+                                        <p class="text-xs font-bold text-slate-200">Quét SĐT</p>
+                                    </div>
+                                    <p class="text-[10px] text-slate-500 leading-relaxed">Kiểm tra số điện thoại có bị báo cáo lừa đảo không.</p>
+                                </div>
+                                <div onclick="setPrompt('Kiểm tra website https://shopee-khuyenmai.vn có an toàn không')" class="group p-4 rounded-2xl bg-gradient-to-br from-blue-500/[0.06] to-blue-500/[0.02] border border-blue-500/15 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 transition-all cursor-pointer text-left">
+                                    <div class="flex items-center gap-2.5 mb-2">
+                                        <div class="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center"><i class="bi bi-globe2 text-blue-400 text-sm"></i></div>
+                                        <p class="text-xs font-bold text-slate-200">Quét URL</p>
+                                    </div>
+                                    <p class="text-[10px] text-slate-500 leading-relaxed">Phát hiện website giả mạo, phishing, malware.</p>
+                                </div>
+                                <div onclick="setPrompt('Kiểm tra tài khoản ngân hàng MB 0373821456789 có an toàn không')" class="group p-4 rounded-2xl bg-gradient-to-br from-violet-500/[0.06] to-violet-500/[0.02] border border-violet-500/15 hover:border-violet-500/40 hover:shadow-lg hover:shadow-violet-500/10 transition-all cursor-pointer text-left">
+                                    <div class="flex items-center gap-2.5 mb-2">
+                                        <div class="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center"><i class="bi bi-bank2 text-violet-400 text-sm"></i></div>
+                                        <p class="text-xs font-bold text-slate-200">Quét TK Bank</p>
+                                    </div>
+                                    <p class="text-[10px] text-slate-500 leading-relaxed">Tra cứu tài khoản ngân hàng trong CSDL lừa đảo.</p>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- General Prompt Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl px-4">
+                            <div onclick="setPrompt('Tôi vừa nhận cuộc gọi từ số lạ tự xưng là công an yêu cầu chuyển tiền, phải làm sao?')" class="group p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-amber-500/30 transition-all cursor-pointer text-left">
+                                <i class="bi bi-exclamation-triangle text-amber-400 text-lg mb-2 block"></i>
+                                <p class="text-xs font-bold text-slate-200 mb-1">Phân tích cuộc gọi lạ</p>
+                                <p class="text-[10px] text-slate-500">Phân tích tình huống đáng ngờ và hướng dẫn xử lý.</p>
+                            </div>
+                            <div onclick="setPrompt('Hướng dẫn tôi cách bảo vệ tài khoản ngân hàng và mạng xã hội')" class="group p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-green-500/30 transition-all cursor-pointer text-left">
+                                <i class="bi bi-shield-check text-green-400 text-lg mb-2 block"></i>
+                                <p class="text-xs font-bold text-slate-200 mb-1">Hướng dẫn bảo mật</p>
+                                <p class="text-[10px] text-slate-500">Tư vấn bảo mật cá nhân từ chuyên gia AI.</p>
+                            </div>
+                            <div onclick="setPrompt('Các kịch bản lừa đảo phổ biến nhất hiện nay ở Việt Nam là gì?')" class="group p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-cyan-500/30 transition-all cursor-pointer text-left">
+                                <i class="bi bi-journal-text text-cyan-400 text-lg mb-2 block"></i>
+                                <p class="text-xs font-bold text-slate-200 mb-1">Nhận diện lừa đảo</p>
+                                <p class="text-[10px] text-slate-500">Tìm hiểu các chiêu trò lừa đảo mới nhất.</p>
+                            </div>
+                            <div onclick="setPrompt('Tìm kiếm tin tức mới nhất về an ninh mạng tại Việt Nam')" class="group p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-emerald-500/30 transition-all cursor-pointer text-left">
+                                <i class="bi bi-search text-emerald-400 text-lg mb-2 block"></i>
+                                <p class="text-xs font-bold text-slate-200 mb-1">Tin tức bảo mật</p>
+                                <p class="text-[10px] text-slate-500">Tìm kiếm web về các sự kiện an ninh mạng mới.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center gap-4 text-[9px] text-white/15 font-bold uppercase tracking-widest">
+                            <span class="flex items-center gap-1.5"><i class="bi bi-lightning-charge-fill text-cyan-500/30"></i> RAG</span>
+                            <span class="w-1 h-1 rounded-full bg-white/10"></span>
+                            <span class="flex items-center gap-1.5"><i class="bi bi-tools text-cyan-500/30"></i> Tool Use</span>
+                            <span class="w-1 h-1 rounded-full bg-white/10"></span>
+                            <span class="flex items-center gap-1.5"><i class="bi bi-globe text-cyan-500/30"></i> Web Search</span>
+                        </div>
                     </div>
+                    <div class="h-40"></div>
                 </div>
-                <div class="h-40"></div>
             </div>
 
             <!-- Float Input Section -->
@@ -526,17 +672,25 @@
             welcomeScreen.classList.add('hidden');
             chatStatus.classList.remove('hidden');
 
-            addMessage('user', text, images);
-            
+            // If editing, remove all messages from the edited one onward in DOM first
             if (editModeMessageId) {
+                const allMsgGroups = [...messagesContainer.querySelectorAll('.msg-group[data-message-id]')];
+                const editIdx = allMsgGroups.findIndex(el => el.dataset.messageId == editModeMessageId);
+                if (editIdx !== -1) {
+                    for (let i = allMsgGroups.length - 1; i >= editIdx; i--) {
+                        allMsgGroups[i].remove();
+                    }
+                }
                 try {
                     await fetch(`/api/v1/chat/messages/${editModeMessageId}/delete_after/`, {
                         method: 'DELETE',
                         headers: { 'X-CSRFToken': getCookie('csrftoken') }
                     });
-                    clearEditMode();
                 } catch (err) { console.error("Truncation failed", err); }
+                clearEditMode();
             }
+
+            addMessage('user', text, images);
 
             userInput.value = '';
             userInput.style.height = '48px';
@@ -710,6 +864,46 @@
             }
             scrollToBottom();
             loadSessions();
+            // Patch bookmark icons on newly created messages that don't have IDs yet
+            patchMessageIds();
+        }
+
+        async function patchMessageIds() {
+            if (!currentSessionId) return;
+            try {
+                const res = await fetch(`/api/v1/chat/sessions/${currentSessionId}/`);
+                const data = await res.json();
+                if (!data.messages) return;
+                // Get all msg-group elements without a data-message-id
+                const allGroups = messagesContainer.querySelectorAll('.msg-group');
+                const serverMsgs = data.messages; // ordered by created_at
+                // Match by index: server messages map 1:1 to DOM message groups (excluding welcome/spacer)
+                let domIdx = 0;
+                for (const sm of serverMsgs) {
+                    if (domIdx >= allGroups.length) break;
+                    const el = allGroups[domIdx];
+                    if (!el.dataset.messageId) {
+                        el.dataset.messageId = sm.id;
+                        // Add bookmark button if missing
+                        const actionsDiv = el.querySelector('.msg-actions');
+                        if (actionsDiv && !actionsDiv.querySelector('.bookmark-btn')) {
+                            const bookmarkBtn = document.createElement('button');
+                            bookmarkBtn.onclick = function() { toggleBookmark(this, sm.id); };
+                            bookmarkBtn.className = 'p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-amber-400 transition-all bookmark-btn';
+                            bookmarkBtn.title = 'Lưu tin nhắn';
+                            bookmarkBtn.innerHTML = '<i class="bi bi-bookmark"></i>';
+                            actionsDiv.insertBefore(bookmarkBtn, actionsDiv.querySelector('.bookmark-btn') || actionsDiv.children[1] || null);
+                        }
+                        // Patch edit button messageId for user messages
+                        const editBtn = actionsDiv?.querySelector('[title="Chỉnh sửa"]');
+                        if (editBtn) {
+                            const rawText = decodeURIComponent(actionsDiv.dataset.rawText || '');
+                            editBtn.onclick = function() { editMessage(this, sm.id, rawText); };
+                        }
+                    }
+                    domIdx++;
+                }
+            } catch (e) { console.error('patchMessageIds error:', e); }
         }
 
         function addMessage(role, text, images = [], isNew = false, messageId = null, metadata = null) {
@@ -773,8 +967,9 @@
                         <div class="search-results-container mt-4 space-y-2 empty:hidden"></div>
                     </div>
                     <div class="msg-actions ${role === 'user' ? 'msg-actions-user' : 'msg-actions-assistant'}" data-raw-text="${encodeURIComponent(text)}">
-                        <button onclick="copyToClipboard(this)" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-all"><i class="bi bi-clipboard"></i></button>
-                        ${role === 'user' ? `<button onclick="editMessage(this, ${messageId}, \`${text.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-all"><i class="bi bi-pencil"></i></button>` : ''}
+                        <button onclick="copyToClipboard(this)" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-all" title="Sao chép"><i class="bi bi-clipboard"></i></button>
+                        ${messageId ? `<button onclick="toggleBookmark(this, ${messageId})" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-amber-400 transition-all bookmark-btn" title="Lưu tin nhắn"><i class="bi bi-bookmark"></i></button>` : ''}
+                        ${role === 'user' ? `<button onclick="editMessage(this, ${messageId}, \`${text.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-all" title="Chỉnh sửa"><i class="bi bi-pencil"></i></button>` : ''}
                     </div>
                 </div>
             `;
@@ -1304,6 +1499,211 @@
 
         function showToast(m, t) {
             Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: t, title: m, background: '#1e293b', color: '#f8fafc' });
+        }
+
+        // ===== Sidebar Tabs =====
+        function switchSidebarTab(tab) {
+            const tabs = ['history', 'saved', 'settings'];
+            tabs.forEach(t => {
+                const panel = document.getElementById(`panel-${t}`);
+                const btn = document.getElementById(`tab-${t}`);
+                if (t === tab) {
+                    panel.classList.remove('hidden');
+                    panel.classList.add('flex');
+                    btn.classList.add('bg-white/10', 'text-white');
+                    btn.classList.remove('text-white/40');
+                } else {
+                    panel.classList.add('hidden');
+                    panel.classList.remove('flex');
+                    btn.classList.remove('bg-white/10', 'text-white');
+                    btn.classList.add('text-white/40');
+                }
+            });
+            if (tab === 'saved') loadSavedMessages();
+            if (tab === 'settings') loadConfig();
+        }
+
+        // ===== Chat Search =====
+        let searchDebounceTimer = null;
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('chat-search-input');
+            const searchClear = document.getElementById('chat-search-clear');
+            const searchPanel = document.getElementById('search-results-panel');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    const q = searchInput.value.trim();
+                    searchClear.classList.toggle('hidden', !q);
+                    clearTimeout(searchDebounceTimer);
+                    if (q.length < 2) {
+                        searchPanel.classList.add('hidden');
+                        searchPanel.innerHTML = '';
+                        return;
+                    }
+                    searchDebounceTimer = setTimeout(() => performSearch(q), 400);
+                });
+                searchClear.addEventListener('click', () => {
+                    searchInput.value = '';
+                    searchClear.classList.add('hidden');
+                    searchPanel.classList.add('hidden');
+                    searchPanel.innerHTML = '';
+                });
+            }
+        });
+
+        async function performSearch(q) {
+            const panel = document.getElementById('search-results-panel');
+            try {
+                const res = await fetch(`/api/v1/chat/search/?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                
+                let html = '';
+                if (data.sessions && data.sessions.length > 0) {
+                    html += `<div class="text-[8px] font-black text-white/20 uppercase tracking-widest px-2 py-1">Hội thoại</div>`;
+                    data.sessions.forEach(s => {
+                        html += `<button onclick="loadSessionDetail('${s.id}');document.getElementById('chat-search-input').value='';document.getElementById('search-results-panel').classList.add('hidden')" 
+                            class="w-full text-left p-2.5 rounded-lg hover:bg-white/5 transition-all group">
+                            <div class="text-xs font-bold text-white/70 truncate group-hover:text-cyan-400 transition-colors">${escapeHtml(s.title)}</div>
+                        </button>`;
+                    });
+                }
+                if (data.messages && data.messages.length > 0) {
+                    html += `<div class="text-[8px] font-black text-white/20 uppercase tracking-widest px-2 py-1 mt-1">Tin nhắn</div>`;
+                    data.messages.forEach(m => {
+                        const icon = m.role === 'user' ? 'bi-person' : 'bi-shield-check';
+                        const highlighted = escapeHtml(m.message).replace(
+                            new RegExp(`(${escapeHtml(q)})`, 'gi'), 
+                            '<mark class="bg-cyan-500/30 text-cyan-200 rounded px-0.5">$1</mark>'
+                        );
+                        html += `<button onclick="loadSessionDetail('${m.session_id}');document.getElementById('chat-search-input').value='';document.getElementById('search-results-panel').classList.add('hidden')"
+                            class="w-full text-left p-2.5 rounded-lg hover:bg-white/5 transition-all">
+                            <div class="flex items-center gap-2 mb-1">
+                                <i class="bi ${icon} text-[9px] text-white/30"></i>
+                                <span class="text-[9px] font-bold text-white/30 truncate">${escapeHtml(m.session_title)}</span>
+                            </div>
+                            <div class="text-[10px] text-white/50 line-clamp-2">${highlighted}</div>
+                        </button>`;
+                    });
+                }
+                if (!html) {
+                    html = `<div class="text-center py-4 text-white/15 text-[10px]">Không tìm thấy kết quả</div>`;
+                }
+                panel.innerHTML = html;
+                panel.classList.remove('hidden');
+            } catch (e) {
+                console.error('Search error:', e);
+            }
+        }
+
+        // ===== Saved/Bookmarked Messages =====
+        async function toggleBookmark(btn, messageId) {
+            try {
+                const res = await fetch('/api/v1/chat/saved/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                    body: JSON.stringify({ message_id: messageId })
+                });
+                const data = await res.json();
+                const icon = btn.querySelector('i');
+                if (data.status === 'unsaved') {
+                    icon.className = 'bi bi-bookmark';
+                    btn.classList.remove('text-amber-400');
+                    showToast('Đã bỏ lưu', 'info');
+                } else {
+                    icon.className = 'bi bi-bookmark-fill';
+                    btn.classList.add('text-amber-400');
+                    showToast('Đã lưu tin nhắn', 'success');
+                }
+            } catch (e) {
+                showToast('Lỗi khi lưu', 'error');
+            }
+        }
+
+        async function loadSavedMessages() {
+            const container = document.getElementById('saved-container');
+            try {
+                const res = await fetch('/api/v1/chat/saved/');
+                const saved = await res.json();
+                document.getElementById('saved-count').textContent = saved.length;
+                
+                if (saved.length === 0) {
+                    container.innerHTML = `<div class="text-center py-8 text-white/10">
+                        <i class="bi bi-bookmark text-3xl block mb-2"></i>
+                        <p class="text-[10px] font-bold">Chưa có tin nhắn nào được lưu</p>
+                        <p class="text-[9px] text-white/5 mt-1">Nhấn <i class="bi bi-bookmark"></i> trên tin nhắn để lưu</p>
+                    </div>`;
+                    return;
+                }
+                
+                container.innerHTML = saved.map(s => `
+                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-amber-500/20 transition-all group cursor-pointer" onclick="loadSessionDetail('${s.session_id}')">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-[8px] font-black uppercase tracking-widest ${s.message_role === 'user' ? 'text-cyan-400/50' : 'text-purple-400/50'}">
+                                <i class="bi ${s.message_role === 'user' ? 'bi-person' : 'bi-shield-check'} mr-1"></i>${s.message_role === 'user' ? 'Bạn' : 'AI'}
+                            </span>
+                            <button onclick="event.stopPropagation();removeSaved(${s.id},this.closest('.group'))" class="text-white/10 hover:text-red-400 transition-colors">
+                                <i class="bi bi-x text-xs"></i>
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-white/60 line-clamp-3 leading-relaxed">${escapeHtml(s.message_text)}</p>
+                        <div class="text-[8px] text-white/15 mt-2 font-bold truncate">${escapeHtml(s.session_title)}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Load saved error:', e);
+            }
+        }
+
+        async function removeSaved(id, el) {
+            try {
+                await fetch(`/api/v1/chat/saved/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+                if (el) el.remove();
+                showToast('Đã xóa khỏi danh sách lưu', 'info');
+            } catch (e) {}
+        }
+
+        // ===== Chatbot Config / Personalization =====
+        let configSaveTimer = null;
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/v1/chat/config/');
+                const data = await res.json();
+                document.getElementById('config-tone').value = data.tone || 'friendly';
+                document.getElementById('config-style').value = data.language_style || 'simple';
+                document.getElementById('config-name').value = data.custom_name || '';
+                document.getElementById('config-instructions').value = data.custom_instructions || '';
+                document.getElementById('config-instructions-count').textContent = (data.custom_instructions || '').length;
+            } catch (e) {
+                console.error('Load config error:', e);
+            }
+        }
+
+        function saveConfig() {
+            clearTimeout(configSaveTimer);
+            const instructions = document.getElementById('config-instructions').value;
+            document.getElementById('config-instructions-count').textContent = instructions.length;
+            
+            configSaveTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch('/api/v1/chat/config/', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                        body: JSON.stringify({
+                            tone: document.getElementById('config-tone').value,
+                            language_style: document.getElementById('config-style').value,
+                            custom_name: document.getElementById('config-name').value,
+                            custom_instructions: instructions
+                        })
+                    });
+                    if (res.ok) {
+                        const statusEl = document.getElementById('config-status');
+                        statusEl.classList.remove('hidden');
+                        setTimeout(() => statusEl.classList.add('hidden'), 2000);
+                    }
+                } catch (e) {
+                    showToast('Lỗi khi lưu cài đặt', 'error');
+                }
+            }, 600);
         }
     </script>
 </body>

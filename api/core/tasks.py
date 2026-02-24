@@ -965,27 +965,52 @@ def process_forum_report(report_id):
     3. If it's a clear violation, we can auto-approve it.
     """
     from api.core.models import ForumPostReport
-    from api.utils.ollama_client import analyze_text_for_scam
+    from api.utils.ollama_client import generate_response
+    import json as _json
     try:
         report = ForumPostReport.objects.select_related('post', 'post__author').get(id=report_id)
         post = report.post
         
-        # Analyze content
-        prompt = f"""
-        Phân tích bài viết diễn đàn sau đây xem có vi phạm tiêu chuẩn cộng đồng (lừa đảo, quấy rối, nội dung độc hại) hay không.
-        Tiêu đề: {post.title}
-        Nội dung: {post.content}
-        Lý do báo cáo: {report.reason}
+        # Analyze content using generate_response with structured JSON output
+        prompt = f"""Phân tích bài viết diễn đàn sau đây xem có vi phạm tiêu chuẩn cộng đồng (lừa đảo, quấy rối, nội dung độc hại, spam, đe dọa) hay không.
+
+Tiêu đề: {post.title}
+Nội dung: {post.content[:2000]}
+Lý do báo cáo từ người dùng: {report.reason}
+
+Hãy phân tích khách quan và trả về kết quả dạng JSON với các trường:
+- violation: true nếu vi phạm, false nếu không
+- confidence: số từ 0 đến 1 thể hiện mức độ chắc chắn
+- reason: giải thích ngắn gọn bằng tiếng Việt"""
+
+        format_schema = {
+            "type": "object",
+            "properties": {
+                "violation": {"type": "boolean"},
+                "confidence": {"type": "number"},
+                "reason": {"type": "string"}
+            },
+            "required": ["violation", "confidence", "reason"]
+        }
         
-        Trả về JSON: {{"violation": true/false, "confidence": 0-1, "reason": "giải thích ngắn gọn"}}
-        """
+        raw_result = generate_response(prompt, format_schema=format_schema)
         
-        analysis_res = analyze_text_for_scam(prompt)
+        # Parse the JSON result
+        try:
+            analysis_res = _json.loads(raw_result) if isinstance(raw_result, str) else {}
+        except (_json.JSONDecodeError, TypeError):
+            analysis_res = {'violation': False, 'confidence': 0, 'reason': 'Không thể phân tích (lỗi format)'}
+        
         report.ai_analysis = analysis_res
         
         from api.utils.email_utils import send_report_outcome_email
+        from api.utils.push_service import PushNotificationService
         
-        if analysis_res.get('violation') is True and analysis_res.get('confidence', 0) > 0.8:
+        violation = analysis_res.get('violation')
+        confidence = analysis_res.get('confidence', 0)
+        ai_reason = analysis_res.get('reason', '')
+        
+        if violation is True and confidence > 0.8:
             report.status = ForumPostReport.ReportStatus.APPROVED
             report.is_resolved = True
             
@@ -995,20 +1020,54 @@ def process_forum_report(report_id):
             
             logger.info(f"Report #{report_id} auto-approved by AI. Post #{post.id} locked.")
             
-            # Notify reporter
-            send_report_outcome_email(
-                report.reporter, 
-                "bài viết", 
-                post.title, 
-                'approved', 
-                analysis_res.get('reason')
+            # Notify reporter via email
+            send_report_outcome_email(report.reporter, "bài viết", post.title, 'approved', ai_reason)
+            
+            # Push notification to reporter
+            PushNotificationService.send_push(
+                report.reporter.id,
+                'Báo cáo được chấp thuận',
+                f'Báo cáo bài viết "{post.title[:50]}" đã được AI xác nhận vi phạm và bài viết đã bị khóa.',
+                url=f'/forum/{post.id}/',
+                notification_type='success'
             )
-        elif analysis_res.get('violation') is True:
+            # Notify admins
+            PushNotificationService.broadcast_admin(
+                'AI: Vi phạm phát hiện',
+                f'Bài viết "{post.title[:50]}" bị AI phát hiện vi phạm (conf: {confidence}). Đã tự động khóa.',
+                url='/admin-cp/forum/',
+                notification_type='warning'
+            )
+        elif violation is True:
             report.status = ForumPostReport.ReportStatus.AI_FLAGGED
             logger.info(f"Report #{report_id} flagged by AI for manual review.")
+            
+            # Notify reporter 
+            send_report_outcome_email(report.reporter, "bài viết", post.title, 'reviewing', ai_reason)
+            PushNotificationService.send_push(
+                report.reporter.id,
+                'Báo cáo đang được xem xét',
+                f'AI đã gắn cờ bài viết "{post.title[:50]}". Admin sẽ xem xét thêm.',
+                url=f'/forum/{post.id}/',
+                notification_type='info'
+            )
+            # Notify admins  
+            PushNotificationService.broadcast_admin(
+                'AI: Cần xem xét',
+                f'Bài viết "{post.title[:50]}" bị AI gắn cờ (conf: {confidence}). Cần admin xem xét.',
+                url='/admin-cp/forum/',
+                notification_type='warning'
+            )
         else:
-            # Mark as safe for now, could auto-reject if confidence is very high
-            pass
+            # AI says safe
+            send_report_outcome_email(report.reporter, "bài viết", post.title, 'rejected', ai_reason)
+            PushNotificationService.send_push(
+                report.reporter.id,
+                'Kết quả phân tích báo cáo',
+                f'AI không phát hiện vi phạm trong bài viết "{post.title[:50]}". Cảm ơn bạn đã báo cáo!',
+                url=f'/forum/{post.id}/',
+                notification_type='info'
+            )
             
         report.save()
         
@@ -1023,41 +1082,95 @@ def process_forum_comment_report(report_id):
     AI processes a forum comment report.
     """
     from api.core.models import ForumCommentReport
-    from api.utils.ollama_client import analyze_text_for_scam
+    from api.utils.ollama_client import generate_response
     from api.utils.email_utils import send_report_outcome_email
+    import json as _json
     
     try:
         report = ForumCommentReport.objects.select_related('comment', 'comment__author', 'reporter').get(id=report_id)
         comment = report.comment
         
-        prompt = f"""
-        Phân tích bình luận diễn đàn sau đây xem có vi phạm tiêu chuẩn cộng đồng (lừa đảo, quấy rối, nội dung độc hại) hay không.
-        Nội dung bình luận: {comment.content}
-        Lý do báo cáo: {report.reason}
+        prompt = f"""Phân tích bình luận diễn đàn sau đây xem có vi phạm tiêu chuẩn cộng đồng (lừa đảo, quấy rối, nội dung độc hại, spam, đe dọa) hay không.
+
+Nội dung bình luận: {comment.content[:2000]}
+Lý do báo cáo từ người dùng: {report.reason}
+
+Hãy phân tích khách quan và trả về kết quả dạng JSON với các trường:
+- violation: true nếu vi phạm, false nếu không
+- confidence: số từ 0 đến 1 thể hiện mức độ chắc chắn
+- reason: giải thích ngắn gọn bằng tiếng Việt"""
+
+        format_schema = {
+            "type": "object",
+            "properties": {
+                "violation": {"type": "boolean"},
+                "confidence": {"type": "number"},
+                "reason": {"type": "string"}
+            },
+            "required": ["violation", "confidence", "reason"]
+        }
         
-        Trả về JSON: {{"violation": true/false, "confidence": 0-1, "reason": "giải thích ngắn gọn"}}
-        """
+        raw_result = generate_response(prompt, format_schema=format_schema)
         
-        analysis_res = analyze_text_for_scam(prompt)
+        try:
+            analysis_res = _json.loads(raw_result) if isinstance(raw_result, str) else {}
+        except (_json.JSONDecodeError, TypeError):
+            analysis_res = {'violation': False, 'confidence': 0, 'reason': 'Không thể phân tích (lỗi format)'}
+        
         report.ai_analysis = analysis_res
         
-        if analysis_res.get('violation') is True and analysis_res.get('confidence', 0) > 0.8:
+        from api.utils.email_utils import send_report_outcome_email
+        from api.utils.push_service import PushNotificationService
+        
+        violation = analysis_res.get('violation')
+        confidence = analysis_res.get('confidence', 0)
+        ai_reason = analysis_res.get('reason', '')
+        comment_preview = comment.content[:50] + '...' if len(comment.content) > 50 else comment.content
+        
+        if violation is True and confidence > 0.8:
             report.status = ForumCommentReport.ReportStatus.APPROVED
             report.is_resolved = True
             
-            # In a real app, we might hide/delete the comment here
             logger.info(f"Comment Report #{report_id} auto-approved by AI.")
             
-            send_report_outcome_email(
-                report.reporter,
-                "bình luận",
-                comment.content[:50] + "...",
-                'approved',
-                analysis_res.get('reason')
+            send_report_outcome_email(report.reporter, "bình luận", comment_preview, 'approved', ai_reason)
+            PushNotificationService.send_push(
+                report.reporter.id,
+                'Báo cáo bình luận được chấp thuận',
+                f'Bình luận bạn báo cáo đã được xác nhận vi phạm bởi AI.',
+                notification_type='success'
             )
-        elif analysis_res.get('violation') is True:
+            PushNotificationService.broadcast_admin(
+                'AI: Bình luận vi phạm',
+                f'Bình luận "{comment_preview}" bị AI phát hiện vi phạm (conf: {confidence}).',
+                url='/admin-cp/forum/',
+                notification_type='warning'
+            )
+        elif violation is True:
             report.status = ForumCommentReport.ReportStatus.AI_FLAGGED
             logger.info(f"Comment Report #{report_id} flagged by AI for manual review.")
+            
+            send_report_outcome_email(report.reporter, "bình luận", comment_preview, 'reviewing', ai_reason)
+            PushNotificationService.send_push(
+                report.reporter.id,
+                'Báo cáo đang được xem xét',
+                f'AI đã gắn cờ bình luận bạn báo cáo. Admin sẽ xem xét thêm.',
+                notification_type='info'
+            )
+            PushNotificationService.broadcast_admin(
+                'AI: BL cần xem xét',
+                f'Bình luận "{comment_preview}" bị AI gắn cờ (conf: {confidence}). Cần admin xem xét.',
+                url='/admin-cp/forum/',
+                notification_type='warning'
+            )
+        else:
+            send_report_outcome_email(report.reporter, "bình luận", comment_preview, 'rejected', ai_reason)
+            PushNotificationService.send_push(
+                report.reporter.id,
+                'Kết quả phân tích báo cáo',
+                f'AI không phát hiện vi phạm trong bình luận bạn báo cáo. Cảm ơn!',
+                notification_type='info'
+            )
             
         report.save()
         
