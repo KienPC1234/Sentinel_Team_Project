@@ -18,7 +18,7 @@ from .views import (
     profile_view, change_password_view, forum_view, forum_post_view,
     forum_create_view, public_profile_view, scan_file_view, scan_audio_view,
     article_detail_view, scam_radar_list_view, demo_video_view,
-    lesson_detail_view,
+    lesson_detail_view, scan_lookup_view,
 )
 from .views.admin_views import (
     admin_dashboard, 
@@ -76,6 +76,7 @@ urlpatterns = [
     path('scan/file/', scan_file_view, name='scan-file'),
     path('scan/audio/', scan_audio_view, name='scan-audio'),
     path('scan/status/<int:scan_id>/', scan_status_view, name='scan-status'),
+    path('scan/lookup/', scan_lookup_view, name='scan-lookup'),
     
     # Community pages
     path("report/", report_view, name="report"),

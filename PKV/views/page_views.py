@@ -135,6 +135,13 @@ def scan_qr_view(request):
     })
 
 
+def scan_lookup_view(request):
+    """Unified scan lookup / search page."""
+    return render(request, "Scan/scan_lookup.html", {
+        "title": "Tra cứu hệ thống",
+    })
+
+
 def scan_status_view(request, scan_id):
     """Display scan result page for /scan/status/<id>/."""
     scan = get_object_or_404(ScanEvent, id=scan_id)
@@ -429,8 +436,8 @@ def learn_hub_view(request):
 
     return render(request, "LearnHub/learn_hub.html", {
         "title": "Kiến thức phòng tránh",
-        "articles": articles[:12],
-        "lessons": lessons[:12],
+        "articles": articles,
+        "lessons": lessons,
         "news": news_articles,
         "guides": guide_articles,
         "alerts": alert_articles,

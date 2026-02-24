@@ -12,7 +12,7 @@ from .scan_views import (
 )
 from .article_views import ArticleListView, ArticleDetailView
 from .report_views import ReportCreateView, ReportDetailView
-from .trend_views import TrendDailyView, TrendHotView, ScamRadarStatsView
+from .trend_views import TrendDailyView, TrendHotView, ScamRadarStatsView, ScanLookupView
 from .user_views import UserScansView, UserReportsView, UserAlertsView, PublicProfileView
 from .scan_views import ScanFileView, ScanAudioView as _ScanAudioView  # noqa: already imported above
 from .admin_views import AdminReportsView, AdminReportActionView, AdminStatsView, AdminRAGManagementView, AdminRAGRebuildView
@@ -31,7 +31,7 @@ __all__ = [
     'ScanAccountView', 'ScanImageView', 'ScanEmailView', 'ScanBanksView', 'ScanFileView',
     'ScanAudioView', 'ScanStatusView',
     'ReportCreateView', 'ReportDetailView',
-    'TrendDailyView', 'TrendHotView', 'ScamRadarStatsView',
+    'TrendDailyView', 'TrendHotView', 'ScamRadarStatsView', 'ScanLookupView',
     'UserScansView', 'UserReportsView', 'UserAlertsView', 'PublicProfileView',
     'AdminReportsView', 'AdminReportActionView', 'AdminStatsView',
     'AdminRAGManagementView', 'AdminRAGRebuildView',

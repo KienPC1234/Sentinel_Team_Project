@@ -15,7 +15,7 @@ document.addEventListener('alpine:init', function() {
             osintExpanded: false,
 
             get visibleSources() {
-                return this.osintExpanded ? this.sources : this.sources.slice(0, 2);
+                return this.osintExpanded ? this.sources : this.sources.slice(0, 6);
             },
 
             normalizeTitle(t) {
@@ -135,9 +135,21 @@ document.addEventListener('alpine:init', function() {
             <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
                 <i class="bi bi-search"></i>
             </div>
-            <div>
+            <div class="flex-1">
                 <h4 class="text-sm font-black text-white uppercase tracking-wider">Thông tin tình báo (OSINT)</h4>
                 <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Grounded Proofs &amp; Sources</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <template x-if="result.web_sources && result.web_sources.length > 0">
+                    <span class="px-3 py-1.5 rounded-xl bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20">
+                        <i class="bi bi-database-check mr-1"></i><span x-text="result.web_sources.length"></span> nguồn
+                    </span>
+                </template>
+                <template x-if="result.searched_urls && result.searched_urls.length > 0">
+                    <span class="px-3 py-1.5 rounded-xl bg-purple-500/10 text-purple-400 text-[10px] font-black border border-purple-500/20">
+                        <i class="bi bi-globe2 mr-1"></i><span x-text="result.searched_urls.length"></span> tra cứu
+                    </span>
+                </template>
             </div>
         </div>
 
@@ -192,15 +204,22 @@ document.addEventListener('alpine:init', function() {
             </div>
 
             <!-- Show More / Show Less Toggle -->
-            <template x-if="sources.length > 2">
+            <template x-if="sources.length > 6">
                 <div class="flex justify-center pt-2">
                     <button @click="osintExpanded = !osintExpanded"
                             class="liquid-btn py-2 px-6 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 transition-all font-bold flex items-center gap-2">
                         <i class="bi" :class="osintExpanded ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-                        <span x-text="osintExpanded ? 'Thu gọn' : ('Xem thêm ' + (sources.length - 2) + ' nguồn')"></span>
+                        <span x-text="osintExpanded ? 'Thu gọn' : ('Xem thêm ' + (sources.length - 6) + ' nguồn')"></span>
                     </button>
                 </div>
             </template>
+
+            <!-- Verification Footer -->
+            <div class="flex items-center justify-center gap-4 pt-3 border-t border-white/5">
+                <span class="text-[9px] text-white/20 font-bold uppercase tracking-widest"><i class="bi bi-patch-check-fill text-cyan-500/40 mr-1"></i>Dữ liệu xác minh bởi ShieldCall AI</span>
+                <span class="w-1 h-1 rounded-full bg-white/10"></span>
+                <span class="text-[9px] text-white/20 font-bold uppercase tracking-widest" x-text="new Date().toLocaleDateString('vi-VN')"></span>
+            </div>
         </div>
     </div>
 </template>
