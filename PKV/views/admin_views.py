@@ -1,6 +1,7 @@
 """ShieldCall VN – Admin Dashboard Views"""
 import logging
 import json
+import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
@@ -16,6 +17,7 @@ from api.core.forms import LearnLessonForm, ArticleForm, LearnScenarioForm
 from django.http import HttpResponseForbidden, JsonResponse
 from django.db import transaction
 from django.utils import timezone
+from django.core.paginator import Paginator
 from datetime import timedelta
 # The instruction implies these are from a local file, but the original code doesn't have a .page_views.
 # Assuming the user wants to add these imports, but the functions admin_required and super_admin_required are defined in this file.
@@ -25,6 +27,59 @@ from datetime import timedelta
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def _paginate_queryset(request, queryset, per_page=20):
+    paginator = Paginator(queryset, per_page)
+    page_number = request.GET.get('page') or 1
+    page_obj = paginator.get_page(page_number)
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    return page_obj, query_params.urlencode()
+
+
+def _strip_html_for_summary(text: str) -> str:
+    if not text:
+        return ''
+    cleaned = re.sub(r'<[^>]+>', ' ', str(text))
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+
+def _generate_summary_ai(title: str, content: str) -> str:
+    """Generate short summary using SMALL_MODEL; returns empty string on failure."""
+    source = _strip_html_for_summary(content)
+    if not source:
+        return ''
+    try:
+        from django.conf import settings
+        from api.utils.ollama_client import generate_response
+
+        small_model = getattr(settings, 'SMALL_MODEL', None) or getattr(settings, 'LLM_MODEL', 'ministral-3:14b-cloud')
+        prompt = f"""Tạo tóm tắt ngắn bằng tiếng Việt cho bài viết/bài học sau.
+
+TIÊU ĐỀ: {title or ''}
+NỘI DUNG:
+{source[:4000]}
+
+YÊU CẦU:
+- 1 đoạn, tối đa 280 ký tự
+- Dễ hiểu, trung lập, không emoji
+- Chỉ trả về nội dung tóm tắt thuần văn bản
+"""
+        summary = generate_response(
+            prompt=prompt,
+            model=small_model,
+            system_prompt='Bạn là trợ lý biên tập. Viết tóm tắt ngắn, rõ ràng, chính xác. Không markdown.',
+            tools=[],
+            max_tokens=220,
+            skip_filter=True,
+        ) or ''
+        summary = re.sub(r'\s+', ' ', summary).strip().strip('"')
+        return summary[:280]
+    except Exception as exc:
+        logger.warning(f"Summary generation failed: {exc}")
+        return ''
 
 def super_admin_required(view_func):
     """Decorator to require super admin role"""
@@ -138,24 +193,26 @@ def manage_reports(request):
         )
         
     reports = reports.order_by(sort_by)
-    
-    # Stats
+    reports_page, query_no_page = _paginate_queryset(request, reports, per_page=25)
+
     all_reports = Report.objects.all()
     stats = {
         'total': all_reports.count(),
         'pending': all_reports.filter(status='pending').count(),
         'approved': all_reports.filter(status='approved').count(),
         'rejected': all_reports.filter(status='rejected').count(),
-        'high_severity': all_reports.filter(severity__in=['high', 'critical']).count(),
+        'high_severity': all_reports.filter(severity='high').count(),
         'has_ai': all_reports.exclude(ai_analysis={}).count(),
     }
-    
-    # Build JSON data for JS (avoids Django template rendering issues with JSONField)
+
     reports_list = []
-    for r in reports:
+    for r in reports_page.object_list:
         evidence_imgs = []
-        for img in r.evidence_images.all():
-            evidence_imgs.append({'url': img.image.url, 'caption': img.caption or ''})
+        try:
+            evidence_imgs = [img.image.url for img in r.evidence_images.all() if getattr(img, 'image', None)]
+        except Exception:
+            evidence_imgs = []
+
         reports_list.append({
             'id': r.id,
             'created_at': r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else '',
@@ -179,7 +236,9 @@ def manage_reports(request):
         })
     
     context = {
-        "reports": reports,
+        "reports": reports_page,
+        "page_obj": reports_page,
+        "query_no_page": query_no_page,
         "reports_json": json.dumps(reports_list, ensure_ascii=False, default=str),
         "stats": stats,
         "current_sort": sort_by,
@@ -549,8 +608,16 @@ def forum_moderator_action(request):
 @super_admin_required
 def manage_users(request):
     """Super Admin only: manage users and roles"""
-    users = User.objects.select_related('profile').all()
-    return render(request, "Admin/users.html", {"users": users})
+    users_qs = User.objects.select_related('profile').annotate(
+        posts_count=Count('forum_posts', distinct=True),
+        comments_count=Count('forum_comments', distinct=True),
+    ).order_by('-is_active', '-is_staff', '-date_joined')
+    users, query_no_page = _paginate_queryset(request, users_qs, per_page=30)
+    return render(request, "Admin/users.html", {
+        "users": users,
+        "page_obj": users,
+        "query_no_page": query_no_page,
+    })
 
 @super_admin_required
 def toggle_admin_role(request, user_id):
@@ -563,13 +630,59 @@ def toggle_admin_role(request, user_id):
         target_user.save()
         role = "Admin" if target_user.is_staff else "User"
         messages.success(request, f"Đã cập nhật vai trò cho {target_user.username} thành {role}.")
-    return redirect('admin_manage_users')
+    return redirect('admin-manage-users')
+
+
+@super_admin_required
+def admin_user_action(request, user_id):
+    """Advanced user controls for Super Admin dashboard."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    target_user = get_object_or_404(User.objects.select_related('profile'), id=user_id)
+    if target_user == request.user:
+        return JsonResponse({'error': 'Không thể thao tác trên chính tài khoản của bạn.'}, status=400)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except Exception:
+        data = {}
+    action = (data.get('action') or '').strip()
+
+    try:
+        if action == 'toggle_active':
+            if target_user.is_superuser:
+                return JsonResponse({'error': 'Không thể khoá/mở khóa Superuser.'}, status=400)
+            target_user.is_active = not target_user.is_active
+            target_user.save(update_fields=['is_active'])
+            return JsonResponse({
+                'status': 'ok',
+                'message': f"Đã {'mở khóa' if target_user.is_active else 'khóa'} tài khoản {target_user.username}.",
+                'is_active': target_user.is_active,
+            })
+
+        if action == 'reset_rank':
+            if hasattr(target_user, 'profile'):
+                target_user.profile.rank_points = 0
+                target_user.profile.save(update_fields=['rank_points'])
+                return JsonResponse({'status': 'ok', 'message': f'Đã reset điểm uy tín cho {target_user.username}.'})
+            return JsonResponse({'error': 'Người dùng chưa có hồ sơ profile.'}, status=400)
+
+        return JsonResponse({'error': 'Unknown action'}, status=400)
+    except Exception as exc:
+        logger.error(f"admin_user_action error: {exc}")
+        return JsonResponse({'error': str(exc)}, status=500)
 
 @admin_required
 def manage_learn(request):
     """Management interface for /learn/ articles and lessons"""
-    lessons = LearnLesson.objects.all().order_by('-created_at')
-    return render(request, "Admin/learn_management.html", {"lessons": lessons})
+    lessons_qs = LearnLesson.objects.all().order_by('-created_at')
+    lessons, query_no_page = _paginate_queryset(request, lessons_qs, per_page=16)
+    return render(request, "Admin/learn_management.html", {
+        "lessons": lessons,
+        "page_obj": lessons,
+        "query_no_page": query_no_page,
+    })
 
 @admin_required
 def approve_report(request, report_id):
@@ -719,6 +832,11 @@ def edit_lesson(request, lesson_id=None):
         form = LearnLessonForm(request.POST, request.FILES, instance=lesson)
         if form.is_valid():
             lesson = form.save()
+            if not (lesson.summary or '').strip():
+                auto_summary = _generate_summary_ai(lesson.title, lesson.content)
+                if auto_summary:
+                    lesson.summary = auto_summary
+                    lesson.save(update_fields=['summary'])
             
             # Handle multiple quizzes from JSON
             quizzes_raw = request.POST.get('quizzes_json', '').strip()
@@ -839,33 +957,33 @@ def delete_article(request, article_id):
 def notify_lesson_email(request, lesson_id):
     """Send email and push notifications to users about a new lesson"""
     lesson = get_object_or_404(LearnLesson, id=lesson_id)
-    
-    # Get all user emails (excluding admins/staff who might already know)
-    user_emails = list(User.objects.filter(is_active=True, is_staff=False).values_list('email', flat=True))
-    user_emails = [email for email in user_emails if email] # filter empty
+
+    # Get all active users with email
+    active_users = User.objects.filter(is_active=True)
+    user_emails = list(active_users.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
+    user_emails = sorted(set(user_emails))
     
     if not user_emails:
         messages.warning(request, "Không có người dùng nào để gửi thông báo.")
         return redirect('admin-manage-learn')
         
     from api.utils.email_utils import send_new_lesson_email
-    lesson_url = request.build_absolute_uri(f"/learn/{lesson.slug}/")
-    
+    lesson_url = request.build_absolute_uri(f"/learn/lesson/{lesson.slug}/")
+
     # Send email notifications
-    send_new_lesson_email(user_emails, lesson.title, lesson_url)
+    sent_email_count = send_new_lesson_email(user_emails, lesson.title, lesson_url)
     
     # Send push notifications to all active users
+    push_count = 0
     try:
         from api.utils.push_service import PushNotificationService
-        active_users = User.objects.filter(is_active=True, is_staff=False)
-        push_count = 0
         for user in active_users:
             try:
                 PushNotificationService.send_push(
                     user_id=user.id,
                     title='📚 Bài học mới trên ShieldCall',
                     message=f'{lesson.title}',
-                    url=f'/learn/{lesson.slug}/',
+                    url=f'/learn/lesson/{lesson.slug}/',
                     notification_type='info'
                 )
                 push_count += 1
@@ -874,8 +992,11 @@ def notify_lesson_email(request, lesson_id):
         logger.info(f"Sent push notifications to {push_count} users for lesson '{lesson.title}'")
     except Exception as e:
         logger.error(f"Error sending push notifications for lesson: {e}")
-    
-    messages.success(request, f"Đã gửi email cho {len(user_emails)} & push thông báo cho người dùng.")
+
+    if sent_email_count > 0:
+        messages.success(request, f"Đã gửi email ({sent_email_count}) và push ({push_count}) cho người dùng.")
+    else:
+        messages.warning(request, f"Không gửi được email (0/{len(user_emails)}). Push đã gửi: {push_count}.")
     return redirect('admin-manage-learn')
 
 @admin_required
@@ -918,7 +1039,7 @@ def magic_create_article_api(request):
 
 @admin_required
 def magic_save_article_api(request):
-    """API to save the AI-generated article and quizzes"""
+    """API to save the AI-generated article (news only, no quiz/scenario)."""
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
         
@@ -926,25 +1047,16 @@ def magic_save_article_api(request):
         data = json.loads(request.body)
         
         with transaction.atomic():
+            summary = (data.get('summary') or '').strip()
+            if not summary:
+                summary = _generate_summary_ai(data.get('title', ''), data.get('content', ''))
             article = Article.objects.create(
                 title=data.get('title'),
+                summary=summary,
                 content=data.get('content'),
                 category=data.get('category', 'news'),
                 is_published=False
             )
-            
-            quizzes_data = data.get('quizzes', [])
-            for quiz_data in quizzes_data:
-                if quiz_data and quiz_data.get('question'):
-                    LearnQuiz.objects.create(
-                        article=article,
-                        question=quiz_data.get('question'),
-                        question_type=quiz_data.get('question_type', 'single_choice'),
-                        options=quiz_data.get('options', []),
-                        correct_answer=quiz_data.get('correct_answer'),
-                        correct_answers=quiz_data.get('correct_answers', []),
-                        explanation=quiz_data.get('explanation', '')
-                    )
                 
         return JsonResponse({'status': 'success', 'article_id': article.id})
         
@@ -962,6 +1074,8 @@ def magic_create_lesson_api(request):
     try:
         data = json.loads(request.body)
         raw_text = data.get('text', '').strip()
+        include_quiz = bool(data.get('include_quiz', True))
+        include_scenario = bool(data.get('include_scenario', True))
         
         if not raw_text:
             return JsonResponse({'status': 'error', 'message': 'Empty text'}, status=400)
@@ -970,13 +1084,32 @@ def magic_create_lesson_api(request):
         task_id = uuid.uuid4().hex[:12]
         
         from api.core.tasks import magic_create_lesson_task
-        magic_create_lesson_task.delay(task_id, raw_text)
+        magic_create_lesson_task.delay(task_id, raw_text, include_quiz, include_scenario)
         
         return JsonResponse({'status': 'pending', 'task_id': task_id})
         
     except Exception as e:
         logger.error(f"Error in magic_create_lesson_api: {e}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@admin_required
+def generate_summary_api(request):
+    """Generate short summary from title/content via SMALL_MODEL."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        title = (data.get('title') or '').strip()
+        content = data.get('content') or ''
+        summary = _generate_summary_ai(title, content)
+        if not summary:
+            return JsonResponse({'status': 'error', 'message': 'Không tạo được tóm tắt'}, status=400)
+        return JsonResponse({'status': 'success', 'summary': summary})
+    except Exception as exc:
+        logger.error(f"Error in generate_summary_api: {exc}")
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=500)
 
 @admin_required
 def magic_save_lesson_api(request):
@@ -988,9 +1121,13 @@ def magic_save_lesson_api(request):
         data = json.loads(request.body)
         
         with transaction.atomic():
+            summary = (data.get('summary') or '').strip()
+            if not summary:
+                summary = _generate_summary_ai(data.get('title', ''), data.get('content', ''))
             # 1. Create Lesson
             lesson = LearnLesson.objects.create(
                 title=data.get('title'),
+                summary=summary,
                 content=data.get('content'),
                 category=data.get('category', 'guide'),
                 is_published=False # Start as draft
@@ -1015,12 +1152,19 @@ def magic_save_lesson_api(request):
             # 3. Create Scenario
             scenario_data = data.get('scenario')
             if scenario_data:
-                LearnScenario.objects.create(
-                    lesson=lesson,
-                    title=scenario_data.get('title'),
-                    description=scenario_data.get('description'),
-                    content=scenario_data.get('content_json'),
-                )
+                content_json = scenario_data.get('content_json') if isinstance(scenario_data, dict) else None
+                steps = []
+                if isinstance(content_json, dict):
+                    raw_steps = content_json.get('steps', [])
+                    if isinstance(raw_steps, list):
+                        steps = [s for s in raw_steps if isinstance(s, dict) and str(s.get('text', '')).strip()]
+                if steps:
+                    LearnScenario.objects.create(
+                        lesson=lesson,
+                        title=scenario_data.get('title'),
+                        description=scenario_data.get('description'),
+                        content={'steps': steps},
+                    )
                 
         return JsonResponse({'status': 'success', 'lesson_id': lesson.id})
         
@@ -1031,15 +1175,23 @@ def magic_save_lesson_api(request):
 @admin_required
 def manage_articles(request):
     """List and manage Articles"""
-    articles = Article.objects.all().order_by('-created_at')
-    return render(request, "Admin/article_management.html", {"articles": articles})
+    articles_qs = Article.objects.all().order_by('-created_at')
+    articles, query_no_page = _paginate_queryset(request, articles_qs, per_page=16)
+    return render(request, "Admin/article_management.html", {
+        "articles": articles,
+        "page_obj": articles,
+        "query_no_page": query_no_page,
+    })
 
 @admin_required
 def manage_scenarios(request):
     """List and manage Scenarios stand-alone"""
-    scenarios = LearnScenario.objects.select_related('article').all().order_by('-created_at')
+    scenarios_qs = LearnScenario.objects.select_related('article').all().order_by('-created_at')
+    scenarios, query_no_page = _paginate_queryset(request, scenarios_qs, per_page=16)
     return render(request, "Admin/scenario_management.html", {
         "scenarios": scenarios,
+        "page_obj": scenarios,
+        "query_no_page": query_no_page,
         "articles_exist": Article.objects.exists()
     })
 
@@ -1054,6 +1206,11 @@ def edit_article(request, article_id=None):
         form = ArticleForm(request.POST, request.FILES, instance=article)
         if form.is_valid():
             article = form.save()
+            if not (article.summary or '').strip():
+                auto_summary = _generate_summary_ai(article.title, article.content)
+                if auto_summary:
+                    article.summary = auto_summary
+                    article.save(update_fields=['summary'])
             messages.success(request, "Bài viết đã được lưu thành công.")
             return redirect('admin-manage-articles')
     else:
@@ -1079,11 +1236,40 @@ def edit_scenario(request, scenario_id=None, article_id=None):
     if request.method == 'POST':
         form = LearnScenarioForm(request.POST, instance=scenario)
         if form.is_valid():
-            scenario = form.save()
+            scenario = form.save(commit=False)
+
+            raw_content = request.POST.get('content', '')
+            parsed_steps = []
+            try:
+                parsed_content = json.loads(raw_content) if raw_content else {}
+                if isinstance(parsed_content, dict):
+                    step_list = parsed_content.get('steps', [])
+                elif isinstance(parsed_content, list):
+                    step_list = parsed_content
+                else:
+                    step_list = []
+
+                if isinstance(step_list, list):
+                    for step in step_list:
+                        if not isinstance(step, dict):
+                            continue
+                        text = str(step.get('text') or '').strip()
+                        if not text:
+                            continue
+                        parsed_steps.append({
+                            'speaker': step.get('speaker') if step.get('speaker') in ['scammer', 'victim', 'narrator'] else 'narrator',
+                            'text': text,
+                            'note': str(step.get('note') or '').strip(),
+                        })
+            except Exception:
+                parsed_steps = []
+
+            scenario.content = {'steps': parsed_steps}
+
             # If created from an article edit page, and it wasn't linked yet
             if article and not scenario.article:
                 scenario.article = article
-                scenario.save()
+            scenario.save()
             
             messages.success(request, "Kịch bản đã được lưu.")
             if article_id:
@@ -1092,10 +1278,17 @@ def edit_scenario(request, scenario_id=None, article_id=None):
     else:
         form = LearnScenarioForm(instance=scenario)
 
+    scenario_content_json = '[]'
+    if scenario and isinstance(scenario.content, dict):
+        steps = scenario.content.get('steps', [])
+        if isinstance(steps, list):
+            scenario_content_json = json.dumps(steps, ensure_ascii=False)
+
     return render(request, "Admin/edit_scenario.html", {
         "form": form,
         "scenario": scenario,
         "article": article,
+        "scenario_content_json": scenario_content_json,
         "title": "Chỉnh sửa kịch bản" if scenario else "Thêm kịch bản mới"
     })
 

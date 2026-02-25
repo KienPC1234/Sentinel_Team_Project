@@ -300,6 +300,46 @@
             border: 1px solid rgba(255, 255, 255, 0.05) !important;
             background: rgba(255, 255, 255, 0.02) !important;
         }
+
+        .session-loading-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(2, 6, 23, 0.58);
+            backdrop-filter: blur(6px);
+            z-index: 15;
+        }
+
+        .session-loading-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 0.9rem;
+            padding: 0.7rem 1rem;
+            color: rgba(226, 232, 240, 0.95);
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .session-loading-spinner {
+            width: 16px;
+            height: 16px;
+            border-radius: 9999px;
+            border: 2px solid rgba(6, 182, 212, 0.18);
+            border-top-color: #06b6d4;
+            animation: spin 0.7s linear infinite;
+        }
+
+        #messages-wrapper {
+            padding-bottom: 220px;
+            scroll-padding-bottom: 220px;
+        }
     </style>
 </head>
 <body class="bg-[#020617] text-slate-200 antialiased h-screen overflow-hidden">
@@ -477,6 +517,12 @@
 
             <!-- Chat Content Window -->
             <div id="messages-wrapper" class="flex-1 overflow-y-auto custom-scrollbar relative px-4">
+                <div id="session-loading" class="session-loading-overlay hidden" aria-live="polite" aria-busy="true">
+                    <div class="session-loading-card">
+                        <span class="session-loading-spinner"></span>
+                        Đang tải hội thoại...
+                    </div>
+                </div>
                 <div id="messages-container" class="max-w-4xl mx-auto py-10 space-y-10">
                     <!-- Welcome State -->
                     <div id="welcome-screen" class="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
@@ -551,12 +597,11 @@
                             <span class="flex items-center gap-1.5"><i class="bi bi-globe text-cyan-500/30"></i> Web Search</span>
                         </div>
                     </div>
-                    <div class="h-60"></div>
                 </div>
             </div>
 
             <!-- Float Input Section -->
-            <div class="absolute bottom-0 left-0 right-0 p-6 pointer-events-none z-40">
+            <div id="chat-composer" class="absolute bottom-0 left-0 right-0 p-6 pointer-events-none z-40">
                 <div class="max-w-4xl mx-auto pointer-events-auto">
                     <div class="relative group bg-white/[0.05] backdrop-blur-3xl border border-white/10 rounded-3xl p-4 shadow-[var(--glass-shadow)] transition-all focus-within:ring-2 focus-within:ring-cyan-500/20">
                         <div id="image-previews" class="flex flex-wrap gap-3 mb-3 shrink-0"></div>
@@ -622,8 +667,11 @@
         const imagePreviews = document.getElementById('image-previews');
         const chatTitle = document.getElementById('chat-title');
         const chatStatus = document.getElementById('chat-status');
+        const chatComposer = document.getElementById('chat-composer');
+        const sessionLoading = document.getElementById('session-loading');
         const sidebar = document.getElementById('chat-sidebar');
         const mobileToggle = document.getElementById('mobile-sidebar-toggle');
+        let isSessionLoading = false;
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSessions();
@@ -636,6 +684,7 @@
                 userInput.style.height = 'auto';
                 userInput.style.height = (userInput.scrollHeight) + 'px';
                 updateSendBtnState();
+                updateComposerSafeSpace();
             });
 
             userInput.addEventListener('keydown', (e) => {
@@ -658,7 +707,29 @@
             if (mobileToggle) {
                 mobileToggle.onclick = () => sidebar.classList.toggle('hidden');
             }
+
+            updateComposerSafeSpace();
+            window.addEventListener('resize', updateComposerSafeSpace);
         });
+
+        function updateComposerSafeSpace() {
+            if (!messagesWrapper) return;
+            const composerHeight = chatComposer ? chatComposer.offsetHeight : 0;
+            const safeBottom = Math.max(140, composerHeight + 16);
+            messagesWrapper.style.paddingBottom = `${safeBottom}px`;
+            messagesWrapper.style.scrollPaddingBottom = `${safeBottom}px`;
+        }
+
+        function setSessionLoadingState(isLoading) {
+            isSessionLoading = !!isLoading;
+            if (sessionLoading) sessionLoading.classList.toggle('hidden', !isSessionLoading);
+            if (isSessionLoading) {
+                chatStatus.innerText = 'Đang tải hội thoại...';
+                chatStatus.classList.remove('hidden');
+            } else if (!isStreaming) {
+                chatStatus.classList.add('hidden');
+            }
+        }
 
         async function sendMessage() {
             const text = userInput.value.trim();
@@ -696,6 +767,7 @@
             userInput.style.height = '48px';
             pendingImages = [];
             imagePreviews.innerHTML = '';
+            updateComposerSafeSpace();
             abortController = new AbortController();
 
             const assistantMsgDiv = addMessage('assistant', '', [], true);
@@ -1110,6 +1182,9 @@
         }
 
         async function loadSessionDetail(id) {
+            if (!id) return;
+            if (isSessionLoading && currentSessionId === id) return;
+            setSessionLoadingState(true);
             currentSessionId = id;
             window.history.pushState({}, '', `/ai-assistant/${id}/`);
             try {
@@ -1122,6 +1197,7 @@
                 scrollToBottom();
                 loadSessions();
             } catch (err) { console.error(err); }
+            finally { setSessionLoadingState(false); }
         }
 
         async function deleteSession(id) {
@@ -1165,6 +1241,7 @@
 
         function startNewChat() {
             currentSessionId = null;
+            setSessionLoadingState(false);
             window.history.pushState({}, '', `/ai-assistant/`);
             messagesContainer.innerHTML = '';
             welcomeScreen.classList.remove('hidden');
@@ -1205,10 +1282,11 @@
                     const p = document.createElement('div');
                     p.className = 'relative w-16 h-16 rounded-xl overflow-hidden border border-white/10 group';
                     p.innerHTML = `<img src="${ev.target.result}" class="w-full h-full object-cover">
-                        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onclick="this.parentElement.remove(); pendingImages=pendingImages.filter(i=>i!=='${ev.target.result}'); updateSendBtnState();">
+                        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onclick="this.parentElement.remove(); pendingImages=pendingImages.filter(i=>i!=='${ev.target.result}'); updateSendBtnState(); updateComposerSafeSpace();">
                         <i class="bi bi-x-circle text-white"></i></div>`;
                     imagePreviews.appendChild(p);
                     updateSendBtnState();
+                    updateComposerSafeSpace();
                 };
                 r.readAsDataURL(f);
             });
@@ -1231,6 +1309,7 @@
             userInput.focus();
             userInput.style.height = 'auto';
             userInput.style.height = userInput.scrollHeight + 'px';
+            updateComposerSafeSpace();
             userInput.parentElement.classList.add('ring-2', 'ring-amber-500/50');
             userInput.placeholder = "Đang chỉnh sửa...";
         }

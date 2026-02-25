@@ -9,7 +9,7 @@ django-redis
 celery
 redis
 pillow
-requests
+requests>=2.31.0
 django-allauth
 django-tailwind
 python-dotenv
@@ -19,16 +19,16 @@ opencv-python-headless
 ollama
 django-allauth[socialaccount]
 vt-py
-channels
-channels-redis
+channels>=4.0.0
+channels-redis>=4.2.0
 daphne
-beautifulsoup4
+beautifulsoup4>=4.12.0
 django-otp
 pyotp
 qrcode
 django-turnstile
 python-whois
-dnspython
+dnspython>=2.4.2
 ipwhois
 phonenumbers
 einops
@@ -37,3 +37,4 @@ faster-whisper
 soundfile
 whitenoise
 faiss
+pywebpush>=2.0.3

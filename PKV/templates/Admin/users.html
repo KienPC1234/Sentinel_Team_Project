@@ -30,21 +30,45 @@
     </div>
     {% endif %}
 
+    <div class="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/10 backdrop-blur-xl">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input x-model.debounce.200ms="searchQuery" type="text" placeholder="Tìm username / email..."
+                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/30 transition-all">
+            <select x-model="roleFilter" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/30 transition-all">
+                <option value="all">Tất cả vai trò</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="admin">Administrator</option>
+                <option value="member">Member</option>
+            </select>
+            <select x-model="statusFilter" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/30 transition-all">
+                <option value="all">Tất cả trạng thái</option>
+                <option value="active">Hoạt động</option>
+                <option value="inactive">Vô hiệu hóa</option>
+            </select>
+        </div>
+    </div>
+
     <div class="p-1 rounded-[3rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
         <div class="overflow-x-auto">
             <table class="w-full text-left border-separate border-spacing-0">
                 <thead>
                     <tr class="bg-white/[0.02]">
                         <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Người dùng</th>
-                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Vai trò</th>
+                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 whitespace-nowrap">Vai trò</th>
                         <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Điểm Uy tín</th>
-                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Trạng thái</th>
+                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 whitespace-nowrap">Trạng thái</th>
                         <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-white/[0.02]">
                     {% for u in users %}
-                    <tr class="group hover:bg-white/[0.03] transition-all duration-300">
+                    <tr class="group hover:bg-white/[0.03] transition-all duration-300"
+                        x-show="rowVisible({
+                            username: '{{ u.username|escapejs }}',
+                            email: '{{ u.email|default_if_none:''|escapejs }}',
+                            role: '{% if u.profile.is_super_admin %}super_admin{% elif u.is_staff %}admin{% else %}member{% endif %}',
+                            active: {{ u.is_active|yesno:'true,false' }}
+                        })">
                         <td class="px-8 py-7">
                             <div class="flex items-center gap-4">
                                 <div class="w-12 h-12 rounded-[1.25rem] bg-white/5 border border-white/10 flex items-center justify-center text-white/20 overflow-hidden relative group/avatar">
@@ -58,10 +82,12 @@
                                 <div class="flex flex-col">
                                     <span class="text-sm font-black text-white tracking-tight">{{ u.username }}</span>
                                     <span class="text-[10px] font-bold text-white/30">{{ u.email }}</span>
+                                    <span class="text-[10px] text-white/20 mt-1">Tham gia: {{ u.date_joined|date:"d/m/Y" }} · Bài viết: {{ u.posts_count }} · Bình luận: {{ u.comments_count }}</span>
+                                    <span class="text-[10px] text-white/20 mt-1">Đăng nhập gần nhất: {% if u.last_login %}{{ u.last_login|date:"d/m/Y H:i" }}{% else %}Chưa có{% endif %}</span>
                                 </div>
                             </div>
                         </td>
-                        <td class="px-8 py-7">
+                        <td class="px-8 py-7 whitespace-nowrap">
                             {% if u.profile.is_super_admin %}
                             <span class="px-3 py-1 rounded-lg bg-rose-500/10 text-rose-500 text-[9px] font-black uppercase border border-rose-500/20 tracking-widest">Super Admin</span>
                             {% elif u.is_staff %}
@@ -70,7 +96,7 @@
                             <span class="px-3 py-1 rounded-lg bg-white/5 text-white/30 text-[9px] font-black uppercase border border-white/10 tracking-widest">Member</span>
                             {% endif %}
                         </td>
-                        <td class="px-8 py-7">
+                        <td class="px-8 py-7 whitespace-nowrap">
                             <div class="flex items-center gap-2">
                                 <span class="text-sm font-black text-white/80">{{ u.profile.rank_points }}</span>
                                 <i class="bi bi-star-fill text-[10px] text-yellow-500/50"></i>
@@ -90,10 +116,20 @@
                             {% endif %}
                         </td>
                         <td class="px-8 py-7">
-                            <div class="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                            <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0 flex-wrap max-w-[430px] ml-auto">
                                 <a href="{% url 'admin-toggle-role' u.id %}" class="h-9 px-4 rounded-xl bg-white/5 text-white/60 text-[10px] font-black uppercase tracking-widest border border-white/10 hover:border-cyan-500/30 hover:text-cyan-400 hover:bg-cyan-500/5 transition-all flex items-center justify-center">
                                     {% if u.is_staff %}Gỡ Quyền{% else %}Cấp Quyền{% endif %}
                                 </a>
+                                {% if u.id != request.user.id %}
+                                <button @click="runUserAction({{ u.id }}, 'toggle_active', '{{ u.username|escapejs }}')"
+                                    class="h-9 px-3 rounded-xl bg-white/5 text-white/60 text-[10px] font-black uppercase tracking-widest border border-white/10 hover:border-amber-500/30 hover:text-amber-300 hover:bg-amber-500/5 transition-all flex items-center justify-center">
+                                    {% if u.is_active %}Khóa TK{% else %}Mở TK{% endif %}
+                                </button>
+                                <button @click="runUserAction({{ u.id }}, 'reset_rank', '{{ u.username|escapejs }}')"
+                                    class="h-9 px-3 rounded-xl bg-white/5 text-white/60 text-[10px] font-black uppercase tracking-widest border border-white/10 hover:border-yellow-500/30 hover:text-yellow-300 hover:bg-yellow-500/5 transition-all flex items-center justify-center">
+                                    Reset điểm
+                                </button>
+                                {% endif %}
                                 {% if not u.is_staff %}
                                 <button @click="banUser('{{ u.username }}', '{{ u.username }}')"
                                     class="h-9 px-4 rounded-xl bg-rose-500/10 text-rose-500 text-[10px] font-black uppercase tracking-widest border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-1.5"
@@ -111,12 +147,75 @@
             </table>
         </div>
     </div>
+
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <div class="mt-6 flex items-center justify-between gap-3 px-2">
+        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest">
+            Trang {{ page_obj.number }}/{{ page_obj.paginator.num_pages }} · Tổng {{ page_obj.paginator.count }} người dùng
+        </p>
+        <div class="flex items-center gap-2">
+            {% if page_obj.has_previous %}
+            <a href="?{% if query_no_page %}{{ query_no_page }}&{% endif %}page={{ page_obj.previous_page_number }}" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-cyan-400 hover:border-cyan-500/30 text-xs font-bold">Trước</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?{% if query_no_page %}{{ query_no_page }}&{% endif %}page={{ page_obj.next_page_number }}" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-cyan-400 hover:border-cyan-500/30 text-xs font-bold">Sau</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 {% block extra_js %}
 <script>
 function userManagement() {
     return {
+        searchQuery: '',
+        roleFilter: 'all',
+        statusFilter: 'all',
+        rowVisible(row) {
+            const key = (this.searchQuery || '').trim().toLowerCase();
+            const text = `${row.username} ${row.email}`.toLowerCase();
+            const roleOk = this.roleFilter === 'all' || row.role === this.roleFilter;
+            const statusKey = row.active ? 'active' : 'inactive';
+            const statusOk = this.statusFilter === 'all' || statusKey === this.statusFilter;
+            const searchOk = !key || text.includes(key);
+            return roleOk && statusOk && searchOk;
+        },
+        async runUserAction(userId, action, username) {
+            const labelMap = {
+                toggle_active: 'thay đổi trạng thái tài khoản',
+                reset_rank: 'reset điểm uy tín',
+            };
+            const confirm = await Swal.fire({
+                title: `Xác nhận ${labelMap[action] || 'thao tác'}?`,
+                text: `Tài khoản: ${username}`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Xác nhận',
+                cancelButtonText: 'Hủy',
+                background: '#161235',
+                color: '#fff',
+                confirmButtonColor: '#06b6d4',
+            });
+            if (!confirm.isConfirmed) return;
+
+            try {
+                const resp = await fetch(`/admin-cp/users/${userId}/action/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ action })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.status === 'ok') {
+                    showToast(data.message || 'Thành công', 'success');
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    showToast(data.error || 'Thao tác thất bại', 'error');
+                }
+            } catch (err) {
+                showToast('Lỗi kết nối', 'error');
+            }
+        },
         async banUser(username, displayName) {
             const result = await Swal.fire({
                 title: 'Cấm ' + displayName + ' khỏi diễn đàn?',

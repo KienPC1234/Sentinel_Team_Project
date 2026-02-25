@@ -116,6 +116,25 @@ celery -A PKV worker -l info --concurrency=4
 celery -A PKV beat -l info
 ```
 
+### WebPush (VAPID) setup
+Tạo VAPID key 1 lần và lưu vào ENV (không commit private key):
+
+```bash
+python scripts/generate_vapid_keys.py --subject mailto:admin@yourdomain.com
+```
+
+Thêm vào môi trường chạy app:
+
+```bash
+export WEBPUSH_VAPID_PUBLIC_KEY="..."
+export WEBPUSH_VAPID_PRIVATE_KEY="..."
+export WEBPUSH_VAPID_SUBJECT="mailto:admin@yourdomain.com"
+```
+
+Frontend đọc public key qua:
+- context template: `WEBPUSH_VAPID_PUBLIC_KEY`
+- endpoint: `/api/v1/push/public-key/`
+
 ### Script tự động
 ```bash
 chmod +x setup.sh
@@ -424,8 +443,19 @@ PKV_TEAM/
 | `LLM_MODEL` | Tên model (gpt-oss:120b, ...) | ✅ |
 | `VT_API_KEY` | VirusTotal API key | ⚠️ Scan feature |
 | `TURNSTILE_SITEKEY` / `TURNSTILE_SECRET` | Cloudflare anti-spam | ⚠️ Forms |
-| `ONESIGNAL_APP_ID` | OneSignal push notifications | ❌ Optional |
+| `WEBPUSH_VAPID_PUBLIC_KEY` | VAPID public key cho WebPush | ⚠️ Push |
+| `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key (secret, chỉ ENV) | ⚠️ Push |
+| `WEBPUSH_VAPID_SUBJECT` | VAPID subject (`mailto:` hoặc URL) | ⚠️ Push |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | SMTP email | ❌ Optional |
+
+### Tạo VAPID key (1 lần)
+
+```bash
+python scripts/generate_vapid_keys.py --subject mailto:admin@yourdomain.com
+```
+
+- Copy 3 dòng output vào ENV/.env của server.
+- Không commit `WEBPUSH_VAPID_PRIVATE_KEY` vào git.
 
 ---
 

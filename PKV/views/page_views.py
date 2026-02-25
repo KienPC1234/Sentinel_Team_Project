@@ -63,12 +63,18 @@ def home_view(request):
         # Latest alert
         latest_report = Report.objects.order_by('-created_at').first()
 
+        # Latest learn/news content
+        latest_lessons = LearnLesson.objects.filter(is_published=True).order_by('-created_at')[:3]
+        latest_articles = Article.objects.filter(is_published=True).order_by('-created_at')[:3]
+
     except Exception as e:
         logger.error(f"Error loading home stats: {e}")
         total_scans = 0
         scam_detected = 0
         top_scam_types = []
         latest_report = None
+        latest_lessons = []
+        latest_articles = []
 
     return render(request, "Home/home.html", {
         "title": "Trang chủ",
@@ -76,6 +82,8 @@ def home_view(request):
         "scam_detected": _format_number(scam_detected),
         "top_scam_types": top_scam_types,
         "latest_report": latest_report,
+        "latest_lessons": latest_lessons,
+        "latest_articles": latest_articles,
         "DEMO_VIDEO_EMBED": getattr(settings, 'DEMO_VIDEO_EMBED', ''),
     })
 
@@ -761,8 +769,31 @@ def error_404_view(request, exception):
     return render(request, "Errors/404.html", status=404)
 
 
+def error_400_view(request, exception):
+    try:
+        return render(request, "Errors/400.html", status=400)
+    except Exception:
+        from django.http import HttpResponse
+        return HttpResponse("Yêu cầu không hợp lệ. Vui lòng thử lại.", status=400)
+
+
+def error_403_view(request, exception):
+    try:
+        return render(request, "Errors/403.html", status=403)
+    except Exception:
+        from django.http import HttpResponse
+        return HttpResponse("Bạn không có quyền truy cập tài nguyên này.", status=403)
+
+
 def error_500_view(request):
-    return render(request, "Errors/500.html", status=500)
+    try:
+        return render(request, "Errors/500.html", {
+            "error_message": "Đã có lỗi máy chủ. Vui lòng chờ một chút, admin đang khắc phục.",
+            "safe_mode": True,
+        }, status=500)
+    except Exception:
+        from django.http import HttpResponse
+        return HttpResponse("Hệ thống đang bận xử lý sự cố. Vui lòng thử lại sau.", status=500)
 
 def scan_file_view(request):
     """Scan file page."""

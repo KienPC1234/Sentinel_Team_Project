@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}504 - Timeout - ShieldCall VN{% endblock %}
+
+{% block content %}
+<div class="animate-fadein flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8">
+    <div class="text-[10rem] font-black text-white/5 leading-none select-none">504</div>
+    <div class="space-y-2">
+        <h1 class="text-3xl font-black text-white tracking-tight">Yêu cầu bị timeout</h1>
+        <p class="text-white/40 text-sm font-medium">Hệ thống phản hồi chậm bất thường. Vui lòng chờ một chút, admin đang kiểm tra.</p>
+    </div>
+    <a href="javascript:location.reload()" class="liquid-btn py-3 px-8 text-xs font-black bg-white/5 text-white/80 border-white/10 hover:bg-white/10 uppercase tracking-widest">Thử lại</a>
+</div>
+{% endblock %}
