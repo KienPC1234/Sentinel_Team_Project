@@ -378,29 +378,28 @@ def filter_thinking(text: str) -> str:
 
 
 def filter_hallucinations(text: str) -> str:
-    """
-    Filter out common AI hallucinations like unexpected CJK characters
-    in a non-CJK context, especially the 'strange unicode' characters
-    reported by the user (e.g., 自称).
-    """
     if not text:
         return text
-    # Strip CJK Unified Ideographs if found in isolation or in strange spots
-    # Range: \u4e00-\u9fff (Common Chinese)
-    # We mainly target the "strange" ones like 自称 \u81ea\u79f0
-    text = re.sub(r'[\u4e00-\u9fff]+', '', text)
+
+    # chỉ xóa nếu CJK đứng đơn lẻ giữa chữ Latin
+    text = re.sub(r'(?<!\w)[\u4e00-\u9fff]+(?!\w)', '', text)
     return text
 
 
-def sanitize_user_facing_tool_text(text: str) -> str:
+def sanitize_user_facing_tool_text(text: str, preserve_edges: bool = False) -> str:
     """
     Replace internal tool/function identifiers with user-friendly phrasing
     before showing model text to end users.
+
+    - Safe replacement (word-boundary aware)
+    - Preserves whitespace and formatting
+    - Normalizes accidental spacing issues
     """
     if not text:
         return ""
 
-    cleaned = text
+    cleaned = str(text)
+
     replacements = {
         '_tool_lookup_scamadviser': 'kiểm tra độ uy tín website',
         '_tool_lookup_scamwave': 'tra cứu cảnh báo lừa đảo',
@@ -416,21 +415,41 @@ def sanitize_user_facing_tool_text(text: str) -> str:
         'web_search': 'tra cứu nguồn công khai',
         'web_fetch': 'đọc nội dung trang web',
     }
-    for token, friendly in replacements.items():
-        cleaned = re.sub(rf'\b{re.escape(token)}\b', friendly, cleaned)
 
+    # 🔹 Thay token an toàn bằng 1 regex duy nhất
+    token_pattern = r'\b(' + '|'.join(map(re.escape, replacements.keys())) + r')\b'
+
+    def replace_token(match):
+        return replacements.get(match.group(0), match.group(0))
+
+    cleaned = re.sub(token_pattern, replace_token, cleaned)
+
+    # 🔹 Chuẩn hóa cách diễn đạt gọi tool
     cleaned = re.sub(
         r'\b(gọi|dùng|sử dụng)\s+(tool|công cụ|function)\b',
         'thực hiện kiểm tra',
         cleaned,
         flags=re.IGNORECASE,
     )
-    cleaned = re.sub(r'\btool\b', 'bước kiểm tra', cleaned, flags=re.IGNORECASE)
 
-    return cleaned
+    cleaned = re.sub(
+        r'\btool\b',
+        'bước kiểm tra',
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    # 🔹 Normalize spacing (KHÔNG xóa newline)
+    cleaned = re.sub(r'[ \t]+', ' ', cleaned)             # nhiều space → 1
+    cleaned = re.sub(r'\s+([,.!?])', r'\1', cleaned)     # bỏ space trước dấu câu
+    cleaned = re.sub(r'([.!?])([^\s])', r'\1 \2', cleaned)  # đảm bảo có space sau .!?
+
+    if preserve_edges:
+        return cleaned
+    return cleaned.strip()
 
 
-def filter_tool_call_artifacts(text: str) -> str:
+def filter_tool_call_artifacts(text: str, preserve_edges: bool = False) -> str:
     """
     Remove accidental tool-call JSON artifacts from agent textual output.
 
@@ -461,10 +480,12 @@ def filter_tool_call_artifacts(text: str) -> str:
         if '_tool_' not in line and '"arguments"' not in line
     )
 
-    cleaned = sanitize_user_facing_tool_text(cleaned)
+    cleaned = sanitize_user_facing_tool_text(cleaned, preserve_edges=preserve_edges)
 
     # Normalize excessive blank lines.
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    if preserve_edges:
+        return cleaned
     return cleaned.strip()
 
 def _extract_json(text: str) -> Optional[dict]:
@@ -766,7 +787,7 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None, m
                 content = msg.get('content', '') or ''
 
             if content:
-                content = filter_tool_call_artifacts(content)
+                content = filter_tool_call_artifacts(content, preserve_edges=True)
                 if content:
                     yield content
                     full_response.append(content)
@@ -899,7 +920,7 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                     
                     if content:
                         content = filter_hallucinations(content)
-                        content = filter_tool_call_artifacts(content)
+                        content = filter_tool_call_artifacts(content, preserve_edges=True)
                         if content: # Could be empty after filtering
                             yield content
                             current_content.append(content)

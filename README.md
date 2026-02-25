@@ -116,6 +116,26 @@ celery -A PKV worker -l info --concurrency=4
 celery -A PKV beat -l info
 ```
 
+### Puppeteer Host (Node.js) cho Web Scan fallback
+Khi website cần render JS, task `core.perform_web_scrapping_task` có thể gọi service Puppeteer nội bộ để lấy nội dung trang.
+
+```bash
+# Cài dependencies cho host
+cd scripts/puppeteer_host
+npm install
+
+# Chạy host (mặc định port 3010)
+npm start
+```
+
+Thiết lập endpoint trong môi trường Django:
+
+```bash
+export PUPPETEER_HOST_URL="http://127.0.0.1:3010/render"
+```
+
+Lưu ý: host này chỉ render trang và phát hiện tín hiệu CAPTCHA/anti-bot để cảnh báo phân tích; không triển khai cơ chế vượt CAPTCHA trái điều khoản dịch vụ.
+
 ### WebPush (VAPID) setup
 Tạo VAPID key 1 lần và lưu vào ENV (không commit private key):
 

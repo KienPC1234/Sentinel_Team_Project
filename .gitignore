@@ -218,3 +218,4 @@ __marimo__/
 media/
 staticfiles/
 celerybeat-schedule.*
+scripts/puppeteer_host/node_modules/
