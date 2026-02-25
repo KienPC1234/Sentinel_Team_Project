@@ -169,6 +169,95 @@
 
     <!-- Management Navigation -->
     <h2 class="text-xs font-black text-white/20 uppercase tracking-[0.3em] mb-8 text-center italic" data-aos="fade-up">Trung Tâm Điều Hành ShieldCall</h2>
+
+    <!-- Broadcast Notification Section -->
+    <div class="mb-12 p-1 rounded-[2.5rem] bg-gradient-to-br from-cyan-500/20 to-purple-500/10" data-aos="fade-up" data-aos-delay="50"
+         x-data="{
+            title: '', message: '', ntype: 'info', url: '', sending: false, sent: false,
+            async send() {
+                if (!this.title.trim() || !this.message.trim()) { showToast('Tiêu đề và nội dung là bắt buộc', 'warning'); return; }
+                this.sending = true;
+                try {
+                    const resp = await fetch('/api/v1/admin/notifications/broadcast/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                        body: JSON.stringify({ title: this.title, message: this.message, notification_type: this.ntype, url: this.url })
+                    });
+                    const data = await resp.json();
+                    if (resp.ok) { showToast(data.message || 'Đã gửi thông báo!', 'success'); this.title = ''; this.message = ''; this.url = ''; this.sent = true; setTimeout(() => this.sent = false, 3000); }
+                    else { showToast(data.error || 'Lỗi gửi thông báo', 'error'); }
+                } catch(e) { showToast('Lỗi kết nối', 'error'); }
+                this.sending = false;
+            }
+         }">
+        <div class="bg-slate-950/80 rounded-[2.3rem] p-8 backdrop-blur-3xl">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
+                    <i class="bi bi-megaphone-fill text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-black text-white tracking-tight">Gửi Thông Báo Toàn Hệ Thống</h3>
+                    <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest">Broadcast Notification</p>
+                </div>
+                <div x-show="sent" x-transition class="ml-auto px-4 py-2 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black">
+                    <i class="bi bi-check-circle-fill mr-1"></i> Đã gửi!
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest block mb-2">Tiêu đề <span class="text-red-400">*</span></label>
+                    <input x-model="title" type="text" placeholder="Tiêu đề thông báo..."
+                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/30 transition-all">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[10px] font-black text-white/40 uppercase tracking-widest block mb-2">Loại</label>
+                        <div class="dropdown-container" x-data="liquidSelect({
+                            value: ntype,
+                            placeholder: 'Chọn loại',
+                            options: [
+                                { value: 'info', label: 'ℹ️ Thông tin' },
+                                { value: 'success', label: '✅ Thành công' },
+                                { value: 'warning', label: '⚠️ Cảnh báo' },
+                                { value: 'error', label: '🚨 Khẩn cấp' }
+                            ]
+                        })" class="liquid-custom-select" @change="ntype = $event.detail">
+                            <div class="liquid-select-trigger py-3 px-4 text-sm" :class="{ 'active': open }" @click="open = !open">
+                                <span x-text="label" class="truncate"></span>
+                                <i class="bi bi-chevron-down liquid-select-arrow"></i>
+                            </div>
+                            <div x-show="open" x-transition:enter="liquid-select-dropdown entering" x-transition:enter-end="liquid-select-dropdown entered" x-transition:leave="liquid-select-dropdown entering" class="liquid-select-dropdown">
+                                <template x-for="option in options" :key="option.value">
+                                    <div class="liquid-select-option" :class="{ 'selected': value === option.value }" @click="select(option)">
+                                        <span x-text="option.label"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-white/40 uppercase tracking-widest block mb-2">URL (tùy chọn)</label>
+                        <input x-model="url" type="text" placeholder="/learn/..."
+                            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:ring-2 focus:ring-cyan-500/30 transition-all">
+                    </div>
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="text-[10px] font-black text-white/40 uppercase tracking-widest block mb-2">Nội dung <span class="text-red-400">*</span></label>
+                <textarea x-model="message" rows="3" placeholder="Nội dung thông báo gửi đến tất cả người dùng..."
+                    class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/30 transition-all resize-none"></textarea>
+            </div>
+            <div class="flex items-center justify-between">
+                <p class="text-[10px] text-white/20 font-bold"><i class="bi bi-info-circle mr-1"></i> Thông báo sẽ gửi đến tất cả người dùng qua hệ thống (Hỗ trợ soạn markdown)</p>
+                <button @click="send()" :disabled="sending || !title.trim() || !message.trim()"
+                    class="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-30 disabled:scale-100 flex items-center gap-2">
+                    <template x-if="!sending"><span class="flex items-center gap-2"><i class="bi bi-send-fill"></i> Gửi Thông Báo</span></template>
+                    <template x-if="sending"><span class="flex items-center gap-2"><span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Đang gửi...</span></template>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-aos="fade-up" data-aos-delay="100">
         <!-- Reports -->
         <a href="{% url 'admin-manage-reports' %}" class="mgmt-card group p-1 rounded-[2.5rem] bg-gradient-to-br from-blue-500/20 to-transparent hover:from-blue-500/40 transition-all duration-500">

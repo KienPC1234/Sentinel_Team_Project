@@ -6,6 +6,8 @@ import json
 from urllib.parse import urlparse
 
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.core.exceptions import ValidationError
 from django.db.models import Count, Sum, F, Q
 from django.utils import timezone
 from datetime import timedelta
@@ -141,6 +143,42 @@ class MeView(APIView):
         """Update profile (avatar, bio, etc.)"""
         user = request.user
         profile, created = UserProfile.objects.get_or_create(user=user)
+
+        # Username update
+        if 'username' in request.data:
+            new_username = (request.data.get('username') or '').strip()
+
+            if not new_username:
+                return Response({
+                    'error': 'Lỗi dữ liệu hồ sơ',
+                    'details': {'username': ['Username không được để trống.']}
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if len(new_username) < 3:
+                return Response({
+                    'error': 'Lỗi dữ liệu hồ sơ',
+                    'details': {'username': ['Username phải có ít nhất 3 ký tự.']}
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if User.objects.filter(username__iexact=new_username).exclude(pk=user.pk).exists():
+                return Response({
+                    'error': 'Lỗi dữ liệu hồ sơ',
+                    'details': {'username': ['Username đã tồn tại.']}
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            validator = UnicodeUsernameValidator()
+            try:
+                validator(new_username)
+            except ValidationError:
+                return Response({
+                    'error': 'Lỗi dữ liệu hồ sơ',
+                    'details': {
+                        'username': ['Username chỉ được chứa chữ cái, số và các ký tự @/./+/-/_.']
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if user.username != new_username:
+                user.username = new_username
         
         # Profile data (avatar, bio, display_name, about, messenger_link)
         profile_fields = ['avatar', 'bio', 'display_name', 'about', 'messenger_link']
@@ -161,8 +199,8 @@ class MeView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()
             
-        # Basic user data (names)
-        if any(k in request.data for k in ['first_name', 'last_name']):
+        # Basic user data (username, names)
+        if any(k in request.data for k in ['username', 'first_name', 'last_name']):
             user.first_name = request.data.get('first_name', user.first_name)
             user.last_name = request.data.get('last_name', user.last_name)
             user.save()

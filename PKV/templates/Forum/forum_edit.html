@@ -2,26 +2,30 @@
 {% block title %}Chỉnh sửa: {{ post.title }} - ShieldCall Community{% endblock %}
 {% block head_extra %}
 <style>
-    .create-card {
+    .edit-card {
         background: var(--glass-bg);
         backdrop-filter: blur(40px);
         border: 1px solid var(--glass-border);
-        border-radius: 2.5rem;
+        border-radius: 1.5rem;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     }
     .input-premium {
-        background: var(--glass-bg);
+        background: rgba(255,255,255,0.03);
         border: 1px solid var(--glass-border);
-        border-radius: 1.25rem;
+        border-radius: 1rem;
         color: var(--text-primary);
         transition: all 0.3s ease;
     }
     .input-premium:focus {
-        background: var(--glass-border);
+        background: rgba(255,255,255,0.06);
         border-color: var(--accent-cyan);
         box-shadow: 0 0 20px rgba(24, 255, 255, 0.1);
         outline: none;
     }
+    .cat-btn { transition: all .25s ease; }
+    .cat-btn.active { transform: scale(1.03); }
+    .ck-editor__editable { min-height: 320px !important; }
+    .img-preview { max-height: 200px; border-radius: 1rem; object-fit: cover; }
 </style>
 {% endblock %}
 
@@ -35,6 +39,10 @@ document.addEventListener('alpine:init', () => {
         category: 'discussion',
         loading: false,
         postId: null,
+        errors: {},
+        currentImage: null,
+        newImageName: '',
+        previewUrl: null,
 
         async init() {
             try {
@@ -45,28 +53,49 @@ document.addEventListener('alpine:init', () => {
                     this.title = data.title || '';
                     this.content = data.content || '';
                     this.category = data.category || 'discussion';
+                    this.currentImage = data.image || null;
                 }
+
+                // Wait a tick for DOM to settle
+                await this.$nextTick();
+
                 forumEditorInstance = await window.createCKEditor('#forum-editor', this.content, 'Chỉnh sửa nội dung bài viết...');
                 if (forumEditorInstance) {
                     forumEditorInstance.model.document.on('change:data', () => {
                         this.content = forumEditorInstance.getData();
                     });
+                } else {
+                    console.warn('CKEditor returned null — falling back to textarea');
                 }
             } catch (e) {
                 console.error('CKEditor init failed:', e);
+                showToast?.('Lỗi khởi tạo trình soạn thảo, vui lòng tải lại trang.', 'error');
+            }
+        },
+
+        handleImageSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                this.newImageName = file.name;
+                const reader = new FileReader();
+                reader.onload = (ev) => { this.previewUrl = ev.target.result; };
+                reader.readAsDataURL(file);
             }
         },
 
         async submitEdit() {
-            if(!this.title.trim() || !this.content.trim()) {
-                showToast('Vui lòng điền đầy đủ tiêu đề và nội dung', 'warning');
+            this.errors = {};
+            if (!this.title.trim()) { this.errors.title = 'Tiêu đề không được để trống'; }
+            if (!this.content.trim()) { this.errors.content = 'Nội dung không được để trống'; }
+            if (Object.keys(this.errors).length) {
+                showToast?.('Vui lòng điền đầy đủ thông tin', 'warning');
                 return;
             }
 
             this.loading = true;
             try {
                 const formData = new FormData();
-                formData.append('title', this.title);
+                formData.append('title', this.title.trim());
                 formData.append('content', this.content);
                 formData.append('category', this.category);
                 if (this.$refs.imageInput && this.$refs.imageInput.files[0]) {
@@ -75,17 +104,20 @@ document.addEventListener('alpine:init', () => {
 
                 const resp = await fetch(`/api/v1/forum/posts/${this.postId}/`, {
                     method: 'PATCH',
-                    headers: {'X-CSRFToken': getCSRFToken()},
+                    headers: { 'X-CSRFToken': getCSRFToken() },
                     body: formData
                 });
-                if(resp.ok) {
-                    showToast('Cập nhật bài viết thành công!', 'success');
-                    setTimeout(() => window.location.href = '/forum/' + this.postId + '/', 1500);
+                if (resp.ok) {
+                    showToast?.('Cập nhật bài viết thành công!', 'success');
+                    setTimeout(() => window.location.href = '/forum/' + this.postId + '/', 1200);
                 } else {
                     const err = await resp.json();
-                    showToast(err.error || 'Lỗi khi cập nhật bài viết', 'error');
+                    showToast?.(err.error || 'Lỗi khi cập nhật bài viết', 'error');
                 }
-            } catch(e) { showToast('Lỗi kết nối', 'error'); }
+            } catch (e) {
+                console.error(e);
+                showToast?.('Lỗi kết nối', 'error');
+            }
             this.loading = false;
         }
     }));
@@ -96,80 +128,115 @@ document.addEventListener('alpine:init', () => {
 {% block content %}
 {{ post_data|json_script:"forum-edit-data" }}
 
-<div class="max-w-4xl mx-auto px-4 py-12" x-data="forumEdit">
+<div class="max-w-4xl mx-auto px-4 py-8" x-data="forumEdit">
+
     <!-- Breadcrumb -->
-    <div class="mb-10 flex items-center gap-3" data-aos="fade-right">
-        <a href="/forum/{{ post.id }}/" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all border border-white/5">
-            <i class="bi bi-arrow-left"></i>
-        </a>
-        <h1 class="text-3xl font-black text-white" data-aos="fade-up" data-aos-delay="100">Chỉnh sửa <span class="text-cyan-400">bài viết</span></h1>
+    <nav class="flex items-center gap-2 text-sm mb-6 text-white/40" data-aos="fade-right">
+        <a href="/forum/" class="hover:text-cyan-400 transition"><i class="bi bi-house-door"></i> Diễn đàn</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <a :href="'/forum/' + postId + '/'" class="hover:text-cyan-400 transition truncate max-w-[200px]" x-text="title || 'Bài viết'"></a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <span class="text-white/60">Chỉnh sửa</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-8" data-aos="fade-up">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/20">
+            <i class="bi bi-pencil-square text-xl text-cyan-400"></i>
+        </div>
+        <div>
+            <h1 class="text-2xl font-black text-white">Chỉnh sửa bài viết</h1>
+            <p class="text-xs text-white/40">Bài viết #<span x-text="postId"></span></p>
+        </div>
     </div>
 
-    <div class="create-card p-8 md:p-12" data-aos="fade-up" data-aos-delay="200">
-        <div class="space-y-8">
+    <div class="edit-card p-6 md:p-10" data-aos="fade-up" data-aos-delay="100">
+        <div class="space-y-6">
+
             <!-- Category Selection -->
-            <div class="space-y-3">
-                <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Chọn danh mục</label>
+            <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-white/50 mb-2 block">Danh mục</label>
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <template x-for="cat in [
-                        {val: 'discussion', label: 'Thảo luận', icon: 'bi-chat-dots', color: 'hover:border-cyan-500/50'},
-                        {val: 'warning', label: 'Cảnh báo', icon: 'bi-exclamation-octagon', color: 'hover:border-red-500/50'},
-                        {val: 'experience', label: 'Kinh nghiệm', icon: 'bi-gem', color: 'hover:border-purple-500/50'},
-                        {val: 'question', label: 'Hỏi đáp', icon: 'bi-patch-question', color: 'hover:border-yellow-500/50'}
+                        {val: 'discussion', label: 'Thảo luận', icon: 'bi-chat-dots', accent: 'cyan'},
+                        {val: 'warning', label: 'Cảnh báo', icon: 'bi-exclamation-octagon', accent: 'red'},
+                        {val: 'experience', label: 'Kinh nghiệm', icon: 'bi-gem', accent: 'purple'},
+                        {val: 'question', label: 'Hỏi đáp', icon: 'bi-patch-question', accent: 'yellow'}
                     ]">
-                        <button @click="category = cat.val" 
-                            :class="category === cat.val ? 'bg-white/10 border-white/20 text-white' : 'text-white/40 border-white/5 ' + cat.color"
-                            class="flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all">
-                            <i :class="cat.icon" class="text-xl"></i>
-                            <span class="text-[11px] font-black uppercase" x-text="cat.label"></span>
+                        <button @click="category = cat.val" type="button"
+                            :class="category === cat.val
+                                ? 'bg-white/10 border-white/30 text-white cat-btn active'
+                                : 'text-white/40 border-white/5 hover:border-white/20 cat-btn'"
+                            class="flex items-center gap-3 p-3 rounded-xl border transition-all text-left">
+                            <i :class="cat.icon" class="text-lg"></i>
+                            <span class="text-xs font-bold uppercase" x-text="cat.label"></span>
                         </button>
                     </template>
                 </div>
             </div>
 
             <!-- Title -->
-            <div class="space-y-3">
-                <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Tiêu đề bài viết</label>
-                <input type="text" x-model="title" placeholder="Nhập tiêu đề ngắn gọn nhưng đủ thông tin..." 
-                    class="input-premium w-full px-6 py-4 text-lg font-bold">
+            <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-white/50 mb-2 block">Tiêu đề</label>
+                <input type="text" x-model="title" placeholder="Nhập tiêu đề bài viết..."
+                    :class="errors.title ? 'border-red-500/50' : ''"
+                    class="input-premium w-full px-5 py-3.5 text-base font-semibold">
+                <p x-show="errors.title" class="text-red-400 text-xs mt-1" x-text="errors.title"></p>
             </div>
 
-            <!-- Image Upload -->
-            <div class="space-y-3">
-                <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Thay ảnh đính kèm (Tùy chọn)</label>
-                <div class="input-premium p-6 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-white/[0.05] transition-all" @click="$refs.imageInput.click()">
-                    <i class="bi bi-cloud-arrow-up text-3xl mb-2 text-white/20"></i>
-                    <span class="text-xs text-white/30 font-bold uppercase tracking-widest" x-text="$refs.imageInput && $refs.imageInput.files[0] ? $refs.imageInput.files[0].name : 'Nhấn để chọn ảnh mới (bỏ qua nếu giữ ảnh cũ)'"></span>
-                    <input type="file" x-ref="imageInput" accept="image/*" class="hidden">
+            <!-- Current Image + Upload -->
+            <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-white/50 mb-2 block">Ảnh đính kèm</label>
+                <div class="space-y-3">
+                    <template x-if="previewUrl">
+                        <div class="relative inline-block">
+                            <img :src="previewUrl" class="img-preview border border-cyan-400/20">
+                            <span class="absolute top-2 left-2 bg-cyan-500/80 text-[10px] text-black font-bold px-2 py-0.5 rounded-full">Ảnh mới</span>
+                        </div>
+                    </template>
+                    <template x-if="currentImage && !previewUrl">
+                        <div class="relative inline-block">
+                            <img :src="currentImage" class="img-preview border border-white/10">
+                            <span class="absolute top-2 left-2 bg-black/60 text-[10px] text-white/60 px-2 py-0.5 rounded-full">Ảnh hiện tại</span>
+                        </div>
+                    </template>
+                    <div class="input-premium p-5 border-dashed flex items-center gap-4 cursor-pointer hover:bg-white/[0.04] transition-all"
+                         @click="$refs.imageInput.click()">
+                        <i class="bi bi-cloud-arrow-up text-2xl text-white/20"></i>
+                        <div>
+                            <p class="text-sm font-semibold text-white/50" x-text="newImageName || 'Nhấn để chọn ảnh mới'"></p>
+                            <p class="text-[10px] text-white/25">Bỏ qua nếu muốn giữ ảnh cũ</p>
+                        </div>
+                        <input type="file" x-ref="imageInput" accept="image/*" class="hidden" @change="handleImageSelect($event)">
+                    </div>
                 </div>
             </div>
 
             <!-- Content -->
-            <div class="space-y-3">
-                <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Nội dung bài viết</label>
-                <div class="input-premium w-full overflow-hidden bg-black/20">
-                    <div id="forum-editor" class="px-6 py-4 min-h-[350px] leading-relaxed text-white/80 focus:outline-none"></div>
+            <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-white/50 mb-2 block">Nội dung</label>
+                <div class="input-premium w-full overflow-hidden" :class="errors.content ? 'border-red-500/50' : ''">
+                    <div id="forum-editor" class="px-4 py-3 min-h-[320px] leading-relaxed text-white/80 focus:outline-none"></div>
                 </div>
-                <p class="text-[10px] text-white/20 font-medium flex items-center gap-1.5"><i class="bi bi-info-circle"></i> CKEditor 5 hỗ trợ soạn thảo trực quan với thanh công cụ tích hợp.</p>
+                <p x-show="errors.content" class="text-red-400 text-xs mt-1" x-text="errors.content"></p>
+                <p class="text-[10px] text-white/20 font-medium flex items-center gap-1 mt-1.5"><i class="bi bi-info-circle"></i> Hỗ trợ định dạng với thanh công cụ CKEditor 5</p>
             </div>
 
-            <!-- Controls -->
-            <div class="flex flex-col md:flex-row items-center justify-between gap-8 pt-8 border-t border-white/5">
-                <p class="text-[10px] text-white/20 font-medium">
-                    <i class="bi bi-pencil-square mr-1"></i> Đang chỉnh sửa bài viết #<span x-text="postId"></span>
-                </p>
-                <div class="flex items-center gap-4 w-full md:w-auto">
-                    <a :href="'/forum/' + postId + '/'" class="text-sm font-black text-white/30 hover:text-white transition-colors uppercase tracking-widest">Hủy</a>
-                    <button @click="submitEdit()" :disabled="loading" 
-                        class="flex-1 md:flex-none bg-gradient-to-r from-cyan-400 to-blue-600 text-[#0d0d1f] px-10 py-4 rounded-2xl font-black transition-all hover:scale-105 shadow-xl shadow-cyan-400/20">
-                        <span x-show="!loading" class="flex items-center gap-2 justify-center">
-                            <i class="bi bi-check-lg"></i> CẬP NHẬT BÀI VIẾT
-                        </span>
-                        <span x-show="loading" class="flex items-center justify-center">
-                            <span class="spinner-border spinner-border-sm"></span>
-                        </span>
-                    </button>
-                </div>
+            <!-- Actions -->
+            <div class="flex items-center justify-between gap-4 pt-6 border-t border-white/5">
+                <a :href="'/forum/' + postId + '/'" class="text-sm font-bold text-white/30 hover:text-white transition flex items-center gap-1.5">
+                    <i class="bi bi-x-lg"></i> Hủy
+                </a>
+                <button @click="submitEdit()" :disabled="loading" type="button"
+                    class="bg-gradient-to-r from-cyan-400 to-blue-600 text-[#0d0d1f] px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 shadow-lg shadow-cyan-400/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+                    <span x-show="!loading" class="flex items-center gap-2">
+                        <i class="bi bi-check-lg"></i> Cập nhật bài viết
+                    </span>
+                    <span x-show="loading" class="flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                        Đang lưu...
+                    </span>
+                </button>
             </div>
         </div>
     </div>

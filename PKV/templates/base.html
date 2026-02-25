@@ -42,6 +42,29 @@
     .richtext-content p, .rich-text-content p, .ai-markdown p { margin: 0.4em 0; }
     .richtext-content img, .rich-text-content img { max-width: 100%; height: auto; border-radius: 0.75rem; margin: 0.5em 0; }
     .richtext-content hr, .rich-text-content hr, .ai-markdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1em 0; }
+    /* ═══ Global: Circular Avatars ═══ */
+    .avatar-circle, img.avatar-circle { border-radius: 50% !important; }
+    /* ═══ User Card Popup ═══ */
+    .user-card-popup {
+        position: absolute;
+        z-index: 9999;
+        width: 280px;
+        background: rgba(13, 13, 31, 0.97);
+        backdrop-filter: blur(40px);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 1rem;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(24,255,255,0.05);
+        padding: 1rem;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.2s, transform 0.2s;
+    }
+    .user-card-popup.visible {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
     </style>
 
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
@@ -77,10 +100,41 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <link rel="stylesheet" href="https://cdn.ckeditor.com/ckeditor5/47.5.0/ckeditor5.css" crossorigin>
+    <link rel="stylesheet" href="{% static 'css/ckeditor5.css' %}">
     <script src="https://cdn.ckeditor.com/ckeditor5/47.5.0/ckeditor5.umd.js" crossorigin></script>
 
     {% block head_extra %}{% endblock %}
     <script>
+        /* --- CKEditor Custom Upload Adapter for /api/v1/utils/upload-image/ --- */
+        class ShieldCallUploadAdapter {
+            constructor(loader) { this.loader = loader; }
+            upload() {
+                return this.loader.file.then(file => new Promise((resolve, reject) => {
+                    const data = new FormData();
+                    data.append('file', file);
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/api/v1/utils/upload-image/', true);
+                    const csrfToken = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value
+                        || (document.cookie.match(/csrftoken=([^;]+)/) || ['', ''])[1];
+                    if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken);
+                    xhr.upload.onprogress = (evt) => { if (evt.lengthComputable) this.loader.uploadTotal = evt.total; this.loader.uploaded = evt.loaded; };
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            const resp = JSON.parse(xhr.responseText);
+                            resolve({ default: resp.file ? resp.file.url : resp.url });
+                        } else { reject('Upload failed: ' + xhr.statusText); }
+                    };
+                    xhr.onerror = () => reject('Upload failed');
+                    this._xhr = xhr;
+                    xhr.send(data);
+                }));
+            }
+            abort() { if (this._xhr) this._xhr.abort(); }
+        }
+        function ShieldCallUploadAdapterPlugin(editor) {
+            editor.plugins.get('FileRepository').createUploadAdapter = (loader) => new ShieldCallUploadAdapter(loader);
+        }
+
         window.createCKEditor = async function(selector, initialData, placeholder = 'Nhập nội dung...') {
             if (!window.CKEDITOR) {
                 console.error('CKEditor not loaded yet');
@@ -110,14 +164,14 @@
                     ImageToolbar, ImageUpload, ImageUtils, Indent, IndentBlock, Italic,
                     Link, List, MediaEmbed, Mention, Paragraph, Strikethrough,
                     Style, Subscript, Superscript, Table, TableCaption, TableToolbar,
-                    TodoList, Underline
+                    TodoList, Underline, ShieldCallUploadAdapterPlugin
                 ],
                 toolbar: {
                     items: [
                         'undo', 'redo', '|',
                         'heading', 'style', '|',
                         'bold', 'italic', 'underline', 'strikethrough', 'subscript', 'superscript', '|',
-                        'horizontalLine', 'link', 'mediaEmbed', 'insertTable', 'highlight', 'blockQuote', 'codeBlock', '|',
+                        'horizontalLine', 'link', 'insertImage', 'mediaEmbed', 'insertTable', 'highlight', 'blockQuote', 'codeBlock', '|',
                         'alignment', '|',
                         'bulletedList', 'numberedList', 'todoList', 'outdent', 'indent'
                     ],
@@ -355,8 +409,8 @@
                 title: title,
                 text: text,
                 icon: icon,
-                background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#161235' : '#fff',
-                color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#fff' : '#1a1a2e',
+                background: '#161235',
+                color: '#fff',
                 confirmButtonColor: '#18ffff',
                 borderRadius: '1.25rem',
                 customClass: {
@@ -372,8 +426,8 @@
                 showConfirmButton: false,
                 timer: 3000,
                 timerProgressBar: true,
-                background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#161235' : '#fff',
-                color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#fff' : '#1a1a2e',
+                background: '#161235',
+                color: '#fff',
                 didOpen: (toast) => {
                     toast.addEventListener('mouseenter', Swal.stopTimer);
                     toast.addEventListener('mouseleave', Swal.resumeTimer);
@@ -590,13 +644,87 @@
                     </a>
 
                     <div class="h-8 w-[1px] bg-white/10 mx-1 hidden lg:block"></div>
-                    
-                    <button @click="toggleTheme" class="p-2.5 rounded-xl hover:bg-white/5 text-white/60 transition-colors">
-                        <i class="bi bi-sun-fill" x-show="document.documentElement.getAttribute('data-theme')==='light'"></i>
-                        <i class="bi bi-moon-stars-fill" x-show="document.documentElement.getAttribute('data-theme')==='dark'"></i>
-                    </button>
 
                     {% if user.is_authenticated %}
+                    <!-- Notification Bell -->
+                    <div class="relative" x-data="notificationBell()" x-init="init()">
+                        <button @mouseenter="showPanel()" @click="togglePanel()" class="relative p-2.5 rounded-xl hover:bg-white/5 text-white/60 transition-colors">
+                            <i class="bi bi-bell-fill text-lg"></i>
+                            <span x-show="unreadCount > 0" x-transition
+                                  class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 flex items-center justify-center text-[9px] font-black text-white border-2 border-[#03030b] px-1"
+                                  x-text="unreadCount > 99 ? '99+' : unreadCount"></span>
+                        </button>
+                        
+                        <!-- Notification Dropdown -->
+                        <div x-show="panelOpen" @mouseleave="hidePanel()" @mouseenter="cancelHide()"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                             x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                             x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+                             class="absolute right-0 mt-2 w-80 dropdown-blur rounded-2xl z-50 overflow-hidden shadow-2xl"
+                             style="display: none;">
+                            <!-- Header -->
+                            <div class="px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                                <div>
+                                    <p class="text-xs font-black text-white">Thông báo</p>
+                                    <p class="text-[9px] text-white/30" x-text="unreadCount + ' chưa đọc'"></p>
+                                </div>
+                                <button @click="markAllRead()" x-show="unreadCount > 0"
+                                        class="text-[10px] font-bold text-cyan-400 hover:text-white transition-colors">
+                                    Đánh dấu tất cả đã đọc
+                                </button>
+                            </div>
+                            <!-- Notification List -->
+                            <div class="max-h-[360px] overflow-y-auto">
+                                <template x-if="loading">
+                                    <div class="p-6 text-center">
+                                        <div class="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                    </div>
+                                </template>
+                                <template x-if="!loading && notifications.length === 0">
+                                    <div class="p-8 text-center">
+                                        <i class="bi bi-bell-slash text-2xl text-white/10 mb-2 block"></i>
+                                        <p class="text-[10px] text-white/20">Chưa có thông báo</p>
+                                    </div>
+                                </template>
+                                <template x-for="n in notifications" :key="n.id">
+                                    <div @click="openNotification(n)" 
+                                         class="flex items-start gap-3 px-4 py-3 border-b border-white/5 cursor-pointer transition-colors"
+                                         :class="n.is_read ? 'hover:bg-white/3' : 'bg-cyan-400/[0.03] hover:bg-cyan-400/[0.06]'">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                                             :class="{
+                                                'bg-cyan-400/10 text-cyan-400': n.notification_type === 'info',
+                                                'bg-green-400/10 text-green-400': n.notification_type === 'success',
+                                                'bg-yellow-400/10 text-yellow-400': n.notification_type === 'warning',
+                                                'bg-red-400/10 text-red-400': n.notification_type === 'error',
+                                             }">
+                                            <i class="bi" :class="{
+                                                'bi-info-circle-fill': n.notification_type === 'info',
+                                                'bi-check-circle-fill': n.notification_type === 'success',
+                                                'bi-exclamation-triangle-fill': n.notification_type === 'warning',
+                                                'bi-x-circle-fill': n.notification_type === 'error',
+                                            }"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2">
+                                                <p class="text-[11px] font-bold text-white/80 truncate" x-text="n.title"></p>
+                                                <div x-show="!n.is_read" class="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></div>
+                                            </div>
+                                            <p class="text-[10px] text-white/40 line-clamp-2 mt-0.5" x-text="n.message"></p>
+                                            <p class="text-[9px] text-white/20 mt-1" x-text="timeAgo(n.created_at)"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <!-- Footer -->
+                            <a href="/profile/inbox/" class="block px-4 py-3 text-center text-[11px] font-bold text-cyan-400 hover:bg-white/3 border-t border-white/5 transition-colors">
+                                Xem tất cả thông báo <i class="bi bi-arrow-right ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+
                     <div class="relative group" x-data="{ open: false, timer: null }" 
                          @mouseenter="clearTimeout(timer); open = true" 
                          @mouseleave="timer = setTimeout(() => { open = false }, 300)">
@@ -685,7 +813,7 @@
                     {% else %}
                     <a href="/login/" class="hidden sm:block text-xs font-bold text-white/60 hover:text-white transition-colors">Đăng nhập</a>
                     <a href="/register/" class="liquid-btn text-[11px] py-1.5 px-5 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Đăng ký</a>
-                    {% endif %}
+                    {% endif %}  {# end is_authenticated #}
 
                     <!-- Mobile menu button -->
                     <button @click="mobileMenu = !mobileMenu" class="lg:hidden p-2 rounded-lg" style="color:rgba(255,255,255,0.7);transition:color 0.3s;">
@@ -823,11 +951,10 @@
 
     <script src="{% static 'js/notifications.js' %}"></script>
     <script>
-        // Initialize theme on load
+        // Force dark theme — light theme is disabled
         (function () {
-            const saved = localStorage.getItem('theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', saved);
-            document.addEventListener('DOMContentLoaded', function () { updateThemeIcons(saved); });
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
         })();
 
         // Lucide replacement (since we use Bootstrap Icons now)
@@ -856,15 +983,117 @@
             return cleaned; 
         }
 
-        // Theme toggle
-        function toggleTheme() {
-            showToast('🎨 Theme sáng đang trong quá trình phát triển', 'info');
+        // ── Notification Bell Alpine Component ──
+        function notificationBell() {
+            return {
+                panelOpen: false,
+                notifications: [],
+                unreadCount: 0,
+                loading: false,
+                hideTimer: null,
+                pollInterval: null,
+
+                async init() {
+                    await this.fetchUnreadCount();
+                    // Poll every 30s for unread count
+                    this.pollInterval = setInterval(() => this.fetchUnreadCount(), 30000);
+                    // Listen for WebSocket notification events
+                    window.addEventListener('sc:notification', () => {
+                        this.unreadCount++;
+                        if (this.panelOpen) this.fetchNotifications();
+                    });
+                },
+
+                async fetchUnreadCount() {
+                    try {
+                        const resp = await fetch('/api/v1/notifications/unread-count/', {
+                            headers: { 'X-CSRFToken': getCSRFToken() }
+                        });
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            this.unreadCount = data.unread_count;
+                        }
+                    } catch(e) {}
+                },
+
+                async fetchNotifications() {
+                    this.loading = true;
+                    try {
+                        const resp = await fetch('/api/v1/notifications/?per_page=10', {
+                            headers: { 'X-CSRFToken': getCSRFToken() }
+                        });
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            this.notifications = data.results;
+                            this.unreadCount = data.unread_count;
+                        }
+                    } catch(e) {}
+                    this.loading = false;
+                },
+
+                showPanel() {
+                    if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = null; }
+                    if (!this.panelOpen) {
+                        this.panelOpen = true;
+                        this.fetchNotifications();
+                    }
+                },
+
+                togglePanel() {
+                    this.panelOpen = !this.panelOpen;
+                    if (this.panelOpen) this.fetchNotifications();
+                },
+
+                hidePanel() {
+                    this.hideTimer = setTimeout(() => { this.panelOpen = false; }, 300);
+                },
+
+                cancelHide() {
+                    if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = null; }
+                },
+
+                async openNotification(n) {
+                    if (!n.is_read) {
+                        try {
+                            await fetch(`/api/v1/notifications/${n.id}/read/`, {
+                                method: 'POST',
+                                headers: { 'X-CSRFToken': getCSRFToken() }
+                            });
+                            n.is_read = true;
+                            this.unreadCount = Math.max(0, this.unreadCount - 1);
+                        } catch(e) {}
+                    }
+                    if (n.url) {
+                        window.location.href = n.url;
+                    }
+                },
+
+                async markAllRead() {
+                    try {
+                        await fetch('/api/v1/notifications/read-all/', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': getCSRFToken() }
+                        });
+                        this.notifications.forEach(n => n.is_read = true);
+                        this.unreadCount = 0;
+                        showToast('Đã đánh dấu tất cả đã đọc', 'success');
+                    } catch(e) {}
+                },
+
+                timeAgo(dt) {
+                    if (!dt) return '';
+                    const diff = (Date.now() - new Date(dt)) / 1000;
+                    if (diff < 60) return 'Vừa xong';
+                    if (diff < 3600) return Math.floor(diff / 60) + ' phút trước';
+                    if (diff < 86400) return Math.floor(diff / 3600) + ' giờ trước';
+                    if (diff < 604800) return Math.floor(diff / 86400) + ' ngày trước';
+                    return new Date(dt).toLocaleDateString('vi-VN');
+                }
+            };
         }
 
         function updateThemeIcons(theme) {
-            const sun = document.querySelector('.bi-sun-fill');
-            const moon = document.querySelector('.bi-moon-stars-fill');
-            // Theme toggle logic is handled by Alpine x-show in the template
+            // Dark-only theme — no toggle needed
         }
 
         // Client Debug Logger
@@ -955,6 +1184,101 @@
 
     <!-- AI Assistant -->
     {% include 'ai_chat/chat_widget_inline.html' %}
+
+    <!-- Global User Card Popup -->
+    <div id="user-card-popup" class="user-card-popup" style="display:none;"></div>
+    <script>
+    (function() {
+        const popup = document.getElementById('user-card-popup');
+        let hideTimer = null, fetchTimer = null, currentUsername = null, cache = {};
+
+        function showCard(el, username) {
+            if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+            if (fetchTimer) { clearTimeout(fetchTimer); }
+            fetchTimer = setTimeout(() => {
+                if (cache[username]) {
+                    renderCard(el, cache[username]);
+                } else {
+                    fetch('/api/v1/user/card/' + username + '/')
+                        .then(r => r.ok ? r.json() : null)
+                        .then(data => {
+                            if (data && !data.error) {
+                                cache[username] = data;
+                                renderCard(el, data);
+                            }
+                        }).catch(() => {});
+                }
+            }, 350);
+        }
+
+        function renderCard(el, d) {
+            const rankColors = {diamond:'#18ffff',platinum:'#b388ff',gold:'#ffd700',silver:'#cbd5e1',bronze:'#fb923c'};
+            const rankLevel = d.rank?.level || 'bronze';
+            const rankName = d.rank?.name || 'Bronze';
+            const rc = rankColors[rankLevel] || '#cbd5e1';
+            const staffBadge = d.is_staff ? '<i class="bi bi-patch-check-fill" style="background:linear-gradient(135deg,#18ffff,#b388ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:0.85rem"></i>' : '';
+            popup.innerHTML = `
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-14 h-14 rounded-full bg-white/5 border-2 border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                        ${d.avatar ? `<img src="${d.avatar}" class="w-full h-full object-cover rounded-full">` : `<span style="color:#18ffff;font-size:1.2rem;font-weight:900">${(d.display_name||'?')[0].toUpperCase()}</span>`}
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1">
+                            <span style="font-weight:800;color:#fff;font-size:0.85rem" class="truncate max-w-[140px]">${d.display_name || d.username}</span>
+                            ${staffBadge}
+                        </div>
+                        <span style="font-size:0.6rem;padding:0.1rem 0.4rem;border-radius:4px;font-weight:800;letter-spacing:0.03em;text-transform:uppercase;background:${rc}22;color:${rc};border:1px solid ${rc}44">${rankName}</span>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.65rem;color:rgba(255,255,255,0.4);font-weight:600">
+                    <div>Tham gia: <span style="color:rgba(255,255,255,0.7)">${d.joined}</span></div>
+                    <div>Bài viết: <span style="color:rgba(255,255,255,0.7)">${d.posts_count}</span></div>
+                    <div>Bình luận: <span style="color:rgba(255,255,255,0.7)">${d.comments_count}</span></div>
+                    <div>Reaction: <span style="color:rgba(255,255,255,0.7)">${d.reaction_score}</span></div>
+                    <div>Điểm: <span style="color:rgba(255,255,255,0.7)">${d.points}</span></div>
+                </div>
+                <div style="display:flex;gap:0.4rem;margin-top:0.6rem">
+                    <a href="/profile/@${d.username}/" style="flex:1;text-align:center;font-size:0.6rem;font-weight:800;padding:0.35rem;border-radius:0.5rem;background:rgba(24,255,255,0.1);color:#18ffff;border:1px solid rgba(24,255,255,0.2);text-transform:uppercase;letter-spacing:0.05em;text-decoration:none">Xem hồ sơ</a>
+                    <a href="/profile/@${d.username}/" style="flex:1;text-align:center;font-size:0.6rem;font-weight:800;padding:0.35rem;border-radius:0.5rem;background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.4);border:1px solid rgba(255,255,255,0.08);text-transform:uppercase;letter-spacing:0.05em;text-decoration:none">Nhắn tin</a>
+                </div>`;
+            // Position
+            const rect = el.getBoundingClientRect();
+            const popW = 280, popH = popup.offsetHeight || 220;
+            let left = rect.left + rect.width / 2 - popW / 2;
+            let top = rect.bottom + 8;
+            if (left < 8) left = 8;
+            if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+            if (top + popH > window.innerHeight) top = rect.top - popH - 8;
+            popup.style.display = 'block';
+            popup.style.position = 'fixed';
+            popup.style.left = left + 'px';
+            popup.style.top = top + 'px';
+            requestAnimationFrame(() => popup.classList.add('visible'));
+            currentUsername = el.dataset.username;
+        }
+
+        function hideCard() {
+            if (fetchTimer) { clearTimeout(fetchTimer); fetchTimer = null; }
+            hideTimer = setTimeout(() => {
+                popup.classList.remove('visible');
+                setTimeout(() => { popup.style.display = 'none'; }, 200);
+                currentUsername = null;
+            }, 200);
+        }
+
+        // Delegate hover events on elements with data-usercard="username"
+        document.addEventListener('mouseenter', (e) => {
+            const el = e.target instanceof Element ? e.target.closest('[data-usercard]') : null;
+            if (el) showCard(el, el.dataset.usercard);
+        }, true);
+        document.addEventListener('mouseleave', (e) => {
+            const el = e.target instanceof Element ? e.target.closest('[data-usercard]') : null;
+            if (el) hideCard();
+        }, true);
+        popup.addEventListener('mouseenter', () => { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } });
+        popup.addEventListener('mouseleave', () => hideCard());
+    })();
+    </script>
 
     {% block extra_js %}{% endblock %}
 </body>

@@ -2,9 +2,10 @@
 URL configuration for PKV project.
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from api.ai_chat.views import AssistantPageView
 from django.http import HttpResponse
@@ -20,6 +21,7 @@ from .views import (
     article_detail_view, scam_radar_list_view, demo_video_view,
     lesson_detail_view, scan_lookup_view,
     my_reports_view,
+    announcements_view, tickets_view, inbox_view, admin_tickets_view,
 )
 from .views.admin_views import (
     admin_dashboard, 
@@ -45,6 +47,9 @@ from .views.admin_views import (
     magic_create_lesson_api,
     magic_save_lesson_api,
     magic_create_lesson_page,
+    magic_create_article_page,
+    magic_create_article_api,
+    magic_save_article_api,
     forum_report_action,
     forum_post_admin_action,
     forum_ban_action,
@@ -126,6 +131,7 @@ urlpatterns = [
     path("admin-cp/learn/<int:lesson_id>/notify/", notify_lesson_email, name="admin-notify-lesson"),
     path("admin-cp/articles/", manage_articles, name="admin-manage-articles"),
     path("admin-cp/articles/add/", edit_article, name="admin-add-article"),
+    path("admin-cp/articles/magic-create/", magic_create_article_page, name="admin-magic-create-article"),
     path("admin-cp/articles/<int:article_id>/edit/", edit_article, name="admin-edit-article"),
     path("admin-cp/articles/<int:article_id>/delete/", delete_article, name="admin-delete-article"),
     path("admin-cp/scenarios/", manage_scenarios, name="admin-manage-scenarios"),
@@ -144,6 +150,10 @@ urlpatterns = [
     path("forum/create/", forum_create_view, name="forum-create"),
     path("forum/<int:post_id>/edit/", forum_edit_view, name="forum-edit"),
     path("forum/<int:post_id>/", forum_post_view, name="forum-post"),
+    path("forum/announcements/", announcements_view, name="announcements"),
+    path("profile/tickets/", tickets_view, name="tickets"),
+    path("profile/inbox/", inbox_view, name="inbox"),
+    path("admin-cp/tickets/", admin_tickets_view, name="admin-tickets"),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
@@ -157,6 +167,8 @@ urlpatterns = [
         path('chat/', include('api.ai_chat.urls')),
         path('admin/learn/ai-generate/', magic_create_lesson_api, name='admin-ai-generate-lesson'),
         path('admin/learn/magic-save/', magic_save_lesson_api, name='admin-magic-save-lesson'),
+        path('admin/articles/ai-generate/', magic_create_article_api, name='admin-ai-generate-article'),
+        path('admin/articles/magic-save/', magic_save_article_api, name='admin-magic-save-article'),
         path('', include('api.media_analysis.urls')),
         path('', include('api.maintenance.urls')),
         path('', include('api.core.urls')),
@@ -169,5 +181,11 @@ urlpatterns = [
 handler404 = 'PKV.views.page_views.error_404_view'
 handler500 = 'PKV.views.page_views.error_500_view'
 
+# Always serve media files — required for uploads (avatars, reports, forum images, etc.)
+# Django's static() helper is a no-op when DEBUG=False, so we register the pattern manually.
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+else:
+    urlpatterns += [
+        re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    ]
