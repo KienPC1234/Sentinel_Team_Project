@@ -4,7 +4,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="animate-fadein max-w-4xl mx-auto space-y-10" 
+<div class="max-w-7xl mx-auto px-4 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
+<div class="animate-fadein space-y-10" 
      x-data="{
     message:'', 
     files:[], 
@@ -14,7 +15,16 @@
     aiText:'', 
     aiLoading:false, 
     previewImage:null,
-    isDragging: false, // For drag-and-drop visual feedback
+    isDragging: false,
+    scanId: null,
+    ws: null,
+    wsConnected: false,
+    wsState: 'idle',
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 6,
+    reconnectTimer: null,
+    statusPollTimer: null,
+    progress: [],
 
     removeFile(index) {
         this.files.splice(index, 1);
@@ -40,7 +50,7 @@
     clearFiles() {
         this.files = [];
         if (this.$refs.imgInput) {
-            this.$refs.imgInput.value = null; // Clear native input
+            this.$refs.imgInput.value = null;
         }
     },
 
@@ -61,75 +71,172 @@
                 }
             }
             if (imageFiles.length) {
+                e.preventDefault();
                 this.addFiles(imageFiles);
             }
         }
     },
 
+    async pasteFromClipboard() {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text && text.trim()) {
+                this.message = this.message ? (this.message + '\n' + text) : text;
+                showToast('Đã dán nội dung từ clipboard!', 'success');
+            } else {
+                showToast('Clipboard trống hoặc không có văn bản.', 'warning');
+            }
+        } catch (err) {
+            showToast('Không thể truy cập clipboard. Vui lòng dán bằng Ctrl+V.', 'warning');
+        }
+    },
+
+    stopReconnect() {
+        if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    },
+    stopStatusPolling() {
+        if (this.statusPollTimer) { clearInterval(this.statusPollTimer); this.statusPollTimer = null; }
+    },
+    startStatusPolling() {
+        if (!this.scanId || this.statusPollTimer) return;
+        this.statusPollTimer = setInterval(() => this.fetchScanStatus(), 4000);
+    },
+    fetchScanStatus() {
+        if (!this.scanId || !this.loading) return;
+        fetch(`/api/v1/scan/status/${this.scanId}/`, { method: 'GET', headers: { 'X-CSRFToken': getCSRFToken() } })
+        .then(r => { if (!r.ok) return null; return r.json(); })
+        .then(data => {
+            if (!data) return;
+            if (data.status === 'completed' && data.result) {
+                this.result = data.result;
+                this.loading = false;
+                this.wsState = 'completed';
+                this.stopStatusPolling();
+                this.stopReconnect();
+                if (this.ws) this.ws.close();
+            } else if (data.status === 'failed') {
+                this.loading = false;
+                this.wsState = 'failed';
+                this.stopStatusPolling();
+                showToast('Phân tích thất bại.', 'error');
+            }
+        }).catch(() => {});
+    },
+    scheduleReconnect() {
+        if (!this.scanId || !this.loading) return;
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this.wsState = 'disconnected';
+            this.progress.push({ message: 'Mất kết nối WS. Chuyển sang chế độ polling.', step: 'warning' });
+            this.startStatusPolling();
+            return;
+        }
+        this.reconnectAttempts += 1;
+        this.wsState = 'reconnecting';
+        const delay = Math.min(10000, 1000 * Math.pow(2, this.reconnectAttempts - 1));
+        this.stopReconnect();
+        this.reconnectTimer = setTimeout(() => this.connectWebSocket(this.scanId, true), delay);
+    },
+    connectWebSocket(scanId, isReconnect = false) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/scan/${scanId}/`;
+        this.scanId = scanId;
+        this.wsState = isReconnect ? 'reconnecting' : 'connecting';
+        if (!isReconnect) this.progress.push({ message: 'Đang kết nối với máy chủ...', step: 'init' });
+        this.ws = new WebSocket(wsUrl);
+        this.ws.onopen = () => {
+            this.wsConnected = true; this.wsState = 'connected';
+            this.reconnectAttempts = 0; this.stopReconnect();
+            if (isReconnect) this.progress.push({ message: 'Đã kết nối lại.', step: 'reconnected' });
+            // Ask server for current status to catch results missed during disconnection
+            this.ws.send(JSON.stringify({ type: 'get_status' }));
+        };
+        this.ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.step !== 'ping') {
+                this.stopStatusPolling();
+                this.progress.push({ message: data.message, step: data.step });
+                this.$nextTick(() => {
+                    if (this.$refs.msgProgressLog) this.$refs.msgProgressLog.scrollTop = this.$refs.msgProgressLog.scrollHeight;
+                });
+            }
+            if (data.step === 'completed' && data.data) {
+                this.result = data.data;
+                this.loading = false;
+                this.wsState = 'completed';
+                this.stopReconnect(); this.stopStatusPolling();
+                this.ws.close();
+            }
+            if (data.step === 'error') {
+                showToast(data.message, 'error');
+                this.loading = false; this.wsState = 'failed';
+                this.stopReconnect(); this.stopStatusPolling();
+                this.ws.close();
+            }
+        };
+        this.ws.onerror = () => { this.wsConnected = false; };
+        this.ws.onclose = () => {
+            this.wsConnected = false;
+            if (this.loading) { this.scheduleReconnect(); this.startStatusPolling(); }
+        };
+    },
+
+    submitScan() {
+        if (!this.message.trim() && !this.files.length) { showToast('Vui lòng nhập tin nhắn hoặc tải ảnh', 'warning'); return; }
+        var tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+        if (!tsToken) { showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning'); return; }
+        if (window.turnstile) { try { window.turnstile.reset(); } catch(e) {} }
+        this.loading = true; this.result = null; this.aiText = ''; this.aiLoading = false;
+        this.progress = []; this.wsState = 'idle'; this.scanId = null;
+        var fd = new FormData();
+        if (this.message.trim()) fd.append('message', this.message.trim());
+        fd.append('cf-turnstile-response', tsToken);
+        var imageFiles = this.files;
+        for (var i = 0; i < imageFiles.length; i++) {
+            fd.append('image', imageFiles[i]);
+        }
+        var self = this;
+        fetch('/api/v1/scan/message/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            body: fd
+        })
+        .then(function(r) { if (!r.ok) return r.json().then(function(e) { throw e }).catch(function() { throw {error: 'Lỗi server (' + r.status + ')'}; }); return r.json(); })
+        .then(function(data) {
+            if (data.scan_id) {
+                self.scanId = data.scan_id;
+                self.connectWebSocket(data.scan_id);
+                self.startStatusPolling();
+            } else if (data.risk_score !== undefined) {
+                self.result = data; self.loading = false;
+            }
+        })
+        .catch(function(e) { showToast(e.error || 'Có lỗi xảy ra.', 'error'); self.loading = false; });
+    },
+
     init() {
-        // Any initialization logic if needed
     }
 }"
      @dragover.prevent="isDragging = true"
      @dragleave.prevent="isDragging = false"
      @drop.prevent="handleDrop($event)"
-     @paste.window.prevent="handlePaste($event)">
+     @paste.window="handlePaste($event)">
     <!-- Page Header -->
-    <div class="text-center space-y-4">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-purple-500/10 text-purple-400 mb-2 border border-purple-500/20 shadow-lg shadow-purple-500/10">
+    <div class="text-center space-y-4" data-aos="fade-up">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-purple-500/10 text-purple-400 mb-2 border border-purple-500/20 shadow-lg shadow-purple-500/10" data-aos="zoom-in" data-aos-delay="100">
             <i class="bi bi-chat-left-dots text-4xl"></i>
         </div>
-        <h1 class="text-4xl font-black text-white tracking-tight">
+        <h1 class="text-4xl font-black text-white tracking-tight" data-aos="fade-up" data-aos-delay="200">
             Kiểm tra <span class="glow-text">Tin nhắn Scam</span>
         </h1>
-        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed">
+        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed" data-aos="fade-up" data-aos-delay="300">
             Phân tích ngữ nghĩa, nhận diện hành vi lừa đảo qua nội dung tin nhắn hoặc ảnh chụp màn hình.
         </p>
     </div>
 
     <!-- Multi-Mode Input Area -->
-    <div class="liquid-card p-6 sm:p-8"
+    <div class="liquid-card p-6 sm:p-8" data-aos="fade-up" data-aos-delay="400"
          :class="{ 'border-purple-500 border-dashed ring-4 ring-purple-500/20': isDragging }">
-        <form @submit.prevent="
-            if(!message.trim() && !files.length){showToast('Vui lòng nhập tin nhắn hoặc tải ảnh', 'warning');return}
-            const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
-            if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
-            loading=true;result=null;aiText='';aiLoading=false;
-            let fd=new FormData();
-            if(message.trim()) fd.append('message',message.trim());
-            fd.append('cf-turnstile-response', tsToken);
-            const imageFiles = files; // Use the Alpine.js 'files' array
-            for(let i=0; i<imageFiles.length; i++) {
-                fd.append('image', imageFiles[i]);
-            }
-            fetch('/api/v1/scan/message/', {
-                method:'POST',
-                headers:{'X-CSRFToken':getCSRFToken()},
-                body:fd
-            })
-            .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
-            .then(data=>{
-                result=data;loading=false;
-                aiLoading=true;aiText='';
-                fetch('/api/v1/scan/analyze-sse/', {
-                    method:'POST',
-                    headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
-                    body:JSON.stringify({scan_type:'message',scan_data:{risk_level:data.risk_level,risk_score:data.risk_score,scam_type:data.scam_type,patterns_found:data.patterns_found,explanation:data.explanation},raw_input:message.trim()})
-                }).then(r=>{
-                    const reader=r.body.getReader();const decoder=new TextDecoder();let buf='';
-                    const pump=()=>reader.read().then(({done,value})=>{
-                        if(done){aiLoading=false;return}
-                        buf+=decoder.decode(value,{stream:true});
-                        const lines=buf.split('\n');buf=lines.pop();
-                        for(const line of lines){
-                            if(line.startsWith('data: ')){
-                                try{const d=JSON.parse(line.substring(6));if(d.chunk)aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
-                            }
-                        }
-                        pump();
-                    });pump();
-                }).catch(()=>{aiLoading=false; showToast('Không thể kết nối AI.', 'warning');});
-        ">
+        <form @submit.prevent="submitScan()">
             <!-- Modal Xem Ảnh To -->
             <div x-show="previewImage" style="display: none;" class="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" @click="previewImage = null" @keydown.escape.window="previewImage = null">
                 <img :src="previewImage" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-transform duration-300 transform scale-100" @click.stop>
@@ -142,6 +249,13 @@
                 <div class="relative">
                     <textarea class="liquid-input w-full min-h-[160px] p-6 text-lg font-medium leading-relaxed" 
                         placeholder="Dán nội dung tin nhắn nghi ngờ vào đây..." x-model="message"></textarea>
+                    
+                    <!-- Clipboard Paste Button -->
+                    <button type="button" @click="pasteFromClipboard()" 
+                        class="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 text-[10px] font-black uppercase tracking-wider border border-purple-500/20 hover:bg-purple-500/20 hover:text-purple-300 transition-all z-10"
+                        title="Dán văn bản từ clipboard">
+                        <i class="bi bi-clipboard-plus"></i> DÁN TỪ CLIPBOARD
+                    </button>
                     
                     <!-- Floating Badge -->
                     <div class="absolute bottom-4 right-4 text-[10px] font-black text-white/20 uppercase tracking-widest pointer-events-none">
@@ -197,6 +311,35 @@
         </form>
     </div>
 
+    <!-- Progress Console -->
+    <template x-if="loading && progress.length > 0">
+        <div class="liquid-card p-6 border-purple-500/20 bg-purple-500/[0.02]">
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <h4 class="text-[10px] font-black text-purple-400 uppercase tracking-widest">Tiến trình phân tích thời gian thực</h4>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] text-white/30 font-mono" x-text="progress.length + ' bước'"></span>
+                    <div class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded border"
+                         :class="wsState==='connected' ? 'text-green-400 border-green-500/30 bg-green-500/10' : (wsState==='reconnecting' || wsState==='connecting') ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10'"
+                         x-text="wsState==='connected' ? 'WS' : (wsState==='reconnecting' ? '...' : (wsState==='connecting' ? '...' : 'Poll'))"></div>
+                </div>
+            </div>
+            <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden mb-4">
+                <div class="h-full bg-purple-500/50 transition-all duration-500 rounded-full" :style="'width:' + Math.min(95, progress.length * 12) + '%'"></div>
+            </div>
+            <div class="space-y-2.5 font-mono text-[11px] max-h-[250px] overflow-y-auto custom-scrollbar" x-ref="msgProgressLog">
+                <template x-for="(item, index) in progress" :key="index">
+                    <div class="flex items-start gap-3 animate-fadein">
+                        <span class="flex-shrink-0 mt-0.5" :class="item.step === 'completed' ? 'text-green-500' : item.step?.includes('warning') ? 'text-yellow-500' : item.step === 'error' ? 'text-red-500' : item.step?.includes('ok') || item.step?.includes('done') ? 'text-green-400' : 'text-purple-500/50'">
+                            <i :class="item.step === 'completed' ? 'bi bi-check-circle-fill' : item.step?.includes('warning') ? 'bi bi-exclamation-triangle-fill' : item.step === 'error' ? 'bi bi-x-circle-fill' : item.step?.includes('ok') || item.step?.includes('done') ? 'bi bi-check2' : (index === progress.length - 1 ? 'bi bi-arrow-right' : 'bi bi-dot')"></i>
+                        </span>
+                        <span class="text-white/80 flex-1" x-text="item.message"></span>
+                        <i x-show="index === progress.length - 1 && item.step !== 'completed' && !item.step?.includes('ok') && !item.step?.includes('done')" class="bi bi-three-dots animate-pulse text-purple-400 flex-shrink-0"></i>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+
     <!-- Result Display -->
     <template x-if="result">
         <div class="space-y-8 animate-fadein">
@@ -220,18 +363,29 @@
                         <div class="space-y-3">
                             <h4 class="text-xs font-black text-white/40 uppercase tracking-widest">Dấu hiệu phát hiện</h4>
                             <div class="flex flex-wrap gap-2">
-                                <template x-for="p in result.patterns_found" :key="p">
-                                    <span class="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold" x-text="p"></span>
+                                <template x-for="p in result.patterns_found" :key="JSON.stringify(p)">
+                                    <span class="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold" x-text="typeof p === 'object' ? (p.label || p.pattern || JSON.stringify(p)) : p"></span>
                                 </template>
                             </div>
                         </div>
                     </template>
 
-                    <template x-if="result.annotated_image">
+                    <template x-if="(result.annotated_images && result.annotated_images.length > 0) || result.annotated_image">
                         <div class="space-y-4">
                             <h4 class="text-xs font-black text-white/40 uppercase tracking-widest">Phân tích vùng text từ ảnh</h4>
-                            <div class="rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
-                                <img :src="result.annotated_image" class="w-full block" alt="Analyzed Message">
+                            <div class="grid gap-4" :class="(result.annotated_images && result.annotated_images.length > 1) ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'">
+                                <template x-if="result.annotated_images && result.annotated_images.length > 0">
+                                    <template x-for="(img, idx) in result.annotated_images" :key="idx">
+                                        <div class="rounded-3xl overflow-hidden border border-white/5 shadow-2xl bg-black/30 flex items-center justify-center p-4 max-h-[400px] overflow-auto custom-scrollbar cursor-pointer" @click="previewImage = img">
+                                            <img :src="img" class="max-w-full max-h-[360px] object-contain rounded-xl" :alt="'Ảnh phân tích ' + (idx+1)">
+                                        </div>
+                                    </template>
+                                </template>
+                                <template x-if="!(result.annotated_images && result.annotated_images.length > 0) && result.annotated_image">
+                                    <div class="rounded-3xl overflow-hidden border border-white/5 shadow-2xl bg-black/30 flex items-center justify-center p-4 max-h-[400px] overflow-auto custom-scrollbar cursor-pointer" @click="previewImage = result.annotated_image">
+                                        <img :src="result.annotated_image" class="max-w-full max-h-[360px] object-contain rounded-xl" alt="Analyzed Message">
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </template>
@@ -246,109 +400,15 @@
                                 <h4 class="text-sm font-black text-white uppercase tracking-wider">AI Fraud Detection</h4>
                                 <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Behavioral & Semantic Analysis</p>
                             </div>
-                            <div x-show="aiLoading" class="ml-auto spinner w-4 h-4 text-purple-400"></div>
                         </div>
                         
                         <div class="ai-markdown text-white/70 text-sm leading-relaxed" 
-                             :class="{'ai-streaming': aiLoading}"
-                             x-html="renderMd(aiText)"></div>
-                        <p x-show="!aiText && !aiLoading" class="text-white/20 text-xs italic">Đang phân tích ý đồ giao tiếp...</p>
+                             x-html="renderMd(result.explanation || result.ai_insight || '')"></div>
+                        <p x-show="!result.explanation && !result.ai_insight" class="text-white/20 text-xs italic">Không có phân tích AI.</p>
                     </div>
 
                     <!-- Grounded Intelligence / Proofs -->
-                    <template x-if="result.web_context || (result.web_sources && result.web_sources.length > 0)">
-                        <div class="p-8 border-t border-white/5 bg-white/[0.01]">
-                            <div class="flex items-center gap-3 mb-6">
-                                <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
-                                    <i class="bi bi-search"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-black text-white uppercase tracking-wider">Thông tin tình báo (OSINT)</h4>
-                                    <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Grounded Proofs & Sources</p>
-                                </div>
-                            </div>
-
-                        <!-- NEW: Structured Intelligence -->
-                        <div class="grid grid-cols-1 gap-6" x-data="{
-                            sources: [],
-                            parseContext() {
-                                if (!result || !result.web_context) { 
-                                    this.sources = []; 
-                                    return; 
-                                }
-                                const raw = result.web_context;
-                                
-                                // Clean up any 'thinking' artifacts if present
-                                const cleanRaw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-                                // Robust splitting logic to handle ### [Source] or ### Source
-                                // Matches: ### [Title] or ### Title followed by newline or end of string
-                                const parts = cleanRaw.split(/###\s+(?:\[)?(.*?)(?:\])?(?:\n|$)/);
-                                
-                                if (parts.length >= 3) {
-                                    // split results in [preamble, title1, content1, title2, content2...]
-                                    let newSources = [];
-                                    for (let i = 1; i < parts.length; i += 2) {
-                                        const title = (parts[i] || '').trim();
-                                        const content = (parts[i+1] || '').trim();
-                                        if (title && content) {
-                                            newSources.push({
-                                                title: title,
-                                                html: (window.marked && window.marked.parse) ? window.marked.parse(content) : content
-                                            });
-                                        }
-                                    }
-                                    this.sources = newSources;
-                                } else {
-                                    // Fallback for unstructured text
-                                    this.sources = [{ 
-                                        title: 'TỔNG HỢP TÌNH BÁO', 
-                                        html: (window.marked && window.marked.parse) ? window.marked.parse(cleanRaw) : cleanRaw 
-                                    }];
-                                }
-                            }
-                        }" x-effect="parseContext()">
-                            
-                            <!-- Sources Badges (Still useful for quick glance) -->
-                            <div class="flex flex-wrap gap-2 mb-2" x-show="result.web_sources && result.web_sources.length">
-                                <template x-for="source in result.web_sources" :key="source">
-                                    <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20 uppercase" x-text="source"></span>
-                                </template>
-                            </div>
-
-                            <!-- Structured Proof Cards -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <template x-for="item in sources">
-                                    <div class="p-5 rounded-xl bg-black/40 border border-white/10 hover:border-cyan-500/30 transition-all group relative overflow-hidden">
-                                        <!-- Header -->
-                                        <div class="flex items-center gap-3 mb-3 border-b border-white/5 pb-3">
-                                            <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400">
-                                                <i class="bi bi-shield-check text-xs"></i>
-                                            </div>
-                                            <h4 class="text-xs font-black text-cyan-100 uppercase tracking-wider" x-text="item.title"></h4>
-                                        </div>
-                                        
-                                        <!-- Content -->
-                                        <div class="prose prose-invert prose-sm text-xs text-gray-400 leading-relaxed font-mono [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>strong]:text-cyan-300" 
-                                             x-html="item.html"></div>
-                                             
-                                        <!-- Deco -->
-                                        <div class="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-10 transition-opacity">
-                                            <i class="bi bi-crosshair text-4xl text-cyan-500"></i>
-                                        </div>
-                                    </div>
-                                </template>
-                                
-                                <!-- Empty State -->
-                                <template x-if="sources.length === 0 && !result.web_context">
-                                    <div class="col-span-full p-6 text-center border dashed border-white/10 rounded-xl">
-                                        <p class="text-white/30 text-xs italic">Đang chờ dữ liệu tình báo...</p>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                        </div>
-                    </template>
+                    {% include 'Scan/_osint_section.html' %}
                 </div>
 
                 <!-- Footer Actions -->
@@ -371,5 +431,7 @@
             </div>
         </div>
     </template>
+</div>
+{% include 'Scan/_scan_guide.html' with scan_type='message' %}
 </div>
 {% endblock %}

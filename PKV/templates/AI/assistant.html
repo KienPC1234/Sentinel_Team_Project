@@ -7,12 +7,9 @@
     <title>Hỏi đáp AI - ShieldCall VN</title>
     
     <script>
-        (function() {
-            const saved = localStorage.getItem('theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', saved);
-            if (saved === 'dark') document.documentElement.classList.add('dark');
-            else document.documentElement.classList.remove('dark');
-        })();
+        // Force dark theme only
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.classList.add('dark');
     </script>
 
     {% tailwind_css %}
@@ -39,16 +36,6 @@
             --text-primary: #ffffff;
             --text-secondary: rgba(255, 255, 255, 0.7);
             --body-bg: #020617;
-        }
-
-        [data-theme="light"] {
-            --glass-bg: rgba(255, 255, 255, 0.9);
-            --glass-border: rgba(0, 0, 0, 0.08);
-            --glass-blur: blur(20px);
-            --glass-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            --text-primary: #1a1a2e;
-            --text-secondary: #475569;
-            --body-bg: #f8fafc;
         }
 
         .markdown-content hr {
@@ -84,10 +71,6 @@
             z-index: -10;
         }
 
-        [data-theme="light"] .mesh-bg {
-            background-image: none;
-        }
-
         .msg-assistant {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
@@ -96,15 +79,6 @@
             backdrop-filter: var(--glass-blur);
             color: var(--text-primary);
         }
-
-        /* Light mode specific text overrides */
-        [data-theme="light"] .text-white { color: var(--text-primary) !important; }
-        [data-theme="light"] .text-white\/40 { color: var(--text-secondary) !important; }
-        [data-theme="light"] .text-white\/70 { color: var(--text-secondary) !important; }
-        [data-theme="light"] .bg-white\/5 { background-color: rgba(0,0,0,0.05) !important; }
-        [data-theme="light"] .border-white\/10 { border-color: rgba(0,0,0,0.1) !important; }
-        [data-theme="light"] h1, [data-theme="light"] h2 { color: var(--text-primary) !important; }
-        [data-theme="light"] .markdown-content { color: var(--text-primary) !important; }
 
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); }
@@ -234,6 +208,87 @@
             display: flex;
             align-items: center;
             gap: 1rem;
+        }
+
+        /* Tool Execution Cards */
+        .tool-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 1rem;
+            margin: 0.75rem 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .tool-card.executing {
+            border-color: rgba(6, 182, 212, 0.3);
+            animation: tool-pulse 2s ease-in-out infinite;
+        }
+        .tool-card.done { border-color: rgba(34, 197, 94, 0.2); }
+        .tool-card.error { border-color: rgba(239, 68, 68, 0.2); }
+        @keyframes tool-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+            50% { box-shadow: 0 0 12px 0 rgba(6, 182, 212, 0.1); }
+        }
+        .tool-card-header {
+            padding: 0.6rem 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .tool-card-icon {
+            width: 28px; height: 28px;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        .tool-card-spinner {
+            width: 14px; height: 14px;
+            border: 2px solid rgba(6, 182, 212, 0.2);
+            border-top-color: #06b6d4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tool-card-body {
+            padding: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+        .tool-card-body.open {
+            max-height: 600px;
+            padding: 0.6rem 0.85rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        .tool-result-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            padding: 0.35rem 0;
+            font-size: 11px;
+            color: rgba(203, 213, 225, 0.8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        }
+        .tool-result-row:last-child { border-bottom: none; }
+        .tool-result-label {
+            font-weight: 700;
+            color: rgba(148, 163, 184, 0.7);
+            min-width: 80px;
+            text-transform: uppercase;
+            font-size: 9px;
+            letter-spacing: 0.05em;
+            padding-top: 2px;
+            flex-shrink: 0;
+        }
+        .tool-result-val {
+            flex: 1;
+            word-break: break-word;
+            line-height: 1.5;
         }
 
         textarea:focus {
@@ -541,6 +596,14 @@
                                     if (currentThinking && !thinkingBox.classList.contains('collapsed')) {
                                         thinkingBox.classList.add('collapsed');
                                     }
+                                    // Fallback: mark any still-executing tool cards as done
+                                    const stillRunning = assistantMsgDiv.querySelectorAll('.tool-card.executing');
+                                    stillRunning.forEach(c => {
+                                        c.classList.remove('executing');
+                                        c.classList.add('done');
+                                        const st = c.querySelector('.tool-card-status');
+                                        if (st) st.innerHTML = '<i class="bi bi-check-circle-fill text-green-400 text-xs"></i><span class="text-[9px] font-bold text-green-400/70 uppercase tracking-wider">Hoàn tất</span>';
+                                    });
                                     fullContent += data.chunk;
                                     throttleRender(contentDiv, fullContent);
                                 }
@@ -557,7 +620,16 @@
                                         statusText = "AI đang suy nghĩ...";
                                         thinkingBox.classList.remove('hidden');
                                     }
+                                    if (data.status.startsWith('executing_tool:')) {
+                                        const toolName = data.status.substring('executing_tool:'.length);
+                                        const meta = TOOL_META[toolName] || { label: toolName };
+                                        statusText = `⚡ ${meta.label}...`;
+                                        addToolCard(assistantMsgDiv, toolName, null);
+                                    }
                                     chatStatus.innerText = statusText;
+                                }
+                                if (data.tool_result) {
+                                    updateToolCardResult(assistantMsgDiv, data.tool_result);
                                 }
                                 if (data.chunk && (data.chunk.startsWith('__SEARCH_RESULTS__:') || data.chunk.startsWith('__METADATA__:'))) {
                                     const marker = data.chunk.startsWith('__METADATA__:') ? '__METADATA__:' : '__SEARCH_RESULTS__:';
@@ -618,6 +690,16 @@
             stopIcon.classList.add('hidden');
             chatStatus.classList.add('hidden');
             updateSendBtnState();
+            
+            // Mark any remaining tool cards as done (safety net)
+            if (assistantMsgDiv) {
+                assistantMsgDiv.querySelectorAll('.tool-card.executing').forEach(c => {
+                    c.classList.remove('executing');
+                    c.classList.add('done');
+                    const st = c.querySelector('.tool-card-status');
+                    if (st) st.innerHTML = '<i class="bi bi-check-circle-fill text-green-400 text-xs"></i><span class="text-[9px] font-bold text-green-400/70 uppercase tracking-wider">Hoàn tất</span>';
+                });
+            }
             
             if (contentDiv && fullContent) {
                 contentDiv.innerHTML = marked.parse(fullContent);
@@ -1003,14 +1085,13 @@
         }
 
         function processToolInText(assistantMsgDiv, text) {
+            // Legacy scan tags are no longer used - tool cards handle this now
             const bubble = assistantMsgDiv.querySelector('.msg-bubble');
-            // Scan for [[SCAN_PHONE:xxx]] etc
-            const phoneMatch = text.match(/\[\[SCAN_PHONE:(.*?)\]\]/);
-            if (phoneMatch) createScannerWidget(bubble, 'phone', phoneMatch[1]);
-            const domainMatch = text.match(/\[\[SCAN_DOMAIN:(.*?)\]\]/);
-            if (domainMatch) createScannerWidget(bubble, 'domain', domainMatch[1]);
-            const accountMatch = text.match(/\[\[SCAN_ACCOUNT:(.*?)\]\]/);
-            if (accountMatch) createScannerWidget(bubble, 'account', accountMatch[1]);
+            // Clean any leaked [[SCAN_...]] tags from display
+            const md = bubble.querySelector('.markdown-content');
+            if (md) {
+                md.innerHTML = md.innerHTML.replace(/\[\[SCAN_[^\]]*\]\]/g, '');
+            }
         }
 
         function createScannerWidget(container, type, value) {
@@ -1032,6 +1113,176 @@
                 <div class="text-[10px] px-2 py-1 rounded bg-green-500/20 text-green-400 font-bold">AN TOÀN</div>
             `;
             container.appendChild(widget);
+        }
+
+        // ===== Tool Execution UI =====
+        const TOOL_META = {
+            'scan_phone': { icon: 'bi-telephone-fill', label: 'Kiểm tra số điện thoại', color: 'cyan' },
+            'scan_url': { icon: 'bi-globe2', label: 'Kiểm tra website / URL', color: 'blue' },
+            'scan_bank_account': { icon: 'bi-bank2', label: 'Kiểm tra tài khoản ngân hàng', color: 'violet' },
+            'web_search': { icon: 'bi-search', label: 'Tìm kiếm web', color: 'emerald' },
+            'web_fetch': { icon: 'bi-cloud-download', label: 'Tải nội dung trang web', color: 'amber' },
+        };
+        const COLOR_MAP = {
+            cyan: { bg: 'rgba(6,182,212,0.15)', text: '#06b6d4', border: 'rgba(6,182,212,0.3)' },
+            blue: { bg: 'rgba(59,130,246,0.15)', text: '#3b82f6', border: 'rgba(59,130,246,0.3)' },
+            violet: { bg: 'rgba(139,92,246,0.15)', text: '#8b5cf6', border: 'rgba(139,92,246,0.3)' },
+            emerald: { bg: 'rgba(16,185,129,0.15)', text: '#10b981', border: 'rgba(16,185,129,0.3)' },
+            amber: { bg: 'rgba(245,158,11,0.15)', text: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
+        };
+
+        function getToolCard(bubble, toolName) {
+            return bubble.querySelector(`.tool-card[data-tool="${toolName}"]:last-of-type`);
+        }
+
+        function addToolCard(assistantMsgDiv, toolName, args) {
+            const bubble = assistantMsgDiv.querySelector('.msg-bubble');
+            if (!bubble) return;
+            const meta = TOOL_META[toolName] || { icon: 'bi-gear', label: toolName, color: 'cyan' };
+            const cm = COLOR_MAP[meta.color] || COLOR_MAP.cyan;
+
+            // Build args display
+            let argsHtml = '';
+            if (args && typeof args === 'object') {
+                const vals = Object.values(args).filter(v => v);
+                if (vals.length) {
+                    argsHtml = `<span class="ml-1 text-[10px] text-slate-400 font-mono truncate max-w-[180px] inline-block align-bottom">${vals.join(', ')}</span>`;
+                }
+            }
+
+            const card = document.createElement('div');
+            card.className = 'tool-card executing';
+            card.dataset.tool = toolName;
+            card.innerHTML = `
+                <div class="tool-card-header">
+                    <div class="tool-card-icon" style="background:${cm.bg};color:${cm.text};border:1px solid ${cm.border}">
+                        <i class="bi ${meta.icon}"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold text-slate-200">${meta.label}</span>
+                            ${argsHtml}
+                        </div>
+                    </div>
+                    <div class="tool-card-status flex items-center gap-1.5">
+                        <div class="tool-card-spinner"></div>
+                        <span class="text-[9px] font-bold text-cyan-400/70 uppercase tracking-wider">Đang chạy</span>
+                    </div>
+                </div>
+                <div class="tool-card-body" data-role="result"></div>
+            `;
+            // Insert before markdown-content or at end of bubble
+            const markdownDiv = bubble.querySelector('.markdown-content');
+            if (markdownDiv) {
+                bubble.insertBefore(card, markdownDiv);
+            } else {
+                bubble.appendChild(card);
+            }
+            scrollToBottom();
+        }
+
+        function updateToolCardResult(assistantMsgDiv, toolResult) {
+            const bubble = assistantMsgDiv.querySelector('.msg-bubble');
+            if (!bubble) return;
+            const toolName = toolResult.tool;
+            const card = getToolCard(bubble, toolName);
+            if (!card) return;
+
+            // Mark as done
+            card.classList.remove('executing');
+            card.classList.add('done');
+            const statusEl = card.querySelector('.tool-card-status');
+            if (statusEl) {
+                statusEl.innerHTML = `<i class="bi bi-check-circle-fill text-green-400 text-xs"></i><span class="text-[9px] font-bold text-green-400/70 uppercase tracking-wider">Hoàn tất</span>`;
+            }
+
+            // Add args display if we have them
+            if (toolResult.args && typeof toolResult.args === 'object') {
+                const vals = Object.values(toolResult.args).filter(v => v);
+                if (vals.length) {
+                    const headerText = card.querySelector('.tool-card-header .flex-1');
+                    if (headerText && !headerText.querySelector('.tool-args')) {
+                        const argsSpan = document.createElement('span');
+                        argsSpan.className = 'tool-args text-[10px] text-slate-400 font-mono truncate block max-w-[260px] mt-0.5';
+                        argsSpan.textContent = vals.join(', ');
+                        headerText.appendChild(argsSpan);
+                    }
+                }
+            }
+
+            // Parse and render result
+            const body = card.querySelector('[data-role="result"]');
+            if (!body) return;
+            let resultData = toolResult.result;
+            let html = '';
+            try {
+                if (typeof resultData === 'string') {
+                    try { resultData = JSON.parse(resultData); } catch(e) {}
+                }
+                if (typeof resultData === 'object' && resultData !== null) {
+                    html = renderToolResultObject(toolName, resultData);
+                } else {
+                    html = `<div class="tool-result-row"><div class="tool-result-val">${escapeHtml(String(resultData || 'Không có kết quả'))}</div></div>`;
+                }
+            } catch (e) {
+                html = `<div class="tool-result-row"><div class="tool-result-val text-slate-500 italic">Kết quả đã xử lý</div></div>`;
+            }
+
+            body.innerHTML = html;
+
+            // Make it toggleable via header click
+            const header = card.querySelector('.tool-card-header');
+            header.style.cursor = 'pointer';
+            header.onclick = () => body.classList.toggle('open');
+            // Auto-open
+            body.classList.add('open');
+            scrollToBottom();
+        }
+
+        function renderToolResultObject(toolName, data) {
+            let rows = '';
+            const LABEL_MAP = {
+                'scamwave': 'ScamWave',
+                'scamadviser': 'ScamAdviser',
+                'trustpilot': 'Trustpilot',
+                'tranco': 'Tranco Rank',
+                'web_results': 'Kết quả web',
+                'title': 'Tiêu đề',
+                'content': 'Nội dung',
+                'links': 'Liên kết',
+                'message': 'Thông báo',
+            };
+            for (const [key, val] of Object.entries(data)) {
+                const label = LABEL_MAP[key] || key;
+                if (key === 'web_results' && Array.isArray(val)) {
+                    let linksHtml = val.slice(0, 5).map(r => {
+                        const t = r.title || r.url || '';
+                        const u = r.url || '#';
+                        const snip = r.content || r.text || '';
+                        return `<a href="${u}" target="_blank" class="block p-1.5 rounded-md bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.04] transition-all mb-1.5">
+                            <div class="text-[10px] font-bold text-cyan-300/80 truncate">${escapeHtml(t)}</div>
+                            ${snip ? `<div class="text-[9px] text-slate-500 line-clamp-2 mt-0.5">${escapeHtml(snip.substring(0, 150))}</div>` : ''}
+                            <div class="text-[8px] text-slate-600 truncate mt-0.5">${escapeHtml(u)}</div>
+                        </a>`;
+                    }).join('');
+                    rows += `<div class="tool-result-row" style="flex-direction:column;gap:0.25rem"><div class="tool-result-label">${label}</div><div class="tool-result-val">${linksHtml}</div></div>`;
+                } else if (typeof val === 'object' && val !== null) {
+                    // Nested object (e.g. tranco {rank, domain})
+                    const summary = Object.entries(val).map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v).substring(0, 200))}`).join(' · ');
+                    rows += `<div class="tool-result-row"><div class="tool-result-label">${label}</div><div class="tool-result-val">${summary}</div></div>`;
+                } else {
+                    const strVal = String(val || '');
+                    const displayVal = strVal.length > 300 ? strVal.substring(0, 300) + '…' : strVal;
+                    rows += `<div class="tool-result-row"><div class="tool-result-label">${label}</div><div class="tool-result-val">${escapeHtml(displayVal)}</div></div>`;
+                }
+            }
+            return rows || '<div class="tool-result-row"><div class="tool-result-val text-slate-500 italic">Không có dữ liệu</div></div>';
+        }
+
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
         }
 
         function getCookie(n) {

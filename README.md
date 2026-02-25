@@ -1,130 +1,75 @@
-# ShieldCall VN 🛡️ — Nền tảng Bảo vệ Người dùng Số Việt Nam
-
-[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
-[![Django](https://img.shields.io/badge/Django-5.2.x-green.svg)](https://www.djangoproject.com/)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-Glassmorphism-blueviolet.svg)](https://tailwindcss.com/)
-[![AI](https://img.shields.io/badge/AI-Ollama%20%2B%20OCR-orange.svg)](https://ollama.ai/)
-
-**ShieldCall VN** là giải pháp toàn diện giúp phát hiện, ngăn chặn và cảnh báo các hình thức lừa đảo kỹ thuật số (cuộc gọi rác, tin nhắn giả mạo, website lừa đảo, tài khoản ngân hàng đen) dành riêng cho người dùng tại Việt Nam.
-
----
-
-## ✨ Tính năng cốt lõi (MVP)
-
-### 1. Hệ thống Scan Đa tầng (5-Layer Scan)
-*   **Phone Scan:** Kiểm tra mức độ rủi ro của số điện thoại dựa trên thuật toán trọng số (Weighted Risk Scoring).
-*   **Message Analysis:** Phân tích nội dung tin nhắn bằng lớp luật (Regex) kết hợp AI (Ollama LLM) để nhận diện kịch bản lừa đảo.
-*   **Website/Domain Checker:** Phát hiện trang web giả mạo (phishing) bằng thuật toán so khớp khoảng cách Levenshtein và kiểm tra danh sách trắng (Whitelist).
-*   **Bank Account Verify:** Tra cứu tài khoản ngân hàng rủi ro từ cơ sở dữ liệu cộng đồng (dữ liệu được băm bảo mật).
-*   **QR/Image OCR:** Quét ảnh chụp màn hình tin nhắn hoặc mã QR để trích xuất thực thể (số ĐT, link, số TK) và phân tích tự động.
-
-### 2. Scam Radar & Intelligence
-*   **Daily Trends:** Bản đồ nhiệt và thống kê các loại hình lừa đảo đang gia tăng theo ngày.
-*   **Hot Targets:** Danh sách các "đầu số nóng" hoặc domain đang hoạt động mạnh trong 24h qua.
-*   **Fraud Graph:** (Experimental) Liên kết các thực thể (số ĐT - domain - tài khoản) để tìm ra các nhóm lừa đảo có tổ chức.
-
-### 3. Trung tâm Hỗ trợ & Giáo dục
-*   **Learn Hub:** Kho kiến thức phòng chống lừa đảo với các bài học và bộ mẫu kịch bản phổ biến.
-*   **Emergency Mode:** Quy trình xử lý khẩn cấp khi người dùng đã lỡ bị lừa (khóa tài khoản, lưu bằng chứng, báo cáo nhanh).
+<div align="center">
+  <img src="PKV/static/logo.png" alt="ShieldCall VN Logo" width="200"/>
+  <h1>ShieldCall VN 🛡️</h1>
+  <p><b>Nền tảng Bảo vệ Người dùng Số Việt Nam Toàn diện bằng AI</b></p>
+  
+  [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+  [![Django](https://img.shields.io/badge/Django-5.2.x-green.svg)](https://www.djangoproject.com/)
+  [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4-blueviolet.svg)](https://tailwindcss.com/)
+  [![AI](https://img.shields.io/badge/AI-Multi--Agent-orange.svg)](https://ollama.ai/)
+</div>
 
 ---
 
-## 🛠️ Công nghệ sử dụng
+## 🌟 Giới thiệu
+**ShieldCall VN** là giải pháp công nghệ tiên phong giúp phát hiện, ngăn chặn và giáo dục về các hình thức lừa đảo kỹ thuật số (cuộc gọi rác, tin nhắn giả mạo, website lừa đảo, tài khoản ngân hàng đen) dành riêng cho người dùng tại Việt Nam. Dự án được phát triển bởi **Sentinel Team** cho cuộc thi **AI Young Guru**.
 
-*   **Backend:** Django 5.2.x, Django REST Framework (DRF)
-*   **Frontend:** TailwindCSS v4 (Glassmorphism Design), Alpine.js
-*   **Database:** MySQL 8.0 (Primary), Redis 7 (Cache & Queue)
-*   **Asynchronous:** Celery & RabbitMQ/Redis (Xử lý OCR và AI dài hạn)
-*   **AI/ML:**
-    *   **Ollama:** Local LLM (Llama3/Gemma) để phân tích ngữ nghĩa tin nhắn.
-    *   **Tesseract/PaddleOCR:** Trích xuất văn bản từ hình ảnh.
-    *   **Phishing Detection:** Heuristics + Levenshtein Distance.
+## ✨ Tính năng nổi bật
 
----
+### 1. Hệ thống Quét Đa nguyên (Multi-Vector Scan)
+*   **Website Scan:** Kiểm tra WHOIS (độ tuổi tên miền), DNS MX, uy tín Hosting (ASN) và phân tích nội dung bằng AI Reasoning Engine.
+*   **Audio Scan:** Chuyển đổi cuộc gọi thành văn bản bằng **Faster-Whisper** và phân tích kịch bản lừa đảo (giả danh công an, ngân hàng).
+*   **Email Analysis:** Phân tích file `.eml`, xác thực SPF/DMARC và vạch trần kịch bản thao túng tâm lý.
+*   **Phone & Account Check:** Tra cứu mức độ rủi ro dựa trên cơ sở dữ liệu cộng đồng và thuật toán trọng số.
+*   **AI OCR Magic:** Trích xuất thông tin lừa đảo từ ảnh chụp màn hình bằng EasyOCR kết hợp AI phân tích thực thể.
 
-## 🚀 Cài đặt & Khởi chạy (Dev)
+### 2. Hệ sinh thái Cộng đồng & Giáo dục
+*   **Scam Radar:** Bản đồ nhiệt và xu hướng lừa đảo cập nhật theo thời gian thực.
+*   **Learn Hub:** Kho bài giảng tương tác về an ninh mạng.
+*   **Interactive Scenarios:** Thực hành đối đầu với kẻ gian trong môi trường giả lập AI.
 
-### 1. Yêu cầu hệ thống
-- Python 3.12+
-- MySQL 8+, Redis 7+
-- Node.js 18+
-- Ollama (Để chạy tính năng phân tích AI nội bộ)
+### 3. Công nghệ Quản trị Đẳng cấp
+*   **AI Magic Create:** Quy trình 5 giai đoạn (Phân tích -> Lesson -> Quiz -> Scenario -> Push) biến tin tức thô thành bài học hoàn chỉnh.
+*   **Dashboard Thông minh:** Hệ thống giám sát dữ liệu và báo cáo lừa đảo chuyên sâu.
 
-### 2. Thiết lập môi trường
+## 🛠️ Stack Công nghệ
+- **Core:** Django 5.2 (Python 3.12), Django REST Framework.
+- **AI Engine:** Multi-Agent Collaboration (Ollama LLM), Faster-Whisper (STT), RAG Architecture, AI OCR.
+- **Performance:** Celery & Redis (Async Tasks), Django Channels (WebSocket Progress).
+- **Design:** Liquid Glass Aesthetic (TailwindCSS v4), Alpine.js.
 
+## 🚀 Cài đặt nhanh
+
+### 1. Yêu cầu
+- Python 3.12+, MySQL 8.0, Redis 7.0, Ollama.
+
+### 2. Các bước khởi chạy
 ```bash
-# Clone repository
+# Clone và cài đặt venv
 git clone <repo-url>
 cd PKV_TEAM
-
-# Tạo môi trường ảo và cài đặt dependencies
 python -m venv venv
-source venv/bin/activate  # Linux/macOS
-# Hoặc: venv\Scripts\activate  # Windows
+source venv/bin/activate
 pip install -r requirements.txt
-```
 
-### 3. Cấu hình Cơ sở dữ liệu
-Sửa tệp `.env` từ `.env.example`:
-```bash
-cp .env.example .env
-# Cập nhật DB_NAME, DB_USER, DB_PASSWORD...
-```
+# Cấu hình môi trường
+cp PKV/settings.py.example PKV/settings.py
+# Sửa thông tin DB và API Key trong settings.py
 
-### 4. Khởi tạo Database & Static Files
-```bash
-python manage.py makemigrations
+# Migrate và Build UI
 python manage.py migrate
-python manage.py tailwind install
 python manage.py tailwind build
 python manage.py collectstatic --noinput
-```
 
-### 5. Khởi chạy hệ thống
-
-Hệ thống cần các tiến trình sau (tùy tính năng):
-
-```bash
-# 1. Django Server
+# Chạy Server
 python manage.py runserver 0.0.0.0:8000
-
-# 2. Celery Worker (Xử lý tác vụ ngầm)
-celery -A PKV worker -l info
-
-# 3. Redis (cho cache, session, Celery, Channels)
-redis-server  # hoặc service tương đương
-
-# 4. Ollama (Phục vụ AI – nếu dùng tính năng AI/scan nâng cao)
-ollama run <model>  # Trùng với model cấu hình trong api/utils/ollama_client.py
 ```
 
 ---
 
-## 📁 Cấu trúc thư mục Chính
-
-- api/core/: API cốt lõi (auth, MFA, scan, forum, trends, articles…).
-- api/sessions_api/: Check/khởi tạo session cho mobile.
-- api/phone_security/: API kiểm tra độ an toàn số điện thoại.
-- api/ai_chat/: Chat AI + SSE stream.
-- api/media_analysis/: Phân tích ảnh/audio (OCR, QR, risk).
-- api/maintenance/: Báo crash, log lỗi.
-- api/utils/: Ollama client, OCR/media utils, normalization, bảo mật, VT, email.
-- PKV/: cấu hình Django project, URL web, view và template.
-- theme/: TailwindCSS (Django-tailwind app).
-- docs/: tài liệu API & tích hợp.
-
----
-
-## 🔌 API Documentation
-
-Sau khi chạy server, bạn có thể truy cập tài liệu API tự động tại:
-*   **Swagger UI:** `http://localhost:8000/api/docs/`
-*   **ReDoc:** `http://localhost:8000/api/redoc/`
-
----
-
-## 🤝 Đóng góp & Bản quyền
-
-Dự án được phát triển bởi **Sentinel Team (PKV Team)**.
+## 👨‍💻 Đội ngũ phát triển
+Dự án được thực hiện bởi **SENTINEL TEAM** (tiền thân là PKV Team).
+- **Quy mô dự án:** ~40,000 dòng code tự viết.
+- **Kiến trúc:** Cloud-native, AI-integrated.
 
 **License:** MIT

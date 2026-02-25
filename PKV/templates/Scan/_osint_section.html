@@ -1,0 +1,206 @@
+{% comment %}
+Shared OSINT Intelligence section for scan result pages.
+Expects Alpine.js 'result' variable to be available in outer x-data scope.
+{% endcomment %}
+
+<!-- OSINT Parser Script (safe: lives in <script>, not in x-data attribute) -->
+<script>
+document.addEventListener('alpine:init', function() {
+    if (Alpine.data.__osintParserRegistered) return;
+    Alpine.data.__osintParserRegistered = true;
+
+    Alpine.data('osintParser', function() {
+        return {
+            sources: [],
+            osintExpanded: false,
+
+            get visibleSources() {
+                return this.osintExpanded ? this.sources : this.sources.slice(0, 2);
+            },
+
+            normalizeTitle(t) {
+                var c = (t || '').trim().replace(/^\[+|\]+$/g, '');
+                // Remove trailing " cho 'domain'" suffix
+                var lowered = c.toLowerCase();
+                var marker = " cho '";
+                var markerIdx = lowered.indexOf(marker);
+                if (markerIdx > -1 && c.endsWith("'")) {
+                    c = c.slice(0, markerIdx);
+                }
+                // Clean trailing brackets and "Nguồn:" prefix
+                c = c.replace(/\]\s*$/, '');
+                c = c.replace(/^Nguồn\s*:\s*/i, '').replace(/\s+/g, ' ').trim();
+                return c || 'TỔNG HỢP TÌNH BÁO';
+            },
+
+            renderMarkdown(text) {
+                if (window.marked && window.marked.parse) {
+                    return window.marked.parse(text);
+                }
+                return text;
+            },
+
+            parseContext() {
+                // 'result' is accessible from the parent Alpine scope
+                var raw = this.result && this.result.web_context;
+                if (!raw) { this.sources = []; return; }
+
+                // Strip <think> blocks
+                var cleanRaw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+                if (!cleanRaw) { this.sources = []; return; }
+
+                // Find ### headers
+                var headerRe = /^###\s+(.+)$/gm;
+                var headers = [];
+                var m;
+                while ((m = headerRe.exec(cleanRaw)) !== null) {
+                    headers.push({
+                        title: m[1].replace(/^\[|\]$/g, '').trim(),
+                        idx: m.index,
+                        end: m.index + m[0].length
+                    });
+                }
+
+                var self = this;
+                var newSources = [];
+                var conclusionText = '';
+                var conclusionRe = /(Kết luận tổng thể\s*:[\s\S]*)$/i;
+
+                if (headers.length > 0) {
+                    for (var i = 0; i < headers.length; i++) {
+                        var title = self.normalizeTitle(headers[i].title);
+                        var contentEnd = (i + 1 < headers.length) ? headers[i + 1].idx : cleanRaw.length;
+                        var content = cleanRaw.slice(headers[i].end, contentEnd).trim();
+
+                        if (content) {
+                            var cm = content.match(conclusionRe);
+                            if (cm && cm[1]) {
+                                var extracted = cm[1].trim();
+                                conclusionText = conclusionText ? (conclusionText + '\n\n' + extracted) : extracted;
+                                content = content.replace(conclusionRe, '').trim();
+                            }
+                        }
+
+                        if (title && content) {
+                            newSources.push({
+                                title: title,
+                                html: self.renderMarkdown(content)
+                            });
+                        }
+                    }
+                } else {
+                    // Fallback: no ### headers found
+                    var fb = cleanRaw;
+                    var cm = fb.match(conclusionRe);
+                    if (cm && cm[1]) {
+                        conclusionText = cm[1].trim();
+                        fb = fb.replace(conclusionRe, '').trim();
+                    }
+                    if (fb) {
+                        newSources.push({
+                            title: 'TỔNG HỢP TÌNH BÁO',
+                            html: self.renderMarkdown(fb)
+                        });
+                    }
+                }
+
+                // Add conclusion as final card
+                if (conclusionText) {
+                    newSources.push({
+                        title: 'KẾT LUẬN TỔNG THỂ',
+                        html: self.renderMarkdown(conclusionText)
+                    });
+                }
+
+                this.sources = newSources;
+            },
+
+            init() {
+                // Parse immediately and also watch for changes
+                var self = this;
+                this.parseContext();
+                this.$watch('result.web_context', function() {
+                    self.parseContext();
+                });
+            }
+        };
+    });
+});
+</script>
+
+<!-- OSINT Section Template -->
+<template x-if="result.web_context || (result.web_sources && result.web_sources.length > 0)">
+    <div class="p-8 border-t border-white/5 bg-white/[0.01]">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                <i class="bi bi-search"></i>
+            </div>
+            <div>
+                <h4 class="text-sm font-black text-white uppercase tracking-wider">Thông tin tình báo (OSINT)</h4>
+                <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Grounded Proofs &amp; Sources</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6" x-data="osintParser()">
+
+            <!-- Sources Badges -->
+            <div class="flex flex-wrap gap-2 mb-2" x-show="result.web_sources && result.web_sources.length">
+                <template x-for="source in result.web_sources" :key="source">
+                    <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20 uppercase" x-text="source"></span>
+                </template>
+            </div>
+
+            <!-- Searched URLs -->
+            <template x-if="result.searched_urls && result.searched_urls.length > 0">
+                <div class="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] mb-2">
+                    <h5 class="text-[10px] font-black text-white/30 uppercase tracking-widest mb-2"><i class="bi bi-globe2 me-1"></i>AI đã tra cứu</h5>
+                    <div class="flex flex-wrap gap-1.5">
+                        <template x-for="(surl, si) in result.searched_urls" :key="si">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 text-[10px] text-white/50 font-mono border border-white/[0.06] max-w-[260px] truncate" :title="surl">
+                                <i :class="surl.startsWith('search:') ? 'bi bi-search' : surl.includes(':') && !surl.startsWith('http') ? 'bi bi-database' : 'bi bi-link-45deg'" class="text-cyan-500/60 flex-shrink-0"></i>
+                                <span x-text="surl.startsWith('search:') ? surl.slice(7) : surl.startsWith('http') ? (new URL(surl)).hostname + (new URL(surl)).pathname.slice(0,30) : surl" class="truncate"></span>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Structured Proof Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <template x-for="item in visibleSources">
+                    <div class="p-5 rounded-xl bg-black/40 border border-white/10 hover:border-cyan-500/30 transition-all group relative overflow-hidden">
+                        <div class="flex items-center gap-3 mb-3 border-b border-white/5 pb-3">
+                            <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400">
+                                <i class="bi bi-shield-check text-xs"></i>
+                            </div>
+                            <h4 class="text-xs font-black text-cyan-100 uppercase tracking-wider" x-text="item.title"></h4>
+                        </div>
+                        <div class="prose prose-invert prose-sm text-xs text-gray-400 leading-relaxed font-mono [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>strong]:text-cyan-300"
+                             x-html="item.html"></div>
+                        <div class="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-10 transition-opacity">
+                            <i class="bi bi-crosshair text-4xl text-cyan-500"></i>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Empty State -->
+                <template x-if="sources.length === 0 && !result.web_context">
+                    <div class="col-span-full p-6 text-center border dashed border-white/10 rounded-xl">
+                        <p class="text-white/30 text-xs italic">Đang chờ dữ liệu tình báo...</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Show More / Show Less Toggle -->
+            <template x-if="sources.length > 2">
+                <div class="flex justify-center pt-2">
+                    <button @click="osintExpanded = !osintExpanded"
+                            class="liquid-btn py-2 px-6 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 transition-all font-bold flex items-center gap-2">
+                        <i class="bi" :class="osintExpanded ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                        <span x-text="osintExpanded ? 'Thu gọn' : ('Xem thêm ' + (sources.length - 2) + ' nguồn')"></span>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+</template>

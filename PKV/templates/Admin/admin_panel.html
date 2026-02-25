@@ -4,13 +4,13 @@
 {% block content %}
 <div style="max-width:1200px;margin:0 auto;" x-data="{activeTab:'overview', searchQ:''}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1rem;"
-        class="animate-fadein">
+        data-aos="fade-down">
         <div>
-            <h1 style="font-size:1.75rem;font-weight:800;"><span class="glow-text">Admin Panel</span></h1>
-            <p style="color:var(--text-muted);font-size:0.9rem;margin-top:0.25rem;">Quản lý hệ thống ShieldCall VN
+            <h1 style="font-size:1.75rem;font-weight:800;" data-aos="fade-right" data-aos-delay="100"><span class="glow-text">Admin Panel</span></h1>
+            <p style="color:var(--text-muted);font-size:0.9rem;margin-top:0.25rem;" data-aos="fade-right" data-aos-delay="200">Quản lý hệ thống ShieldCall VN
             </p>
         </div>
-        <div style="display:flex;gap:0.5rem;">
+        <div style="display:flex;gap:0.5rem;" data-aos="fade-left" data-aos-delay="300">
             <input type="text" class="glass-input" placeholder="Tìm kiếm..." x-model="searchQ"
                 style="width:250px;padding:0.5rem 0.75rem;font-size:0.85rem;">
         </div>
@@ -18,7 +18,7 @@
 
     <!-- System Stats -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:2rem;"
-        class="animate-fadein animate-fadein-delay-1">
+        data-aos="fade-up" data-aos-delay="400">
         <div class="glass-card" style="padding:1.25rem;">
             <div style="font-size:0.8rem;color:var(--text-muted);">Users</div>
             <div style="font-size:1.75rem;font-weight:800;color:var(--accent-cyan);">2,547</div>
@@ -42,9 +42,50 @@
         </div>
     </div>
 
+    <!-- Quick Navigation: Management Pages -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:2rem;"
+        data-aos="fade-up" data-aos-delay="450">
+        <a href="{% url 'admin-manage-learn' %}" class="glass-card" style="padding:1.25rem;text-decoration:none;color:inherit;display:flex;align-items:center;gap:1rem;transition:all 0.3s;border:1px solid transparent;" onmouseover="this.style.borderColor='var(--accent-cyan)'" onmouseout="this.style.borderColor='transparent'">
+            <div style="width:40px;height:40px;border-radius:10px;background:rgba(6,182,212,0.15);display:flex;align-items:center;justify-content:center;">
+                <i class="bi bi-journal-text" style="font-size:1.25rem;color:var(--accent-cyan);"></i>
+            </div>
+            <div>
+                <div style="font-weight:700;font-size:0.9rem;">Bài học</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);">LearnHub quản lý</div>
+            </div>
+        </a>
+        <a href="{% url 'admin-manage-articles' %}" class="glass-card" style="padding:1.25rem;text-decoration:none;color:inherit;display:flex;align-items:center;gap:1rem;transition:all 0.3s;border:1px solid transparent;" onmouseover="this.style.borderColor='var(--accent-purple)'" onmouseout="this.style.borderColor='transparent'">
+            <div style="width:40px;height:40px;border-radius:10px;background:rgba(168,85,247,0.15);display:flex;align-items:center;justify-content:center;">
+                <i class="bi bi-newspaper" style="font-size:1.25rem;color:var(--accent-purple);"></i>
+            </div>
+            <div>
+                <div style="font-weight:700;font-size:0.9rem;">Tin tức</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);">Bài viết & ScamRadar</div>
+            </div>
+        </a>
+        <a href="{% url 'admin-manage-forum' %}" class="glass-card" style="padding:1.25rem;text-decoration:none;color:inherit;display:flex;align-items:center;gap:1rem;transition:all 0.3s;border:1px solid transparent;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='transparent'">
+            <div style="width:40px;height:40px;border-radius:10px;background:rgba(245,158,11,0.15);display:flex;align-items:center;justify-content:center;">
+                <i class="bi bi-chat-square-dots" style="font-size:1.25rem;color:#f59e0b;"></i>
+            </div>
+            <div>
+                <div style="font-weight:700;font-size:0.9rem;">Diễn đàn</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);">Forum & Báo cáo</div>
+            </div>
+        </a>
+        <a href="{% url 'admin-manage-scenarios' %}" class="glass-card" style="padding:1.25rem;text-decoration:none;color:inherit;display:flex;align-items:center;gap:1rem;transition:all 0.3s;border:1px solid transparent;" onmouseover="this.style.borderColor='var(--risk-green)'" onmouseout="this.style.borderColor='transparent'">
+            <div style="width:40px;height:40px;border-radius:10px;background:rgba(34,197,94,0.15);display:flex;align-items:center;justify-content:center;">
+                <i class="bi bi-shield-check" style="font-size:1.25rem;color:var(--risk-green);"></i>
+            </div>
+            <div>
+                <div style="font-weight:700;font-size:0.9rem;">Kịch bản</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);">Scenarios luyện tập</div>
+            </div>
+        </a>
+    </div>
+
     <!-- Tabs -->
     <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;"
-        class="animate-fadein animate-fadein-delay-2">
+        data-aos="fade-up" data-aos-delay="500">
         <button class="tab-btn" :class="activeTab==='overview'&&'active'" @click="activeTab='overview'"><i
                 class="bi bi-bar-chart-fill mr-1"></i> Tổng
             quan</button>
@@ -58,6 +99,8 @@
             Domains</button>
         <button class="tab-btn" :class="activeTab==='system'&&'active'" @click="activeTab='system'"><i
                 class="bi bi-gear-fill mr-1"></i> System</button>
+        <button class="tab-btn" :class="activeTab==='forum'&&'active'" @click="activeTab='forum'"><i
+                class="bi bi-chat-square-dots-fill mr-1"></i> Forum</button>
     </div>
 
     <!-- Overview -->
@@ -242,6 +285,56 @@
                     style="display:flex;justify-content:space-between;padding:0.75rem;border-radius:0.5rem;background:var(--glass-border);font-size:0.9rem;">
                     <span>Task Queue</span><span style="font-weight:600;">Celery + Redis</span>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forum Management -->
+    <div x-show="activeTab==='forum'" x-transition>
+        <div style="display:grid;gap:1.5rem;">
+            <!-- Forum Stats -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;">
+                <div class="glass-card" style="padding:1.25rem;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:800;color:#f59e0b;">{{ forum_stats.total_posts|default:"—" }}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);">Bài viết</div>
+                </div>
+                <div class="glass-card" style="padding:1.25rem;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:800;color:var(--accent-cyan);">{{ forum_stats.total_comments|default:"—" }}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);">Bình luận</div>
+                </div>
+                <div class="glass-card" style="padding:1.25rem;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:800;color:var(--risk-red);">{{ forum_stats.total_reports|default:"—" }}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);">Báo cáo</div>
+                </div>
+                <div class="glass-card" style="padding:1.25rem;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:800;color:var(--risk-green);">{{ forum_stats.active_today|default:"—" }}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);">Hôm nay</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="glass-card" style="padding:1.5rem;">
+                <h3 style="font-weight:700;margin-bottom:1rem;"><i class="bi bi-lightning-fill mr-2 text-yellow-500"></i> Quản lý nhanh</h3>
+                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                    <a href="{% url 'admin-manage-forum' %}" style="text-decoration:none;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);padding:0.6rem 1.25rem;border-radius:1rem;font-size:0.85rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;transition:all 0.3s;" onmouseover="this.style.background='rgba(245,158,11,0.25)'" onmouseout="this.style.background='rgba(245,158,11,0.15)'">
+                        <i class="bi bi-chat-square-dots"></i> Quản lý bài viết
+                    </a>
+                    <a href="/forum/" target="_blank" style="text-decoration:none;background:rgba(24,255,255,0.1);color:var(--accent-cyan);border:1px solid rgba(24,255,255,0.15);padding:0.6rem 1.25rem;border-radius:1rem;font-size:0.85rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;transition:all 0.3s;" onmouseover="this.style.background='rgba(24,255,255,0.2)'" onmouseout="this.style.background='rgba(24,255,255,0.1)'">
+                        <i class="bi bi-box-arrow-up-right"></i> Xem diễn đàn
+                    </a>
+                    <a href="/admin/core/forumpostreport/" target="_blank" style="text-decoration:none;background:rgba(255,23,68,0.1);color:var(--risk-red);border:1px solid rgba(255,23,68,0.15);padding:0.6rem 1.25rem;border-radius:1rem;font-size:0.85rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;transition:all 0.3s;" onmouseover="this.style.background='rgba(255,23,68,0.2)'" onmouseout="this.style.background='rgba(255,23,68,0.1)'">
+                        <i class="bi bi-flag-fill"></i> Báo cáo bài viết
+                    </a>
+                    <a href="/admin/core/forumcommentreport/" target="_blank" style="text-decoration:none;background:rgba(179,136,255,0.1);color:var(--accent-purple);border:1px solid rgba(179,136,255,0.15);padding:0.6rem 1.25rem;border-radius:1rem;font-size:0.85rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;transition:all 0.3s;" onmouseover="this.style.background='rgba(179,136,255,0.2)'" onmouseout="this.style.background='rgba(179,136,255,0.1)'">
+                        <i class="bi bi-flag"></i> Báo cáo bình luận
+                    </a>
+                </div>
+            </div>
+
+            <!-- Recent Posts Preview -->
+            <div class="glass-card" style="padding:1.5rem;">
+                <h3 style="font-weight:700;margin-bottom:1rem;"><i class="bi bi-clock-history mr-2 text-cyan-400"></i> Bài viết gần đây</h3>
+                <p style="color:var(--text-muted);font-size:0.85rem;">Truy cập <a href="{% url 'admin-manage-forum' %}" style="color:var(--accent-cyan);font-weight:700;">Quản lý diễn đàn</a> để xem, chỉnh sửa hoặc xóa bài viết. Sử dụng <a href="/admin/core/forumpost/" target="_blank" style="color:var(--accent-cyan);font-weight:700;">Django Admin</a> để quản lý nâng cao.</p>
             </div>
         </div>
     </div>

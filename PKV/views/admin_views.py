@@ -9,10 +9,12 @@ from django.db.models import Count, F
 from django.http import HttpResponseForbidden
 from api.core.models import (
     LearnLesson, ForumPost, Article, LearnQuiz, LearnScenario, BankAccount, Domain,
-    Report, ScanEvent, ForumPostReport, ForumCommentReport
+    Report, ScanEvent, ForumPostReport, ForumCommentReport, ScamType, ArticleCategory
 )
+from django.db.models import Q
 from api.core.forms import LearnLessonForm, ArticleForm, LearnScenarioForm
 from django.http import HttpResponseForbidden, JsonResponse
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 # The instruction implies these are from a local file, but the original code doesn't have a .page_views.
@@ -102,25 +104,139 @@ def admin_stats_api(request):
 
 @admin_required
 def manage_reports(request):
-    """List and manage community reports with sorting"""
+    """List and manage community reports with filtering and search"""
     sort_by = request.GET.get('sort', '-created_at')
-    # Validate sort field to prevent malicious input
-    allowed_sorts = ['created_at', '-created_at', 'status', '-status', 'target_type', '-target_type', 'reporter__username', '-reporter__username']
+    status_filter = request.GET.get('status', '')
+    type_filter = request.GET.get('type', '')
+    query = request.GET.get('q', '').strip()
+    
+    allowed_sorts = [
+        'created_at', '-created_at', 'status', '-status', 
+        'target_type', '-target_type', 'reporter__username', '-reporter__username'
+    ]
     if sort_by not in allowed_sorts:
         sort_by = '-created_at'
         
-    reports = Report.objects.select_related('reporter').all().order_by(sort_by)
-    return render(request, "Admin/reports.html", {"reports": reports, "current_sort": sort_by})
+    reports = Report.objects.select_related('reporter').all()
+    
+    if status_filter:
+        reports = reports.filter(status=status_filter)
+    if type_filter:
+        reports = reports.filter(target_type=type_filter)
+    if query:
+        reports = reports.filter(
+            Q(target_value__icontains=query) |
+            Q(description__icontains=query) |
+            Q(scammer_name__icontains=query) |
+            Q(scammer_phone__icontains=query) |
+            Q(scammer_bank_account__icontains=query)
+        )
+        
+    reports = reports.order_by(sort_by)
+    
+    context = {
+        "reports": reports,
+        "current_sort": sort_by,
+        "status_filter": status_filter,
+        "type_filter": type_filter,
+        "query": query,
+    }
+    return render(request, "Admin/reports.html", context)
 
 @admin_required
 def manage_forum(request):
     """Manage forum posts and reports"""
-    post_reports = ForumPostReport.objects.select_related('reporter', 'post').all()
-    comment_reports = ForumCommentReport.objects.select_related('reporter', 'comment').all()
+    posts = ForumPost.objects.select_related('author').order_by('-is_pinned', '-created_at')[:100]
+    post_reports = ForumPostReport.objects.select_related('reporter', 'post', 'post__author').order_by('-created_at')
+    comment_reports = ForumCommentReport.objects.select_related('reporter', 'comment', 'comment__author').order_by('-created_at')
     return render(request, "Admin/forum_management.html", {
+        "posts": posts,
         "post_reports": post_reports,
-        "comment_reports": comment_reports
+        "comment_reports": comment_reports,
     })
+
+
+@admin_required
+def forum_report_action(request, report_type, report_id):
+    """Approve/reject/analyze forum reports. Returns JSON."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    action = request.POST.get('action') or json.loads(request.body).get('action') if request.body else None
+    if not action:
+        return JsonResponse({'error': 'Missing action'}, status=400)
+
+    try:
+        if report_type == 'post':
+            report = ForumPostReport.objects.select_related('post', 'post__author', 'reporter').get(id=report_id)
+        else:
+            report = ForumCommentReport.objects.select_related('comment', 'comment__author', 'reporter').get(id=report_id)
+
+        if action == 'approve':
+            report.status = 'approved'
+            report.is_resolved = True
+            report.save()
+            if report_type == 'post' and hasattr(report, 'post'):
+                report.post.is_locked = True
+                report.post.save(update_fields=['is_locked'])
+            return JsonResponse({'status': 'ok', 'message': f'Đã chấp thuận báo cáo #{report_id}'})
+
+        elif action == 'reject':
+            report.status = 'rejected'
+            report.is_resolved = True
+            report.save()
+            return JsonResponse({'status': 'ok', 'message': f'Đã từ chối báo cáo #{report_id}'})
+
+        elif action == 'analyze':
+            if report_type == 'post':
+                from api.core.tasks import process_forum_report
+                process_forum_report.delay(report_id)
+            else:
+                from api.core.tasks import process_forum_comment_report
+                process_forum_comment_report.delay(report_id)
+            return JsonResponse({'status': 'ok', 'message': f'Đã gửi phân tích AI cho báo cáo #{report_id}'})
+
+        else:
+            return JsonResponse({'error': 'Unknown action'}, status=400)
+
+    except (ForumPostReport.DoesNotExist, ForumCommentReport.DoesNotExist):
+        return JsonResponse({'error': 'Báo cáo không tồn tại'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@admin_required
+def forum_post_admin_action(request, post_id):
+    """Admin actions on forum posts: delete, pin/unpin. Returns JSON."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    action = request.POST.get('action') or json.loads(request.body).get('action') if request.body else None
+    try:
+        post = ForumPost.objects.get(id=post_id)
+
+        if action == 'delete':
+            title = post.title
+            post.delete()
+            return JsonResponse({'status': 'ok', 'message': f'Đã xóa bài viết: {title}'})
+
+        elif action == 'pin':
+            post.is_pinned = not post.is_pinned
+            post.save(update_fields=['is_pinned'])
+            state = 'ghim' if post.is_pinned else 'bỏ ghim'
+            return JsonResponse({'status': 'ok', 'message': f'Đã {state} bài viết', 'is_pinned': post.is_pinned})
+
+        elif action == 'lock':
+            post.is_locked = not post.is_locked
+            post.save(update_fields=['is_locked'])
+            state = 'khóa' if post.is_locked else 'mở khóa'
+            return JsonResponse({'status': 'ok', 'message': f'Đã {state} bài viết', 'is_locked': post.is_locked})
+
+        else:
+            return JsonResponse({'error': 'Unknown action'}, status=400)
+
+    except ForumPost.DoesNotExist:
+        return JsonResponse({'error': 'Bài viết không tồn tại'}, status=404)
 
 @super_admin_required
 def manage_users(request):
@@ -179,25 +295,259 @@ def reject_report(request, report_id):
 
 @admin_required
 def edit_lesson(request, lesson_id=None):
-    """View to create or edit a Learn Lesson"""
+    """View to create or edit a Learn Lesson with quiz and scenario"""
     lesson = None
+    quiz = None
+    scenario = None
     if lesson_id:
         lesson = get_object_or_404(LearnLesson, id=lesson_id)
+        quiz = lesson.quizzes.first()
+        scenario = LearnScenario.objects.filter(
+            title__icontains=lesson.title[:30]
+        ).first() if lesson else None
+        # Also check scenarios linked to lesson via a naming convention
+        if not scenario:
+            # Try matching by recent scenarios created around same time
+            scenario = LearnScenario.objects.filter(
+                created_at__gte=lesson.created_at - timedelta(minutes=5),
+                created_at__lte=lesson.created_at + timedelta(minutes=5),
+            ).first() if lesson else None
     
     if request.method == 'POST':
         form = LearnLessonForm(request.POST, request.FILES, instance=lesson)
         if form.is_valid():
             lesson = form.save()
+            
+            # Handle quiz data
+            quiz_question = request.POST.get('quiz_question', '').strip()
+            if quiz_question:
+                quiz_options = [
+                    request.POST.get('quiz_option_0', '').strip(),
+                    request.POST.get('quiz_option_1', '').strip(),
+                    request.POST.get('quiz_option_2', '').strip(),
+                    request.POST.get('quiz_option_3', '').strip(),
+                ]
+                quiz_options = [o for o in quiz_options if o]  # filter empty
+                quiz_correct = request.POST.get('quiz_correct', '').strip()
+                quiz_explanation = request.POST.get('quiz_explanation', '').strip()
+                
+                if quiz:
+                    quiz.question = quiz_question
+                    quiz.options = quiz_options
+                    quiz.correct_answer = quiz_correct
+                    quiz.explanation = quiz_explanation
+                    quiz.save()
+                else:
+                    LearnQuiz.objects.create(
+                        lesson=lesson,
+                        question=quiz_question,
+                        options=quiz_options,
+                        correct_answer=quiz_correct,
+                        explanation=quiz_explanation,
+                    )
+            
+            # Handle scenario data
+            scenario_title = request.POST.get('scenario_title', '').strip()
+            if scenario_title:
+                scenario_desc = request.POST.get('scenario_description', '').strip()
+                scenario_steps_raw = request.POST.get('scenario_steps', '').strip()
+                try:
+                    scenario_steps = json.loads(scenario_steps_raw) if scenario_steps_raw else []
+                except json.JSONDecodeError:
+                    scenario_steps = []
+                
+                scenario_content = {'steps': scenario_steps}
+                scenario_id_form = request.POST.get('scenario_id', '')
+                
+                if scenario_id_form:
+                    try:
+                        sc = LearnScenario.objects.get(id=int(scenario_id_form))
+                        sc.title = scenario_title
+                        sc.description = scenario_desc
+                        sc.content = scenario_content
+                        sc.save()
+                    except LearnScenario.DoesNotExist:
+                        LearnScenario.objects.create(
+                            title=scenario_title,
+                            description=scenario_desc,
+                            content=scenario_content,
+                        )
+                elif scenario:
+                    scenario.title = scenario_title
+                    scenario.description = scenario_desc
+                    scenario.content = scenario_content
+                    scenario.save()
+                else:
+                    LearnScenario.objects.create(
+                        title=scenario_title,
+                        description=scenario_desc,
+                        content=scenario_content,
+                    )
+            
             messages.success(request, "Bài học đã được lưu thành công.")
             return redirect('admin-manage-learn')
     else:
         form = LearnLessonForm(instance=lesson)
     
+    # Prepare scenario steps as JSON for the template
+    scenario_steps_json = '[]'
+    if scenario and scenario.content:
+        steps = scenario.content.get('steps', []) if isinstance(scenario.content, dict) else []
+        scenario_steps_json = json.dumps(steps, ensure_ascii=False)
+    
+    # Prepare quiz options as JSON for the template
+    quiz_options_json = '[]'
+    if quiz and quiz.options:
+        quiz_options_json = json.dumps(quiz.options, ensure_ascii=False)
+    
     return render(request, "Admin/edit_lesson.html", {
         "form": form,
         "lesson": lesson,
+        "quiz": quiz,
+        "scenario": scenario,
+        "scenario_steps_json": scenario_steps_json,
+        "quiz_options_json": quiz_options_json,
         "title": "Chỉnh sửa bài học" if lesson else "Thêm bài học mới"
     })
+
+@admin_required
+def delete_lesson(request, lesson_id):
+    """Delete a Learn Lesson"""
+    lesson = get_object_or_404(LearnLesson, id=lesson_id)
+    lesson.delete()
+    messages.success(request, f"Đã xóa bài học '{lesson.title}'.")
+    return redirect('admin-manage-learn')
+
+@admin_required
+def delete_article(request, article_id):
+    """Delete an Article"""
+    article = get_object_or_404(Article, id=article_id)
+    article.delete()
+    messages.success(request, f"Đã xóa tin tức '{article.title}'.")
+    return redirect('admin-manage-articles')
+
+@admin_required
+def notify_lesson_email(request, lesson_id):
+    """Send email and push notifications to users about a new lesson"""
+    lesson = get_object_or_404(LearnLesson, id=lesson_id)
+    
+    # Get all user emails (excluding admins/staff who might already know)
+    user_emails = list(User.objects.filter(is_active=True, is_staff=False).values_list('email', flat=True))
+    user_emails = [email for email in user_emails if email] # filter empty
+    
+    if not user_emails:
+        messages.warning(request, "Không có người dùng nào để gửi thông báo.")
+        return redirect('admin-manage-learn')
+        
+    from api.utils.email_utils import send_new_lesson_email
+    lesson_url = request.build_absolute_uri(f"/learn/{lesson.slug}/")
+    
+    # Send email notifications
+    send_new_lesson_email(user_emails, lesson.title, lesson_url)
+    
+    # Send push notifications to all active users
+    try:
+        from api.utils.push_service import PushNotificationService
+        active_users = User.objects.filter(is_active=True, is_staff=False)
+        push_count = 0
+        for user in active_users:
+            try:
+                PushNotificationService.send_push(
+                    user_id=user.id,
+                    title='📚 Bài học mới trên ShieldCall',
+                    message=f'{lesson.title}',
+                    url=f'/learn/{lesson.slug}/',
+                    notification_type='info'
+                )
+                push_count += 1
+            except Exception:
+                pass
+        logger.info(f"Sent push notifications to {push_count} users for lesson '{lesson.title}'")
+    except Exception as e:
+        logger.error(f"Error sending push notifications for lesson: {e}")
+    
+    messages.success(request, f"Đã gửi email cho {len(user_emails)} & push thông báo cho người dùng.")
+    return redirect('admin-manage-learn')
+
+@admin_required
+def magic_create_lesson_page(request):
+    """Dedicated Magic Create page with real-time streaming."""
+    return render(request, "Admin/magic_create.html")
+
+
+@admin_required
+def magic_create_lesson_api(request):
+    """AI API to generate lesson structure — dispatched to Celery with WS progress."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
+        
+    try:
+        data = json.loads(request.body)
+        raw_text = data.get('text', '').strip()
+        
+        if not raw_text:
+            return JsonResponse({'status': 'error', 'message': 'Empty text'}, status=400)
+        
+        import uuid
+        task_id = uuid.uuid4().hex[:12]
+        
+        from api.core.tasks import magic_create_lesson_task
+        magic_create_lesson_task.delay(task_id, raw_text)
+        
+        return JsonResponse({'status': 'pending', 'task_id': task_id})
+        
+    except Exception as e:
+        logger.error(f"Error in magic_create_lesson_api: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@admin_required
+def magic_save_lesson_api(request):
+    """API to save the AI-generated lesson, multiple quizzes and scenario"""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
+        
+    try:
+        data = json.loads(request.body)
+        
+        with transaction.atomic():
+            # 1. Create Lesson
+            lesson = LearnLesson.objects.create(
+                title=data.get('title'),
+                content=data.get('content'),
+                category=data.get('category', 'guide'),
+                is_published=False # Start as draft
+            )
+            
+            # 2. Create Quizzes (multiple)
+            quizzes_data = data.get('quizzes', [])
+            # Backward compat: single quiz
+            if not quizzes_data and data.get('quiz'):
+                quizzes_data = [data['quiz']]
+            
+            for quiz_data in quizzes_data:
+                if quiz_data and quiz_data.get('question'):
+                    LearnQuiz.objects.create(
+                        lesson=lesson,
+                        question=quiz_data.get('question'),
+                        options=quiz_data.get('options', []),
+                        correct_answer=quiz_data.get('correct_answer'),
+                        explanation=quiz_data.get('explanation', '')
+                    )
+            
+            # 3. Create Scenario
+            scenario_data = data.get('scenario')
+            if scenario_data:
+                LearnScenario.objects.create(
+                    title=scenario_data.get('title'),
+                    description=scenario_data.get('description'),
+                    content=scenario_data.get('content_json'),
+                )
+                
+        return JsonResponse({'status': 'success', 'lesson_id': lesson.id})
+        
+    except Exception as e:
+        logger.error(f"Error in magic_save_lesson_api: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 @admin_required
 def manage_articles(request):

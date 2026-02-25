@@ -52,12 +52,11 @@
                     <a href="{% url 'admin-edit-article' article.id %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all shadow-lg" title="Sửa bài viết">
                         <i class="bi bi-pencil-square text-lg"></i>
                     </a>
-                    <form action="#" method="post" onsubmit="return confirm('Xóa bài viết này?');" class="inline">
-                        {% csrf_token %}
-                        <button type="submit" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all shadow-lg" title="Xóa">
-                            <i class="bi bi-trash3 text-lg"></i>
-                        </button>
-                    </form>
+                    <a href="{% url 'admin-delete-article' article.id %}" 
+                       onclick="return confirm('Bạn có chắc chắn muốn xóa tin tức này?');"
+                       class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all shadow-lg" title="Xóa">
+                        <i class="bi bi-trash3 text-lg"></i>
+                    </a>
                 </div>
             </div>
         </div>
