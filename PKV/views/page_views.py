@@ -371,7 +371,7 @@ def dashboard_view(request):
 
 
 def admin_panel_view(request):
-    return render(request, "Admin/admin_panel.html", {"title": "Admin Panel"})
+    return redirect('admin-dashboard')
 
 
 # ─── Profile & Password ────────────────────────────────────────────────────

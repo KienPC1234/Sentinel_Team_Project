@@ -40,6 +40,7 @@ urlpatterns = [
     # Trends
     path('trends/daily/', views.TrendDailyView.as_view(), name='trends-daily'),
     path('trends/hot/', views.TrendHotView.as_view(), name='trends-hot'),
+    path('trends/radar-stats/', views.ScamRadarStatsView.as_view(), name='trends-radar-stats'),
 
     # User
     path('user/scans/', views.UserScansView.as_view(), name='user-scans'),
@@ -71,4 +72,7 @@ urlpatterns = [
     path('utils/upload-image/', views.EditorImageUploadView.as_view(), name='editor-upload-image'),
     path('utils/fetch-url/', views.EditorFetchUrlView.as_view(), name='editor-fetch-url'),
     path('utils/mentions/', views.MentionUserListView.as_view(), name='mentions'),
+    path('notifications/test-push/', views.TestPushView.as_view(), name='test-push'),
+    path('notifications/onesignal-register/', views.OneSignalRegistrationView.as_view(), name='onesignal-register'),
+    path('admin/rag/reset/', views.ResetRAGView.as_view(), name='rag-reset'),
 ]

@@ -30,3 +30,5 @@ django-turnstile
 python-whois
 dnspython
 ipwhois
+phonenumbers
+einops

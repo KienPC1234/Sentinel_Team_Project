@@ -59,8 +59,8 @@ class ReportCreateView(APIView):
         # Update report counts on related entities
         target = report.target_value
         if report.target_type == 'phone':
-            from api.utils.normalization import normalize_phone
-            normalized = normalize_phone(target)
+            from api.utils.normalization import normalize_phone_e164
+            normalized = normalize_phone_e164(target, strict=True)
             if normalized != target:
                 report.target_value = normalized
                 report.save()

@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """Bạn là ShieldCall AI - chuyên gia an ninh mạng thông minh của ShieldCall VN.
 Nhiệm vụ của bạn là bảo vệ người dùng khỏi lừa đảo, tấn công mạng và giúp họ sử dụng ứng dụng ShieldCall hiệu quả.
 
-QUY TẮC:
+QUY TẮC QUAN TRỌNG:
 1. Luôn phản hồi lịch sự, thân thiện bằng tiếng Việt.
-2. Nếu người dùng hỏi về các chủ đề lừa đảo, hãy sử dụng các thông tin được cung cấp trong [CONTEXT] để trả lời chính xác nhất.
-3. Khi bạn cần quét số điện thoại, tên miền/URL hoặc tài khoản ngân hàng, hãy SỬ DỤNG CÁC CÔNG CỤ (TOOLS) được cung cấp sẵn.
-4. Đừng tự ý đưa ra kết luận nếu chưa có đủ thông tin, hãy hướng dẫn người dùng sử dụng các chức năng của ShieldCall.
+2. Nếu người dùng hỏi về các chủ đề lừa đảo, hãy sử dụng thông tin trong [CONTEXT] để trả lời chính xác nhất.
+3. Luôn TIN TƯỞNG TUYỆT ĐỐI vào kết quả từ các CÔNG CỤ (TOOLS). Các công cụ sẽ trả về dữ liệu văn bản để bạn phân tích và giải thích cho người dùng.
+4. Khi nhận được [Nội dung từ ảnh] (OCR), hãy lưu ý rằng công nghệ OCR có thể gặp lỗi chữ (typos) hoặc nhầm ký tự. Đừng vội vàng kết luận đó là dấu hiệu lừa đảo chỉ vì lỗi chính tả trong ảnh. 
+5. Đừng tự ý đưa ra kết luận nếu chưa có đủ thông tin, hãy hướng dẫn người dùng sử dụng các chức năng quét của ShieldCall.
 
-[CONTEXT] Sẽ được hệ thống tự động chèn nếu có thông tin liên quan từ cơ sở dữ liệu bài học và tin tức của ShieldCall VN.
-Nếu không có [CONTEXT], hãy trả lời dựa trên kiến thức bảo mật chuyên sâu của bạn.
+HÔM NAY LÀ: {current_time}
 """
 
 class AIAgent:
@@ -35,12 +35,17 @@ class AIAgent:
         if session_id:
             from django.core.exceptions import ValidationError
             try:
-                self.session = ChatSession.objects.get(id=session_id)
-            except (ChatSession.DoesNotExist, ValidationError, ValueError):
+                # Use filter().first() to avoid DoesNotExist exceptions during initialization
+                self.session = ChatSession.objects.filter(id=session_id).first()
+                if not self.session:
+                    logger.warning(f"Session {session_id} not found, creating new one for user {user}")
+                    self.session = ChatSession.objects.create(user=user)
+                    self.session_id = self.session.id
+            except (ValidationError, ValueError) as e:
+                logger.error(f"Invalid session ID {session_id}: {e}")
                 self.session = ChatSession.objects.create(user=user)
                 self.session_id = self.session.id
         elif user:
-            # Create a new session if none provided but user is authenticated
             self.session = ChatSession.objects.create(user=user)
             self.session_id = self.session.id
 
@@ -121,7 +126,11 @@ class AIAgent:
             yield f"__METADATA__:{json.dumps(current_metadata)}"
         
         # 3. Construct Final Prompt
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        from datetime import datetime
+        now = datetime.now()
+        time_str = now.strftime("%A, ngày %d/%m/%Y, %H:%M:%S")
+        
+        messages = [{"role": "system", "content": SYSTEM_PROMPT.format(current_time=time_str)}]
         if rag_context:
             messages.append({"role": "system", "content": f"SỬ DỤNG BỐI CẢNH SAU ĐỂ TRẢ LỜI:\n{rag_context}"})
         
@@ -152,7 +161,7 @@ class AIAgent:
                         continue
                     except: pass
 
-                # Handle Tool Markers for Frontend Widgets
+                # Handle Tool Markers for Frontend Widgets (Hiding raw metadata from UI)
                 if chunk.startswith("__TOOL_CALLS__:"):
                     try:
                         tcs = json.loads(chunk[len("__TOOL_CALLS__:") :])
@@ -163,21 +172,21 @@ class AIAgent:
                             if isinstance(args, str):
                                 args = json.loads(args)
 
-                            tool_marker = ""
-                            if name == "scan_phone":
-                                tool_marker = f"\n[[SCAN_PHONE:{args.get('phone')}]]\n"
-                            elif name == "scan_url":
-                                tool_marker = f"\n[[SCAN_DOMAIN:{args.get('url')}]]\n"
-                            elif name == "scan_bank_account":
-                                tool_marker = f"\n[[SCAN_ACCOUNT:{args.get('account_number')}]]\n"
-
-                            if tool_marker:
-                                yield tool_marker
-                                full_response += tool_marker
+                        # Internal marker yielding removed (user requested to hide [[SCAN_...]])
+                        continue
                     except Exception as te:
                         logger.error(f"Tool Call Parse Error: {te}")
+                        continue
                 
                 # Normal Yield (content, thinking, status, search_results)
+                if chunk.startswith("__THINK__:"):
+                    # Limit the total thinking yielded to user to save bandwidth/UI noise
+                    think_content = chunk[10:]
+                    if len(getattr(self, '_think_buffer', '')) < 1000:
+                        self._think_buffer = getattr(self, '_think_buffer', '') + think_content
+                        yield chunk
+                    continue
+
                 yield chunk
                 if not chunk.startswith("__"):
                     full_response += chunk
@@ -187,11 +196,14 @@ class AIAgent:
                 # Clean internal markers before saving to DB
                 clean_msg = full_response
                 # Markers to remove from DB storage (but keep '[[SCAN_' as it's used for rendering history)
-                internal_markers = ["__THINK__:", "__STATUS__:", "__SEARCH_RESULTS__:", "__TOOL_CALLS__:"]
+                internal_markers = ["__THINK__:", "__STATUS__:", "__SEARCH_RESULTS__:", "__TOOL_CALLS__:", "[[SCAN_"]
                 for marker in internal_markers:
                     if marker in clean_msg:
-                        # Remove marker and everything until the next newline or end of line
-                        clean_msg = re.sub(rf"{re.escape(marker)}[^\n]*\n?", "", clean_msg)
+                        if marker == "[[SCAN_":
+                            # Special handling for legacy tags if they leaked
+                            clean_msg = re.sub(r"\[\[SCAN_[^\]]*\]\]\n?", "", clean_msg)
+                        else:
+                            clean_msg = re.sub(rf"{re.escape(marker)}[^\n]*\n?", "", clean_msg)
                 
                 ChatMessage.objects.create(
                     session=self.session,
@@ -200,28 +212,79 @@ class AIAgent:
                     metadata=current_metadata if current_metadata else None
                 )
                 
-                # 5. Auto-Title Generation (If first message)
-                if self.session.messages.count() <= 2:
-                    new_title = self.generate_title(user_message)
-                    if new_title:
-                        yield f"__TITLE__:{new_title}"
+                # 5. Auto-Title Generation (If still default)
+                if self.session:
+                    self.session.refresh_from_db()
+                    logger.info(f"[DEBUG] Session {self.session.id} current title: '{self.session.title}'")
+                    if self.session.title == "Cuộc trò chuyện mới" or not self.session.title:
+                        logger.info(f"Generating title for session {self.session.id}...")
+                        new_title = self.generate_title(user_message)
+                        if new_title:
+                            logger.info(f"Generated new title: '{new_title}' and saved to DB.")
+                            yield f"__TITLE__:{new_title}"
+                        else:
+                            logger.warning("Title generation returned empty string")
+                    else:
+                        logger.info(f"Session {self.session.id} already has title, skipping generation.")
                     
         except Exception as e:
-            logger.error(f"Agent Stream Error: {e}")
+            logger.error(f"Agent Stream Error: {e}", exc_info=True)
             yield f"\n[Lỗi kết nối AI: {str(e)}]"
 
     def generate_title(self, first_message: str) -> str:
-        """Generates a concise title for the chat session."""
-        prompt = f"Tạo một tiêu đề ngắn gọn (tối đa 6 từ) bằng tiếng Việt cho cuộc trò chuyện bắt đầu bằng: '{first_message}'. Chỉ trả về tiêu đề, không để trong ngoặc kép."
+        """Generates a concise and engaging title for the chat session using a faster model."""
+        from .ollama_client import SMALL_MODEL, generate_response
+        
+        # Clean up the input message for the prompt
+        clean_input = first_message[:100].replace('\n', ' ').strip()
+        prompt = (
+            f"Dựa trên tin nhắn sau, hãy tạo một tiêu đề (2-6 từ) để tóm tắt nội dung.\n"
+            f"Tin nhắn: '{clean_input}'\n"
+            f"Yêu cầu: Chỉ trả về tiêu đề tiếng Việt, không giải thích, không ngoặc kép, không có tiền tố 'Tiêu đề:'."
+        )
+        
         try:
-            title = generate_response(prompt)
+            # Use SMALL_MODEL for fast title generation
+            title = generate_response(prompt, model=SMALL_MODEL, max_tokens=30)
             if title:
-                title = title.strip().replace('"', '')
+                # 1. Basic cleaning
+                title = title.strip().replace('"', '').replace("'", "").replace("[", "").replace("]", "")
+                if title.lower().startswith("tiêu đề:"):
+                    title = title[8:].strip()
+                
+                # 2. Advanced deduplication for repeating loops (e.g. "ABCABCABC")
+                for length in range(len(title) // 2, 2, -1):
+                    for i in range(len(title) - length * 2 + 1):
+                        slice1 = title[i : i + length]
+                        slice2 = title[i + length : i + length * 2]
+                        if slice1 == slice2 and slice1.strip():
+                            title = title[: i + length]
+                            break
+                
+                # 3. Strict word limit
+                words = title.split()
+                if len(words) > 6:
+                    title = " ".join(words[:6])
+                
+                if not title:
+                    return ""
+
                 self.session.title = title
                 self.session.save()
                 return title
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Generate title error: {e}")
+        
+        # Fallback: Best effort title from first message
+        words = first_message.split()
+        fallback_title = " ".join(words[:4])
+        if len(words) > 4:
+            fallback_title += "..."
+        if fallback_title:
+            self.session.title = fallback_title
+            self.session.save()
+            return fallback_title
+            
         return ""
 
 def get_agent(session_id=None, user=None):

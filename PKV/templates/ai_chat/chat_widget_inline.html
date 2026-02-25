@@ -1,0 +1,474 @@
+{% load static %}
+<div x-data="chatWidget()" @start-contextual-chat.window="startContextualChat($event.detail.context)" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-4">
+    <button @click="open=!open"
+        style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));border:none;cursor:pointer;box-shadow:0 4px 20px rgba(24,255,255,0.4);display:flex;align-items:center;justify-content:center;transition:all 0.3s;position:relative;"
+        onmouseover="this.style.transform='scale(1.1) rotate(5deg)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'">
+        <svg x-show="!open" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0a0a1a" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        <svg x-show="open" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0a1a"
+            stroke-width="2.5" stroke-linecap="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+        <span x-show="!open && !hasInteracted"
+            style="position:absolute;top:-2px;right:-2px;width:12px;height:12px;background:var(--risk-red);border-radius:50%;border:2px solid #0a0a1a;animation:pulse-red 2s infinite;"></span>
+    </button>
+
+    <div x-show="open" x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+        x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+        x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        style="position:absolute;bottom:70px;right:0;width:380px;max-height:580px;border-radius:1.5rem;overflow:hidden;"
+        class="liquid-glass" @click.outside="open=false">
+        <div style="padding:1.15rem 1.25rem;background:var(--subtle-bg);border-bottom:1px solid var(--subtle-border);display:flex;align-items:center;gap:0.75rem;">
+            <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(24,255,255,0.2);">
+                <i class="bi bi-robot text-[#0a0a1a] text-lg"></i>
+            </div>
+            <div class="flex-1">
+                <div id="floatingChatTitle" style="font-weight:800;font-size:0.95rem;letter-spacing:0.02em;color:var(--text-primary);" x-text="chatTitle">ShieldCall AI</div>
+                <div style="font-size:0.65rem;color:var(--accent-cyan);font-weight:700;display:flex;align-items:center;gap:4px;">
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span x-text="(messages.length > 0 && messages[messages.length-1].status) ? messages[messages.length-1].status : 'Trực tuyến'"></span>
+                </div>
+            </div>
+            <button @click="resetChat()" class="text-white/20 hover:text-cyan-400 transition-colors mr-2" title="Cuộc trò chuyện mới"><i class="bi bi-plus-square"></i></button>
+            <button @click="open=false" class="text-white/20 hover:text-white transition-colors"><i class="bi bi-dash-lg"></i></button>
+        </div>
+
+        <div x-ref="chatMessages"
+            style="height:340px;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem;background:rgba(0,0,0,0.15);scroll-behavior: smooth;">
+            <template x-for="(msg, i) in messages" :key="i">
+                <div :class="msg.from==='bot' ? 'items-start' : 'items-end'" class="flex flex-col gap-1 w-full">
+                    <div :class="msg.from==='bot' ? 'bg-white/5 border-white/10 rounded-2xl rounded-bl-none' : 'bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border-cyan-500/20 rounded-2xl rounded-br-none shadow-sm'"
+                        class="max-w-[88%] border p-3.5 text-xs sm:text-[13px] leading-relaxed transition-all">
+                        
+                        <!-- Thinking Block -->
+                        <div x-show="msg.from==='bot' && (msg.isThinking || msg.thinkingContent)" 
+                             class="thinking-container" :class="{'collapsed': msg.thinkingCollapsed}">
+                            <div class="thinking-header" @click="msg.thinkingCollapsed = !msg.thinkingCollapsed">
+                                <i class="bi" :class="msg.isThinking ? 'bi-lightning-charge-fill animate-pulse text-cyan-400' : (msg.thinkingCollapsed ? 'bi-chevron-right text-white/40' : 'bi-chevron-down text-white/40')"></i>
+                                <span class="text-[9px] font-black uppercase tracking-widest" :class="msg.isThinking ? 'text-cyan-400' : 'text-white/40'">
+                                    <span x-show="msg.isThinking">Đang suy luận...</span>
+                                    <span x-show="!msg.isThinking">Quá trình suy luận</span>
+                                </span>
+                            </div>
+                            <div class="thinking-content" x-text="msg.thinkingContent"></div>
+                        </div>
+
+                        <div class="ai-markdown" :class="{'inline': msg.streaming}" x-html="msg.html || msg.text"></div>
+                        <span x-show="msg.streaming" class="streaming-cursor"></span>
+
+                        <!-- Search Results (RAG & Web) -->
+                        <div x-show="msg.from==='bot' && msg.metadata && (msg.metadata.web_search || msg.metadata.internal_knowledge)" class="search-results-container">
+                            <div class="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 flex items-center gap-2">
+                                <i class="bi bi-search text-[10px]"></i> Nguồn tham khảo
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <!-- Internal Knowledge (RAG) -->
+                                <template x-for="res in (msg.metadata ? msg.metadata.internal_knowledge : [])" :key="res.url + 'rag'">
+                                    <a :href="res.url" target="_blank" class="search-item group">
+                                        <div class="flex items-center justify-between gap-2 overflow-hidden">
+                                            <div class="flex items-center gap-2 overflow-hidden">
+                                                <div class="w-4 h-4 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                                                    <i class="bi bi-shield-check text-[10px]"></i>
+                                                </div>
+                                                <div class="font-bold text-slate-200 truncate text-[11px] group-hover:text-purple-400 transition-colors" x-text="res.title"></div>
+                                            </div>
+                                            <i class="bi bi-arrow-up-right text-[8px] text-white/20 group-hover:text-white transition-colors"></i>
+                                        </div>
+                                    </a>
+                                </template>
+
+                                <!-- Web Search Results -->
+                                <template x-for="res in (msg.metadata ? msg.metadata.web_search : [])" :key="res.url + 'web'">
+                                    <a :href="res.url" target="_blank" class="search-item group">
+                                        <div class="flex items-center justify-between gap-2 overflow-hidden">
+                                            <div class="flex items-center gap-2 overflow-hidden">
+                                                <div class="w-4 h-4 rounded bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+                                                    <img src="{% static 'logo.png' %}" class="w-2.5 h-2.5 object-contain" alt="SC">
+                                                </div>
+                                                <div class="font-bold text-slate-200 truncate text-[11px] group-hover:text-cyan-400 transition-colors" x-text="res.title"></div>
+                                            </div>
+                                            <i class="bi bi-arrow-up-right text-[8px] text-white/20 group-hover:text-white transition-colors"></i>
+                                        </div>
+                                    </a>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-[9px] text-white/20 px-1 font-bold tracking-tight uppercase" x-text="msg.time"></div>
+                </div>
+            </template>
+        </div>
+
+        <div x-show="messages.length <= 1" class="p-3 flex gap-2 overflow-x-auto no-scrollbar bg-black/10 border-t border-white/5">
+            <button @click="sendQuick('Kiểm tra số điện thoại')" class="flex-none bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Kiểm tra SĐT</button>
+            <button @click="sendQuick('Cách nhận diện lừa đảo')" class="flex-none bg-white/5 hover:bg-purple-500/10 border border-white/10 hover:border-purple-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Cách phòng tránh</button>
+        </div>
+
+        <div x-show="imagePreviews.length > 0" class="px-4 py-2 flex gap-2 bg-black/20 border-t border-white/5">
+            <template x-for="(img, idx) in imagePreviews" :key="idx">
+                <div class="relative w-12 h-12 rounded-lg overflow-hidden border border-white/20 group">
+                    <img :src="img" class="w-full h-full object-cover">
+                    <button @click="removeImage(idx)" class="absolute inset-0 bg-red-500/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                        <i class="bi bi-trash text-xs"></i>
+                    </button>
+                </div>
+            </template>
+        </div>
+
+        <div class="p-4 bg-black/30 border-t border-white/10 flex gap-2 items-center">
+            <button @click="$refs.fileInput.click()" class="w-10 h-10 rounded-xl hover:bg-white/5 flex items-center justify-center text-white/40 hover:text-cyan-400 transition-all border border-transparent hover:border-white/10">
+                <i class="bi bi-plus-circle text-lg"></i>
+            </button>
+            <input type="file" x-ref="fileInput" @change="handleFileUpload" multiple accept="image/*" class="hidden">
+
+            <div class="flex-1 relative">
+                <input type="text" x-model="input" @keydown.enter="send()" placeholder="Nhập câu hỏi..." 
+                    class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[13px] text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-white/20"
+                    data-theme-aware="true">
+            </div>
+            
+            <button @click="send()" :disabled="(!input.trim() && imageFiles.length===0) || typing"
+                class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 disabled:opacity-30 disabled:grayscale transition-all hover:scale-105 active:scale-95">
+                <i class="bi bi-send-fill text-white text-sm"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .thinking-container {
+        margin-bottom: 0.75rem;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    .thinking-header {
+        padding: 0.5rem 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        user-select: none;
+        background: rgba(255, 255, 255, 0.02);
+    }
+    .thinking-header:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .thinking-content {
+        padding: 0.75rem;
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        border-top: 1px solid rgba(255, 255, 255, 0.03);
+        white-space: pre-wrap;
+        line-height: 1.6;
+    }
+    .thinking-container.collapsed .thinking-content {
+        display: none;
+    }
+    
+    .search-results-container {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .search-item {
+        display: block;
+        padding: 0.6rem 0.75rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 0.5rem;
+        margin-top: 0.5rem;
+        text-decoration: none !important;
+        transition: all 0.2s ease;
+    }
+    .search-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.1);
+        transform: translateY(-1px);
+    }
+
+    .streaming-cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1em;
+        background: var(--accent-cyan);
+        margin-left: 2px;
+        animation: blink 0.8s infinite;
+        vertical-align: middle;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+</style>
+
+<script>
+    function chatWidget() {
+        return {
+            open: false,
+            hasInteracted: false,
+            input: '',
+            chatTitle: 'ShieldCall AI',
+            typing: false,
+            imagePreviews: [],
+            imageFiles: [],
+            messages: [
+                { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là **ShieldCall AI**. Hãy gửi số điện thoại hoặc tin nhắn lạ để tôi kiểm tra giúp bạn!', time: new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }), html: '' }
+            ],
+            init() {
+                if (window.renderMd) {
+                    this.messages[0].html = window.renderMd(this.messages[0].text);
+                }
+            },
+            now() { return new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }); },
+            resetChat() {
+                localStorage.removeItem('chat_session_id');
+                this.messages = [
+                    { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là **ShieldCall AI**. Hãy gửi số điện thoại hoặc tin nhắn lạ để tôi kiểm tra giúp bạn!', time: this.now(), html: '' }
+                ];
+                if (window.renderMd) {
+                    this.messages[0].html = window.renderMd(this.messages[0].text);
+                }
+                this.hasInteracted = false;
+                this.input = '';
+                this.imagePreviews = [];
+                this.imageFiles = [];
+                if (typeof showToast === 'function') showToast('Đã bắt đầu cuộc trò chuyện mới', 'success');
+            },
+            scrollDown() {
+                this.$nextTick(() => {
+                    const el = this.$refs.chatMessages;
+                    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                });
+            },
+            sendQuick(text) { this.input = text; this.send(); },
+            startContextualChat(systemContext, userMsg = 'Hãy giải thích thêm về kết quả này.') {
+                this.open = true;
+                this.hasInteracted = true;
+                const botMsg = { 
+                    from: 'bot', 
+                    text: '<i class="bi bi-info-circle text-cyan-400"></i> **Đã nhận ngữ cảnh.** Tôi đã sẵn sàng phân tích kết quả trên cùng bạn.',
+                    time: this.now(),
+                    html: ''
+                };
+                if (window.renderMd) {
+                    botMsg.html = window.renderMd(botMsg.text);
+                }
+                this.messages.push(botMsg);
+                this.input = userMsg;
+            },
+            handleFileUpload(e) {
+                const files = Array.from(e.target.files);
+                files.forEach(file => {
+                    if (file.size > 5 * 1024 * 1024) {
+                        if (typeof showToast === 'function') showToast('File ' + file.name + ' quá lớn (max 5MB)', 'warning');
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (ex) => {
+                        this.imagePreviews.push(ex.target.result);
+                        this.imageFiles.push(ex.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                });
+                e.target.value = '';
+            },
+            removeImage(idx) {
+                this.imagePreviews.splice(idx, 1);
+                this.imageFiles.splice(idx, 1);
+            },
+            async send() {
+                const text = this.input.trim();
+                if (!text && this.imageFiles.length === 0) return;
+                if (this.typing) return;
+
+                this.hasInteracted = true;
+                const userDisplay = text || (this.imageFiles.length > 0 ? 'Đã gửi ' + this.imageFiles.length + ' ảnh' : '');
+                this.messages.push({ from: 'user', text: userDisplay, time: this.now(), html: text });
+
+                const imagesToSend = [...this.imageFiles];
+                const messageToSend = text || 'Hãy phân tích các hình ảnh tôi vừa gửi.';
+                this.input = '';
+                this.imagePreviews = [];
+                this.imageFiles = [];
+
+                this.scrollDown();
+                this.typing = true;
+
+                try {
+                    const sessionId = localStorage.getItem('chat_session_id') || 
+                                    (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2));
+                    
+                    await this._tryStream({
+                        user_message: messageToSend,
+                        session_id: sessionId,
+                        context: 'chat',
+                        images: imagesToSend
+                    });
+                } catch (err) {
+                    console.error('Chat Widget send error:', err);
+                    if (window.SCDebug) window.SCDebug.error('Send error:', err);
+                } finally {
+                    this.typing = false;
+                    this.scrollDown();
+                    if (window.SCDebug) window.SCDebug.log('Send finished');
+                }
+            },
+
+            async _tryStream(payload) {
+                const botMsg = { 
+                    from: 'bot', 
+                    text: '', 
+                    html: '', 
+                    time: this.now(),
+                    status: '',
+                    isThinking: false,
+                    thinkingContent: '',
+                    thinkingCollapsed: false,
+                    metadata: null,
+                    streaming: true
+                };
+                this.messages.push(botMsg);
+                this.scrollDown();
+                if (window.SCDebug) window.SCDebug.log('Starting stream...', payload);
+
+                try {
+                    const response = await fetch('/api/v1/chat/stream/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                        body: JSON.stringify(payload),
+                        cache: 'no-store'
+                    });
+
+                    if (!response.ok) {
+                        botMsg.text = 'Lỗi kết nối (HTTP ' + response.status + ')';
+                        botMsg.html = botMsg.text;
+                        return;
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            let trimmedLine = line.trim();
+                            if (!trimmedLine) continue;
+                            if (window.SCDebug) window.SCDebug.log('Stream line:', trimmedLine);
+                            
+                            if (!trimmedLine.startsWith('data: ')) continue;
+                            
+                            try {
+                                const rawData = trimmedLine.substring(6);
+                                const data = JSON.parse(rawData);
+                                const lastIdx = this.messages.length - 1;
+                                
+                                if (data.session_id) {
+                                    localStorage.setItem('chat_session_id', data.session_id);
+                                }
+                                if (data.title && data.title !== 'Guest Session') {
+                                    if (data.title !== this.chatTitle) {
+                                        const el = document.getElementById('floatingChatTitle');
+                                        if (el) {
+                                            el.classList.remove('title-reveal');
+                                            void el.offsetWidth;
+                                            el.classList.add('title-reveal');
+                                        }
+                                        this.chatTitle = data.title;
+                                    }
+                                }
+
+                                if (data.status) {
+                                    const statusMap = {
+                                        'searching_knowledge': 'Đang tra cứu kiến thức...',
+                                        'searching_web': 'Đang tìm kiếm thông tin...',
+                                        'checking_safety': 'Đang kiểm tra an toàn...',
+                                        'reasoning': 'Đang suy luận...',
+                                        'thinking': 'Đang suy luận...'
+                                    };
+                                    this.messages[lastIdx].status = statusMap[data.status] || data.status;
+                                    if (data.status === 'thinking' || data.status === 'reasoning') {
+                                        this.messages[lastIdx].isThinking = true;
+                                    }
+                                }
+
+                                if (data.chunk) {
+                                    const chunk = data.chunk;
+                                    
+                                    if (chunk.startsWith('__STATUS__:')) {
+                                        const statusVal = chunk.substring(11);
+                                        const statusMap = {
+                                            'searching_knowledge': 'Đang tra cứu kiến thức...',
+                                            'searching_web': 'Đang tìm kiếm thông tin...',
+                                            'checking_safety': 'Đang kiểm tra an toàn...',
+                                            'reasoning': 'Đang suy luận...',
+                                            'thinking': 'Đang suy luận...'
+                                        };
+                                        this.messages[lastIdx].status = statusMap[statusVal] || statusVal;
+                                        if (statusVal === 'thinking' || statusVal === 'reasoning') {
+                                            this.messages[lastIdx].isThinking = true;
+                                        }
+                                    } else if (chunk.startsWith('__THINK__:')) {
+                                        const thinkPart = chunk.substring(10);
+                                        this.messages[lastIdx].isThinking = true;
+                                        this.messages[lastIdx].thinkingContent += thinkPart;
+                                    } else if (chunk.startsWith('__SEARCH_RESULTS__:') || chunk.startsWith('__METADATA__:')) {
+                                        const marker = chunk.startsWith('__METADATA__:') ? '__METADATA__:' : '__SEARCH_RESULTS__:';
+                                        const mData = JSON.parse(chunk.substring(marker.length));
+                                        
+                                        if (marker === '__SEARCH_RESULTS__:') {
+                                            this.messages[lastIdx].metadata = { web_search: mData };
+                                        } else if (mData.web_search) {
+                                            this.messages[lastIdx].metadata = { web_search: mData.web_search };
+                                        }
+                                    } else {
+                                        if (typeof chunk === 'string' && chunk.startsWith('__')) {
+                                            if (window.SCDebug) window.SCDebug.log('[SC] Metadata chunk filtered from UI:', chunk);
+                                        } else {
+                                            this.messages[lastIdx].text += chunk;
+                                            if (window.renderMd) {
+                                                this.messages[lastIdx].html = window.renderMd(this.messages[lastIdx].text);
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                if (data.done) {
+                                    this.messages[lastIdx].status = "";
+                                    this.messages[lastIdx].isThinking = false;
+                                    this.messages[lastIdx].thinkingCollapsed = true; // Auto-collapse when done
+                                    this.messages[lastIdx].streaming = false;
+                                }
+
+                                this.scrollDown();
+                            } catch (e) {
+                                console.warn("Parse error", e, trimmedLine);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    botMsg.text = 'Lỗi kết nối mạng.';
+                    botMsg.html = botMsg.text;
+                } finally {
+                    const lastIdx = this.messages.length - 1;
+                    if (this.messages[lastIdx] && this.messages[lastIdx].from === 'bot') {
+                        this.messages[lastIdx].status = "";
+                        this.messages[lastIdx].streaming = false;
+                    }
+                }
+            }
+        };
+    }
+</script>
