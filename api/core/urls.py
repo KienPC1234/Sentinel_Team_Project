@@ -33,6 +33,7 @@ urlpatterns = [
     path('scan/status/<int:scan_id>/', views.ScanStatusView.as_view(), name='api-scan-status'),
     path('scan/email/', views.ScanEmailView.as_view(), name='api-scan-email'),
     path('scan/banks/', views.ScanBanksView.as_view(), name='api-scan-banks'),
+    path('scan/file/', views.ScanFileView.as_view(), name='api-scan-file'),
 
     # Report
     path('report/', views.ReportCreateView.as_view(), name='report'),
@@ -45,18 +46,30 @@ urlpatterns = [
     path('user/scans/', views.UserScansView.as_view(), name='user-scans'),
     path('user/reports/', views.UserReportsView.as_view(), name='user-reports'),
     path('user/alerts/', views.UserAlertsView.as_view(), name='user-alerts'),
+    path('user/profile/<str:username>/', views.PublicProfileView.as_view(), name='public-profile'),
 
     # Admin
     path('admin/reports/', views.AdminReportsView.as_view(), name='admin-reports'),
     path('admin/reports/<int:report_id>/action/', views.AdminReportActionView.as_view(), name='admin-report-action'),
     path('admin/stats/', views.AdminStatsView.as_view(), name='admin-stats'),
+    path('admin/rag/', views.AdminRAGManagementView.as_view(), name='admin-rag'),
+    path('admin/rag/rebuild/', views.AdminRAGRebuildView.as_view(), name='admin-rag-rebuild'),
 
     # Forum
     path('forum/posts/', views.ForumPostListCreateView.as_view(), name='forum-posts'),
+    path('forum/posts/<int:post_id>/', views.ForumPostDetailView.as_view(), name='forum-detail'),
     path('forum/posts/<int:post_id>/comment/', views.ForumPostCommentView.as_view(), name='forum-comment'),
     path('forum/posts/<int:post_id>/like/', views.ForumPostLikeView.as_view(), name='forum-like'),
+    path('forum/posts/<int:post_id>/reaction/', views.ForumPostReactionView.as_view(), name='forum-reaction'),
+    path('forum/posts/<int:post_id>/report/', views.ForumPostReportView.as_view(), name='forum-report'),
+    path('forum/comments/<int:comment_id>/like/', views.ForumCommentLikeView.as_view(), name='forum-comment-like'),
     
     # Articles
     path('articles/', views.ArticleListView.as_view(), name='article-list'),
     path('articles/<slug:slug>/', views.ArticleDetailView.as_view(), name='article-detail'),
+
+    # Utils
+    path('utils/upload-image/', views.EditorImageUploadView.as_view(), name='editor-upload-image'),
+    path('utils/fetch-url/', views.EditorFetchUrlView.as_view(), name='editor-fetch-url'),
+    path('utils/mentions/', views.MentionUserListView.as_view(), name='mentions'),
 ]

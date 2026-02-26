@@ -1,15 +1,106 @@
 {% extends "base.html" %}
 {% block title %}Báo cáo lừa đảo{% endblock %}
 {% block head_extra %}
+<script>
+    let reportEditorInstance = null;
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('reportManager', () => ({
+            target_type: new URLSearchParams(window.location.search).get('target_type') || '',
+            target_value: new URLSearchParams(window.location.search).get('target_value') || '',
+            scam_type:'', severity:'medium', description:'', evidence:null,
+            scammer_phone: new URLSearchParams(window.location.search).get('phone') || '',
+            scammer_bank_account: new URLSearchParams(window.location.search).get('bank_account') || '',
+            scammer_bank_name: new URLSearchParams(window.location.search).get('bank_name') || '',
+            scammer_name: new URLSearchParams(window.location.search).get('scammer_name') || '',
+            banks: [],
+            showBanks: false,
+            loading: false,
+            success: false,
+            error: '',
+            async fetchBanks() {
+                try {
+                    const resp = await fetch('/api/v1/scan/banks/');
+                    const data = await resp.json();
+                    this.banks = data.banks || data;
+                } catch(e) { console.error('Failed to fetch banks', e); }
+            },
+            get filteredBanks() {
+                if (!this.scammer_bank_name) return this.banks.slice(0, 10);
+                return this.banks.filter(b => 
+                    b.shortName.toLowerCase().includes(this.scammer_bank_name.toLowerCase()) || 
+                    b.name.toLowerCase().includes(this.scammer_bank_name.toLowerCase())
+                ).slice(0, 10);
+            },
+            async init() {
+                this.fetchBanks();
+                try {
+                    reportEditorInstance = await window.createCKEditor('#report-editor', this.description, 'Hãy mô tả chi tiết: tình huống lừa đảo, thủ đoạn của đối tượng...');
+                    if (reportEditorInstance) {
+                        reportEditorInstance.model.document.on('change:data', () => {
+                            this.description = reportEditorInstance.getData();
+                        });
+                    }
+                } catch (e) {
+                    console.error('CKEditor init failed:', e);
+                }
+            },
+            async submitReport() {
+                if(!this.target_type){showToast('Vui lòng chọn loại đối tượng', 'warning');return}
+                if(!this.target_value.trim()){showToast('Vui lòng nhập thông tin cụ thể', 'warning');return}
+                if(!this.scam_type){showToast('Vui lòng chọn phương thức lừa đảo', 'warning');return}
+                if(!this.description.trim()){showToast('Vui lòng nhập nội dung chi tiết', 'warning');return}
+
+                this.loading = true;
+                this.error = '';
+                const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+                if(!tsToken){
+                    this.error = 'Vui lòng hoàn thành xác minh anti-spam';
+                    this.loading = false;
+                    showToast(this.error, 'warning');
+                    return;
+                }
+
+                const fd = new FormData();
+                fd.append('target_type', this.target_type);
+                fd.append('target_value', this.target_value.trim());
+                fd.append('scam_type', this.scam_type);
+                fd.append('severity', this.severity);
+                fd.append('description', this.description);
+                fd.append('cf-turnstile-response', tsToken);
+                if (this.scammer_phone) fd.append('scammer_phone', this.scammer_phone);
+                if (this.scammer_bank_account) fd.append('scammer_bank_account', this.scammer_bank_account);
+                if (this.scammer_bank_name) fd.append('scammer_bank_name', this.scammer_bank_name);
+                if (this.scammer_name) fd.append('scammer_name', this.scammer_name);
+                if (this.evidence) fd.append('evidence_file', this.evidence);
+
+                try {
+                    const resp = await fetch('/api/v1/report/', {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': getCSRFToken() },
+                        body: fd
+                    });
+                    const res = await resp.json();
+                    if (resp.ok) {
+                        this.success = true;
+                        showToast('Báo cáo đã được gửi thành công!', 'success');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    } else {
+                        this.error = res.error || 'Gửi báo cáo thất bại';
+                        showToast(this.error, 'error');
+                    }
+                } catch(e) { 
+                    this.error = 'Lỗi kết nối';
+                    showToast(this.error, 'error');
+                }
+                finally { this.loading = false; }
+            }
+        }));
+    });
+</script>
 {% endblock %}
 
 {% block content %}
-<div class="animate-fadein max-w-3xl mx-auto space-y-10" x-data="{
-    target_type: new URLSearchParams(window.location.search).get('target_type') || '',
-    target_value: new URLSearchParams(window.location.search).get('target_value') || '',
-    scam_type:'', severity:'medium', description:'', evidence:null,
-    loading:false, success:false, error:''
-}">
+<div class="animate-fadein max-w-3xl mx-auto space-y-10" x-data="reportManager()">
     <!-- Page Header -->
     <div class="text-center space-y-4">
         <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-red-500/10 text-red-500 mb-2 border border-red-500/20 shadow-lg shadow-red-500/10">
@@ -61,6 +152,56 @@
                 </div>
             </div>
 
+            <!-- New Scammer Details (Optional but encouraged) -->
+            <div class="p-6 rounded-[2.5rem] bg-white/[0.02] border border-white/5 space-y-6">
+                <h4 class="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <i class="bi bi-info-circle"></i> Chi tiết đối tượng (Chống giả mạo)
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-2">
+                        <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Họ tên đối tượng</label>
+                        <input type="text" class="liquid-input w-full py-3 px-5 text-xs font-bold" x-model="scammer_name" placeholder="VD: Nguyễn Văn A">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Số điện thoại đối tượng</label>
+                        <input type="text" class="liquid-input w-full py-3 px-5 text-xs font-bold" x-model="scammer_phone" placeholder="VD: 09... hoặc N/A">
+                    </div>
+                    <div class="space-y-2" x-init="fetchBanks()">
+                        <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Ngân hàng</label>
+                        <div class="relative" @click.away="showBanks = false">
+                            <input type="text" class="liquid-input w-full py-3 px-5 text-xs font-bold" 
+                                x-model="scammer_bank_name" 
+                                @focus="showBanks = true"
+                                placeholder="Chọn hoặc nhập tên ngân hàng...">
+                            
+                            <div x-show="showBanks && filteredBanks.length" 
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 translate-y-2"
+                                 x-transition:enter-end="opacity-100 translate-y-0"
+                                 class="absolute z-50 w-full mt-2 bg-[#0a0f18] border border-white/10 rounded-2xl max-h-60 overflow-y-auto shadow-2xl">
+                                <template x-for="bank in filteredBanks" :key="bank.code">
+                                    <div @click="scammer_bank_name = bank.shortName; showBanks = false" 
+                                         class="p-3 hover:bg-white/5 cursor-pointer flex items-center gap-3 border-b border-white/5 last:border-0 transition-colors">
+                                        <div class="w-8 h-8 rounded bg-white p-1 flex items-center justify-center">
+                                            <img :src="bank.logo" class="max-w-full max-h-full object-contain" x-show="bank.logo">
+                                            <i class="bi bi-bank" x-show="!bank.logo"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-white text-[10px] font-bold truncate" x-text="bank.shortName"></p>
+                                            <p class="text-white/40 text-[8px] truncate" x-text="bank.name"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Số tài khoản</label>
+                        <input type="text" class="liquid-input w-full py-3 px-5 text-xs font-bold" x-model="scammer_bank_account" placeholder="Nhập số tài khoản...">
+                    </div>
+                </div>
+            </div>
+
             <!-- Scam Category -->
             <div class="space-y-2">
                 <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Phương thức lừa đảo</label>
@@ -92,13 +233,14 @@
                 </div>
             </div>
 
-            <!-- Description -->
             <div class="space-y-3">
                 <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
-                    <i class="bi bi-chat-text-fill text-red-500/40"></i> Nội dung chi tiết
+                    <i class="bi bi-chat-text-fill text-red-500/40"></i> Nội dung chi tiết (Rich Text)
                 </label>
-                <textarea class="liquid-input w-full min-h-[160px] py-4 px-6 text-sm font-medium leading-relaxed placeholder:text-white/10" x-model="description"
-                    placeholder="Hãy mô tả chi tiết: tình huống lừa đảo, thủ đoạn của đối tượng, số tiền bị chiếm đoạt (nếu có)... Thông tin càng chi tiết sẽ càng giúp ích cho cộng đồng."></textarea>
+                <div class="liquid-input w-full overflow-hidden bg-black/20 rounded-2xl border border-white/5">
+                    <div id="report-editor" class="py-4 px-6 min-h-[250px] text-sm font-medium focus:outline-none"></div>
+                </div>
+                <p class="text-[9px] text-white/20 font-black uppercase tracking-widest ml-1 mt-1">Thông tin càng chi tiết sẽ càng giúp ích cho cộng đồng.</p>
             </div>
 
             <!-- Evidence -->
@@ -127,44 +269,7 @@
                 <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark" x-ref="turnstile"></div>
             </div>
             <button type="submit" class="liquid-btn w-full py-6 bg-red-500 text-black font-black text-xl hover:bg-red-400 active:scale-[0.97] transition-all shadow-2xl shadow-red-500/20 uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed" 
-                :disabled="loading" @click="
-                if(!target_type){showToast('Vui lòng chọn loại đối tượng', 'warning');return}
-                if(!target_value.trim()){showToast('Vui lòng nhập thông tin cụ thể', 'warning');return}
-                if(!scam_type){showToast('Vui lòng chọn phương thức lừa đảo', 'warning');return}
-                if(!description.trim()){showToast('Vui lòng nhập nội dung chi tiết', 'warning');return}
-                
-                loading=true; error='';
-                
-                const formData = new FormData();
-                formData.append('target_type', target_type);
-                formData.append('target_value', target_value.trim());
-                formData.append('scam_type', scam_type);
-                formData.append('severity', severity);
-                formData.append('description', description.trim());
-                if(evidence) formData.append('evidence_file', evidence);
-                
-                const ts = document.querySelector('[name=cf-turnstile-response]');
-                if(!ts || !ts.value){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
-                formData.append('cf-turnstile-response', ts.value);
-
-                fetch('/api/v1/report/', {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': getCSRFToken() },
-                    body: formData
-                })
-                .then(r => { if(!r.ok) return r.json().then(e=>{throw e}); return r.json(); })
-                .then(data => {
-                    loading=false;
-                    success=true;
-                    showToast('Báo cáo đã được gửi thành công!','success')
-                    window.scrollTo({top:0, behavior:'smooth'});
-                })
-                .catch(e => {
-                    error = e.error || 'Đã có lỗi xảy ra. Hãy kiểm tra kết nối.';
-                    loading = false;
-                    showToast(error, 'error');
-                });
-            ">
+                :disabled="loading" @click="submitReport()">
                 <span x-show="!loading" class="flex items-center justify-center gap-3">
                     <i class="bi bi-shield-fill-exclamation text-2xl"></i>
                     <span>TÔI XÁC NHẬN GỬI BÁO CÁO</span>

@@ -6,6 +6,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from api.ai_chat.views import AssistantPageView
 from .views import (
     home_view,
     scan_phone_view,
@@ -27,6 +28,22 @@ from .views import (
     change_password_view,
     forum_view,
     forum_post_view,
+    forum_create_view,
+    public_profile_view,
+    scan_file_view,
+)
+from .views.admin_views import (
+    admin_dashboard, 
+    manage_reports, 
+    manage_forum, 
+    manage_users, 
+    toggle_admin_role, 
+    manage_learn,
+    edit_lesson,
+    manage_articles,
+    edit_article,
+    approve_report,
+    reject_report
 )
 
 urlpatterns = [
@@ -42,12 +59,14 @@ urlpatterns = [
     path("scan/bank/", scan_bank_view, name="scan-bank"),
     path("scan/email/", scan_email_view, name="scan-email"),
     path("scan/qr/", scan_qr_view, name="scan-qr"),
+    path('scan/file/', scan_file_view, name='scan-file'),
     
     # Community pages
     path("report/", report_view, name="report"),
     path("scam-radar/", scam_radar_view, name="scam-radar"),
     path("learn/", learn_hub_view, name="learn-hub"),
     path("emergency/", emergency_view, name="emergency"),
+    path("ai-assistant/", AssistantPageView.as_view(), name="ai-assistant"),
     
     # Auth pages
     path("login/", login_view, name="login"),
@@ -56,12 +75,30 @@ urlpatterns = [
     
     # User pages
     path("dashboard/", dashboard_view, name="dashboard"),
+    
+    # Custom Admin Control Panel
+    path("admin-cp/", admin_dashboard, name="admin-dashboard"),
+    path("admin-cp/reports/", manage_reports, name="admin-manage-reports"),
+    path("admin-cp/reports/<int:report_id>/approve/", approve_report, name="admin-approve-report"),
+    path("admin-cp/reports/<int:report_id>/reject/", reject_report, name="admin-reject-report"),
+    path("admin-cp/forum/", manage_forum, name="admin-manage-forum"),
+    path("admin-cp/users/", manage_users, name="admin-manage-users"),
+    path("admin-cp/users/<int:user_id>/toggle-admin/", toggle_admin_role, name="admin-toggle-role"),
+    path("admin-cp/learn/", manage_learn, name="admin-manage-learn"),
+    path("admin-cp/learn/add/", edit_lesson, name="admin-add-lesson"),
+    path("admin-cp/learn/<int:lesson_id>/edit/", edit_lesson, name="admin-edit-lesson"),
+    path("admin-cp/articles/", manage_articles, name="admin-manage-articles"),
+    path("admin-cp/articles/add/", edit_article, name="admin-add-article"),
+    path("admin-cp/articles/<int:article_id>/edit/", edit_article, name="admin-edit-article"),
+    
     path("admin-panel/", admin_panel_view, name="admin-panel"),
     path("profile/", profile_view, name="profile"),
+    path("profile/@<str:username>/", public_profile_view, name="public-profile"),
     path("change-password/", change_password_view, name="change-password"),
 
     # Forum pages
     path("forum/", forum_view, name="forum"),
+    path("forum/create/", forum_create_view, name="forum-create"),
     path("forum/<int:post_id>/", forum_post_view, name="forum-post"),
     
     # API Documentation
@@ -73,7 +110,7 @@ urlpatterns = [
     path('api/v1/', include([
         path('', include('api.sessions_api.urls')),
         path('', include('api.phone_security.urls')),
-        path('', include('api.ai_chat.urls')),
+        path('chat/', include('api.ai_chat.urls')),
         path('', include('api.media_analysis.urls')),
         path('', include('api.maintenance.urls')),
         path('', include('api.core.urls')),
@@ -81,6 +118,9 @@ urlpatterns = [
 
 # Allauth (Google OAuth)
     path('accounts/', include('allauth.urls')),
+    
+    # Martor Markdown Editor
+    path('martor/', include('martor.urls')),
 ]
 
 handler404 = 'PKV.views.page_views.error_404_view'

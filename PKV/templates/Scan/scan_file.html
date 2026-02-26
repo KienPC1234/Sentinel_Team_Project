@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Scan File - ShieldCall VN{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-12" x-data="fileScanHandler()">
+    <!-- Header -->
+    <div class="text-center mb-12 animate__animated animate__fadeIn">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-pink-500/10 text-pink-500 mb-6 border border-pink-500/20">
+            <i class="bi bi-file-earmark-medical text-3xl"></i>
+        </div>
+        <h1 class="text-4xl font-black text-white mb-4 tracking-tight">Scan <span class="text-pink-500">File</span> Nghi Vấn</h1>
+        <p class="text-white/50 text-lg max-w-2xl mx-auto">Phát hiện mã độc, phần mềm gián điệp và các tệp tin độc hại bằng công nghệ VirusTotal & AI.</p>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="glass-v2-card p-8 sm:p-12 mb-8 relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        
+        <div class="relative z-10">
+            <template x-if="!file">
+                <div class="flex flex-col items-center justify-center py-12 border-2 border-dashed border-white/10 rounded-2xl hover:border-pink-500/30 transition-all cursor-pointer"
+                     @click="$refs.fileInput.click()"
+                     @dragover.prevent="dragging = true"
+                     @dragleave.prevent="dragging = false"
+                     @drop.prevent="handleDrop($event)"
+                     :class="dragging ? 'bg-pink-500/10 border-pink-500/50 scale-[0.99]' : ''">
+                    <input type="file" x-ref="fileInput" class="hidden" @change="handleFileSelect($event)">
+                    <i class="bi bi-cloud-arrow-up text-5xl text-white/20 mb-4 group-hover:text-pink-500/50 transition-colors"></i>
+                    <p class="text-white font-bold text-lg mb-2">Click hoặc kéo thả file vào đây</p>
+                    <p class="text-white/40 text-sm">Hỗ trợ .exe, .zip, .pdf, .apk và nhiều định dạng khác (Max: 32MB)</p>
+                </div>
+            </template>
+
+            <template x-if="file">
+                <div class="bg-black/20 rounded-2xl p-6 border border-white/10 flex items-center gap-4">
+                    <div class="w-14 h-14 rounded-xl bg-pink-500/10 flex items-center justify-center text-pink-500 text-2xl">
+                        <i class="bi" :class="getFileIcon(file.name)"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-white font-bold truncate" x-text="file.name"></h4>
+                        <p class="text-white/40 text-xs" x-text="formatBytes(file.size)"></p>
+                    </div>
+                    <button @click="reset()" x-show="!loading" class="text-white/30 hover:text-white transition-colors">
+                        <i class="bi bi-x-circle text-xl"></i>
+                    </button>
+                    
+                    <div x-show="loading" class="w-8 h-8 rounded-full border-2 border-pink-500/20 border-t-pink-500 animate-spin"></div>
+                </div>
+            </template>
+
+            <div class="mt-8 flex flex-col items-center gap-6" x-show="file && !loading && !scanning">
+                <!-- Turnstile Widget -->
+                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark" data-size="flexible"></div>
+                
+                <button @click="startScan()" class="liquid-button bg-pink-500 hover:bg-pink-400 text-white px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-pink-500/25 flex items-center gap-3">
+                    <i class="bi bi-shield-shaded"></i> Bắt đầu phân tích
+                </button>
+            </div>
+            
+            <!-- Progress Stepper -->
+            <div x-show="loading || scanning" class="mt-8 space-y-6">
+                <div class="relative pt-1">
+                    <div class="flex mb-2 items-center justify-between text-xs">
+                        <span class="font-bold text-pink-400 uppercase tracking-widest" x-text="statusMsg"></span>
+                        <span class="text-white/40 font-bold" x-text="progress + '%'"></span>
+                    </div>
+                    <div class="overflow-hidden h-2 text-xs flex rounded-full bg-white/5 border border-white/5">
+                        <div :style="'width: ' + progress + '%'" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-700"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <template x-if="result">
+        <div class="animate__animated animate__fadeInUp">
+            <div :class="{
+                'bg-red-500/10 border-red-500/20': result.risk_level === 'RED',
+                'bg-yellow-500/10 border-yellow-500/20': result.risk_level === 'YELLOW',
+                'bg-green-500/10 border-green-500/20': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
+            }" class="p-8 rounded-3xl border-2 mb-8">
+                <div class="flex flex-col sm:flex-row items-center gap-8">
+                    <div class="relative">
+                        <svg class="w-32 h-32 transform -rotate-90">
+                            <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="8" fill="transparent" class="text-white/5" />
+                            <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="8" fill="transparent" 
+                                    :stroke-dasharray="364.4" :stroke-dashoffset="364.4 * (1 - result.risk_score/100)"
+                                    :class="{
+                                        'text-red-500': result.risk_level === 'RED',
+                                        'text-yellow-400': result.risk_level === 'YELLOW',
+                                        'text-green-400': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
+                                    }" class="transition-all duration-1000 ease-out" />
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span class="text-3xl font-black text-white" x-text="result.risk_score"></span>
+                            <span class="text-[8px] uppercase font-black text-white/30">Rủi ro</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 text-center sm:text-left">
+                        <div class="flex items-center justify-center sm:justify-start gap-2 mb-2">
+                            <span :class="{
+                                'bg-red-500': result.risk_level === 'RED',
+                                'bg-yellow-400': result.risk_level === 'YELLOW',
+                                'bg-green-400': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
+                            }" class="px-3 py-1 rounded-full text-[10px] font-black uppercase text-black" x-text="result.risk_level === 'RED' ? 'Độc hại' : (result.risk_level === 'YELLOW' ? 'Nghi vấn' : 'An toàn')"></span>
+                        </div>
+                        <h2 class="text-2xl font-black text-white mb-2" x-text="result.risk_level === 'RED' ? 'PHÁT HIỆN MÃ ĐỘC!' : 'Tệp tin có vẻ an toàn'"></h2>
+                        <ul class="space-y-1.5">
+                            <template x-for="detail in result.details" :key="detail">
+                                <li class="flex items-center gap-2 text-white/60 text-sm">
+                                    <i class="bi bi-check2-circle text-cyan-400"></i>
+                                    <span x-text="detail"></span>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="flex flex-wrap gap-4">
+                <button @click="reset()" class="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-3 rounded-xl text-white font-bold transition-all">Thử file khác</button>
+                <a :href="'/report/?scammer_name=' + encodeURIComponent(file.name) + '&target_type=file'" class="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 px-8 py-3 rounded-xl text-red-500 font-bold transition-all flex items-center gap-2">
+                    <i class="bi bi-exclamation-triangle"></i> Báo cáo file này
+                </a>
+            </div>
+        </div>
+    </template>
+</div>
+
+<script>
+function fileScanHandler() {
+    return {
+        file: null,
+        dragging: false,
+        loading: false,
+        scanning: false,
+        progress: 0,
+        statusMsg: '',
+        result: null,
+        scanId: null,
+        statusInterval: null,
+
+        handleFileSelect(e) {
+            this.file = e.target.files[0];
+            this.result = null;
+        },
+
+        handleDrop(e) {
+            this.dragging = false;
+            this.file = e.dataTransfer.files[0];
+            this.result = null;
+        },
+
+        reset() {
+            this.file = null;
+            this.result = null;
+            this.loading = false;
+            this.scanning = false;
+            this.progress = 0;
+            if (this.statusInterval) clearInterval(this.statusInterval);
+        },
+
+        async startScan() {
+            if (!this.file) return;
+            this.loading = true;
+            this.progress = 10;
+            this.statusMsg = 'Đang tải file lên hệ thống...';
+
+            const formData = new FormData();
+            formData.append('file', this.file);
+            
+            // Get Turnstile token
+            const turnstileResponse = document.querySelector('[name="cf-turnstile-response"]')?.value;
+            if (!turnstileResponse) {
+                window.showToast('Vui lòng hoàn thành xác minh anti-spam.', 'warning');
+                return;
+            }
+            formData.append('cf-turnstile-response', turnstileResponse);
+
+            try {
+                const resp = await fetch('/api/v1/scan/file/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCSRFToken() },
+                    body: formData
+                });
+                
+                const data = await resp.json();
+                if (data.scan_id) {
+                    this.scanId = data.scan_id;
+                    this.loading = false;
+                    this.scanning = true;
+                    this.statusMsg = 'VirusTotal đang phân tích file...';
+                    this.startPolling();
+                } else {
+                    window.showToast(data.error || 'Lỗi khi upload file.', 'error');
+                    this.reset();
+                }
+            } catch (e) {
+                window.showToast('Lỗi kết nối máy chủ.', 'error');
+                this.reset();
+            }
+        },
+
+        startPolling() {
+            let dots = 0;
+            this.statusInterval = setInterval(async () => {
+                try {
+                    const resp = await fetch(`/api/v1/scan/status/${this.scanId}/`);
+                    const data = await resp.json();
+                    
+                    if (data.status === 'completed') {
+                        this.progress = 100;
+                        this.result = data.result_json;
+                        this.scanning = false;
+                        clearInterval(this.statusInterval);
+                    } else if (data.status === 'failed') {
+                        window.showToast('Hệ thống gặp lỗi khi phân tích file.', 'error');
+                        this.reset();
+                    } else {
+                        // Smooth progress simulation
+                        if (this.progress < 90) this.progress += 2;
+                        dots = (dots + 1) % 4;
+                        this.statusMsg = 'VirusTotal đang phân tích' + '.'.repeat(dots);
+                    }
+                } catch (e) {
+                    console.error('Polling error', e);
+                }
+            }, 2000);
+        },
+
+        getFileIcon(name) {
+            const ext = name.split('.').pop().toLowerCase();
+            const map = {
+                'pdf': 'bi-file-earmark-pdf',
+                'zip': 'bi-file-earmark-zip',
+                'rar': 'bi-file-earmark-zip',
+                'doc': 'bi-file-earmark-word',
+                'docx': 'bi-file-earmark-word',
+                'exe': 'bi-file-earmark-play',
+                'msi': 'bi-file-earmark-play',
+                'apk': 'bi-file-earmark-code',
+                'png': 'bi-file-earmark-image',
+                'jpg': 'bi-file-earmark-image',
+                'jpeg': 'bi-file-earmark-image',
+            };
+            return map[ext] || 'bi-file-earmark-binary';
+        },
+
+        formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+    }
+}
+
+function getCSRFToken() {
+    return document.cookie.split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1];
+}
+</script>
+{% endblock %}

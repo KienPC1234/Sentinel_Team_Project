@@ -1,10 +1,13 @@
+from django.conf import settings
 import json
 import logging
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import update_session_auth_hash, logout
+from django.contrib.auth import update_session_auth_hash, logout, get_user_model
 from django.contrib import messages
-from django.db.models import Count, Q, Sum
+
+User = get_user_model()
+from django.db.models import Count, Q, Sum, F
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
@@ -14,6 +17,7 @@ from api.core.models import (
     UserAlert, ForumPost, ForumComment, ScamType, RiskLevel,
     Article, ArticleCategory,
 )
+from api.core.serializers import ForumPostSerializer, ForumCommentSerializer
 from api.phone_security.models import PhoneNumber
 
 logger = logging.getLogger(__name__)
@@ -82,31 +86,52 @@ def _format_number(n: int) -> str:
 
 
 def scan_phone_view(request):
-    return render(request, "Scan/scan_phone.html", {"title": "Scan Số điện thoại"})
+    return render(request, "Scan/scan_phone.html", {
+        "title": "Scan Số điện thoại",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
 
 
 def scan_message_view(request):
-    return render(request, "Scan/scan_message.html", {"title": "Scan Tin nhắn"})
+    return render(request, "Scan/scan_message.html", {
+        "title": "Scan Tin nhắn",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
 
 
 def scan_website_view(request):
-    return render(request, "Scan/scan_website.html", {"title": "Scan Website"})
+    return render(request, "Scan/scan_website.html", {
+        "title": "Scan Website",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
 
 
 def scan_email_view(request):
-    return render(request, "Scan/scan_email.html", {"title": "Scan Email"})
+    return render(request, "Scan/scan_email.html", {
+        "title": "Scan Email",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
 
 
 def scan_bank_view(request):
-    return render(request, "Scan/scan_bank.html", {"title": "Scan Tài khoản ngân hàng"})
+    return render(request, "Scan/scan_bank.html", {
+        "title": "Scan Tài khoản ngân hàng",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
 
 
 def scan_qr_view(request):
-    return render(request, "Scan/scan_qr.html", {"title": "Scan QR / Ảnh"})
+    return render(request, "Scan/scan_qr.html", {
+        "title": "Scan QR / Ảnh",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
 
 
 def report_view(request):
-    return render(request, "Report/report.html", {"title": "Báo cáo lừa đảo"})
+    return render(request, "Report/report.html", {
+        "title": "Báo cáo lừa đảo",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
 
 
 def scam_radar_view(request):
@@ -350,6 +375,12 @@ def profile_view(request):
         user.first_name = request.POST.get('first_name', '').strip()
         user.last_name = request.POST.get('last_name', '').strip()
         user.save(update_fields=['first_name', 'last_name'])
+        
+        bio = request.POST.get('bio', '').strip()
+        if user.profile.bio != bio:
+            user.profile.bio = bio
+            user.profile.save(update_fields=['bio'])
+
         messages.success(request, 'Cập nhật thông tin thành công!')
         return redirect('profile')
 
@@ -362,6 +393,21 @@ def profile_view(request):
         "total_scans": total_scans,
         "total_reports": total_reports,
         "total_posts": total_posts,
+    })
+
+
+def public_profile_view(request, username):
+    """Public profile page."""
+    user = get_object_or_404(User.objects.select_related('profile'), username=username)
+    posts = ForumPost.objects.filter(author=user).order_by('-created_at')[:10]
+    serializer = ForumPostSerializer(posts, many=True, context={'request': request})
+    
+    return render(request, "Auth/public_profile.html", {
+        "title": f"Hồ sơ của {user.username}",
+        "profile_user": user,
+        "posts_data": serializer.data,
+        "total_posts": ForumPost.objects.filter(author=user).count(),
+        "total_reports": Report.objects.filter(reporter=user).count(),
     })
 
 
@@ -402,46 +448,36 @@ def change_password_view(request):
 
 def forum_view(request):
     """Forum listing page."""
-    posts = ForumPost.objects.select_related('author').order_by('-is_pinned', '-created_at')[:50]
-    posts_list = []
-    for p in posts:
-        posts_list.append({
-            'id': p.id,
-            'title': p.title,
-            'content': p.content[:300],
-            'category': p.category,
-            'image': p.image.url if p.image else None,
-            'views_count': p.views_count,
-            'author_name': p.author.first_name or p.author.username,
-            'likes_count': p.likes_count,
-            'comments_count': p.comments_count,
-            'is_pinned': p.is_pinned,
-            'created_at': p.created_at.isoformat(),
-            'user_liked': p.likes.filter(user=request.user).exists() if request.user.is_authenticated else False,
-        })
-
+    posts = ForumPost.objects.select_related('author', 'author__profile').order_by('-is_pinned', '-created_at')[:50]
+    serializer = ForumPostSerializer(posts, many=True, context={'request': request})
+    
     return render(request, "Forum/forum.html", {
         "title": "Diễn đàn",
-        "posts_json": json.dumps(posts_list),
+        "posts_data": serializer.data,
     })
-
 
 def forum_post_view(request, post_id):
     """Forum post detail page."""
-    post = get_object_or_404(ForumPost.objects.select_related('author'), id=post_id)
-    comments = ForumComment.objects.filter(post=post).select_related('author')
-    comments_list = [{
-        'id': c.id,
-        'author_name': c.author.first_name or c.author.username,
-        'content': c.content,
-        'parent': c.parent_id,
-        'created_at': c.created_at.isoformat(),
-    } for c in comments]
+    post = get_object_or_404(ForumPost.objects.select_related('author', 'author__profile'), id=post_id)
+    # Increment views
+    ForumPost.objects.filter(id=post_id).update(views_count=F('views_count') + 1)
+    post.refresh_from_db()
 
+    serializer = ForumPostSerializer(post, context={'request': request})
+    
     return render(request, "Forum/forum_detail.html", {
         "title": post.title,
         "post": post,
-        "comments_json": json.dumps(comments_list),
+        "post_data": serializer.data,
+        "comments_data": serializer.data.get('comments', []),
+    })
+
+@login_required
+def forum_create_view(request):
+    """Page to create a new forum thread."""
+    return render(request, "Forum/forum_create.html", {
+        "title": "Tạo chủ đề mới",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
     })
 
 
@@ -451,3 +487,11 @@ def error_404_view(request, exception):
 
 def error_500_view(request):
     return render(request, "Errors/500.html", status=500)
+
+def scan_file_view(request):
+    """Scan file page."""
+    return render(request, "Scan/scan_file.html", {
+        "title": "Scan File",
+        "active_page": "scan_file",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })

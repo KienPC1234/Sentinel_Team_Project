@@ -97,7 +97,7 @@
                             <div class="text-[10px] font-black text-white/60 uppercase tracking-widest" x-text="art.author_name || 'Admin'"></div>
                         </div>
                     </div>
-                    <div class="prose prose-invert prose-cyan max-w-none text-white/70 leading-relaxed font-medium text-sm sm:text-base selection:bg-cyan-500/20" x-html="art.content"></div>
+                    <div class="prose prose-invert prose-cyan max-w-none text-white/70 leading-relaxed font-medium text-sm sm:text-base selection:bg-cyan-500/20" x-html="renderMd(art.content)"></div>
                 </div>
             </template>
         </div>

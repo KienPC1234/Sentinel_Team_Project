@@ -148,7 +148,7 @@
                             <i class="bi bi-chat-dots-fill"></i> CHAT VỚI AI
                         </button>
                     </div>
-                    <a :href="'/report/?target_type=account&target_value='+encodeURIComponent(account)"
+                    <a :href="'/report/?target_type=account&target_value='+encodeURIComponent(result.account || account)+'&bank_name='+encodeURIComponent(result.bank || bank)+'&bank_account='+encodeURIComponent(result.account || account)"
                         class="liquid-btn py-2 px-10 text-xs bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30 transition-all font-black">
                         <i class="bi bi-shield-slash text-sm"></i> TỐ CÁO TÀI KHOẢN
                     </a>

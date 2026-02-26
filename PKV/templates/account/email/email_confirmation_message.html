@@ -1,0 +1,56 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: 'Inter', -apple-system, blinkmacsystemfont, 'Segoe UI', roboto, sans-serif; line-height: 1.6; color: #ffffff; background-color: #0a0f18; margin: 0; padding: 0; }
+        .wrapper { background-color: #0a0f18; padding: 40px 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #111827; border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        .header { padding: 40px 0; text-align: center; background: linear-gradient(135deg, rgba(24,255,255,0.05), rgba(179,136,255,0.05)); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .logo-box { display: inline-flex; width: 64px; height: 64px; background: rgba(24,255,255,0.1); border: 1px solid rgba(24,255,255,0.2); border-radius: 20px; align-items: center; justify-content: center; margin-bottom: 16px; }
+        .content { padding: 40px; }
+        h1 { font-size: 24px; font-weight: 900; margin-top: 0; color: #ffffff; text-align: center; letter-spacing: -0.02em; }
+        p { font-size: 15px; color: rgba(255,255,255,0.6); margin-bottom: 24px; text-align: center; }
+        .button-wrapper { text-align: center; margin: 40px 0; }
+        .button { display: inline-block; padding: 16px 32px; background-color: #18ffff; color: #000000; text-decoration: none; border-radius: 14px; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.3s ease; box-shadow: 0 10px 20px rgba(24,255,255,0.2); }
+        .footer { padding: 30px; text-align: center; background: rgba(0,0,0,0.2); border-top: 1px solid rgba(255,255,255,0.05); }
+        .footer p { font-size: 11px; color: rgba(255,255,255,0.3); margin: 0; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+        .link { color: #18ffff; text-decoration: none; word-break: break-all; font-size: 12px; opacity: 0.6; }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="container">
+            <div class="header">
+                <div class="logo-box">
+                    <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M32 2L6 14v18c0 16.6 11.1 31.1 26 35 14.9-3.9 26-18.4 26-35V14L32 2z" fill="#18ffff"/>
+                        <path d="M28 38l-8-8 3-3 5 5 13-13 3 3z" fill="#000000"/>
+                    </svg>
+                </div>
+                <h1>SHIELDCALL VN</h1>
+            </div>
+            <div class="content">
+                <h1>{% trans "Xác nhận Email" %}</h1>
+                {% blocktrans with user.email as email %}
+                <p>Chào bạn, cảm ơn bạn đã gia nhập cộng đồng ShieldCall VN. Để bảo mật tài khoản và sử dụng đầy đủ các tính năng, vui lòng xác nhận địa chỉ email của bạn bằng cách nhấn vào nút bên dưới:</p>
+                {% endblocktrans %}
+                
+                <div class="button-wrapper">
+                    <a href="{{ activate_url }}" class="button">{% trans "Xác nhận tài khoản" %}</a>
+                </div>
+
+                <p style="font-size: 12px; opacity: 0.4;">{% trans "Nếu nút trên không hoạt động, bạn có thể copy và dán liên kết sau vào trình duyệt:" %}</p>
+                <div style="text-align: center;">
+                    <a href="{{ activate_url }}" class="link">{{ activate_url }}</a>
+                </div>
+            </div>
+            <div class="footer">
+                <p>© 2026 SHIELDCALL VN — BẢO VỆ CỘNG ĐỒNG SỐ</p>
+                <p style="margin-top: 8px; font-weight: 400; text-transform: none;">{% trans "Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email." %}</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

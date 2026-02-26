@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="animate-fadein max-w-6xl mx-auto space-y-8" x-data="profileApp()">
+    {{ posts_data|json_script:"profile-posts-data" }}
+    {{ profile_user.profile.about|json_script:"profile-about-data" }}
+
+    <!-- Profile Hero Section -->
+    <div class="relative rounded-[2.5rem] overflow-hidden shadow-2xl bg-[#03030b] border border-white/5">
+        <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-purple-500/10 to-transparent -z-10"></div>
+        <div class="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(0,229,255,0.15),transparent_50%)]"></div>
+        
+        <div class="p-8 sm:p-12 flex flex-col md:flex-row items-center md:items-end gap-10">
+            <!-- Avatar with Glow -->
+            <div class="relative group">
+                <div class="absolute inset-0 bg-cyan-400 blur-3xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                <template x-if="user.avatar">
+                    <img :src="user.avatar" class="relative w-32 h-32 md:w-48 md:h-48 rounded-[2rem] object-cover border-4 border-white/10 shadow-2xl transition-transform group-hover:scale-[1.02]">
+                </template>
+                <template x-if="!user.avatar">
+                    <div class="relative w-32 h-32 md:w-48 md:h-48 rounded-[2rem] bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center text-6xl font-black text-white border-4 border-white/10 shadow-2xl group-hover:scale-[1.02] transition-transform">
+                        <span x-text="(user.username || '?')[0].toUpperCase()"></span>
+                    </div>
+                </template>
+                
+                <!-- Rank Badge Floating -->
+                <div class="absolute -bottom-4 -right-4 p-4 rounded-3xl bg-slate-900/90 border-2 border-white/10 shadow-2xl backdrop-blur-xl group-hover:translate-y-[-4px] transition-transform" :class="user.rank.color">
+                    <i class="bi text-3xl" :class="user.rank.icon"></i>
+                </div>
+            </div>
+
+            <!-- Identity Stats Area -->
+            <div class="flex-1 space-y-6 text-center md:text-left">
+                <div class="space-y-4">
+                    <div class="flex flex-wrap items-center justify-center md:justify-start gap-4">
+                        <h1 class="text-4xl md:text-6xl font-black text-white tracking-tight leading-none" x-text="user.display_name || user.username"></h1>
+                        {% if profile_user.is_staff %}
+                        <div class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                            <i class="bi bi-patch-check-fill text-xl"></i>
+                            <span class="text-[10px] font-black uppercase tracking-widest">Quản trị viên</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center justify-center md:justify-start gap-4 text-white/40 font-bold uppercase tracking-[0.2em] text-[11px]">
+                        <span class="text-white/60" x-text="'@' + user.username"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-white/10"></span>
+                        <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5">
+                            <i class="bi bi-stars text-yellow-400"></i>
+                            <span x-text="user.rank.name"></span>
+                        </div>
+                        <span class="w-1.5 h-1.5 rounded-full bg-white/10"></span>
+                        <div class="flex items-center gap-2">
+                            <i class="bi bi-calendar3"></i> 
+                            Gia nhập <span x-text="user.date_joined"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Toolbar -->
+                <div class="flex flex-wrap justify-center md:justify-start gap-3">
+                    <button @click="copyLink()" class="liquid-btn py-3 px-8 text-[11px] bg-cyan-500 text-black hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
+                        <i class="bi bi-send-fill mr-2"></i> CHIA SẺ HỒ SƠ
+                    </button>
+                    <a :href="user.messenger_link" target="_blank" x-show="user.messenger_link" class="liquid-btn py-3 px-8 text-[11px] bg-white/5 border-white/10 hover:bg-white/10">
+                        <i class="bi bi-chat-dots-fill mr-2"></i> NHẮN TIN
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Horizontal Stats Banner -->
+        <div class="bg-white/[0.02] border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/5">
+            <div class="p-6 text-center group">
+                <div class="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1 group-hover:text-cyan-400 transition-colors">Đóng góp</div>
+                <div class="text-3xl font-black text-white">{{ total_posts }} <span class="text-xs text-white/30 font-bold">BÀI</span></div>
+            </div>
+            <div class="p-6 text-center group">
+                <div class="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1 group-hover:text-red-400 transition-colors">Báo cáo</div>
+                <div class="text-3xl font-black text-white">{{ total_reports }} <span class="text-xs text-white/30 font-bold">TIN</span></div>
+            </div>
+            <div class="p-6 text-center group">
+                <div class="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1 group-hover:text-yellow-400 transition-colors">Hạng hiệu</div>
+                <div class="text-3xl font-black text-white" x-text="user.rank.level.toUpperCase()"></div>
+            </div>
+            <div class="p-6 text-center group">
+                <div class="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1 group-hover:text-purple-400 transition-colors">Uy tín</div>
+                <div class="text-3xl font-black text-white" x-text="Math.min(100, Math.floor(user.rank_points/20)) + '%'"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-20">
+        <!-- Sidebar: Info & Rank -->
+        <div class="space-y-8 lg:sticky lg:top-24 h-fit">
+            <!-- Rank Progress Card -->
+            <div class="liquid-card p-6 space-y-6">
+                <h4 class="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] flex items-center gap-2">
+                    <i class="bi bi-bar-chart-fill"></i> Tiến trình uy tín
+                </h4>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-end">
+                        <span class="text-xs font-black text-white uppercase tracking-wider" x-text="user.rank.name"></span>
+                        <span class="text-[10px] font-black text-white/40 uppercase" x-text="user.rank_points + ' ĐIỂM'"></span>
+                    </div>
+                    <div class="h-2 rounded-full bg-white/5 border border-white/5 overflow-hidden p-[2px]">
+                        <div class="h-full rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 shadow-[0_0_10px_rgba(0,229,255,0.5)]"
+                             :style="{ width: Math.min(100, (user.rank_points % 1000) / 10) + '%' }"></div>
+                    </div>
+                    <p class="text-[10px] text-center text-white/30 font-medium">Bạn cần thêm <span class="text-white/60" x-text="1000 - (user.rank_points % 1000)"></span> điểm để lên hạng tiếp theo.</p>
+                </div>
+            </div>
+
+            <!-- Short Info / Metadata -->
+            <div class="liquid-card p-6 space-y-6">
+                <h4 class="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] flex items-center gap-2">
+                    <i class="bi bi-info-circle-fill"></i> Thông tin thêm
+                </h4>
+                <div class="space-y-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40">
+                            <i class="bi bi-hash"></i>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black text-white/20 uppercase tracking-widest">ID NGƯỜI DÙNG</p>
+                            <p class="text-xs font-bold text-white/80">#{{ profile_user.id|stringformat:"05d" }}</p>
+                        </div>
+                    </div>
+                    {% if profile_user.profile.bio %}
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40">
+                            <i class="bi bi-chat-quote"></i>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black text-white/20 uppercase tracking-widest">DANH NGÔN</p>
+                            <p class="text-xs font-bold text-white/80 italic">"{{ profile_user.profile.bio }}"</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Column: About & Activity -->
+        <div class="lg:col-span-2 space-y-8">
+            <!-- About Section (Markdown) -->
+            <div class="liquid-card p-8 sm:p-10 space-y-8">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-black text-white tracking-tight flex items-center gap-4">
+                        <span class="w-10 h-1 rounded-full bg-cyan-400"></span>
+                        Về tôi
+                    </h2>
+                    <i class="bi bi-quote text-4xl text-white/5"></i>
+                </div>
+                
+                <div class="prose prose-invert max-w-none prose-p:text-white/70 prose-headings:text-white prose-strong:text-cyan-400"
+                     x-html="window.renderRichText(document.getElementById('profile-about-data').textContent || '*Người dùng chưa cập nhật thông tin giới thiệu.*')">
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="space-y-6">
+                <h3 class="text-xs font-black text-white uppercase tracking-[0.3em] flex items-center gap-3 ml-4">
+                    <i class="bi bi-lightning-charge-fill text-yellow-500"></i>
+                    Hoạt động cộng đồng gần đây
+                </h3>
+
+                <div class="space-y-4">
+                    <template x-for="post in posts" :key="post.id">
+                        <a :href="'/forum/' + post.id + '/'" 
+                           class="liquid-card p-6 flex items-center gap-6 hover:translate-x-1 hover:border-cyan-400/30 transition-all group">
+                            <div class="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center shrink-0 group-hover:bg-cyan-500/10 transition-colors">
+                                <i class="bi bi-journal-text text-2xl text-white/20 group-hover:text-cyan-400 transition-colors"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-3 mb-1">
+                                    <span class="px-2 py-0.5 rounded-lg bg-cyan-500/10 text-cyan-400 text-[9px] font-black uppercase tracking-widest" x-text="post.category"></span>
+                                    <span class="text-[10px] font-black text-white/20" x-text="new Date(post.created_at).toLocaleDateString('vi-VN')"></span>
+                                </div>
+                                <h4 class="text-lg font-bold text-white truncate group-hover:text-cyan-400 transition-colors" x-text="post.title"></h4>
+                            </div>
+                            <div class="flex items-center gap-2 text-white/30 text-xs font-black">
+                                <i class="bi bi-chat-dots-fill"></i>
+                                <span x-text="post.comments_count"></span>
+                            </div>
+                        </a>
+                    </template>
+                    
+                    <template x-if="posts.length === 0">
+                        <div class="p-20 text-center liquid-card bg-white/[0.01] border-dashed border-white/5">
+                            <i class="bi bi-journals text-5xl text-white/5 mb-6 block"></i>
+                            <p class="text-white/20 font-black uppercase tracking-widest text-xs">Chưa tham gia thảo luận nào</p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('profileApp', () => ({
+        posts: [],
+        user: {
+            username: '{{ profile_user.username|escapejs }}',
+            display_name: '{{ profile_user.profile.display_name|escapejs }}',
+            avatar: '{% if profile_user.profile.avatar %}{{ profile_user.profile.avatar.url|escapejs }}{% endif %}',
+            date_joined: '{{ profile_user.date_joined|date:"d/m/Y" }}',
+            rank: {{ profile_user.profile.rank_info|safe|default:"{}" }},
+            rank_points: {{ profile_user.profile.rank_points }},
+            messenger_link: '{{ profile_user.profile.messenger_link|escapejs }}'
+        },
+
+        init() {
+            try {
+                const dataEl = document.getElementById('profile-posts-data');
+                if (dataEl) this.posts = JSON.parse(dataEl.textContent);
+            } catch (e) {
+                console.error('Profile Data Error:', e);
+            }
+        },
+
+        copyLink() {
+            const url = window.location.href;
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('Đã sao chép liên kết hồ sơ!', 'success');
+            });
+        }
+    }));
+});
+</script>
+{% endblock %}

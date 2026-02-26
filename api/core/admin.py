@@ -4,7 +4,8 @@ ShieldCall VN – Core Admin Registration
 from django.contrib import admin
 from .models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily, EntityLink, UserAlert,
-    Article,
+    Article, LearnLesson, LearnQuiz, LearnScenario, ForumPost, ForumComment,
+    ForumPostReport, UserProfile
 )
 
 
@@ -80,3 +81,33 @@ class ArticleAdmin(admin.ModelAdmin):
     search_fields = ['title', 'content']
     prepopulated_fields = {'slug': ('title',)}
     ordering = ['-created_at']
+
+@admin.register(LearnLesson)
+class LearnLessonAdmin(admin.ModelAdmin):
+    list_display = ['title', 'category', 'is_published', 'created_at']
+    list_filter = ['category', 'is_published']
+    search_fields = ['title', 'content']
+    prepopulated_fields = {'slug': ('title',)}
+
+@admin.register(ForumPost)
+class ForumPostAdmin(admin.ModelAdmin):
+    list_display = ['title', 'author', 'category', 'is_locked', 'created_at']
+    list_filter = ['category', 'is_locked', 'is_pinned']
+    search_fields = ['title', 'content']
+
+@admin.register(ForumComment)
+class ForumCommentAdmin(admin.ModelAdmin):
+    list_display = ['author', 'post', 'created_at']
+    search_fields = ['content']
+
+@admin.register(ForumPostReport)
+class ForumPostReportAdmin(admin.ModelAdmin):
+    list_display = ['reporter', 'post', 'status', 'created_at']
+    list_filter = ['status']
+    raw_id_fields = ['reporter', 'post']
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'display_name', 'rank_points', 'is_super_admin', 'created_at']
+    search_fields = ['user__username', 'display_name']
+    list_filter = ['is_super_admin']

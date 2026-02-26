@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Quản lý RAG - Admin ShieldCall{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto py-12 px-6">
+    <div class="flex items-center justify-between mb-10">
+        <div>
+            <h1 class="text-3xl font-black italic glow-text mb-2 tracking-tight">HỆ THỐNG RAG & KNOWLEDGE BASE</h1>
+            <p class="text-slate-400 text-sm">Quản lý cơ sở dữ liệu tri thức và chỉ mục vector của ShieldCall AI.</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="rebuildIndex()" class="glass-btn shadow-lg shadow-cyan-500/20 group">
+                <i class="bi bi-arrow-repeat group-hover:rotate-180 transition-transform duration-700"></i>
+                LÀM MỚI CHỈ MỤC
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <!-- Stats Card -->
+        <div class="glass-card p-6 flex flex-col items-center justify-center text-center">
+            <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-4 border border-cyan-500/20 shadow-inner">
+                <i class="bi bi-database-fill-check text-3xl"></i>
+            </div>
+            <p class="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Tài liệu đã Index</p>
+            <h3 id="doc-count" class="text-4xl font-black text-white italic">{{ stats.document_count }}</h3>
+        </div>
+
+        <div class="glass-card p-6 flex flex-col items-center justify-center text-center">
+            <div class="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-4 border border-purple-500/20 shadow-inner">
+                <i class="bi bi-clock-history text-3xl"></i>
+            </div>
+            <p class="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Cập nhật lần cuối</p>
+            <h3 class="text-lg font-bold text-white italic">Hôm nay</h3>
+        </div>
+
+        <div class="glass-card p-6 flex flex-col items-center justify-center text-center">
+            <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-4 border border-blue-500/20 shadow-inner">
+                <i class="bi bi-gpu-card text-3xl"></i>
+            </div>
+            <p class="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Model Nhúng</p>
+            <h3 class="text-xs font-bold text-slate-300 italic">MiniLM-L12-v2</h3>
+        </div>
+    </div>
+
+    <!-- Details and Logs -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="glass-card overflow-hidden">
+            <div class="p-5 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+                <h2 class="text-xs font-black uppercase tracking-widest text-slate-200">Nguồn dữ liệu (Articles & Lessons)</h2>
+                <i class="bi bi-info-circle text-slate-500"></i>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-xs text-slate-400 leading-relaxed">
+                    Hệ thống tự động đồng bộ tất cả Bài báo (Articles) và Bài học (LearnLessons) có trạng thái <b>Đã xuất bản (Published)</b> vào FAISS Vector Index.
+                </p>
+                <div class="p-4 rounded-xl bg-black/20 border border-white/5 space-y-3">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-slate-400 italic">Tính năng RAG:</span>
+                        <span class="text-green-400 font-bold uppercase">Online</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-slate-400 italic">Dung lượng index:</span>
+                        <span class="text-slate-200">~1.5 MB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-white/10 bg-white/[0.02]">
+                <h2 class="text-xs font-black uppercase tracking-widest text-slate-200">Nhật ký hệ thống AI</h2>
+            </div>
+            <div id="ai-logs" class="p-4 flex-1 h-48 overflow-y-auto font-mono text-[10px] text-cyan-400/70 space-y-1">
+                <p>[SYSTEM] Ready for indexing...</p>
+                <p>[KNOWLEDGE] FAISS Index loaded successfully.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function rebuildIndex() {
+        const btn = event.currentTarget;
+        const originalText = btn.innerHTML;
+        const logContainer = document.getElementById('ai-logs');
+        
+        if (!confirm('Bạn có muốn xây dựng lại toàn bộ chỉ mục tìm kiếm? Việc này có thể tốn vài phút.')) return;
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i> ĐANG XỬ LÝ...';
+        
+        const log = (msg) => {
+            const p = document.createElement('p');
+            p.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logContainer.appendChild(p);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        };
+
+        log("Bắt đầu quá trình rebuild index...");
+        
+        try {
+            const res = await fetch('/api/admin/rag/rebuild/', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                log("THÀNH CÔNG: " + data.message);
+                showToast('Chỉ mục đã được cập nhật!', 'success');
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                log("LỖI: " + (data.error || 'Unknown error'));
+            }
+        } catch (err) {
+            log("LỖI KẾT NỐI: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+</script>
+{% endblock %}
