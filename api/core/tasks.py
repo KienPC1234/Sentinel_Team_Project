@@ -268,12 +268,14 @@ def perform_image_scan_task(self, scan_event_id, images_data):
     """
     Background task for multi-image / OCR scans.
     Provides real-time progress updates via Channels.
+    Uses extract_ocr_with_boxes for annotated bounding-box images.
     """
     from api.core.models import ScanEvent, ScanStatus, RiskLevel
-    from api.utils.media_utils import extract_ocr_text
+    from api.utils.media_utils import extract_ocr_with_boxes
     from api.utils.ollama_client import analyze_text_for_scam
     import base64
     import io
+    import re
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
 
@@ -311,26 +313,76 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         send_progress(f"Bắt đầu xử lý {num_images} hình ảnh...", step="init")
 
         full_ocr = ""
+        all_qr_contents = []
+        annotated_images = []
+        all_phones = set()
+        all_urls = set()
+        all_emails = set()
+        all_bank_accounts = set()
+
         for i, img_b64 in enumerate(images_data):
             try:
-                send_progress(f"Đang bóc tách chữ từ ảnh {i+1}/{num_images}...", step="ocr")
+                send_progress(f"Đang phân tích ảnh {i+1}/{num_images} (OCR + QR)...", step="ocr")
                 if ',' in img_b64: img_b64 = img_b64.split(',')[1]
                 img_bytes = base64.b64decode(img_b64)
                 img_file = io.BytesIO(img_bytes)
-                text = extract_ocr_text(img_file)
-                if text: full_ocr += text + "\n---\n"
+                img_file.name = f"image_{i}.png"
+                img_file.size = len(img_bytes)
+                
+                ocr_result = extract_ocr_with_boxes(img_file)
+                text = ocr_result.get("text", "")
+                qr_contents = ocr_result.get("qr_contents", [])
+                annotated_b64 = ocr_result.get("annotated_image_b64", "")
+                
+                if text:
+                    full_ocr += text + "\n---\n"
+                    send_progress(f"Ảnh {i+1}: Trích xuất {len(text)} ký tự", step="ocr_ok")
+                else:
+                    send_progress(f"Ảnh {i+1}: Không phát hiện text", step="ocr_ok")
+                
+                if qr_contents:
+                    all_qr_contents.extend(qr_contents)
+                    send_progress(f"Ảnh {i+1}: Phát hiện {len(qr_contents)} mã QR", step="qr_ok")
+                
+                if annotated_b64:
+                    annotated_images.append(annotated_b64)
+                
+                # Extract entities from OCR text
+                if text:
+                    phones = re.findall(r'(?:\+84|0)\d[\d\s\-\.]{7,12}\d', text)
+                    all_phones.update(p.replace(' ', '').replace('-', '').replace('.', '') for p in phones)
+                    urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', text)
+                    all_urls.update(urls)
+                    emails = re.findall(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', text)
+                    all_emails.update(emails)
+                    bank_accs = re.findall(r'\b\d{8,19}\b', text)
+                    # Filter out likely non-bank numbers (too short or phone-like)
+                    for acc in bank_accs:
+                        if len(acc) >= 8 and not any(acc == p for p in all_phones):
+                            all_bank_accounts.add(acc)
+                
             except Exception as e:
                 logger.error(f"OCR Error in task for event {scan_event_id}: {e}")
                 send_progress(f"Cảnh báo: Lỗi xử lý ảnh {i+1}.", step="ocr_warning")
 
-        if full_ocr:
+        # Also extract entities from QR contents
+        for qr in all_qr_contents:
+            urls_in_qr = re.findall(r'https?://[^\s<>"]+', qr)
+            all_urls.update(urls_in_qr)
+
+        if full_ocr or all_qr_contents:
+            # Build analysis text including QR contents
+            analysis_text = full_ocr
+            if all_qr_contents:
+                analysis_text += "\n[QR CODE CONTENTS]:\n" + "\n".join(all_qr_contents) + "\n"
+            
             send_progress("Đang phân tích nội dung bằng Trí tuệ nhân tạo (AI)...", step="analyzing")
             
             # Retry mechanism for AI analysis
             ai_res = None
             for attempt in range(3):
                 try:
-                    ai_res = analyze_text_for_scam(full_ocr, use_web_search=True)
+                    ai_res = analyze_text_for_scam(analysis_text, use_web_search=True)
                     if ai_res and (ai_res.get('risk_score') is not None):
                         break
                 except:
@@ -346,7 +398,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             send_progress("AI đã hoàn tất phân tích logic.", step="analyzing")
         else:
             send_progress("Không tìm thấy ký tự khả dụng trong ảnh.", step="analyzing")
-            ai_res = {'risk_score': 0, 'risk_level': 'SAFE', 'explanation': 'Không tìm thấy chữ trong ảnh để phân tích.'}
+            ai_res = {'risk_score': 0, 'risk_level': 'SAFE', 'explanation': 'Không tìm thấy chữ hoặc mã QR trong ảnh để phân tích.'}
 
         # Determine level correctly
         score = ai_res.get('risk_score', 0)
@@ -358,6 +410,17 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         # Map reason to explanation if needed
         explanation = ai_res.get('explanation') or ai_res.get('reason') or ''
 
+        # Build entities dict
+        entities = {}
+        if all_phones:
+            entities['phones'] = list(all_phones)[:20]
+        if all_urls:
+            entities['urls'] = list(all_urls)[:20]
+        if all_emails:
+            entities['emails'] = list(all_emails)[:10]
+        if all_bank_accounts:
+            entities['bank_accounts'] = list(all_bank_accounts)[:10]
+
         result = {
             'ocr_text': full_ocr,
             'risk_score': score,
@@ -367,10 +430,15 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             'ai_retry_used': ai_res.get('ai_retry_used', False),
             'ai_retry_count': ai_res.get('ai_retry_count', 0),
             'web_sources': ai_res.get('web_sources', []),
-            'web_context': ai_res.get('web_context', '')
+            'web_context': ai_res.get('web_context', ''),
+            'qr_contents': list(set(all_qr_contents)),
+            'entities': entities if entities else None,
+            'annotated_images': annotated_images,
+            'annotated_image': annotated_images[0] if annotated_images else '',
         }
 
-        scan_event.result_json = result
+        # Save to DB without large annotated images (they bloat the JSON field)
+        scan_event.result_json = {k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')}
         scan_event.risk_score = score
         scan_event.risk_level = level
         scan_event.status = ScanStatus.COMPLETED
