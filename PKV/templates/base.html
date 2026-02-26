@@ -18,6 +18,31 @@
     <link rel="icon" type="image/png" href="{% static 'logo.png' %}">
     <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}">
     <style>#onesignal-bell-container { display: none !important; }</style>
+    <style>
+    /* ═══ Rich Text Content Styling (CKEditor output + Markdown) ═══ */
+    .richtext-content ul, .rich-text-content ul, .ai-markdown ul { list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0; }
+    .richtext-content ol, .rich-text-content ol, .ai-markdown ol { list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+    .richtext-content li, .rich-text-content li, .ai-markdown li { margin: 0.25em 0; }
+    .richtext-content ul ul, .rich-text-content ul ul, .ai-markdown ul ul { list-style-type: circle; }
+    .richtext-content ul ul ul, .rich-text-content ul ul ul, .ai-markdown ul ul ul { list-style-type: square; }
+    .richtext-content h1, .rich-text-content h1, .ai-markdown h1 { font-size: 1.75em; font-weight: 800; margin: 0.8em 0 0.4em; }
+    .richtext-content h2, .rich-text-content h2, .ai-markdown h2 { font-size: 1.5em; font-weight: 700; margin: 0.7em 0 0.35em; }
+    .richtext-content h3, .rich-text-content h3, .ai-markdown h3 { font-size: 1.25em; font-weight: 700; margin: 0.6em 0 0.3em; }
+    .richtext-content h4, .rich-text-content h4, .ai-markdown h4 { font-size: 1.1em; font-weight: 600; margin: 0.5em 0 0.25em; }
+    .richtext-content blockquote, .rich-text-content blockquote, .ai-markdown blockquote { border-left: 3px solid rgba(24,255,255,0.3); padding-left: 1em; margin: 0.75em 0; color: rgba(255,255,255,0.6); font-style: italic; }
+    .richtext-content pre, .rich-text-content pre, .ai-markdown pre { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; padding: 1em; overflow-x: auto; margin: 0.75em 0; }
+    .richtext-content code, .rich-text-content code, .ai-markdown code { background: rgba(255,255,255,0.08); padding: 0.15em 0.4em; border-radius: 0.3em; font-size: 0.9em; }
+    .richtext-content pre code, .rich-text-content pre code, .ai-markdown pre code { background: transparent; padding: 0; }
+    .richtext-content a, .rich-text-content a, .ai-markdown a { color: #18ffff; text-decoration: underline; text-underline-offset: 2px; }
+    .richtext-content a:hover, .rich-text-content a:hover, .ai-markdown a:hover { color: #fff; }
+    .richtext-content table, .rich-text-content table, .ai-markdown table { width: 100%; border-collapse: collapse; margin: 0.75em 0; table-layout: auto; min-width: 100%; }
+    .ai-markdown { overflow-x: auto; scrollbar-width: thin; }
+    .richtext-content th, .richtext-content td, .rich-text-content th, .rich-text-content td, .ai-markdown th, .ai-markdown td { border: 1px solid rgba(255,255,255,0.1); padding: 0.5em 0.75em; text-align: left; }
+    .richtext-content th, .rich-text-content th, .ai-markdown th { background: rgba(255,255,255,0.05); font-weight: 700; }
+    .richtext-content p, .rich-text-content p, .ai-markdown p { margin: 0.4em 0; }
+    .richtext-content img, .rich-text-content img { max-width: 100%; height: auto; border-radius: 0.75rem; margin: 0.5em 0; }
+    .richtext-content hr, .rich-text-content hr, .ai-markdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1em 0; }
+    </style>
 
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 
@@ -625,6 +650,12 @@
                                 </div>
                                 Hỏi đáp AI Assistant
                             </a>
+                            <a href="/my-reports/" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 transition-colors">
+                                <div class="w-7 h-7 rounded-lg bg-red-400/10 flex items-center justify-center text-red-400">
+                                    <i class="bi bi-flag-fill"></i>
+                                </div>
+                                Tra cứu báo cáo
+                            </a>
                             {% if user.is_staff or user.profile.is_super_admin %}
                             <a href="{% url 'admin-dashboard' %}" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-yellow-400 hover:bg-yellow-400/10 transition-colors">
                                 <div class="w-7 h-7 rounded-lg bg-yellow-400/10 flex items-center justify-center">
@@ -856,6 +887,15 @@
             toast.style.border = `1px solid ${borderColors[type] || borderColors.info}`;
             toast.style.color = '#fff';
             toast.textContent = message;
+
+            // Stack toasts vertically by calculating offset from existing toasts
+            const existingToasts = document.querySelectorAll('.toast');
+            let bottomOffset = 96; // 6rem base
+            existingToasts.forEach(t => {
+                bottomOffset += t.offsetHeight + 12;
+            });
+            toast.style.bottom = bottomOffset + 'px';
+
             document.body.appendChild(toast);
             setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 3000);
             setTimeout(() => toast.remove(), 3500);

@@ -11,9 +11,12 @@ import io
 import logging
 import os
 
-from .models import ChatFolder, ChatSession, ChatMessage, ChatAction, ChatMessageImage
+from .models import ChatFolder, ChatSession, ChatMessage, ChatAction, ChatMessageImage, ChatbotConfig, SavedMessage
 from django.core.files.base import ContentFile
-from .serializers import ChatAIRequestSerializer, ChatAIResponseSerializer, ChatFolderSerializer, ChatSessionSerializer
+from .serializers import (
+    ChatAIRequestSerializer, ChatAIResponseSerializer, ChatFolderSerializer, 
+    ChatSessionSerializer, ChatbotConfigSerializer, SavedMessageSerializer
+)
 from api.utils.ai_agent import get_agent
 from api.utils.ollama_client import classify_message
 from api.utils.media_utils import extract_ocr_text, extract_ocr_with_boxes
@@ -299,6 +302,125 @@ class ChatAIStreamView(APIView):
         return response
 
 from django.views import View
+
+class ChatSearchView(APIView):
+    """
+    GET: Search chat sessions and messages by query string.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        q = request.query_params.get('q', '').strip()
+        if not q or len(q) < 2:
+            return Response({'sessions': [], 'messages': []})
+        
+        from django.db.models import Q
+        
+        # Search sessions by title
+        sessions = ChatSession.objects.filter(
+            user=request.user
+        ).filter(
+            Q(title__icontains=q)
+        ).order_by('-updated_at')[:10]
+        
+        session_results = [{
+            'id': str(s.id),
+            'title': s.title,
+            'updated_at': s.updated_at,
+            'folder': s.folder_id,
+        } for s in sessions]
+        
+        # Search messages by content
+        messages = ChatMessage.objects.filter(
+            session__user=request.user
+        ).filter(
+            Q(message__icontains=q)
+        ).select_related('session').order_by('-created_at')[:20]
+        
+        message_results = [{
+            'id': m.id,
+            'role': m.role,
+            'message': m.message[:200],
+            'session_id': str(m.session_id),
+            'session_title': m.session.title,
+            'created_at': m.created_at,
+        } for m in messages]
+        
+        return Response({
+            'sessions': session_results,
+            'messages': message_results,
+        })
+
+
+class ChatbotConfigView(APIView):
+    """
+    GET: Get current user's chatbot personalization config.
+    PUT: Update chatbot config.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        config, _ = ChatbotConfig.objects.get_or_create(user=request.user)
+        serializer = ChatbotConfigSerializer(config)
+        data = serializer.data
+        # Include available choices
+        data['tone_choices'] = [{'value': c[0], 'label': c[1]} for c in ChatbotConfig.TONE_CHOICES]
+        data['language_style_choices'] = [{'value': c[0], 'label': c[1]} for c in ChatbotConfig.LANGUAGE_STYLE_CHOICES]
+        return Response(data)
+
+    def put(self, request):
+        config, _ = ChatbotConfig.objects.get_or_create(user=request.user)
+        serializer = ChatbotConfigSerializer(config, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SavedMessageListView(APIView):
+    """
+    GET: List saved/bookmarked messages.
+    POST: Bookmark a message.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        saved = SavedMessage.objects.filter(user=request.user).select_related('message', 'message__session')
+        serializer = SavedMessageSerializer(saved, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        message_id = request.data.get('message_id')
+        note = request.data.get('note', '')
+        
+        if not message_id:
+            return Response({'error': 'message_id required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        message = get_object_or_404(ChatMessage, id=message_id, session__user=request.user)
+        saved, created = SavedMessage.objects.get_or_create(
+            user=request.user, message=message,
+            defaults={'note': note}
+        )
+        if not created:
+            # Toggle: unsave if already saved
+            saved.delete()
+            return Response({'status': 'unsaved', 'message_id': message_id})
+        
+        serializer = SavedMessageSerializer(saved)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class SavedMessageDetailView(APIView):
+    """
+    DELETE: Remove a bookmarked message.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, saved_id):
+        saved = get_object_or_404(SavedMessage, id=saved_id, user=request.user)
+        saved.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class AssistantPageView(View):
     """

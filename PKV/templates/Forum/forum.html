@@ -2,23 +2,49 @@
 {% block title %}Diễn đàn cộng đồng{% endblock %}
 {% block head_extra %}
 <style>
+    .voz-section {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+    }
+    .voz-row {
+        transition: all 0.2s ease;
+    }
+    .voz-row:hover {
+        background: rgba(24, 255, 255, 0.02);
+    }
     .forum-card {
         background: var(--glass-bg);
         backdrop-filter: blur(20px);
         border: 1px solid var(--glass-border);
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: all 0.3s ease;
     }
     .forum-card:hover {
-        border-color: rgba(24, 255, 255, 0.3);
-        transform: translateY(-4px);
-        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        border-color: rgba(24, 255, 255, 0.2);
     }
-    .verified-badge {
-        background: linear-gradient(135deg, #18ffff, #b388ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-size: 0.9rem;
+    .category-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
     }
+    .rank-badge-sm {
+        font-size: 0.55rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+    .rank-diamond { background: rgba(24,255,255,0.15); color: #18ffff; border: 1px solid rgba(24,255,255,0.3); }
+    .rank-platinum { background: rgba(179,136,255,0.15); color: #b388ff; border: 1px solid rgba(179,136,255,0.3); }
+    .rank-gold { background: rgba(255,215,0,0.15); color: #ffd700; border: 1px solid rgba(255,215,0,0.3); }
+    .rank-silver { background: rgba(203,213,225,0.15); color: #cbd5e1; border: 1px solid rgba(203,213,225,0.3); }
+    .rank-bronze { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
     .reaction-btn {
         transition: all 0.2s ease;
     }
@@ -34,13 +60,11 @@
         color: #ff1744;
         background: rgba(255, 23, 68, 0.1);
     }
-    .category-tag {
-        font-size: 0.65rem;
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        font-weight: 800;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
+    .verified-badge {
+        background: linear-gradient(135deg, #18ffff, #b388ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 0.9rem;
     }
 </style>
 {% endblock %}
@@ -52,16 +76,26 @@ document.addEventListener('alpine:init', () => {
         activeTab: 'all',
         searchQuery: '',
         sortBy: 'newest',
+        viewMode: 'categories',
         posts: [],
+        categoryStats: [],
         loading: false,
 
         init() {
             try {
                 const dataEl = document.getElementById('forum-posts-data');
                 if (dataEl) this.posts = JSON.parse(dataEl.textContent);
+                const catEl = document.getElementById('forum-category-stats');
+                if (catEl) this.categoryStats = JSON.parse(catEl.textContent);
             } catch (e) {
                 console.error('Forum Data Error:', e);
             }
+        },
+        stripHtml(html) {
+            if (!html) return '';
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            return tmp.textContent || tmp.innerText || '';
         },
         
         async toggleLike(post) {
@@ -130,9 +164,8 @@ document.addEventListener('alpine:init', () => {
             if(this.activeTab !== 'all') filtered = filtered.filter(p => p.category === this.activeTab);
             if(this.searchQuery.trim()) {
                 const q = this.searchQuery.toLowerCase();
-                filtered = filtered.filter(p => (p.title || '').toLowerCase().includes(q) || (p.content || '').toLowerCase().includes(q));
+                filtered = filtered.filter(p => (p.title || '').toLowerCase().includes(q) || this.stripHtml(p.content || '').toLowerCase().includes(q));
             }
-            // Sort
             filtered = [...filtered];
             if (this.sortBy === 'popular') {
                 filtered.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
@@ -141,7 +174,6 @@ document.addEventListener('alpine:init', () => {
             } else if (this.sortBy === 'views') {
                 filtered.sort((a, b) => (b.views_count || 0) - (a.views_count || 0));
             } else {
-                // newest (default) — pinned first, then by created_at desc
                 filtered.sort((a, b) => {
                     if (a.is_pinned !== b.is_pinned) return b.is_pinned ? 1 : -1;
                     return new Date(b.created_at) - new Date(a.created_at);
@@ -160,21 +192,26 @@ document.addEventListener('alpine:init', () => {
             const diff = (Date.now() - new Date(dt)) / 1000;
             if(isNaN(diff)) return '';
             if(diff < 60) return 'Vừa xong';
-            if(diff < 3600) return Math.floor(diff/60) + ' phút';
-            if(diff < 86400) return Math.floor(diff/3600) + ' giờ';
-            return Math.floor(diff/86400) + ' ngày';
+            if(diff < 3600) return Math.floor(diff/60) + ' phút trước';
+            if(diff < 86400) return Math.floor(diff/3600) + ' giờ trước';
+            if(diff < 604800) return Math.floor(diff/86400) + ' ngày trước';
+            return new Date(dt).toLocaleDateString('vi-VN');
         },
         categoryInfo(cat) {
             const map = {
-                warning: { label: 'Cảnh báo', color: 'bg-red-500/20 text-red-500', icon: 'bi-exclamation-triangle' },
-                discussion: { label: 'Thảo luận', color: 'bg-cyan-500/20 text-cyan-500', icon: 'bi-chat-dots' },
-                experience: { label: 'Kinh nghiệm', color: 'bg-purple-500/20 text-purple-500', icon: 'bi-lightbulb' },
-                question: { label: 'Hỏi đáp', color: 'bg-yellow-500/20 text-yellow-500', icon: 'bi-question-diamond' }
+                warning: { label: 'Cảnh báo', desc: 'Cảnh báo lừa đảo mới nhất', color: 'bg-red-500/20 text-red-500', iconBg: 'bg-red-500/15 border-red-500/30', icon: 'bi-shield-fill-exclamation', textColor: 'text-red-400' },
+                discussion: { label: 'Thảo luận', desc: 'Thảo luận về an ninh mạng', color: 'bg-cyan-500/20 text-cyan-500', iconBg: 'bg-cyan-500/15 border-cyan-500/30', icon: 'bi-chat-dots-fill', textColor: 'text-cyan-400' },
+                experience: { label: 'Kinh nghiệm', desc: 'Chia sẻ kinh nghiệm phòng chống', color: 'bg-purple-500/20 text-purple-500', iconBg: 'bg-purple-500/15 border-purple-500/30', icon: 'bi-lightbulb-fill', textColor: 'text-purple-400' },
+                question: { label: 'Hỏi đáp', desc: 'Đặt câu hỏi, nhận giải đáp', color: 'bg-yellow-500/20 text-yellow-500', iconBg: 'bg-yellow-500/15 border-yellow-500/30', icon: 'bi-question-diamond-fill', textColor: 'text-yellow-400' }
             };
-            return map[cat] || { label: cat, color: 'bg-white/10 text-white/60', icon: 'bi-hash' };
+            return map[cat] || { label: cat, desc: '', color: 'bg-white/10 text-white/60', iconBg: 'bg-white/10 border-white/20', icon: 'bi-hash', textColor: 'text-white/60' };
         },
         getInitial(name) {
             return name ? name.charAt(0).toUpperCase() : '?';
+        },
+        categoryPosts(catValue) {
+            if (!Array.isArray(this.posts)) return [];
+            return this.posts.filter(p => p.category === catValue).slice(0, 5);
         }
     }));
 });
@@ -183,198 +220,398 @@ document.addEventListener('alpine:init', () => {
 
 {% block content %}
 {{ posts_data|json_script:"forum-posts-data" }}
-<div x-data="forumApp" class="max-w-6xl mx-auto px-4 py-10">
-    <!-- Header Section -->
-    <div class="flex flex-col md:flex-row justify-between items-center gap-6 mb-12" data-aos="fade-up">
-        <div data-aos="fade-right" data-aos-delay="100">
-            <h1 class="text-4xl font-black text-white mb-2">Trung Tâm <span class="text-cyan-400">Cộng Đồng</span></h1>
-            <p class="text-white/40">Nơi người dân chung tay đẩy lùi tội phạm công nghệ cao.</p>
+{{ category_stats|json_script:"forum-category-stats" }}
+<div x-data="forumApp" class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8" data-aos="fade-up">
+        <div>
+            <h1 class="text-3xl font-black text-white mb-1">Diễn đàn <span class="text-cyan-400">Cộng đồng</span></h1>
+            <p class="text-white/40 text-sm">Nơi người dân chung tay đẩy lùi tội phạm công nghệ cao</p>
         </div>
-        <div class="flex items-center gap-3" data-aos="fade-left" data-aos-delay="200">
-            <a href="/forum/create/" class="bg-gradient-to-r from-cyan-400 to-blue-600 text-[#0d0d1f] px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:scale-105 transition-all shadow-xl shadow-cyan-500/20">
-                <i class="bi bi-pencil-fill"></i> Tạo chủ đề mới
+        <div class="flex items-center gap-3">
+            <div class="flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                <button @click="viewMode='categories'" :class="viewMode==='categories' ? 'bg-cyan-400/10 text-cyan-400' : 'text-white/40'" class="px-3 py-2 text-xs font-bold transition-all" title="Xem theo danh mục">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                </button>
+                <button @click="viewMode='threads'" :class="viewMode==='threads' ? 'bg-cyan-400/10 text-cyan-400' : 'text-white/40'" class="px-3 py-2 text-xs font-bold transition-all" title="Xem chủ đề">
+                    <i class="bi bi-list-ul"></i>
+                </button>
+            </div>
+            <a href="/forum/create/" class="bg-gradient-to-r from-cyan-400 to-blue-600 text-[#0d0d1f] px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:scale-105 transition-all shadow-lg shadow-cyan-500/20 text-sm">
+                <i class="bi bi-pencil-fill"></i> Tạo chủ đề
             </a>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <!-- Sidebar Navigation -->
-        <div class="lg:col-span-3 space-y-6" data-aos="fade-right" data-aos-delay="300">
-            <div class="glass-dropdown rounded-3xl p-4 overflow-hidden border border-white/5">
-                <h3 class="text-[10px] uppercase font-black tracking-widest text-white/30 px-4 mb-4">Danh mục</h3>
-                <nav class="space-y-1">
-                    <button @click="activeTab='all'" :class="activeTab==='all' ? 'bg-white/10 text-cyan-400' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
-                        <i class="bi bi-grid-fill"></i> Tất cả
-                    </button>
-                    <button @click="activeTab='warning'" :class="activeTab==='warning' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
-                        <i class="bi bi-shield-fill-exclamation"></i> Cảnh báo
-                    </button>
-                    <button @click="activeTab='discussion'" :class="activeTab==='discussion' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
-                        <i class="bi bi-chat-text-fill"></i> Thảo luận
-                    </button>
-                    <button @click="activeTab='experience'" :class="activeTab==='experience' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
-                        <i class="bi bi-gem"></i> Kinh nghiệm
-                    </button>
-                    <button @click="activeTab='question'" :class="activeTab==='question' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' : 'text-white/60 hover:bg-white/5'" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-sm font-bold">
-                        <i class="bi bi-patch-question-fill"></i> Hỏi đáp
-                    </button>
-                </nav>
-            </div>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Main Content Area -->
+        <div class="lg:col-span-9 space-y-6">
 
-            <div class="glass-dropdown rounded-3xl p-6 border border-white/5 bg-gradient-to-br from-cyan-400/5 to-transparent">
-                <h4 class="text-xs font-black text-white/80 mb-4">THỐNG KÊ CỘNG ĐỒNG</h4>
+            <!-- =================== VIEW MODE: CATEGORIES (VOZ-style) =================== -->
+            <div x-show="viewMode === 'categories'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
                 <div class="space-y-4">
-                    <div class="flex items-center justify-between">
-                        <span class="text-[11px] text-white/40 font-bold uppercase">Chủ đề</span>
-                        <span class="text-sm font-black text-white" x-text="posts.length"></span>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-[11px] text-white/40 font-bold uppercase">Lượt tương tác</span>
-                        <span class="text-sm font-black text-white" x-text="Array.isArray(posts) ? posts.reduce((a, b) => a + (b.likes_count || 0), 0) : 0"></span>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-[11px] text-white/40 font-bold uppercase">Bình luận</span>
-                        <span class="text-sm font-black text-white" x-text="Array.isArray(posts) ? posts.reduce((a, b) => a + (b.comments_count || 0), 0) : 0"></span>
-                    </div>
-                </div>
-            </div>
+                    <!-- VOZ-Style Category Section -->
+                    <div class="voz-section rounded-2xl overflow-hidden" data-aos="fade-up">
+                        <!-- Section Header -->
+                        <div class="px-5 py-3 bg-gradient-to-r from-cyan-500/10 to-purple-500/5 border-b border-white/5">
+                            <h2 class="text-xs font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
+                                <i class="bi bi-shield-fill-check"></i> ShieldCall VN — Diễn đàn
+                            </h2>
+                        </div>
 
-            <!-- Trending Posts -->
-            <div class="glass-dropdown rounded-3xl p-5 border border-white/5 bg-gradient-to-br from-amber-500/5 to-transparent">
-                <h4 class="text-xs font-black text-amber-400/80 mb-4 flex items-center gap-2"><i class="bi bi-fire"></i> XU HƯỚNG</h4>
-                <div class="space-y-3">
-                    <template x-for="(tp, idx) in trendingPosts()" :key="'t'+tp.id">
-                        <a :href="'/forum/' + tp.id + '/'" class="flex items-start gap-3 group/t hover:bg-white/5 rounded-xl p-2 -mx-2 transition-all">
-                            <span class="text-lg font-black text-white/10 group-hover/t:text-cyan-400/40 transition-colors w-6 text-center shrink-0" x-text="idx + 1"></span>
-                            <div class="min-w-0">
-                                <p class="text-xs font-bold text-white/70 group-hover/t:text-cyan-400 transition-colors line-clamp-2 leading-snug" x-text="tp.title"></p>
-                                <div class="flex items-center gap-3 mt-1.5 text-[10px] text-white/30">
-                                    <span><i class="bi bi-heart-fill text-red-500/50 mr-1"></i><span x-text="tp.likes_count"></span></span>
-                                    <span><i class="bi bi-chat-left-text mr-1"></i><span x-text="tp.comments_count"></span></span>
-                                    <span><i class="bi bi-eye mr-1"></i><span x-text="tp.views_count || 0"></span></span>
+                        <!-- Column Headers (desktop only) -->
+                        <div class="hidden md:grid grid-cols-12 gap-4 px-5 py-2 bg-white/[0.02] border-b border-white/5 text-[9px] font-black text-white/25 uppercase tracking-widest">
+                            <div class="col-span-6">Danh mục</div>
+                            <div class="col-span-1 text-center">Chủ đề</div>
+                            <div class="col-span-1 text-center">Tin nhắn</div>
+                            <div class="col-span-4 text-right">Bài viết mới nhất</div>
+                        </div>
+
+                        <!-- Category Rows -->
+                        <template x-for="cat in categoryStats" :key="cat.value">
+                            <div class="voz-row grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 px-5 py-4 border-b border-white/5 items-center cursor-pointer" @click="activeTab = cat.value; viewMode = 'threads';">
+                                <!-- Category Info -->
+                                <div class="md:col-span-6 flex items-center gap-4">
+                                    <div class="category-icon border" :class="categoryInfo(cat.value).iconBg">
+                                        <i :class="categoryInfo(cat.value).icon + ' ' + categoryInfo(cat.value).textColor"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h3 class="text-sm font-bold text-white hover:text-cyan-400 transition-colors" x-text="cat.label"></h3>
+                                        <p class="text-[10px] text-white/30 mt-0.5" x-text="categoryInfo(cat.value).desc"></p>
+                                    </div>
+                                </div>
+
+                                <!-- Thread Count -->
+                                <div class="md:col-span-1 text-center hidden md:block">
+                                    <span class="text-sm font-black text-white/60" x-text="cat.threads_count"></span>
+                                    <div class="text-[8px] text-white/20 uppercase">Chủ đề</div>
+                                </div>
+
+                                <!-- Messages Count -->
+                                <div class="md:col-span-1 text-center hidden md:block">
+                                    <span class="text-sm font-black text-white/60" x-text="cat.messages_count"></span>
+                                    <div class="text-[8px] text-white/20 uppercase">Tin nhắn</div>
+                                </div>
+
+                                <!-- Latest Post -->
+                                <div class="md:col-span-4" @click.stop>
+                                    <template x-if="cat.latest_post">
+                                        <a :href="'/forum/' + cat.latest_post.id + '/'" class="flex items-center gap-3 group/lp justify-end">
+                                            <div class="text-right min-w-0 hidden md:block">
+                                                <p class="text-[11px] font-bold text-white/50 group-hover/lp:text-cyan-400 transition-colors truncate max-w-[200px]" x-text="cat.latest_post.title"></p>
+                                                <div class="flex items-center gap-1.5 justify-end mt-0.5">
+                                                    <span class="text-[9px] text-white/25" x-text="cat.latest_post.author_name"></span>
+                                                    <span class="text-[9px] text-white/15">·</span>
+                                                    <span class="text-[9px] text-white/20" x-text="timeAgo(cat.latest_post.created_at)"></span>
+                                                </div>
+                                            </div>
+                                            <div class="w-9 h-9 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                                <template x-if="cat.latest_post.author_avatar">
+                                                    <img :src="cat.latest_post.author_avatar" class="w-full h-full object-cover">
+                                                </template>
+                                                <template x-if="!cat.latest_post.author_avatar">
+                                                    <span class="text-[10px] font-bold text-cyan-400" x-text="getInitial(cat.latest_post.author_name)"></span>
+                                                </template>
+                                            </div>
+                                        </a>
+                                    </template>
+                                    <template x-if="!cat.latest_post">
+                                        <span class="text-[10px] text-white/15 italic block text-right">Chưa có bài viết</span>
+                                    </template>
+                                </div>
+
+                                <!-- Mobile Stats -->
+                                <div class="md:hidden flex items-center gap-4 text-[10px] text-white/30">
+                                    <span><i class="bi bi-file-earmark-text mr-1"></i><span x-text="cat.threads_count"></span> chủ đề</span>
+                                    <span><i class="bi bi-chat-left-text mr-1"></i><span x-text="cat.messages_count"></span> tin nhắn</span>
                                 </div>
                             </div>
-                        </a>
+                        </template>
+                    </div>
+
+                    <!-- Pinned Posts -->
+                    <template x-if="posts.filter(p => p.is_pinned).length > 0">
+                        <div class="voz-section rounded-2xl overflow-hidden" data-aos="fade-up" data-aos-delay="100">
+                            <div class="px-5 py-3 bg-gradient-to-r from-yellow-500/10 to-transparent border-b border-white/5">
+                                <h2 class="text-xs font-black text-yellow-400 uppercase tracking-widest flex items-center gap-2">
+                                    <i class="bi bi-pin-angle-fill"></i> Bài viết được ghim
+                                </h2>
+                            </div>
+                            <template x-for="post in posts.filter(p => p.is_pinned)" :key="'pinned-'+post.id">
+                                <a :href="'/forum/' + post.id + '/'" class="voz-row flex items-center gap-4 px-5 py-3 border-b border-white/5 group/pin">
+                                    <div class="w-8 h-8 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
+                                        <i class="bi bi-pin-angle-fill text-yellow-500 text-xs"></i>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2 py-0.5 text-[8px] font-black rounded border uppercase"
+                                                  :class="categoryInfo(post.category).color"
+                                                  x-text="categoryInfo(post.category).label"></span>
+                                            <h3 class="text-sm font-bold text-white group-hover/pin:text-cyan-400 transition-colors truncate" x-text="post.title"></h3>
+                                        </div>
+                                    </div>
+                                    <div class="hidden sm:flex items-center gap-4 text-[10px] text-white/25 shrink-0">
+                                        <span><i class="bi bi-chat-left-text mr-1"></i><span x-text="post.comments_count"></span></span>
+                                        <span><i class="bi bi-eye mr-1"></i><span x-text="post.views_count || 0"></span></span>
+                                    </div>
+                                    <div class="w-7 h-7 rounded-md bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                        <template x-if="post.author_avatar">
+                                            <img :src="post.author_avatar" class="w-full h-full object-cover">
+                                        </template>
+                                        <template x-if="!post.author_avatar">
+                                            <span class="text-[9px] font-bold text-cyan-400" x-text="getInitial(post.author_name)"></span>
+                                        </template>
+                                    </div>
+                                </a>
+                            </template>
+                        </div>
                     </template>
+
+                    <!-- Recent Threads -->
+                    <div class="voz-section rounded-2xl overflow-hidden" data-aos="fade-up" data-aos-delay="150">
+                        <div class="px-5 py-3 bg-gradient-to-r from-white/5 to-transparent border-b border-white/5">
+                            <h2 class="text-xs font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
+                                <i class="bi bi-clock-history"></i> Chủ đề mới nhất
+                            </h2>
+                        </div>
+                        <template x-for="post in posts.filter(p => !p.is_pinned).slice(0, 10)" :key="'recent-'+post.id">
+                            <a :href="'/forum/' + post.id + '/'" class="voz-row grid grid-cols-12 gap-3 px-5 py-3 border-b border-white/5 items-center group/thread">
+                                <div class="col-span-12 sm:col-span-7 flex items-center gap-3 min-w-0">
+                                    <div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                        <template x-if="post.author_avatar">
+                                            <img :src="post.author_avatar" class="w-full h-full object-cover">
+                                        </template>
+                                        <template x-if="!post.author_avatar">
+                                            <span class="text-[10px] font-bold text-cyan-400" x-text="getInitial(post.author_name)"></span>
+                                        </template>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 text-[7px] font-black rounded border uppercase shrink-0"
+                                                  :class="categoryInfo(post.category).color"
+                                                  x-text="categoryInfo(post.category).label"></span>
+                                            <span x-show="post.is_locked" class="text-red-400 text-[8px]"><i class="bi bi-lock-fill"></i></span>
+                                            <h3 class="text-[13px] font-bold text-white/80 group-hover/thread:text-cyan-400 transition-colors truncate" x-text="post.title"></h3>
+                                        </div>
+                                        <div class="flex items-center gap-2 mt-0.5 text-[9px] text-white/25">
+                                            <span x-text="post.author_name"></span>
+                                            <span>·</span>
+                                            <span x-text="timeAgo(post.created_at)"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-span-5 hidden sm:flex items-center justify-end gap-6 text-[10px] text-white/25">
+                                    <div class="text-center">
+                                        <span class="block font-black text-white/40" x-text="post.comments_count"></span>
+                                        <span class="text-[8px]">trả lời</span>
+                                    </div>
+                                    <div class="text-center">
+                                        <span class="block font-black text-white/40" x-text="post.views_count || 0"></span>
+                                        <span class="text-[8px]">xem</span>
+                                    </div>
+                                    <template x-if="post.last_comment_author">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <div class="w-6 h-6 rounded-md bg-white/5 border border-white/5 overflow-hidden flex items-center justify-center shrink-0">
+                                                <template x-if="post.last_comment_author.avatar">
+                                                    <img :src="post.last_comment_author.avatar" class="w-full h-full object-cover">
+                                                </template>
+                                                <template x-if="!post.last_comment_author.avatar">
+                                                    <span class="text-[8px] font-bold text-cyan-400" x-text="getInitial(post.last_comment_author.name)"></span>
+                                                </template>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <span class="text-[9px] text-white/30 truncate block max-w-[80px]" x-text="post.last_comment_author.name"></span>
+                                                <span class="text-[8px] text-white/15" x-text="timeAgo(post.last_comment_at)"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </a>
+                        </template>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Thread List Area -->
-        <div class="lg:col-span-9 space-y-6" data-aos="fade-up" data-aos-delay="400">
-            <!-- Search Bar -->
-            <div class="relative group">
-                <i class="bi bi-search absolute left-5 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-cyan-400 transition-colors"></i>
-                <input type="text" x-model="searchQuery" placeholder="Tìm kiếm kinh nghiệm, cảnh báo giả mạo..." 
-                    class="w-full bg-white/5 border border-white/10 rounded-3xl py-4 pl-14 pr-6 text-white focus:outline-none focus:border-cyan-400/30 transition-all font-medium">
-            </div>
+            <!-- =================== VIEW MODE: THREADS (traditional list) =================== -->
+            <div x-show="viewMode === 'threads'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+                <div class="space-y-4">
+                    <!-- Search Bar -->
+                    <div class="relative group">
+                        <i class="bi bi-search absolute left-5 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-cyan-400 transition-colors"></i>
+                        <input type="text" x-model="searchQuery" placeholder="Tìm kiếm kinh nghiệm, cảnh báo giả mạo..."
+                            class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-14 pr-6 text-white focus:outline-none focus:border-cyan-400/30 transition-all font-medium text-sm">
+                    </div>
 
-            <!-- Sort Options -->
-            <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-[10px] uppercase font-black tracking-widest text-white/20 mr-2">Sắp xếp</span>
-                <button @click="sortBy='newest'" :class="sortBy==='newest' ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'" class="px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5">
-                    <i class="bi bi-clock"></i> Mới nhất
-                </button>
-                <button @click="sortBy='popular'" :class="sortBy==='popular' ? 'bg-red-500/15 text-red-400 border-red-500/30' : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'" class="px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5">
-                    <i class="bi bi-heart"></i> Phổ biến
-                </button>
-                <button @click="sortBy='discussed'" :class="sortBy==='discussed' ? 'bg-purple-500/15 text-purple-400 border-purple-500/30' : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'" class="px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5">
-                    <i class="bi bi-chat-left-text"></i> Nhiều thảo luận
-                </button>
-                <button @click="sortBy='views'" :class="sortBy==='views' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'" class="px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5">
-                    <i class="bi bi-eye"></i> Nhiều lượt xem
-                </button>
-            </div>
+                    <!-- Sort & Filter Bar -->
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button @click="activeTab='all'" :class="activeTab==='all' ? 'bg-cyan-400/10 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-white/40 border-white/10'" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all">Tất cả</button>
+                        <button @click="activeTab='warning'" :class="activeTab==='warning' ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-white/5 text-white/40 border-white/10'" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all">Cảnh báo</button>
+                        <button @click="activeTab='discussion'" :class="activeTab==='discussion' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-white/40 border-white/10'" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all">Thảo luận</button>
+                        <button @click="activeTab='experience'" :class="activeTab==='experience' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'bg-white/5 text-white/40 border-white/10'" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all">Kinh nghiệm</button>
+                        <button @click="activeTab='question'" :class="activeTab==='question' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' : 'bg-white/5 text-white/40 border-white/10'" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all">Hỏi đáp</button>
+                        <div class="h-4 w-px bg-white/10 mx-1"></div>
+                        <button @click="sortBy='newest'" :class="sortBy==='newest' ? 'text-cyan-400' : 'text-white/30'" class="px-2 py-1.5 text-[10px] font-bold transition-all"><i class="bi bi-clock mr-1"></i>Mới</button>
+                        <button @click="sortBy='popular'" :class="sortBy==='popular' ? 'text-red-400' : 'text-white/30'" class="px-2 py-1.5 text-[10px] font-bold transition-all"><i class="bi bi-heart mr-1"></i>Hot</button>
+                        <button @click="sortBy='discussed'" :class="sortBy==='discussed' ? 'text-purple-400' : 'text-white/30'" class="px-2 py-1.5 text-[10px] font-bold transition-all"><i class="bi bi-chat-left-text mr-1"></i>Thảo luận</button>
+                        <button @click="sortBy='views'" :class="sortBy==='views' ? 'text-amber-400' : 'text-white/30'" class="px-2 py-1.5 text-[10px] font-bold transition-all"><i class="bi bi-eye mr-1"></i>Xem</button>
+                    </div>
 
-            <!-- Posts -->
-            <div class="grid gap-4">
-                <template x-for="post in filteredPosts()" :key="post.id">
-                    <div class="forum-card rounded-3xl p-6 relative overflow-hidden group cursor-pointer" @click="window.location.href='/forum/' + post.id + '/'">
-                        <div x-show="post.is_pinned" class="absolute top-0 right-0 px-4 py-1 bg-yellow-500/20 text-yellow-500 text-[9px] font-black uppercase tracking-widest border-b border-l border-yellow-500/20 rounded-bl-xl">
-                            <i class="bi bi-pin-angle-fill"></i> Đang ghim
+                    <!-- Thread List (VOZ table-style) -->
+                    <div class="voz-section rounded-2xl overflow-hidden">
+                        <div class="hidden md:grid grid-cols-12 gap-4 px-5 py-2 bg-white/[0.02] border-b border-white/5 text-[9px] font-black text-white/25 uppercase tracking-widest">
+                            <div class="col-span-7">Chủ đề</div>
+                            <div class="col-span-1 text-center">Trả lời</div>
+                            <div class="col-span-1 text-center">Xem</div>
+                            <div class="col-span-3 text-right">Hoạt động</div>
                         </div>
-                        
-                        <div class="flex flex-col sm:flex-row gap-6">
-                            <!-- Left Content -->
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-3 mb-4">
-                                    <a @click.stop :href="'/profile/@' + post.author_username + '/'" class="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-400/20 to-purple-500/20 flex items-center justify-center border border-white/5 relative overflow-hidden shrink-0 hover:scale-110 transition-transform">
+
+                        <template x-for="post in filteredPosts()" :key="post.id">
+                            <a :href="'/forum/' + post.id + '/'" class="voz-row grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 px-5 py-3.5 border-b border-white/5 items-center group/t">
+                                <div class="md:col-span-7 flex items-center gap-3 min-w-0">
+                                    <div class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                                         <template x-if="post.author_avatar">
                                             <img :src="post.author_avatar" class="w-full h-full object-cover">
                                         </template>
                                         <template x-if="!post.author_avatar">
                                             <span class="text-xs font-bold text-cyan-400" x-text="getInitial(post.author_name)"></span>
                                         </template>
-                                    </a>
-                                    <div>
-                                        <div class="flex items-center gap-2">
-                                            <a @click.stop :href="'/profile/@' + post.author_username + '/'" class="text-sm font-bold text-white/90 hover:text-cyan-400 transition-colors" x-text="post.author_name"></a>
-                                            <i x-show="post.author_is_staff" class="bi bi-patch-check-fill verified-badge" title="Quản trị viên"></i>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span x-show="post.is_pinned" class="text-yellow-500 text-[8px]"><i class="bi bi-pin-angle-fill"></i></span>
+                                            <span x-show="post.is_locked" class="text-red-400 text-[8px]"><i class="bi bi-lock-fill"></i></span>
+                                            <span class="px-1.5 py-0.5 text-[7px] font-black rounded border uppercase shrink-0"
+                                                  :class="categoryInfo(post.category).color"
+                                                  x-text="categoryInfo(post.category).label"></span>
+                                            <h3 class="text-[13px] font-bold text-white/80 group-hover/t:text-cyan-400 transition-colors truncate" x-text="post.title"></h3>
                                         </div>
-                                        <div class="flex items-center gap-2 text-[10px] font-medium text-white/30">
-                                            <span x-text="timeAgo(post.created_at) + ' trước'"></span>
-                                            <span>•</span>
-                                            <span :class="categoryInfo(post.category).color" class="category-tag" x-text="categoryInfo(post.category).label"></span>
+                                        <div class="flex items-center gap-2 mt-1 text-[9px] text-white/25">
+                                            <span x-text="post.author_name"></span>
+                                            <span>·</span>
+                                            <span x-text="timeAgo(post.created_at)"></span>
+                                            <template x-if="post.author_rank">
+                                                <span class="rank-badge-sm" :class="'rank-' + post.author_rank.level" x-text="post.author_rank.name"></span>
+                                            </template>
                                         </div>
                                     </div>
                                 </div>
-
-                                <a :href="'/forum/' + post.id + '/'" class="inline-block group-hover:translate-x-1 transition-transform mb-4">
-                                    <h2 class="text-xl font-bold text-white mb-2 leading-tight group-hover:text-cyan-400 transition-colors" x-text="post.title"></h2>
-                                    <p class="text-sm text-white/50 line-clamp-2 leading-relaxed" x-text="post.content"></p>
-                                </a>
-
-                                <div class="flex flex-wrap items-center gap-4 mt-2 pt-4 border-t border-white/5">
-                                    <div class="flex items-center gap-1">
-                                        <button @click.stop="toggleLike(post)" class="reaction-btn px-3 py-1.5 rounded-xl flex items-center gap-2" :class="post.user_liked ? 'active-red' : 'text-white/30'">
-                                            <i class="bi" :class="post.user_liked ? 'bi-heart-fill' : 'bi-heart'"></i>
-                                            <span class="text-xs font-black" x-text="post.likes_count"></span>
-                                        </button>
-                                        <button @click.stop="toggleReaction(post, 'helpful')" class="reaction-btn px-3 py-1.5 rounded-xl flex items-center gap-2" :class="post.user_helpful ? 'active' : 'text-white/30'">
-                                            <i class="bi" :class="post.user_helpful ? 'bi-patch-check-fill' : 'bi-patch-check'"></i>
-                                            <span class="text-xs font-black" x-text="post.helpful_count"></span>
-                                        </button>
-                                        <button @click.stop="toggleReaction(post, 'share')" class="reaction-btn px-3 py-1.5 rounded-xl flex items-center gap-2" :class="post.user_shared ? 'active' : 'text-white/30'">
-                                            <i class="bi bi-share-fill"></i>
-                                            <span class="text-xs font-black" x-text="post.shares_count"></span>
-                                        </button>
-                                    </div>
-
-                                    <div class="h-4 w-[1px] bg-white/5 mx-1"></div>
-
-                                    <a :href="'/forum/' + post.id + '/'" class="flex items-center gap-2 text-white/30 hover:text-white transition-colors">
-                                        <i class="bi bi-chat-left-text"></i>
-                                        <span class="text-[11px] font-bold" x-text="post.comments_count"></span>
-                                    </a>
-
-                                    <div class="flex items-center gap-2 text-white/20">
-                                        <i class="bi bi-eye"></i>
-                                        <span class="text-[11px] font-bold" x-text="post.views_count || 0"></span>
-                                    </div>
-
-                                    <button @click.stop="reportPost(post)" class="ml-auto flex items-center gap-2 text-white/20 hover:text-red-500 transition-all text-[11px] font-bold">
-                                        <i class="bi bi-flag"></i> Báo cáo
-                                    </button>
+                                <div class="md:col-span-1 text-center hidden md:block">
+                                    <span class="text-sm font-black text-white/40" x-text="post.comments_count"></span>
                                 </div>
-                            </div>
-
-                            <!-- Right Media -->
-                            <template x-if="post.image">
-                                <div class="sm:w-36 h-36 rounded-2xl overflow-hidden border border-white/5 flex-shrink-0">
-                                    <img :src="post.image" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                                <div class="md:col-span-1 text-center hidden md:block">
+                                    <span class="text-sm font-black text-white/30" x-text="post.views_count || 0"></span>
                                 </div>
-                            </template>
+                                <div class="md:col-span-3 hidden md:block">
+                                    <template x-if="post.last_comment_author">
+                                        <div class="flex items-center gap-2 justify-end">
+                                            <div class="text-right min-w-0">
+                                                <span class="text-[9px] text-white/30 block truncate max-w-[100px]" x-text="post.last_comment_author.name"></span>
+                                                <span class="text-[8px] text-white/15" x-text="timeAgo(post.last_comment_at)"></span>
+                                            </div>
+                                            <div class="w-7 h-7 rounded-md bg-white/5 border border-white/5 overflow-hidden flex items-center justify-center shrink-0">
+                                                <template x-if="post.last_comment_author.avatar">
+                                                    <img :src="post.last_comment_author.avatar" class="w-full h-full object-cover">
+                                                </template>
+                                                <template x-if="!post.last_comment_author.avatar">
+                                                    <span class="text-[8px] font-bold text-cyan-400" x-text="getInitial(post.last_comment_author.name)"></span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <template x-if="!post.last_comment_author">
+                                        <div class="text-right">
+                                            <span class="text-[9px] text-white/15" x-text="timeAgo(post.created_at)"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                                <!-- Mobile stats -->
+                                <div class="md:hidden flex items-center gap-4 text-[10px] text-white/25">
+                                    <span><i class="bi bi-chat-left-text mr-1"></i><span x-text="post.comments_count"></span></span>
+                                    <span><i class="bi bi-eye mr-1"></i><span x-text="post.views_count || 0"></span></span>
+                                    <span><i class="bi bi-heart mr-1"></i><span x-text="post.likes_count"></span></span>
+                                </div>
+                            </a>
+                        </template>
+
+                        <div x-show="filteredPosts().length === 0" class="p-12 text-center">
+                            <i class="bi bi-search text-3xl text-white/10 mb-3 block"></i>
+                            <p class="text-white/30 text-sm font-bold">Không tìm thấy bài viết</p>
                         </div>
                     </div>
-                </template>
+                </div>
+            </div>
+        </div>
 
-                <!-- Empty State -->
-                <div x-show="filteredPosts().length === 0" class="glass-dropdown rounded-[40px] p-20 text-center border border-white/5">
-                    <div class="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <i class="bi bi-search text-4xl text-white/20"></i>
+        <!-- RIGHT Sidebar -->
+        <div class="lg:col-span-3 space-y-4">
+            <!-- Community Stats -->
+            <div class="voz-section rounded-2xl overflow-hidden" data-aos="fade-left">
+                <div class="px-4 py-3 bg-gradient-to-r from-cyan-500/10 to-transparent border-b border-white/5">
+                    <h4 class="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
+                        <i class="bi bi-graph-up"></i> Thống kê
+                    </h4>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] text-white/40 font-bold">Tổng chủ đề</span>
+                        <span class="text-sm font-black text-white/70" x-text="posts.length"></span>
                     </div>
-                    <h3 class="text-2xl font-black text-white/80">Không có dữ liệu</h3>
-                    <p class="text-white/40 mt-3 font-medium">Chúng tôi không tìm thấy kết quả nào phù hợp.</p>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] text-white/40 font-bold">Tổng bình luận</span>
+                        <span class="text-sm font-black text-white/70" x-text="Array.isArray(posts) ? posts.reduce((a, b) => a + (b.comments_count || 0), 0) : 0"></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] text-white/40 font-bold">Tổng lượt xem</span>
+                        <span class="text-sm font-black text-white/70" x-text="Array.isArray(posts) ? posts.reduce((a, b) => a + (b.views_count || 0), 0) : 0"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trending Posts -->
+            <div class="voz-section rounded-2xl overflow-hidden" data-aos="fade-left" data-aos-delay="100">
+                <div class="px-4 py-3 bg-gradient-to-r from-amber-500/10 to-transparent border-b border-white/5">
+                    <h4 class="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                        <i class="bi bi-fire"></i> Xu hướng
+                    </h4>
+                </div>
+                <div class="py-2">
+                    <template x-for="(tp, idx) in trendingPosts()" :key="'t'+tp.id">
+                        <a :href="'/forum/' + tp.id + '/'" class="flex items-start gap-3 group/t hover:bg-white/[0.03] px-4 py-2.5 transition-all">
+                            <span class="text-lg font-black text-white/10 group-hover/t:text-cyan-400/30 w-5 text-center shrink-0 leading-tight" x-text="idx + 1"></span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[11px] font-bold text-white/60 group-hover/t:text-cyan-400 transition-colors line-clamp-2 leading-snug" x-text="tp.title"></p>
+                                <div class="flex items-center gap-3 mt-1 text-[9px] text-white/20">
+                                    <span><i class="bi bi-heart-fill text-red-500/40 mr-0.5"></i><span x-text="tp.likes_count"></span></span>
+                                    <span><i class="bi bi-chat-left-text mr-0.5"></i><span x-text="tp.comments_count"></span></span>
+                                    <span><i class="bi bi-eye mr-0.5"></i><span x-text="tp.views_count || 0"></span></span>
+                                </div>
+                            </div>
+                        </a>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Quick Category Navigation -->
+            <div class="voz-section rounded-2xl overflow-hidden" data-aos="fade-left" data-aos-delay="200">
+                <div class="px-4 py-3 border-b border-white/5">
+                    <h4 class="text-[10px] font-black text-white/40 uppercase tracking-widest">Danh mục</h4>
+                </div>
+                <div class="py-1">
+                    <button @click="activeTab='all'; viewMode='threads'" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-all text-left"
+                            :class="activeTab==='all' && viewMode==='threads' ? 'bg-white/[0.05] text-cyan-400' : 'text-white/50'">
+                        <i class="bi bi-grid-fill text-xs"></i>
+                        <span class="text-[11px] font-bold">Tất cả</span>
+                    </button>
+                    <template x-for="cat in categoryStats" :key="'nav-'+cat.value">
+                        <button @click="activeTab=cat.value; viewMode='threads'" class="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-all text-left"
+                                :class="activeTab===cat.value && viewMode==='threads' ? 'bg-white/[0.05]' : ''">
+                            <div class="flex items-center gap-3">
+                                <i :class="categoryInfo(cat.value).icon + ' ' + categoryInfo(cat.value).textColor" class="text-xs"></i>
+                                <span class="text-[11px] font-bold" :class="activeTab===cat.value && viewMode==='threads' ? categoryInfo(cat.value).textColor : 'text-white/50'" x-text="cat.label"></span>
+                            </div>
+                            <span class="text-[9px] font-bold text-white/20" x-text="cat.threads_count"></span>
+                        </button>
+                    </template>
                 </div>
             </div>
         </div>

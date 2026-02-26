@@ -16,9 +16,10 @@ from .views import (
     scam_radar_view, learn_hub_view, emergency_view, login_view,
     register_view, logout_view, dashboard_view, admin_panel_view,
     profile_view, change_password_view, forum_view, forum_post_view,
-    forum_create_view, public_profile_view, scan_file_view, scan_audio_view,
+    forum_create_view, forum_edit_view, public_profile_view, scan_file_view, scan_audio_view,
     article_detail_view, scam_radar_list_view, demo_video_view,
     lesson_detail_view, scan_lookup_view,
+    my_reports_view,
 )
 from .views.admin_views import (
     admin_dashboard, 
@@ -36,6 +37,8 @@ from .views.admin_views import (
     delete_scenario,
     approve_report,
     reject_report,
+    analyze_report_ai,
+    update_report_note,
     delete_lesson,
     delete_article,
     notify_lesson_email,
@@ -44,6 +47,8 @@ from .views.admin_views import (
     magic_create_lesson_page,
     forum_report_action,
     forum_post_admin_action,
+    forum_ban_action,
+    forum_moderator_action,
 )
 
 def service_worker(request):
@@ -80,6 +85,7 @@ urlpatterns = [
     
     # Community pages
     path("report/", report_view, name="report"),
+    path("my-reports/", my_reports_view, name="my-reports"),
     path("scam-radar/", scam_radar_view, name="scam-radar"),
     path("scam-radar/list/<str:list_type>/", scam_radar_list_view, name="scam-radar-list"),
     path("learn/", learn_hub_view, name="learn-hub"),
@@ -103,9 +109,13 @@ urlpatterns = [
     path("admin-cp/reports/", manage_reports, name="admin-manage-reports"),
     path("admin-cp/reports/<int:report_id>/approve/", approve_report, name="admin-approve-report"),
     path("admin-cp/reports/<int:report_id>/reject/", reject_report, name="admin-reject-report"),
+    path("admin-cp/reports/<int:report_id>/analyze/", analyze_report_ai, name="admin-analyze-report"),
+    path("admin-cp/reports/<int:report_id>/note/", update_report_note, name="admin-report-note"),
     path("admin-cp/forum/", manage_forum, name="admin-manage-forum"),
     path("admin-cp/forum/report/<str:report_type>/<int:report_id>/action/", forum_report_action, name="admin-forum-report-action"),
     path("admin-cp/forum/post/<int:post_id>/action/", forum_post_admin_action, name="admin-forum-post-action"),
+    path("admin-cp/forum/ban/", forum_ban_action, name="admin-forum-ban-action"),
+    path("admin-cp/forum/moderator/", forum_moderator_action, name="admin-forum-moderator-action"),
     path("admin-cp/users/", manage_users, name="admin-manage-users"),
     path("admin-cp/users/<int:user_id>/toggle-admin/", toggle_admin_role, name="admin-toggle-role"),
     path("admin-cp/learn/", manage_learn, name="admin-manage-learn"),
@@ -132,6 +142,7 @@ urlpatterns = [
     # Forum pages
     path("forum/", forum_view, name="forum"),
     path("forum/create/", forum_create_view, name="forum-create"),
+    path("forum/<int:post_id>/edit/", forum_edit_view, name="forum-edit"),
     path("forum/<int:post_id>/", forum_post_view, name="forum-post"),
     
     # API Documentation

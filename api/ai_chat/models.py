@@ -101,3 +101,53 @@ class ChatAction(models.Model):
     
     def __str__(self):
         return f"{self.action} (Msg ID: {self.chat_message.id})"
+
+
+class ChatbotConfig(models.Model):
+    """
+    Per-user chatbot personalization settings (tone, personality, etc.)
+    """
+    TONE_CHOICES = [
+        ('professional', 'Chuyên nghiệp'),
+        ('friendly', 'Thân thiện'),
+        ('casual', 'Thoải mái'),
+        ('formal', 'Trang trọng'),
+        ('humorous', 'Hài hước'),
+    ]
+    LANGUAGE_STYLE_CHOICES = [
+        ('simple', 'Đơn giản, dễ hiểu'),
+        ('detailed', 'Chi tiết, chuyên sâu'),
+        ('concise', 'Ngắn gọn, súc tích'),
+    ]
+    
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chatbot_config')
+    tone = models.CharField(max_length=30, choices=TONE_CHOICES, default='friendly')
+    language_style = models.CharField(max_length=30, choices=LANGUAGE_STYLE_CHOICES, default='simple')
+    custom_name = models.CharField(max_length=50, blank=True, default='', help_text="Custom name for the AI assistant")
+    custom_instructions = models.TextField(blank=True, default='', help_text="Additional instructions for the AI")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'chatbot_configs'
+
+    def __str__(self):
+        return f"Config for {self.user.username} (tone={self.tone})"
+
+
+class SavedMessage(models.Model):
+    """
+    User-bookmarked chat messages for quick access.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_messages')
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='saved_by')
+    note = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'saved_messages'
+        ordering = ['-created_at']
+        unique_together = ('user', 'message')
+
+    def __str__(self):
+        return f"Saved by {self.user.username}: Msg {self.message.id}"

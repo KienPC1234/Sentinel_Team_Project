@@ -140,13 +140,40 @@ class ScamRadarStatsView(APIView):
 
             scam_labels = dict(ScamType.choices)
             hot_counter = {}
+            sensitive_scan_types = {'message', 'qr'}
+            sensitive_placeholder = '[Nội dung nhạy cảm đã được ẩn]'
+
+            reported_risky_targets = {
+                ((target_type or '').strip(), (target_value or '').strip())
+                for target_type, target_value in Report.objects.filter(
+                    status=ReportStatus.APPROVED,
+                    target_type__in=['phone', 'account']
+                ).values_list('target_type', 'target_value')
+                if (target_type or '').strip() and (target_value or '').strip()
+            }
 
             def mask_target(target_type, value):
+                if target_type in sensitive_scan_types:
+                    return sensitive_placeholder
+
+                if (target_type in {'phone', 'account'} and
+                    (target_type, value) in reported_risky_targets):
+                    return value
+
                 if target_type == 'phone':
                     return value[:4] + '****' + value[-2:] if len(value) > 6 else value
                 if target_type == 'account':
                     return value[:3] + '*****' + value[-3:] if len(value) > 6 else value
                 return value
+
+            def map_scan_target_type(scan_type):
+                if scan_type == 'phone':
+                    return 'phone'
+                if scan_type == 'account':
+                    return 'account'
+                if scan_type in {'domain', 'email', 'message', 'qr', 'audio', 'file'}:
+                    return scan_type
+                return 'domain'
 
             for item in reports_qs.filter(created_at__gte=start_date).values('target_type', 'target_value', 'scam_type'):
                 target_type = item.get('target_type') or 'unknown'
@@ -170,7 +197,7 @@ class ScamRadarStatsView(APIView):
                 normalized_input = (item.get('normalized_input') or '').strip()
                 if not normalized_input:
                     continue
-                mapped_type = 'phone' if scan_type == 'phone' else ('account' if scan_type == 'account' else 'domain')
+                mapped_type = map_scan_target_type(scan_type)
                 key = f"scan:{scan_type}:{normalized_input}"
                 if key not in hot_counter:
                     hot_counter[key] = {
@@ -188,11 +215,12 @@ class ScamRadarStatsView(APIView):
             from django.utils.timesince import timesince
             recent_data = []
             for report in reports_qs.select_related('reporter').order_by('-created_at')[:10]:
+                report_target_value = (report.target_value or '').strip()
                 recent_data.append({
                     'id': f"report-{report.id}",
                     'created_at': report.created_at,
                     'created_at_display': f"{timesince(report.created_at, now).split(',')[0]} trước",
-                    'target_value': report.target_value,
+                    'target_value': mask_target(report.target_type, report_target_value),
                     'target_type': report.target_type,
                     'target_type_display': report.get_target_type_display(),
                     'scam_type': report.scam_type,
@@ -215,11 +243,13 @@ class ScamRadarStatsView(APIView):
                 'file': 'Tệp tin',
             }
             for scan in scans_qs.select_related('user').order_by('-created_at')[:10]:
+                scan_target_type = map_scan_target_type(scan.scan_type)
+                scan_target_value = (scan.normalized_input or scan.raw_input or '').strip()
                 recent_data.append({
                     'id': f"scan-{scan.id}",
                     'created_at': scan.created_at,
                     'created_at_display': f"{timesince(scan.created_at, now).split(',')[0]} trước",
-                    'target_value': scan.normalized_input or scan.raw_input,
+                    'target_value': mask_target(scan_target_type, scan_target_value),
                     'target_type': scan.scan_type,
                     'target_type_display': scan_type_display.get(scan.scan_type, scan.scan_type),
                     'scam_type': 'ai_detected',
