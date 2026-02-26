@@ -198,11 +198,16 @@
 
         window.renderMd = function(text) {
             if (!text) return '';
-            // Trim leading whitespace to prevent unintended code blocks, 
-            // but preserve internal formatting if possible
-            const cleanText = String(text).trim(); 
+            let cleanText = String(text).trim();
+            // Strip LLM thinking tags <think>...</think>
+            cleanText = cleanText.replace(/<think>[\s\S]*?<\/think>/gi, '');
+            // Strip partial/unclosed <think> tag at the end (during streaming)
+            cleanText = cleanText.replace(/<think>[\s\S]*$/gi, '');
+            // Strip __STATUS__:xxx markers from stream
+            cleanText = cleanText.replace(/__STATUS__:\w+/g, '');
+            cleanText = cleanText.trim();
+            if (!cleanText) return '';
             try { 
-                // Use built-in marked with breaks enabled for newlines
                 return marked.parse(cleanText, { 
                     breaks: true, 
                     gfm: true
@@ -221,13 +226,27 @@
                 try {
                     const parsed = JSON.parse(data);
                     if (parsed.blocks) {
-                        return window.renderEditorJS(parsed);
+                        return window.processMentions(window.renderEditorJS(parsed));
                     }
                 } catch(e) {}
             }
             
-            // Reverted to HTML output from CKEditor, so we return as is
-            return data;
+            // Reverted to HTML output from CKEditor, process mentions and return
+            return window.processMentions(data);
+        };
+        
+        // Process @mentions in content and convert to profile links
+        window.processMentions = function(html) {
+            if (!html) return '';
+            // Match @username patterns (CKEditor uses <span class="mention" data-mention="@username">@username</span>)
+            // Also match plain text @username patterns
+            return html
+                // Handle CKEditor mention spans
+                .replace(/<span[^>]*class="[^"]*mention[^"]*"[^>]*data-mention="@([^"]+)"[^>]*>([^<]*)<\/span>/gi, 
+                    '<a href="/profile/@$1/" class="mention-link text-cyan-400 hover:text-white transition-colors font-bold">$2</a>')
+                // Handle plain text @username that is not already in a link
+                .replace(/(?<!href="[^"]*|>)@([a-zA-Z0-9_]+)(?![^<]*<\/a>)/g, 
+                    '<a href="/profile/@$1/" class="mention-link text-cyan-400 hover:text-white transition-colors font-bold">@$1</a>');
         };
 
         window.renderEditorJS = function(data) {
@@ -527,7 +546,7 @@
                                     <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center"><i class="bi bi-mic"></i></div>
                                     <div>
                                         <div class="text-xs font-black text-white">Âm Thanh</div>
-                                        <div class="text-[9px] text-white/40">Nhận diện giọng nói AI</div>
+                                        <div class="text-[9px] text-white/40">Phân tích hội thoại lừa đảo</div>
                                     </div>
                                 </a>
                             </div>
@@ -808,12 +827,7 @@
 
         // Theme toggle
         function toggleTheme() {
-            const html = document.documentElement;
-            const current = html.getAttribute('data-theme') || 'dark';
-            const next = current === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', next);
-            localStorage.setItem('theme', next);
-            updateThemeIcons(next);
+            showToast('🎨 Theme sáng đang trong quá trình phát triển', 'info');
         }
 
         function updateThemeIcons(theme) {

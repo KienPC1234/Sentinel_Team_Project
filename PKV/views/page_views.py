@@ -16,6 +16,7 @@ from api.core.models import (
     ScanEvent, Report, Domain, TrendDaily,
     UserAlert, ForumPost, ForumComment, ScamType, RiskLevel,
     Article, ArticleCategory, ReportStatus,
+    LearnLesson, LearnQuiz, LearnScenario,
 )
 from api.core.serializers import ForumPostSerializer, ForumCommentSerializer
 from api.phone_security.models import PhoneNumber
@@ -75,7 +76,14 @@ def home_view(request):
         "scam_detected": _format_number(scam_detected),
         "top_scam_types": top_scam_types,
         "latest_report": latest_report,
+        "DEMO_VIDEO_EMBED": getattr(settings, 'DEMO_VIDEO_EMBED', ''),
     })
+
+
+def demo_video_view(request):
+    """Redirect to YouTube demo video."""
+    video_url = getattr(settings, 'DEMO_VIDEO_URL', 'https://www.youtube.com/')
+    return redirect(video_url)
 
 
 def _format_number(n: int) -> str:
@@ -404,10 +412,16 @@ def _build_type_distribution(since):
 
 
 def learn_hub_view(request):
-    """Learn Hub with real articles."""
+    """Learn Hub with real articles and lessons."""
     articles = Article.objects.filter(is_published=True).order_by('-created_at')
-    
-    # Categorize for the template if needed, or just send all
+    lessons = LearnLesson.objects.filter(is_published=True).order_by('-created_at')
+
+    # All quizzes (from both lessons and articles)
+    all_quizzes = LearnQuiz.objects.select_related('lesson', 'article').order_by('-id')
+    # All scenarios
+    all_scenarios = LearnScenario.objects.order_by('-created_at')
+
+    # Categorize articles
     news_articles = articles.filter(category=ArticleCategory.NEWS)[:6]
     guide_articles = articles.filter(category=ArticleCategory.GUIDE)[:6]
     alert_articles = articles.filter(category=ArticleCategory.ALERT)[:6]
@@ -416,10 +430,13 @@ def learn_hub_view(request):
     return render(request, "LearnHub/learn_hub.html", {
         "title": "Kiến thức phòng tránh",
         "articles": articles[:12],
+        "lessons": lessons[:12],
         "news": news_articles,
         "guides": guide_articles,
         "alerts": alert_articles,
         "stories": story_articles,
+        "quizzes": all_quizzes,
+        "scenarios": all_scenarios,
     })
 
 
@@ -429,6 +446,23 @@ def article_detail_view(request, slug):
     return render(request, "Learning/article_detail.html", {
         "title": article.title,
         "article": article,
+    })
+
+
+def lesson_detail_view(request, slug):
+    """Lesson detail page with quizzes and scenario."""
+    lesson = get_object_or_404(LearnLesson, slug=slug, is_published=True)
+    quizzes = list(lesson.quizzes.all().values('id', 'question', 'options', 'correct_answer', 'explanation'))
+    scenario = lesson.scenarios.first()
+    scenario_steps = []
+    if scenario:
+        scenario_steps = scenario.content.get('steps', []) if isinstance(scenario.content, dict) else []
+    return render(request, "Learning/lesson_detail.html", {
+        "title": lesson.title,
+        "lesson": lesson,
+        "quizzes": quizzes,
+        "scenario": scenario,
+        "scenario_steps": scenario_steps,
     })
 
 

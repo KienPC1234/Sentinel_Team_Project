@@ -180,6 +180,28 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="p-8 space-y-4 border-t border-white/5 bg-white/[0.01]" x-show="result.online_lookup">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex items-center gap-3 text-white/40">
+                                <i class="bi bi-globe2"></i>
+                                <span class="text-[10px] font-black uppercase tracking-widest">Tra cứu Internet</span>
+                            </div>
+                            <span class="font-black text-[10px] px-2 py-0.5 rounded uppercase"
+                                :class="result.online_lookup?.suspected_disposable ? 'bg-red-500/20 text-red-500 border border-red-500/30' : 'bg-green-500/20 text-green-500 border border-green-500/30'"
+                                x-text="result.online_lookup?.suspected_disposable ? 'Có dấu hiệu số miễn phí online' : 'Không phát hiện số miễn phí online'"></span>
+                        </div>
+                        <p class="text-xs text-white/60" x-text="result.online_lookup?.note || ''"></p>
+
+                        <div class="space-y-2" x-show="result.online_lookup?.matches?.length">
+                            <template x-for="src in result.online_lookup.matches" :key="src.url">
+                                <div class="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                    <a :href="src.url" target="_blank" rel="noopener" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 transition-colors" x-text="src.title || src.url"></a>
+                                    <p class="text-[11px] text-white/40 mt-1 line-clamp-2" x-text="src.snippet"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- System Insight (Modern) -->

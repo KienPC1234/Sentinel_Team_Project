@@ -3,106 +3,136 @@
 
 {% block head_extra %}
 <style>
-    .magic-input {
-        width: 100%;
-        background: rgba(15, 23, 42, 0.4);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 1rem;
-        padding: 1rem 1.25rem;
-        color: white;
-        font-size: 0.875rem;
-        line-height: 1.6;
-        transition: all 0.3s;
-        resize: vertical;
+    /* ── Magic Create Premium Styles ── */
+    .mc-textarea {
+        width: 100%; background: rgba(15,23,42,0.5); border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 1.25rem; padding: 1.25rem 1.5rem; color: white; font-size: 0.875rem;
+        line-height: 1.7; transition: all 0.3s ease; resize: vertical; font-family: 'Inter', sans-serif;
     }
-    .magic-input:focus { border-color: #8b5cf6; outline: none; background: rgba(15,23,42,0.6); }
-    .magic-input::placeholder { color: rgba(255,255,255,0.2); }
+    .mc-textarea:focus { border-color: rgba(139,92,246,0.5); outline: none; background: rgba(15,23,42,0.7); box-shadow: 0 0 0 3px rgba(139,92,246,0.08); }
+    .mc-textarea::placeholder { color: rgba(255,255,255,0.15); }
 
-    .stream-section {
-        background: rgba(255,255,255,0.02);
-        border: 1px solid rgba(255,255,255,0.05);
-        border-radius: 1.5rem;
-        overflow: hidden;
-        transition: all 0.3s;
+    /* Pipeline stepper */
+    .mc-pipeline { display: flex; align-items: center; gap: 0; }
+    .mc-step-item { display: flex; align-items: center; gap: 0.5rem; position: relative; }
+    .mc-step-icon {
+        width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+        font-size: 14px; font-weight: 800; transition: all 0.4s ease; position: relative; z-index: 1;
+        background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.2);
     }
-    .stream-section.active { border-color: rgba(139,92,246,0.3); box-shadow: 0 0 30px rgba(139,92,246,0.05); }
-    .stream-section.done { border-color: rgba(34,197,94,0.3); }
+    .mc-step-icon.active {
+        background: linear-gradient(135deg, rgba(139,92,246,0.3), rgba(59,130,246,0.3));
+        border-color: rgba(139,92,246,0.5); color: #c4b5fd;
+        box-shadow: 0 0 20px rgba(139,92,246,0.15);
+        animation: mc-pulse 2s ease-in-out infinite;
+    }
+    .mc-step-icon.done {
+        background: linear-gradient(135deg, rgba(34,197,94,0.25), rgba(16,185,129,0.2));
+        border-color: rgba(34,197,94,0.4); color: #86efac;
+    }
+    .mc-step-connector {
+        width: 40px; height: 2px; background: rgba(255,255,255,0.05); margin: 0 4px;
+        border-radius: 1px; transition: background 0.4s; position: relative; overflow: hidden;
+    }
+    .mc-step-connector.done { background: rgba(34,197,94,0.3); }
+    .mc-step-connector.active::after {
+        content: ''; position: absolute; inset: 0; border-radius: 1px;
+        background: linear-gradient(90deg, rgba(139,92,246,0.6), rgba(59,130,246,0.6));
+        animation: mc-connector-flow 1.5s ease-in-out infinite;
+    }
+    @keyframes mc-connector-flow {
+        0% { transform: translateX(-100%); } 50% { transform: translateX(0); } 100% { transform: translateX(100%); }
+    }
+    @keyframes mc-pulse {
+        0%, 100% { box-shadow: 0 0 20px rgba(139,92,246,0.15); }
+        50% { box-shadow: 0 0 30px rgba(139,92,246,0.3); }
+    }
 
-    .stream-header {
-        display: flex; align-items: center; gap: 0.75rem;
-        padding: 1rem 1.5rem;
-        background: rgba(255,255,255,0.02);
-        border-bottom: 1px solid rgba(255,255,255,0.05);
+    /* Result cards */
+    .mc-card {
+        background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 1.25rem; overflow: hidden; transition: all 0.4s ease;
     }
-    .stream-body { padding: 1.5rem; min-height: 100px; }
+    .mc-card.active { border-color: rgba(139,92,246,0.25); box-shadow: 0 4px 40px rgba(139,92,246,0.06); }
+    .mc-card.done { border-color: rgba(34,197,94,0.2); }
+    .mc-card-head {
+        display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.25rem;
+        background: rgba(255,255,255,0.015); border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .mc-card-body { padding: 1.25rem; }
 
-    .stage-dot {
-        width: 10px; height: 10px; border-radius: 50%;
-        background: rgba(255,255,255,0.1);
-        transition: all 0.3s;
-    }
-    .stage-dot.active { background: #8b5cf6; box-shadow: 0 0 10px #8b5cf6; animation: pulse-dot 1.5s infinite; }
-    .stage-dot.done { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.3); }
+    /* Content preview */
+    .mc-content { color: rgba(255,255,255,0.7); font-size: 0.8rem; line-height: 1.8; }
+    .mc-content h1 { color: #22d3ee; font-size: 1.1rem; font-weight: 800; margin: 1.25rem 0 0.5rem; }
+    .mc-content h2 { color: #22d3ee; font-size: 1rem; font-weight: 800; margin: 1rem 0 0.5rem; }
+    .mc-content h3 { color: rgba(255,255,255,0.85); font-size: 0.9rem; font-weight: 700; margin: 0.75rem 0 0.3rem; }
+    .mc-content ul, .mc-content ol { padding-left: 1.5rem; }
+    .mc-content li { margin: 0.3rem 0; }
+    .mc-content p { margin: 0.5rem 0; }
+    .mc-content strong { color: white; }
+    .mc-content blockquote { border-left: 3px solid #8b5cf6; padding: 0.5rem 1rem; color: rgba(255,255,255,0.5); margin: 0.75rem 0; background: rgba(139,92,246,0.03); border-radius: 0 0.5rem 0.5rem 0; }
 
-    @keyframes pulse-dot {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.6; transform: scale(1.3); }
+    /* Quiz */
+    .mc-quiz {
+        background: rgba(139,92,246,0.03); border: 1px solid rgba(139,92,246,0.08);
+        border-radius: 1rem; padding: 1rem; transition: all 0.3s;
+    }
+    .mc-quiz:hover { border-color: rgba(139,92,246,0.2); background: rgba(139,92,246,0.05); }
+
+    /* Scenario chat */
+    .mc-chat-bubble {
+        display: flex; gap: 0.75rem; padding: 0.75rem; border-radius: 1rem; transition: all 0.2s;
+    }
+    .mc-chat-bubble:hover { background: rgba(255,255,255,0.02); }
+    .mc-chat-avatar {
+        width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+        font-size: 15px; flex-shrink: 0;
+    }
+    .mc-chat-avatar.scammer { background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.1)); }
+    .mc-chat-avatar.victim { background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(37,99,235,0.1)); }
+    .mc-chat-avatar.narrator { background: linear-gradient(135deg, rgba(168,85,247,0.15), rgba(147,51,234,0.1)); }
+
+    /* Skeleton */
+    .mc-skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 75%);
+        background-size: 200% 100%; animation: mc-shimmer 1.5s infinite; border-radius: 0.5rem; }
+    @keyframes mc-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* Typing dots */
+    .mc-dots { display: inline-flex; gap: 4px; align-items: center; }
+    .mc-dots span { width: 5px; height: 5px; border-radius: 50%; background: #8b5cf6; opacity: 0.3; animation: mc-bounce 1.2s infinite; }
+    .mc-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .mc-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes mc-bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.3; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+    /* Animations */
+    .mc-fade { animation: mc-fadeUp 0.5s ease-out both; }
+    @keyframes mc-fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .mc-fade-delay-1 { animation-delay: 0.1s; }
+    .mc-fade-delay-2 { animation-delay: 0.2s; }
+
+    /* Elapsed timer */
+    .mc-timer {
+        font-variant-numeric: tabular-nums; font-feature-settings: 'tnum';
     }
 
-    .quiz-card {
-        background: rgba(168,85,247,0.05);
-        border: 1px solid rgba(168,85,247,0.1);
-        border-radius: 1rem;
-        padding: 1rem;
-        transition: all 0.3s;
+    /* Glow button */
+    .mc-glow-btn {
+        position: relative; overflow: hidden;
     }
-    .quiz-card:hover { border-color: rgba(168,85,247,0.3); }
-
-    .step-bubble {
-        display: flex; gap: 0.75rem; align-items: flex-start;
-        padding: 0.5rem 0;
+    .mc-glow-btn::before {
+        content: ''; position: absolute; inset: -2px; border-radius: inherit;
+        background: linear-gradient(135deg, #8b5cf6, #3b82f6, #06b6d4, #8b5cf6); background-size: 300% 300%;
+        animation: mc-glow-spin 3s linear infinite; z-index: -1; opacity: 0; transition: opacity 0.3s;
     }
-    .step-avatar {
-        width: 28px; height: 28px; border-radius: 8px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 14px; flex-shrink: 0;
-    }
-    .step-avatar.scammer { background: rgba(239,68,68,0.15); }
-    .step-avatar.victim { background: rgba(59,130,246,0.15); }
-    .step-avatar.narrator { background: rgba(168,85,247,0.15); }
-
-    .content-preview { color: rgba(255,255,255,0.7); font-size: 0.8rem; line-height: 1.7; }
-    .content-preview h2 { color: #22d3ee; font-size: 1rem; font-weight: 800; margin: 1rem 0 0.5rem; }
-    .content-preview h3 { color: rgba(255,255,255,0.8); font-size: 0.9rem; font-weight: 700; margin: 0.75rem 0 0.3rem; }
-    .content-preview ul { padding-left: 1.5rem; }
-    .content-preview li { margin: 0.2rem 0; }
-    .content-preview p { margin: 0.4rem 0; }
-    .content-preview strong { color: white; }
-    .content-preview blockquote { border-left: 3px solid #8b5cf6; padding-left: 1rem; color: rgba(255,255,255,0.5); margin: 0.5rem 0; }
-
-    .typing-indicator { display: inline-flex; gap: 3px; align-items: center; padding: 4px 0; }
-    .typing-indicator span {
-        width: 6px; height: 6px; border-radius: 50%;
-        background: #8b5cf6; opacity: 0.4;
-        animation: typing-bounce 1.2s infinite;
-    }
-    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing-bounce {
-        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-        30% { transform: translateY(-4px); opacity: 1; }
-    }
-    .fade-in { animation: fadeIn 0.4s ease-out; }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(8px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
+    .mc-glow-btn:hover::before { opacity: 1; }
+    @keyframes mc-glow-spin { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8 mt-16" x-data="magicCreate()">
-    <!-- Header -->
+<div class="container mx-auto px-4 py-8 mt-16" x-data="magicCreate()" x-init="startTimer()">
+
+    <!-- ═══ Header ═══ -->
     <div class="flex items-center justify-between mb-8">
         <div class="flex items-center gap-4">
             <a href="{% url 'admin-manage-learn' %}" class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-purple-400 hover:border-purple-500/30 transition-all">
@@ -113,174 +143,357 @@
                     <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-purple-500/20">⚡</span>
                     Magic Create
                 </h1>
-                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">AI tạo bài học · 5 quiz · kịch bản hội thoại tự động</p>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">AI tạo bài học · 5 quiz · kịch bản hội thoại</p>
+            </div>
+        </div>
+        <!-- Timer (visible during streaming) -->
+        <div x-show="stage === 'streaming'" x-transition class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5">
+            <div class="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
+            <span class="text-xs font-bold text-white/40 mc-timer" x-text="elapsedStr"></span>
+        </div>
+    </div>
+
+    <!-- ═══ INPUT STAGE ═══ -->
+    <div x-show="stage === 'input'" x-transition:enter="mc-fade" class="max-w-3xl mx-auto">
+        <div class="liquid-card p-0 border-white/5 bg-slate-900/40 overflow-hidden">
+            <!-- Top visual -->
+            <div class="relative px-8 pt-10 pb-6 text-center overflow-hidden">
+                <div class="absolute inset-0 bg-gradient-to-b from-purple-600/5 to-transparent pointer-events-none"></div>
+                <div class="relative">
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-600/20 to-blue-600/20 border border-purple-500/15 flex items-center justify-center mx-auto mb-5 shadow-2xl shadow-purple-500/10">
+                        <i class="bi bi-stars text-3xl text-purple-400"></i>
+                    </div>
+                    <h2 class="text-xl font-black text-white mb-2">Biến tin tức thành bài học</h2>
+                    <p class="text-xs text-white/30 max-w-md mx-auto leading-relaxed">Dán bài báo, tin tức hoặc tài liệu về lừa đảo. AI sẽ tự động phân tích và tạo bài học hoàn chỉnh gồm nội dung, 5 câu quiz và kịch bản mô phỏng.</p>
+                </div>
+            </div>
+
+            <!-- Input area -->
+            <div class="px-8 pb-8 space-y-4">
+                <div class="relative">
+                    <textarea x-model="rawText" class="mc-textarea" rows="10" placeholder="Dán nội dung tin tức/bài báo về lừa đảo vào đây...&#10;&#10;Ví dụ: Công an vừa triệt phá đường dây lừa đảo qua mạng với thủ đoạn giả danh nhân viên ngân hàng gọi điện yêu cầu cung cấp OTP..."></textarea>
+                </div>
+
+                <div class="flex items-center justify-between pt-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-[10px] text-white/15 font-mono" x-text="rawText.length.toLocaleString() + ' ký tự'"></span>
+                        <span x-show="rawText.length > 0 && rawText.length < 100" class="text-[10px] text-amber-400/60">
+                            <i class="bi bi-exclamation-triangle mr-0.5"></i> Nên nhập ít nhất 100 ký tự
+                        </span>
+                    </div>
+                    <button @click="startCreate()" :disabled="!rawText.trim() || rawText.trim().length < 50 || creating"
+                        class="mc-glow-btn px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-purple-500/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2.5">
+                        <i class="bi bi-lightning-charge-fill text-base"></i>
+                        Magic Create
+                    </button>
+                </div>
+
+                <!-- Feature chips -->
+                <div class="flex flex-wrap gap-2 pt-2">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
+                        <i class="bi bi-journal-richtext text-cyan-500/50"></i> Bài học Markdown
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
+                        <i class="bi bi-patch-question text-purple-500/50"></i> 5 câu Quiz
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
+                        <i class="bi bi-chat-square-text text-blue-500/50"></i> Kịch bản 10+ bước
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
+                        <i class="bi bi-bell text-amber-500/50"></i> Push khi xong
+                    </span>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Input Section -->
-    <div x-show="stage === 'input'" x-transition class="max-w-3xl mx-auto space-y-6">
-        <div class="liquid-card p-8 border-white/5 bg-slate-900/40 space-y-6">
-            <div class="text-center space-y-2">
-                <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600/20 to-blue-600/20 border border-purple-500/20 flex items-center justify-center mx-auto mb-4">
-                    <i class="bi bi-magic text-2xl text-purple-400"></i>
-                </div>
-                <h2 class="text-lg font-black text-white">Dán văn bản nguồn</h2>
-                <p class="text-xs text-white/30 max-w-md mx-auto">Dán bài báo, tin tức, tài liệu về lừa đảo. AI sẽ tự động phân tích và tạo bài học đầy đủ với nội dung, quiz kiểm tra và kịch bản mô phỏng.</p>
+    <!-- ═══ STREAMING / DONE STAGE ═══ -->
+    <div x-show="stage === 'streaming' || stage === 'done'" x-transition:enter="mc-fade">
+
+        <!-- Pipeline Stepper -->
+        <div class="flex items-center justify-center mb-8">
+            <div class="mc-pipeline flex-wrap justify-center gap-y-2">
+                <template x-for="(s, i) in stages" :key="i">
+                    <div class="flex items-center">
+                        <div class="mc-step-item">
+                            <div class="mc-step-icon"
+                                :class="{
+                                    'active': currentStep === i+1 && stage !== 'done',
+                                    'done': currentStep > i+1 || stage === 'done'
+                                }">
+                                <template x-if="currentStep > i+1 || stage === 'done'"><i class="bi bi-check2 text-sm"></i></template>
+                                <template x-if="currentStep === i+1 && stage !== 'done'"><span class="mc-dots"><span></span><span></span><span></span></span></template>
+                                <template x-if="currentStep <= i && stage !== 'done'"><i :class="s.icon" class="text-xs"></i></template>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase tracking-wider hidden sm:inline"
+                                :class="currentStep >= i+1 || stage === 'done' ? 'text-white/50' : 'text-white/15'"
+                                x-text="s.name"></span>
+                        </div>
+                        <template x-if="i < stages.length - 1">
+                            <div class="mc-step-connector"
+                                :class="{
+                                    'done': currentStep > i+1 || stage === 'done',
+                                    'active': currentStep === i+1 && stage !== 'done'
+                                }"></div>
+                        </template>
+                    </div>
+                </template>
             </div>
+        </div>
 
-            <textarea x-model="rawText" class="magic-input" rows="10" placeholder="Ví dụ: Công an vừa triệt phá đường dây lừa đảo qua mạng với thủ đoạn giả danh nhân viên ngân hàng gọi điện yêu cầu cung cấp OTP. Nạn nhân là một phụ nữ 45 tuổi đã chuyển 500 triệu đồng cho kẻ gian..."></textarea>
+        <!-- Progress bar -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[10px] font-bold text-white/25 uppercase tracking-widest" x-text="statusMsg"></span>
+                <span class="text-[10px] font-black text-white/15 mc-timer" x-text="Math.round(progressPct) + '%'"></span>
+            </div>
+            <div class="w-full bg-white/[0.03] rounded-full h-1 overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-1000 ease-out"
+                    :class="stage === 'done' ? 'bg-gradient-to-r from-green-500 to-emerald-400' : 'bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400'"
+                    :style="'width:' + progressPct + '%'"></div>
+            </div>
+        </div>
 
-            <div class="flex items-center justify-between">
-                <span class="text-[10px] text-white/20" x-text="rawText.length + ' ký tự'"></span>
-                <button @click="startCreate()" :disabled="!rawText.trim() || creating" class="px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-500/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2">
-                    <i class="bi bi-lightning-charge-fill"></i>
-                    Bắt đầu sáng tạo
+        <!-- Success banner -->
+        <div x-show="stage === 'done'" x-transition class="mb-6 p-4 rounded-2xl bg-gradient-to-r from-green-500/5 to-emerald-500/5 border border-green-500/15 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center flex-shrink-0">
+                <i class="bi bi-check-circle-fill text-xl text-green-400"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-black text-white">Tạo bài học thành công!</h3>
+                <p class="text-[11px] text-white/30 mt-0.5">Kiểm tra nội dung bên dưới rồi nhấn <strong class="text-white/50">Lưu bản nháp</strong> để hoàn tất.</p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button @click="saveDraft()" :disabled="saving"
+                    class="px-5 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-green-500/20 flex items-center gap-2 disabled:opacity-50">
+                    <i class="bi bi-cloud-arrow-up-fill"></i>
+                    <span x-text="saving ? 'Đang lưu...' : 'Lưu bản nháp'"></span>
+                </button>
+                <button @click="stage = 'input'; resetResult()"
+                    class="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 font-bold text-xs transition-all border border-white/5">
+                    <i class="bi bi-arrow-repeat"></i>
                 </button>
             </div>
         </div>
-    </div>
 
-    <!-- Streaming Results Section -->
-    <div x-show="stage === 'streaming' || stage === 'done'" x-transition>
-        <!-- Progress Bar -->
-        <div class="mb-8 space-y-3">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <template x-for="(s, i) in stageNames" :key="i">
-                        <div class="flex items-center gap-2">
-                            <div class="stage-dot" :class="{ 'active': currentStep === i+1 && stage !== 'done', 'done': currentStep > i+1 || stage === 'done' }"></div>
-                            <span class="text-[10px] font-bold uppercase tracking-wider" :class="currentStep >= i+1 ? 'text-white/60' : 'text-white/20'" x-text="s"></span>
-                            <template x-if="i < stageNames.length - 1">
-                                <div class="w-8 h-px" :class="currentStep > i+1 || stage === 'done' ? 'bg-green-500/30' : 'bg-white/5'"></div>
-                            </template>
-                        </div>
-                    </template>
-                </div>
-                <span class="text-[10px] font-black text-white/30" x-text="statusMsg"></span>
+        <!-- Error banner -->
+        <div x-show="errorMsg" x-transition class="mb-6 p-4 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                <i class="bi bi-exclamation-triangle-fill text-red-400"></i>
             </div>
-            <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                <div class="h-full rounded-full transition-all duration-700" :class="stage === 'done' ? 'bg-green-500' : 'bg-gradient-to-r from-purple-500 to-cyan-500'" :style="'width:' + progressPct + '%'"></div>
+            <div class="flex-1">
+                <p class="text-xs text-red-300 font-bold" x-text="errorMsg"></p>
             </div>
+            <button @click="stage = 'input'; resetResult()" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 text-xs font-bold transition-all">Thử lại</button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <!-- Main Content Column -->
+            <!-- ─── Main Column ─── -->
             <div class="lg:col-span-8 space-y-6">
-                <!-- Lesson Content Stream -->
-                <div class="stream-section" :class="{ 'active': currentStep === 2, 'done': currentStep > 2 || stage === 'done' }">
-                    <div class="stream-header">
-                        <i class="bi bi-journal-text text-cyan-400"></i>
-                        <span class="text-xs font-black text-white/60 uppercase tracking-widest">Nội dung bài học</span>
-                        <template x-if="currentStep === 2 && stage !== 'done'"><span class="typing-indicator ml-auto"><span></span><span></span><span></span></span></template>
-                        <template x-if="currentStep > 2 || stage === 'done'"><span class="ml-auto text-[10px] text-green-400 font-bold">✓ Xong</span></template>
+
+                <!-- Lesson Content -->
+                <div class="mc-card" :class="{ 'active': currentStep === 2 && stage !== 'done', 'done': currentStep > 2 || stage === 'done' }">
+                    <div class="mc-card-head">
+                        <div class="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                            <i class="bi bi-journal-richtext text-cyan-400 text-xs"></i>
+                        </div>
+                        <span class="text-xs font-black text-white/50 uppercase tracking-widest">Nội dung bài học</span>
+                        <div class="ml-auto flex items-center gap-2">
+                            <template x-if="currentStep === 2 && stage !== 'done'"><span class="mc-dots"><span></span><span></span><span></span></span></template>
+                            <template x-if="currentStep > 2 || stage === 'done'">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-500/10 text-[9px] font-bold text-green-400"><i class="bi bi-check2"></i> Xong</span>
+                            </template>
+                        </div>
                     </div>
-                    <div class="stream-body">
-                        <template x-if="!result.title && currentStep < 2"><p class="text-white/10 text-xs italic">Đang chờ AI...</p></template>
-                        <template x-if="result.title">
-                            <div class="fade-in">
-                                <h3 class="text-lg font-black text-white mb-1" x-text="result.title"></h3>
-                                <span class="inline-flex px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[9px] font-black uppercase border border-blue-500/10 mb-3" x-text="result.category"></span>
+                    <div class="mc-card-body">
+                        <!-- Skeleton -->
+                        <template x-if="!result.title && (currentStep <= 2 && stage !== 'done')">
+                            <div class="space-y-3">
+                                <div class="mc-skeleton h-6 w-3/4"></div>
+                                <div class="mc-skeleton h-3 w-1/4"></div>
+                                <div class="mc-skeleton h-3 w-full mt-4"></div>
+                                <div class="mc-skeleton h-3 w-5/6"></div>
+                                <div class="mc-skeleton h-3 w-4/6"></div>
+                                <div class="mc-skeleton h-3 w-full"></div>
+                                <div class="mc-skeleton h-3 w-3/4"></div>
                             </div>
                         </template>
-                        <div class="content-preview" x-html="result.content || ''"></div>
+                        <!-- Real content -->
+                        <template x-if="result.title">
+                            <div class="mc-fade">
+                                <div class="flex items-start gap-3 mb-4">
+                                    <div class="flex-1 min-w-0">
+                                        <h3 class="text-lg font-black text-white leading-tight" x-text="result.title"></h3>
+                                    </div>
+                                    <span class="inline-flex px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider flex-shrink-0"
+                                        :class="{
+                                            'bg-blue-500/10 text-blue-400 border border-blue-500/10': result.category === 'news',
+                                            'bg-green-500/10 text-green-400 border border-green-500/10': result.category === 'guide',
+                                            'bg-red-500/10 text-red-400 border border-red-500/10': result.category === 'alert',
+                                            'bg-purple-500/10 text-purple-400 border border-purple-500/10': result.category === 'story'
+                                        }"
+                                        x-text="result.category === 'news' ? 'Tin tức' : result.category === 'guide' ? 'Hướng dẫn' : result.category === 'alert' ? 'Cảnh báo' : 'Câu chuyện'"></span>
+                                </div>
+                                <div class="mc-content" x-html="result.content || ''"></div>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
-                <!-- Scenario Stream -->
-                <div class="stream-section" :class="{ 'active': currentStep === 4, 'done': currentStep > 4 || stage === 'done' }">
-                    <div class="stream-header">
-                        <i class="bi bi-chat-dots text-blue-400"></i>
-                        <span class="text-xs font-black text-white/60 uppercase tracking-widest">Kịch bản hội thoại</span>
-                        <span class="ml-auto text-[9px] text-white/20" x-text="scenarioSteps.length ? scenarioSteps.length + ' bước' : ''"></span>
-                        <template x-if="currentStep === 4 && stage !== 'done'"><span class="typing-indicator"><span></span><span></span><span></span></span></template>
-                        <template x-if="currentStep > 4 || stage === 'done'"><span class="text-[10px] text-green-400 font-bold">✓ Xong</span></template>
+                <!-- Scenario -->
+                <div class="mc-card" :class="{ 'active': currentStep === 4 && stage !== 'done', 'done': currentStep > 4 || stage === 'done' }">
+                    <div class="mc-card-head">
+                        <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                            <i class="bi bi-chat-square-text text-blue-400 text-xs"></i>
+                        </div>
+                        <span class="text-xs font-black text-white/50 uppercase tracking-widest">Kịch bản hội thoại</span>
+                        <div class="ml-auto flex items-center gap-2">
+                            <span x-show="scenarioSteps.length" class="text-[9px] text-white/20 font-bold" x-text="scenarioSteps.length + ' bước'"></span>
+                            <template x-if="currentStep === 4 && stage !== 'done'"><span class="mc-dots"><span></span><span></span><span></span></span></template>
+                            <template x-if="currentStep > 4 || stage === 'done'">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-500/10 text-[9px] font-bold text-green-400"><i class="bi bi-check2"></i> Xong</span>
+                            </template>
+                        </div>
                     </div>
-                    <div class="stream-body">
-                        <template x-if="!result.scenario && currentStep < 4"><p class="text-white/10 text-xs italic">Đang chờ tạo kịch bản...</p></template>
-                        <template x-if="result.scenario">
-                            <div class="fade-in space-y-2">
-                                <h4 class="text-sm font-bold text-white" x-text="result.scenario.title"></h4>
-                                <p class="text-[10px] text-white/30" x-text="result.scenario.description"></p>
-                                <div class="space-y-0.5 mt-3">
-                                    <template x-for="(step, si) in scenarioSteps" :key="si">
-                                        <div class="step-bubble fade-in">
-                                            <div class="step-avatar" :class="step.speaker">
-                                                <span x-text="step.speaker === 'scammer' ? '🦹' : step.speaker === 'victim' ? '👤' : '📝'"></span>
-                                            </div>
-                                            <div class="flex-1">
-                                                <span class="text-[9px] font-black uppercase tracking-widest" :class="step.speaker === 'scammer' ? 'text-red-400' : step.speaker === 'victim' ? 'text-blue-400' : 'text-purple-400'" x-text="step.speaker === 'scammer' ? 'Kẻ lừa đảo' : step.speaker === 'victim' ? 'Nạn nhân' : 'Tường thuật'"></span>
-                                                <p class="text-xs text-white/70" x-text="step.text"></p>
-                                                <template x-if="step.note">
-                                                    <p class="text-[10px] text-purple-400/60 italic mt-0.5"><i class="bi bi-info-circle mr-1"></i><span x-text="step.note"></span></p>
-                                                </template>
-                                            </div>
+                    <div class="mc-card-body">
+                        <!-- Skeleton -->
+                        <template x-if="!result.scenario && (currentStep <= 4 && stage !== 'done')">
+                            <div class="space-y-4">
+                                <template x-for="i in 3" :key="i">
+                                    <div class="flex gap-3">
+                                        <div class="mc-skeleton w-8 h-8 rounded-lg flex-shrink-0"></div>
+                                        <div class="flex-1 space-y-2">
+                                            <div class="mc-skeleton h-2.5 w-20"></div>
+                                            <div class="mc-skeleton h-3 w-full"></div>
+                                            <div class="mc-skeleton h-3 w-2/3"></div>
                                         </div>
-                                    </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <!-- Real scenario -->
+                        <template x-if="result.scenario">
+                            <div class="mc-fade space-y-1">
+                                <div class="mb-4">
+                                    <h4 class="text-sm font-bold text-white" x-text="result.scenario.title"></h4>
+                                    <p class="text-[11px] text-white/25 mt-1" x-text="result.scenario.description"></p>
                                 </div>
+                                <template x-for="(step, si) in scenarioSteps" :key="si">
+                                    <div class="mc-chat-bubble mc-fade" :style="'animation-delay:' + (si * 0.05) + 's'">
+                                        <div class="mc-chat-avatar" :class="step.speaker">
+                                            <span x-text="step.speaker === 'scammer' ? '🦹' : step.speaker === 'victim' ? '👤' : '📖'"></span>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <span class="text-[9px] font-black uppercase tracking-widest"
+                                                    :class="step.speaker === 'scammer' ? 'text-red-400/80' : step.speaker === 'victim' ? 'text-blue-400/80' : 'text-purple-400/80'"
+                                                    x-text="step.speaker === 'scammer' ? 'Kẻ lừa đảo' : step.speaker === 'victim' ? 'Nạn nhân' : 'Tường thuật'"></span>
+                                                <span class="text-[8px] text-white/10 font-mono" x-text="'#' + (si + 1)"></span>
+                                            </div>
+                                            <p class="text-xs text-white/65 leading-relaxed" x-text="step.text"></p>
+                                            <template x-if="step.note">
+                                                <p class="text-[10px] text-purple-400/40 italic mt-1.5 flex items-start gap-1">
+                                                    <i class="bi bi-lightbulb text-purple-400/30 flex-shrink-0 mt-px"></i>
+                                                    <span x-text="step.note"></span>
+                                                </p>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
                         </template>
                     </div>
                 </div>
             </div>
 
-            <!-- Sidebar: Quizzes Stream -->
+            <!-- ─── Sidebar ─── -->
             <div class="lg:col-span-4 space-y-6">
-                <div class="stream-section sticky top-24" :class="{ 'active': currentStep === 3, 'done': currentStep > 3 || stage === 'done' }">
-                    <div class="stream-header">
-                        <i class="bi bi-list-check text-purple-400"></i>
-                        <span class="text-xs font-black text-white/60 uppercase tracking-widest">Quiz kiểm tra</span>
-                        <span class="ml-auto text-[9px] text-white/20" x-text="quizzes.length ? quizzes.length + ' câu' : ''"></span>
-                        <template x-if="currentStep === 3 && stage !== 'done'"><span class="typing-indicator"><span></span><span></span><span></span></span></template>
+
+                <!-- Quizzes -->
+                <div class="mc-card" :class="{ 'active': currentStep === 3 && stage !== 'done', 'done': currentStep > 3 || stage === 'done' }">
+                    <div class="mc-card-head">
+                        <div class="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                            <i class="bi bi-patch-question text-purple-400 text-xs"></i>
+                        </div>
+                        <span class="text-xs font-black text-white/50 uppercase tracking-widest">Quiz</span>
+                        <div class="ml-auto flex items-center gap-2">
+                            <span x-show="quizzes.length" class="text-[9px] text-white/20 font-bold" x-text="quizzes.length + ' câu'"></span>
+                            <template x-if="currentStep === 3 && stage !== 'done'"><span class="mc-dots"><span></span><span></span><span></span></span></template>
+                            <template x-if="currentStep > 3 || stage === 'done'">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-500/10 text-[9px] font-bold text-green-400"><i class="bi bi-check2"></i> Xong</span>
+                            </template>
+                        </div>
                     </div>
-                    <div class="stream-body space-y-3">
-                        <template x-if="quizzes.length === 0 && currentStep < 3"><p class="text-white/10 text-xs italic">Đang chờ tạo quiz...</p></template>
+                    <div class="mc-card-body space-y-3">
+                        <!-- Skeleton -->
+                        <template x-if="quizzes.length === 0 && (currentStep <= 3 && stage !== 'done')">
+                            <div class="space-y-3">
+                                <template x-for="i in 3" :key="i">
+                                    <div class="p-3 rounded-lg bg-white/[0.02] space-y-2">
+                                        <div class="mc-skeleton h-3 w-full"></div>
+                                        <div class="mc-skeleton h-3 w-4/5"></div>
+                                        <div class="space-y-1 mt-2">
+                                            <div class="mc-skeleton h-2.5 w-3/4"></div>
+                                            <div class="mc-skeleton h-2.5 w-2/3"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <!-- Real quizzes -->
                         <template x-for="(q, qi) in quizzes" :key="qi">
-                            <div class="quiz-card fade-in">
-                                <div class="flex items-start gap-2 mb-2">
-                                    <span class="w-5 h-5 rounded-md bg-purple-500/20 text-purple-400 text-[10px] font-black flex items-center justify-center flex-shrink-0" x-text="qi + 1"></span>
-                                    <p class="text-xs text-white/80 font-bold" x-text="q.question"></p>
+                            <div class="mc-quiz mc-fade" :style="'animation-delay:' + (qi * 0.08) + 's'">
+                                <div class="flex items-start gap-2.5 mb-2.5">
+                                    <span class="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 text-purple-300 text-[10px] font-black flex items-center justify-center flex-shrink-0" x-text="qi + 1"></span>
+                                    <p class="text-xs text-white/80 font-bold leading-relaxed" x-text="q.question"></p>
                                 </div>
-                                <div class="space-y-1 ml-7">
+                                <div class="space-y-1 ml-8">
                                     <template x-for="(opt, oi) in q.options" :key="oi">
-                                        <div class="text-[10px] px-2 py-1 rounded-lg" :class="opt === q.correct_answer ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-white/[0.03] text-white/40 border border-white/5'">
-                                            <span x-text="String.fromCharCode(65 + oi) + '. ' + opt"></span>
-                                            <template x-if="opt === q.correct_answer"><i class="bi bi-check-circle-fill ml-1"></i></template>
+                                        <div class="text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
+                                            :class="opt === q.correct_answer
+                                                ? 'bg-green-500/10 text-green-400 border border-green-500/15'
+                                                : 'bg-white/[0.02] text-white/35 border border-white/[0.03]'">
+                                            <span class="w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 text-[8px] font-black"
+                                                :class="opt === q.correct_answer ? 'bg-green-500/20 text-green-300' : 'bg-white/5 text-white/20'"
+                                                x-text="String.fromCharCode(65 + oi)"></span>
+                                            <span class="flex-1" x-text="opt"></span>
+                                            <template x-if="opt === q.correct_answer"><i class="bi bi-check-circle-fill text-green-400 text-[10px]"></i></template>
                                         </div>
                                     </template>
                                 </div>
                                 <template x-if="q.explanation">
-                                    <p class="text-[10px] text-white/30 italic mt-2 ml-7"><i class="bi bi-lightbulb mr-1 text-yellow-500"></i><span x-text="q.explanation"></span></p>
+                                    <div class="mt-2.5 ml-8 p-2 rounded-lg bg-amber-500/[0.03] border border-amber-500/10">
+                                        <p class="text-[10px] text-amber-300/50 leading-relaxed flex items-start gap-1.5">
+                                            <i class="bi bi-lightbulb-fill text-amber-400/40 flex-shrink-0 mt-px"></i>
+                                            <span x-text="q.explanation"></span>
+                                        </p>
+                                    </div>
                                 </template>
                             </div>
                         </template>
                     </div>
                 </div>
 
-                <!-- Action Buttons -->
-                <div x-show="stage === 'done'" x-transition class="space-y-3">
-                    <button @click="saveDraft()" :disabled="saving" class="w-full py-3.5 rounded-xl bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest transition-all shadow-lg shadow-green-500/20 flex items-center justify-center gap-2 disabled:opacity-50">
-                        <i class="bi bi-cloud-arrow-up-fill text-lg"></i>
-                        <span x-text="saving ? 'Đang lưu...' : 'Lưu bản nháp'"></span>
-                    </button>
-                    <button @click="stage = 'input'; resetResult()" class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 font-bold transition-all border border-white/5 flex items-center justify-center gap-2">
-                        <i class="bi bi-arrow-repeat"></i> Làm lại
-                    </button>
-                </div>
-
-                <!-- Log -->
-                <div class="stream-section" x-show="logs.length > 0">
-                    <div class="stream-header">
-                        <i class="bi bi-terminal text-white/30"></i>
-                        <span class="text-[10px] font-black text-white/30 uppercase tracking-widest">Log</span>
-                    </div>
-                    <div class="stream-body max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
-                        <template x-for="(log, li) in logs" :key="li">
-                            <div class="text-[10px] font-mono" :class="log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-400' : 'text-cyan-400/50'">
-                                <span class="text-white/10" x-text="log.time"></span>
-                                <span x-text="log.msg"></span>
+                <!-- Summary stats (done) -->
+                <div x-show="stage === 'done'" x-transition class="mc-card">
+                    <div class="mc-card-body">
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="text-center p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/10">
+                                <div class="text-lg font-black text-cyan-400">1</div>
+                                <div class="text-[9px] text-white/20 font-bold uppercase mt-0.5">Bài học</div>
                             </div>
-                        </template>
+                            <div class="text-center p-3 rounded-xl bg-purple-500/5 border border-purple-500/10">
+                                <div class="text-lg font-black text-purple-400" x-text="quizzes.length">0</div>
+                                <div class="text-[9px] text-white/20 font-bold uppercase mt-0.5">Quiz</div>
+                            </div>
+                            <div class="text-center p-3 rounded-xl bg-blue-500/5 border border-blue-500/10">
+                                <div class="text-lg font-black text-blue-400" x-text="scenarioSteps.length">0</div>
+                                <div class="text-[9px] text-white/20 font-bold uppercase mt-0.5">Bước</div>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-center text-[10px] text-white/15">
+                            <i class="bi bi-clock mr-1"></i> Hoàn thành trong <span class="text-white/30 font-bold" x-text="elapsedStr"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -293,39 +506,72 @@
 <script>
 function magicCreate() {
     return {
-        stage: 'input',  // input | streaming | done
+        stage: 'input',
         rawText: '',
         creating: false,
         saving: false,
         currentStep: 0,
         progressPct: 0,
         statusMsg: '',
+        errorMsg: '',
         result: {},
         quizzes: [],
         scenarioSteps: [],
-        logs: [],
         ws: null,
         taskId: null,
         pingInterval: null,
         reconnectAttempts: 0,
         maxReconnects: 10,
-        stageNames: ['Phân tích', 'Nội dung', 'Quiz', 'Kịch bản', 'Hoàn thành'],
+        elapsedSec: 0,
+        elapsedStr: '00:00',
+        _timerInterval: null,
+        stages: [
+            { name: 'Phân tích', icon: 'bi bi-search' },
+            { name: 'Nội dung', icon: 'bi bi-journal-text' },
+            { name: 'Quiz', icon: 'bi bi-patch-question' },
+            { name: 'Kịch bản', icon: 'bi bi-chat-dots' },
+            { name: 'Xong', icon: 'bi bi-check-lg' },
+        ],
 
-        addLog(msg, type = 'info') {
-            const now = new Date();
-            this.logs.push({ time: now.toLocaleTimeString(), msg, type });
+        startTimer() {
+            /* NOP on load — activated when streaming starts */
+        },
+
+        _startElapsed() {
+            this.elapsedSec = 0;
+            this.elapsedStr = '00:00';
+            if (this._timerInterval) clearInterval(this._timerInterval);
+            this._timerInterval = setInterval(() => {
+                this.elapsedSec++;
+                const m = String(Math.floor(this.elapsedSec / 60)).padStart(2, '0');
+                const s = String(this.elapsedSec % 60).padStart(2, '0');
+                this.elapsedStr = m + ':' + s;
+            }, 1000);
+        },
+        _stopElapsed() {
+            if (this._timerInterval) { clearInterval(this._timerInterval); this._timerInterval = null; }
+        },
+
+        _log(msg, level = 'log') {
+            const tag = '[MagicCreate]';
+            const ts = new Date().toLocaleTimeString();
+            const full = `${tag} ${ts} ${msg}`;
+            if (level === 'error') console.error(full);
+            else if (level === 'warn') console.warn(full);
+            else console.log(full);
         },
 
         resetResult() {
             this.result = {};
             this.quizzes = [];
             this.scenarioSteps = [];
-            this.logs = [];
             this.currentStep = 0;
             this.progressPct = 0;
             this.statusMsg = '';
+            this.errorMsg = '';
             this.creating = false;
             this.reconnectAttempts = 0;
+            this._stopElapsed();
             this.stopPing();
             if (this.ws) { this.ws.close(); this.ws = null; }
         },
@@ -348,8 +594,9 @@ function magicCreate() {
             this.creating = true;
             this.stage = 'streaming';
             this.resetResult();
-            this.creating = true; // re-set after reset
-            this.addLog('Gửi yêu cầu tới server...');
+            this.creating = true;
+            this._startElapsed();
+            this._log('Starting creation, text length: ' + this.rawText.length);
 
             try {
                 const resp = await fetch('/api/v1/admin/learn/ai-generate/', {
@@ -358,21 +605,25 @@ function magicCreate() {
                     body: JSON.stringify({ text: this.rawText })
                 });
                 const res = await resp.json();
+                this._log('API response: ' + resp.status + ' ' + JSON.stringify(res));
 
                 if (!resp.ok || res.status === 'error') {
-                    this.addLog('Lỗi: ' + (res.message || 'Server error'), 'error');
-                    this.stage = 'input';
+                    this._log('API error: ' + (res.message || resp.status), 'error');
+                    this.errorMsg = res.message || 'Lỗi server (HTTP ' + resp.status + ')';
+                    this.stage = 'streaming'; // keep visible with error banner
                     this.creating = false;
+                    this._stopElapsed();
                     return;
                 }
 
                 this.taskId = res.task_id;
-                this.addLog('Task ID: ' + this.taskId);
+                this._log('Task ID: ' + this.taskId);
                 this.connectWS(this.taskId);
             } catch (e) {
-                this.addLog('Lỗi kết nối: ' + e.message, 'error');
-                this.stage = 'input';
+                this._log('Fetch error: ' + e.message, 'error');
+                this.errorMsg = 'Không thể kết nối server: ' + e.message;
                 this.creating = false;
+                this._stopElapsed();
             }
         },
 
@@ -380,36 +631,45 @@ function magicCreate() {
             const proto = location.protocol === 'https:' ? 'wss' : 'ws';
             const url = `${proto}://${location.host}/ws/task/${taskId}/`;
             this.ws = new WebSocket(url);
-            this.addLog('WebSocket đang kết nối...');
+            this._log('WS connecting: ' + url);
 
             this.ws.onopen = () => {
                 this.reconnectAttempts = 0;
                 this.startPing();
-                this.addLog('WebSocket đã kết nối', 'success');
+                this._log('WS connected, readyState: ' + this.ws.readyState);
             };
 
             this.ws.onmessage = (e) => {
-                const msg = JSON.parse(e.data);
-                if (msg.type === 'pong') return; // ping/pong keepalive
+                let msg;
+                try {
+                    msg = JSON.parse(e.data);
+                } catch (err) {
+                    this._log('WS JSON parse error: ' + err.message + ', raw: ' + e.data, 'error');
+                    return;
+                }
+                if (msg.type === 'pong') return;
+                this._log('WS msg: status=' + msg.status + ' step=' + msg.step + ' msg=' + msg.message + ' data_keys=' + (msg.data ? Object.keys(msg.data) : 'none'));
                 this.handleWSMessage(msg);
             };
 
-            this.ws.onerror = () => {
-                this.addLog('WebSocket lỗi kết nối', 'error');
+            this.ws.onerror = (ev) => {
+                this._log('WS error event', 'error');
+                console.error('[MagicCreate] WS error:', ev);
             };
 
             this.ws.onclose = (ev) => {
                 this.stopPing();
-                // Auto-reconnect if task is still running (not done/error)
+                this._log('WS closed — code=' + ev.code + ' reason=' + ev.reason + ' clean=' + ev.wasClean);
                 if (this.creating && this.stage === 'streaming' && this.reconnectAttempts < this.maxReconnects) {
                     this.reconnectAttempts++;
                     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 15000);
-                    this.addLog(`WebSocket đóng — tự động kết nối lại (${this.reconnectAttempts}/${this.maxReconnects}) sau ${(delay/1000).toFixed(0)}s...`, 'error');
+                    this._log('WS reconnect ' + this.reconnectAttempts + '/' + this.maxReconnects + ' in ' + (delay/1000) + 's', 'warn');
                     setTimeout(() => this.connectWS(taskId), delay);
                 } else if (this.creating) {
-                    this.addLog('WebSocket đã đóng, vượt quá số lần retry.', 'error');
-                } else {
-                    this.addLog('WebSocket đã đóng');
+                    this._log('WS max reconnects exceeded', 'error');
+                    this.errorMsg = 'Mất kết nối WebSocket. Vui lòng thử lại.';
+                    this.creating = false;
+                    this._stopElapsed();
                 }
             };
         },
@@ -419,15 +679,39 @@ function magicCreate() {
                 this.currentStep = msg.step || this.currentStep;
                 this.statusMsg = msg.message || '';
                 this.progressPct = msg.step ? Math.min(msg.step / 5 * 90 + 5, 95) : this.progressPct;
-                this.addLog(msg.message);
 
-                // Handle partial data sent at each stage
                 if (msg.data) {
                     if (msg.data.title) this.result.title = msg.data.title;
                     if (msg.data.category) this.result.category = msg.data.category;
+                    // Content streaming (progressive HTML sections)
+                    if (msg.data.content_stream) this.result.content = msg.data.content_stream;
                     if (msg.data.content) this.result.content = msg.data.content;
-                    if (msg.data.quizzes) {
-                        this.quizzes = msg.data.quizzes;
+                    // Progressive quiz streaming (one by one)
+                    if (msg.data.quiz_item !== undefined) {
+                        const idx = msg.data.quiz_index;
+                        if (idx !== undefined && idx < this.quizzes.length) {
+                            this.quizzes[idx] = msg.data.quiz_item;
+                        } else {
+                            this.quizzes.push(msg.data.quiz_item);
+                        }
+                    }
+                    if (msg.data.quizzes) this.quizzes = msg.data.quizzes;
+                    // Progressive scenario streaming
+                    if (msg.data.scenario_header) {
+                        this.result.scenario = {
+                            title: msg.data.scenario_header.title,
+                            description: msg.data.scenario_header.description,
+                            content_json: { steps: [] }
+                        };
+                        this.scenarioSteps = [];
+                    }
+                    if (msg.data.scenario_step !== undefined) {
+                        this.scenarioSteps.push(msg.data.scenario_step);
+                        if (!this.result.scenario) {
+                            this.result.scenario = { title: '', description: '', content_json: { steps: this.scenarioSteps } };
+                        } else {
+                            this.result.scenario.content_json.steps = this.scenarioSteps;
+                        }
                     }
                     if (msg.data.scenario) {
                         this.result.scenario = msg.data.scenario;
@@ -442,23 +726,29 @@ function magicCreate() {
                 }
                 this.currentStep = 5;
                 this.progressPct = 100;
-                this.statusMsg = '✅ Hoàn thành!';
+                this.statusMsg = 'Hoàn thành!';
                 this.stage = 'done';
                 this.creating = false;
-                this.addLog('Tạo bài học thành công!', 'success');
+                this._stopElapsed();
+                this._log('Done! quizzes=' + this.quizzes.length + ' steps=' + this.scenarioSteps.length + ' elapsed=' + this.elapsedStr);
                 this.stopPing();
                 if (this.ws) this.ws.close();
             } else if (msg.status === 'error') {
-                this.addLog('Lỗi: ' + msg.message, 'error');
-                this.statusMsg = '❌ ' + msg.message;
+                this._log('Server error: ' + msg.message, 'error');
+                this.errorMsg = msg.message;
+                this.statusMsg = '';
                 this.creating = false;
+                this._stopElapsed();
                 this.stopPing();
                 if (this.ws) this.ws.close();
+            } else {
+                this._log('Unknown WS status: ' + msg.status, 'warn');
             }
         },
 
         async saveDraft() {
             this.saving = true;
+            this._log('Saving draft...');
             try {
                 const payload = {
                     title: this.result.title,
@@ -473,12 +763,12 @@ function magicCreate() {
                     body: JSON.stringify(payload)
                 });
                 const res = await resp.json();
+                this._log('Save response: ' + resp.status + ' ' + JSON.stringify(res));
                 if (resp.ok) {
-                    this.addLog('Đã lưu thành công! Lesson ID: ' + res.lesson_id, 'success');
                     await Swal.fire({
                         icon: 'success',
-                        title: 'Đã lưu bản nháp!',
-                        html: `<p class="text-white/40 text-sm">Bài học đã được tạo thành công.</p>`,
+                        title: 'Đã lưu thành công!',
+                        html: '<p class="text-white/40 text-sm">Bài học đã được tạo và lưu bản nháp.</p>',
                         background: '#0d0d1f',
                         color: '#fff',
                         timer: 2000,
@@ -487,11 +777,11 @@ function magicCreate() {
                     });
                     window.location.href = '{% url "admin-manage-learn" %}';
                 } else {
-                    this.addLog('Lỗi lưu: ' + (res.message || 'Unknown'), 'error');
-                    Swal.fire({ icon: 'error', title: 'Lỗi', text: res.message || 'Không thể lưu', background: '#0d0d1f', color: '#fff', customClass: { popup: 'rounded-[2rem] border border-white/10' } });
+                    Swal.fire({ icon: 'error', title: 'Lỗi lưu', text: res.message || 'Không thể lưu', background: '#0d0d1f', color: '#fff', customClass: { popup: 'rounded-[2rem] border border-white/10' } });
                 }
             } catch (e) {
-                this.addLog('Lỗi kết nối: ' + e.message, 'error');
+                this._log('Save error: ' + e.message, 'error');
+                Swal.fire({ icon: 'error', title: 'Lỗi', text: 'Mất kết nối: ' + e.message, background: '#0d0d1f', color: '#fff', customClass: { popup: 'rounded-[2rem] border border-white/10' } });
             }
             this.saving = false;
         },

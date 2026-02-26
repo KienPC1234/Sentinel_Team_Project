@@ -149,10 +149,63 @@ def manage_forum(request):
     posts = ForumPost.objects.select_related('author').order_by('-is_pinned', '-created_at')[:100]
     post_reports = ForumPostReport.objects.select_related('reporter', 'post', 'post__author').order_by('-created_at')
     comment_reports = ForumCommentReport.objects.select_related('reporter', 'comment', 'comment__author').order_by('-created_at')
+
+    from django.utils.timesince import timesince
+    posts_json = [
+        {
+            'id': p.id,
+            'title': p.title,
+            'author_name': p.author.get_full_name() or p.author.username,
+            'category': p.category,
+            'likes_count': p.likes_count,
+            'comments_count': p.comments_count,
+            'views_count': p.views_count,
+            'is_pinned': p.is_pinned,
+            'is_locked': p.is_locked,
+            'created_at_display': timesince(p.created_at) + ' trước',
+        }
+        for p in posts
+    ]
+
+    def _report_ai_status(report):
+        ai = report.ai_analysis or {}
+        if ai.get('violation') is True:
+            return {'ai_status': 'done', 'ai_violation': True, 'ai_confidence': ai.get('confidence', '—')}
+        if ai.get('violation') is False:
+            return {'ai_status': 'done', 'ai_violation': False, 'ai_confidence': ai.get('confidence', '—')}
+        return {'ai_status': 'none', 'ai_violation': None, 'ai_confidence': None}
+
+    post_reports_json = [
+        {
+            'id': r.id,
+            'reporter_name': r.reporter.get_full_name() or r.reporter.username,
+            'post_title': r.post.title if r.post else '—',
+            'reason': r.reason,
+            'status': r.status,
+            'created_at_display': timesince(r.created_at) + ' trước',
+            **_report_ai_status(r),
+        }
+        for r in post_reports
+    ]
+    comment_reports_json = [
+        {
+            'id': r.id,
+            'reporter_name': r.reporter.get_full_name() or r.reporter.username,
+            'comment_content': (r.comment.content[:120] + '…') if r.comment and len(r.comment.content) > 120 else (r.comment.content if r.comment else '—'),
+            'reason': r.reason,
+            'status': r.status,
+            'created_at_display': timesince(r.created_at) + ' trước',
+        }
+        for r in comment_reports
+    ]
+
     return render(request, "Admin/forum_management.html", {
         "posts": posts,
         "post_reports": post_reports,
         "comment_reports": comment_reports,
+        "posts_json": posts_json,
+        "post_reports_json": post_reports_json,
+        "comment_reports_json": comment_reports_json,
     })
 
 
@@ -297,11 +350,9 @@ def reject_report(request, report_id):
 def edit_lesson(request, lesson_id=None):
     """View to create or edit a Learn Lesson with quiz and scenario"""
     lesson = None
-    quiz = None
     scenario = None
     if lesson_id:
         lesson = get_object_or_404(LearnLesson, id=lesson_id)
-        quiz = lesson.quizzes.first()
         scenario = LearnScenario.objects.filter(
             title__icontains=lesson.title[:30]
         ).first() if lesson else None
@@ -318,33 +369,31 @@ def edit_lesson(request, lesson_id=None):
         if form.is_valid():
             lesson = form.save()
             
-            # Handle quiz data
-            quiz_question = request.POST.get('quiz_question', '').strip()
-            if quiz_question:
-                quiz_options = [
-                    request.POST.get('quiz_option_0', '').strip(),
-                    request.POST.get('quiz_option_1', '').strip(),
-                    request.POST.get('quiz_option_2', '').strip(),
-                    request.POST.get('quiz_option_3', '').strip(),
-                ]
-                quiz_options = [o for o in quiz_options if o]  # filter empty
-                quiz_correct = request.POST.get('quiz_correct', '').strip()
-                quiz_explanation = request.POST.get('quiz_explanation', '').strip()
-                
-                if quiz:
-                    quiz.question = quiz_question
-                    quiz.options = quiz_options
-                    quiz.correct_answer = quiz_correct
-                    quiz.explanation = quiz_explanation
-                    quiz.save()
-                else:
-                    LearnQuiz.objects.create(
-                        lesson=lesson,
-                        question=quiz_question,
-                        options=quiz_options,
-                        correct_answer=quiz_correct,
-                        explanation=quiz_explanation,
-                    )
+            # Handle multiple quizzes from JSON
+            quizzes_raw = request.POST.get('quizzes_json', '').strip()
+            if quizzes_raw:
+                try:
+                    quizzes_data = json.loads(quizzes_raw)
+                    # Delete existing quizzes and recreate
+                    lesson.quizzes.all().delete()
+                    for qd in quizzes_data:
+                        if qd.get('question') and qd.get('options'):
+                            correct_answers = qd.get('correct_answers') or []
+                            if not isinstance(correct_answers, list):
+                                correct_answers = []
+                            if not correct_answers and qd.get('correct_answer'):
+                                correct_answers = [qd.get('correct_answer')]
+                            LearnQuiz.objects.create(
+                                lesson=lesson,
+                                question=qd['question'],
+                                question_type=qd.get('question_type') or 'single_choice',
+                                options=qd['options'],
+                                correct_answer=qd.get('correct_answer', ''),
+                                correct_answers=correct_answers,
+                                explanation=qd.get('explanation', ''),
+                            )
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.error(f"Failed to parse quizzes JSON in edit_lesson: {e}")
             
             # Handle scenario data
             scenario_title = request.POST.get('scenario_title', '').strip()
@@ -368,6 +417,7 @@ def edit_lesson(request, lesson_id=None):
                         sc.save()
                     except LearnScenario.DoesNotExist:
                         LearnScenario.objects.create(
+                            lesson=lesson,
                             title=scenario_title,
                             description=scenario_desc,
                             content=scenario_content,
@@ -379,6 +429,7 @@ def edit_lesson(request, lesson_id=None):
                     scenario.save()
                 else:
                     LearnScenario.objects.create(
+                        lesson=lesson,
                         title=scenario_title,
                         description=scenario_desc,
                         content=scenario_content,
@@ -395,18 +446,25 @@ def edit_lesson(request, lesson_id=None):
         steps = scenario.content.get('steps', []) if isinstance(scenario.content, dict) else []
         scenario_steps_json = json.dumps(steps, ensure_ascii=False)
     
-    # Prepare quiz options as JSON for the template
-    quiz_options_json = '[]'
-    if quiz and quiz.options:
-        quiz_options_json = json.dumps(quiz.options, ensure_ascii=False)
+    # Prepare all quizzes as JSON for the template
+    quizzes_json = '[]'
+    if lesson:
+        qs = list(lesson.quizzes.all().values('id', 'question', 'question_type', 'options', 'correct_answer', 'correct_answers', 'explanation'))
+        quizzes_json = json.dumps([{
+            'question': q['question'] or '',
+            'question_type': q.get('question_type') or 'single_choice',
+            'options': q['options'] if isinstance(q['options'], list) else [],
+            'correct_answer': q['correct_answer'] or '',
+            'correct_answers': q['correct_answers'] if isinstance(q.get('correct_answers'), list) else ([q['correct_answer']] if q['correct_answer'] else []),
+            'explanation': q['explanation'] or '',
+        } for q in qs], ensure_ascii=False)
     
     return render(request, "Admin/edit_lesson.html", {
         "form": form,
         "lesson": lesson,
-        "quiz": quiz,
+        "quizzes_json": quizzes_json,
         "scenario": scenario,
         "scenario_steps_json": scenario_steps_json,
-        "quiz_options_json": quiz_options_json,
         "title": "Chỉnh sửa bài học" if lesson else "Thêm bài học mới"
     })
 
@@ -538,6 +596,7 @@ def magic_save_lesson_api(request):
             scenario_data = data.get('scenario')
             if scenario_data:
                 LearnScenario.objects.create(
+                    lesson=lesson,
                     title=scenario_data.get('title'),
                     description=scenario_data.get('description'),
                     content=scenario_data.get('content_json'),
@@ -583,11 +642,18 @@ def edit_article(request, article_id=None):
                     quizzes = json.loads(quizzes_data)
                     article.quizzes.all().delete()
                     for q in quizzes:
+                        correct_answers = q.get('correct_answers') or []
+                        if not isinstance(correct_answers, list):
+                            correct_answers = []
+                        if not correct_answers and q.get('correct_answer'):
+                            correct_answers = [q.get('correct_answer')]
                         LearnQuiz.objects.create(
                             article=article,
                             question=q.get('question'),
+                            question_type=q.get('question_type') or 'single_choice',
                             options=q.get('options', []),
                             correct_answer=q.get('correct_answer'),
+                            correct_answers=correct_answers,
                             explanation=q.get('explanation', '')
                         )
                 except Exception as e:
@@ -603,8 +669,10 @@ def edit_article(request, article_id=None):
         for q in article.quizzes.all():
             existing_quizzes.append({
                 'question': q.question,
+                'question_type': getattr(q, 'question_type', 'single_choice') or 'single_choice',
                 'options': q.options,
                 'correct_answer': q.correct_answer,
+                'correct_answers': getattr(q, 'correct_answers', []) or ([q.correct_answer] if q.correct_answer else []),
                 'explanation': q.explanation
             })
 

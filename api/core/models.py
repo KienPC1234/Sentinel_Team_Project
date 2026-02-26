@@ -394,6 +394,8 @@ class ForumComment(models.Model):
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
     content = models.TextField()
     likes_count = models.IntegerField(default=0)
+    dislikes_count = models.IntegerField(default=0)
+    helpful_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -433,6 +435,45 @@ class ForumReactionType(models.TextChoices):
     HELPFUL = 'helpful', 'Hữu ích'
     SHARE = 'share', 'Chia sẻ'
     DISLIKE = 'dislike', 'Không thích'
+
+
+class ForumCommentReaction(models.Model):
+    """Reactions on forum comments (upvote/downvote/helpful)"""
+    class ReactionType(models.TextChoices):
+        UPVOTE = 'upvote', 'Upvote'
+        DOWNVOTE = 'downvote', 'Downvote'
+        HELPFUL = 'helpful', 'Hữu ích'
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    comment = models.ForeignKey(ForumComment, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=10, choices=ReactionType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'comment', 'reaction_type']
+
+    def __str__(self):
+        return f"{self.user.username} {self.reaction_type} comment {self.comment.id}"
+
+
+class ForumPostView(models.Model):
+    """Track unique views per post"""
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE, related_name='unique_views')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    session_key = models.CharField(max_length=40, blank=True)
+    viewed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['post', 'user']),
+            models.Index(fields=['post', 'ip_address']),
+        ]
+
+    def __str__(self):
+        identifier = self.user.username if self.user else self.ip_address
+        return f"View on post {self.post.id} by {identifier}"
+
 
 class ForumPostReaction(models.Model):
     """Specific reactions like Helpful or Shared"""
@@ -527,18 +568,27 @@ class LearnLesson(models.Model):
             self.slug = slugify(self.title)
         super().save(*args, **kwargs)
 
+
+class QuizQuestionType(models.TextChoices):
+    SINGLE = 'single_choice', 'Chọn 1 đáp án'
+    MULTIPLE = 'multiple_choice', 'Chọn nhiều đáp án'
+    TRUE_FALSE = 'true_false', 'Đúng / Sai'
+
 class LearnQuiz(models.Model):
     """Quizzes attached to lessons"""
     lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='quizzes', null=True, blank=True)
     article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='quizzes', null=True, blank=True)
     question = models.TextField()
+    question_type = models.CharField(max_length=30, choices=QuizQuestionType.choices, default=QuizQuestionType.SINGLE)
     options = models.JSONField(help_text="List of choices")
     correct_answer = models.CharField(max_length=200)
+    correct_answers = models.JSONField(default=list, blank=True, help_text="List of correct choices for multi-select")
     explanation = models.TextField(blank=True)
 
 class LearnScenario(models.Model):
     """Interactive scam scenarios"""
     title = models.CharField(max_length=300)
+    lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='scenarios', null=True, blank=True)
     article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='scenarios', null=True, blank=True)
     description = models.TextField()
     content = models.JSONField(help_text="Scenario flow logic")

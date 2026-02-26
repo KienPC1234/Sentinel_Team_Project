@@ -228,7 +228,7 @@
                     if (line.startsWith('data: ')) {
                         try {
                             const d = JSON.parse(line.substring(6));
-                            if (d.chunk) this.aiText += d.chunk;
+                            if (d.chunk && !d.chunk.startsWith('__STATUS__')) this.aiText += d.chunk;
                             if (d.done) this.aiLoading = false;
                         } catch (e) {}
                     }
