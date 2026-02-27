@@ -36,5 +36,5 @@ markdown
 faster-whisper
 soundfile
 whitenoise
-faiss
+faiss-cpu
 pywebpush>=2.0.3
