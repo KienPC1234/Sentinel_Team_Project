@@ -19,6 +19,8 @@ from django.db import transaction
 from django.utils import timezone
 from django.core.paginator import Paginator
 from datetime import timedelta
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 # The instruction implies these are from a local file, but the original code doesn't have a .page_views.
 # Assuming the user wants to add these imports, but the functions admin_required and super_admin_required are defined in this file.
 # If they were meant to be imported from .page_views, the local definitions would be redundant or cause issues.
@@ -27,6 +29,48 @@ from datetime import timedelta
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def _broadcast_forum_live_event(event_name: str, payload: dict):
+    try:
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+        async_to_sync(channel_layer.group_send)(
+            'forum_live',
+            {
+                'type': 'forum_live_event',
+                'event': event_name,
+                'payload': payload or {},
+                'timestamp': timezone.now().isoformat(),
+            }
+        )
+    except Exception as exc:
+        logger.warning(f"Forum live broadcast failed ({event_name}): {exc}")
+
+
+def _soft_hide_post(post, reason: str = ''):
+    note = _strip_html_for_summary(reason or '')
+    prefix = '[NỘI DUNG ĐÃ TẠM ẨN BỞI KIỂM DUYỆT VIÊN]'
+    replacement = f"{prefix}\n\nLý do: {note[:280]}" if note else f"{prefix}\n\nĐang chờ xử lý thủ công."
+    changed_fields = []
+    if not str(post.content or '').startswith(prefix):
+        post.content = replacement
+        changed_fields.append('content')
+    if not post.is_locked:
+        post.is_locked = True
+        changed_fields.append('is_locked')
+    if changed_fields:
+        post.save(update_fields=changed_fields)
+
+
+def _soft_hide_comment(comment, reason: str = ''):
+    note = _strip_html_for_summary(reason or '')
+    prefix = '[BÌNH LUẬN ĐÃ TẠM ẨN BỞI KIỂM DUYỆT VIÊN]'
+    replacement = f"{prefix} Lý do: {note[:220]}" if note else f"{prefix} Đang chờ xử lý thủ công."
+    if not str(comment.content or '').startswith(prefix):
+        comment.content = replacement
+        comment.save(update_fields=['content'])
 
 
 def _paginate_queryset(request, queryset, per_page=20):
@@ -46,6 +90,74 @@ def _strip_html_for_summary(text: str) -> str:
     return cleaned
 
 
+def _extract_summary_text(raw_response) -> str:
+    if raw_response is None:
+        return ''
+
+    if isinstance(raw_response, dict):
+        for key in ('summary', 'tóm_tắt', 'tom_tat', 'content', 'text', 'title'):
+            value = raw_response.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return ''
+
+    text = str(raw_response).strip()
+    if not text:
+        return ''
+
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        parsed = None
+
+    if parsed is None and text.startswith('```'):
+        stripped = re.sub(r'^```(?:json)?\s*', '', text)
+        stripped = re.sub(r'\s*```$', '', stripped).strip()
+        try:
+            parsed = json.loads(stripped)
+        except Exception:
+            parsed = None
+
+    if parsed is None and text.startswith('{') and text.endswith('}'):
+        try:
+            import ast
+            parsed = ast.literal_eval(text)
+        except Exception:
+            parsed = None
+
+    if isinstance(parsed, dict):
+        for key in ('summary', 'tóm_tắt', 'tom_tat', 'content', 'text', 'title'):
+            value = parsed.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+    if isinstance(parsed, list):
+        for item in parsed:
+            if isinstance(item, dict):
+                for key in ('summary', 'tóm_tắt', 'tom_tat', 'content', 'text', 'title'):
+                    value = item.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+
+    # regex fallback for malformed JSON / escaped payloads
+    for pattern in [
+        r'"summary"\s*:\s*"([\s\S]*?)"\s*(?:,|})',
+        r'"tóm_tắt"\s*:\s*"([\s\S]*?)"\s*(?:,|})',
+        r'"tom_tat"\s*:\s*"([\s\S]*?)"\s*(?:,|})',
+        r"'summary'\s*:\s*'([\s\S]*?)'\s*(?:,|})",
+        r"'tóm_tắt'\s*:\s*'([\s\S]*?)'\s*(?:,|})",
+    ]:
+        m = re.search(pattern, text)
+        if m and m.group(1).strip():
+            return m.group(1).strip()
+
+    # If still object-like, avoid leaking raw JSON into summary field
+    if (text.startswith('{') and text.endswith('}')) or (text.startswith('[') and text.endswith(']')):
+        return ''
+
+    return text
+
+
 def _generate_summary_ai(title: str, content: str) -> str:
     """Generate short summary using SMALL_MODEL; returns empty string on failure."""
     source = _strip_html_for_summary(content)
@@ -56,27 +168,36 @@ def _generate_summary_ai(title: str, content: str) -> str:
         from api.utils.ollama_client import generate_response
 
         small_model = getattr(settings, 'SMALL_MODEL', None) or getattr(settings, 'LLM_MODEL', 'ministral-3:14b-cloud')
-        prompt = f"""Tạo tóm tắt ngắn bằng tiếng Việt cho bài viết/bài học sau.
+        summary_schema = {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"}
+            },
+            "required": ["summary"]
+        }
+        prompt = f"""Tạo tóm tắt súc tích bằng tiếng Việt cho bài viết/bài học sau.
 
 TIÊU ĐỀ: {title or ''}
 NỘI DUNG:
 {source[:4000]}
 
 YÊU CẦU:
-- 1 đoạn, tối đa 280 ký tự
+- 2-4 câu ngắn, tối đa 420 ký tự
 - Dễ hiểu, trung lập, không emoji
-- Chỉ trả về nội dung tóm tắt thuần văn bản
+- KHÔNG trả về JSON thô trong trường summary (không object lồng, không key khác)
 """
-        summary = generate_response(
+        raw_summary = generate_response(
             prompt=prompt,
             model=small_model,
-            system_prompt='Bạn là trợ lý biên tập. Viết tóm tắt ngắn, rõ ràng, chính xác. Không markdown.',
+            system_prompt='Trả về JSON thuần theo schema. Không markdown, không code block.',
+            format_schema=summary_schema,
             tools=[],
-            max_tokens=220,
+            max_tokens=1200,
             skip_filter=True,
         ) or ''
+        summary = _extract_summary_text(raw_summary)
         summary = re.sub(r'\s+', ' ', summary).strip().strip('"')
-        return summary[:280]
+        return summary[:420]
     except Exception as exc:
         logger.warning(f"Summary generation failed: {exc}")
         return ''
@@ -209,7 +330,14 @@ def manage_reports(request):
     for r in reports_page.object_list:
         evidence_imgs = []
         try:
-            evidence_imgs = [img.image.url for img in r.evidence_images.all() if getattr(img, 'image', None)]
+            evidence_imgs = [
+                {
+                    'url': img.image.url,
+                    'caption': img.caption or '',
+                }
+                for img in r.evidence_images.all()
+                if getattr(img, 'image', None)
+            ]
         except Exception:
             evidence_imgs = []
 
@@ -290,8 +418,8 @@ def manage_forum(request):
         {
             'id': r.id,
             'reporter_name': r.reporter.get_full_name() or r.reporter.username,
-            'post_title': r.post.title if r.post else '—',
-            'reason': r.reason,
+            'post_title': _strip_html_for_summary(r.post.title) if r.post else '—',
+            'reason': _strip_html_for_summary(r.reason),
             'status': r.status,
             'created_at_display': timesince(r.created_at) + ' trước',
             **_report_ai_status(r),
@@ -302,8 +430,12 @@ def manage_forum(request):
         {
             'id': r.id,
             'reporter_name': r.reporter.get_full_name() or r.reporter.username,
-            'comment_content': (r.comment.content[:120] + '…') if r.comment and len(r.comment.content) > 120 else (r.comment.content if r.comment else '—'),
-            'reason': r.reason,
+            'comment_content': (
+                (_strip_html_for_summary(r.comment.content)[:120] + '…')
+                if r.comment and len(_strip_html_for_summary(r.comment.content)) > 120
+                else (_strip_html_for_summary(r.comment.content) if r.comment else '—')
+            ),
+            'reason': _strip_html_for_summary(r.reason),
             'status': r.status,
             'created_at_display': timesince(r.created_at) + ' trước',
             **_report_ai_status(r),
@@ -441,8 +573,22 @@ def forum_report_action(request, report_type, report_id):
             report.is_resolved = True
             report.save()
             if report_type == 'post' and hasattr(report, 'post'):
-                report.post.is_locked = True
-                report.post.save(update_fields=['is_locked'])
+                _soft_hide_post(report.post, report.reason)
+                _broadcast_forum_live_event('post_moderated', {
+                    'post_id': report.post.id,
+                    'report_id': report.id,
+                    'source': 'admin_moderation',
+                    'action': 'hidden',
+                })
+            elif report_type == 'comment' and hasattr(report, 'comment'):
+                _soft_hide_comment(report.comment, report.reason)
+                _broadcast_forum_live_event('comment_moderated', {
+                    'post_id': report.comment.post_id,
+                    'comment_id': report.comment.id,
+                    'report_id': report.id,
+                    'source': 'admin_moderation',
+                    'action': 'hidden',
+                })
             return JsonResponse({'status': 'ok', 'message': f'Đã chấp thuận báo cáo #{report_id}'})
 
         elif action == 'reject':
@@ -1020,15 +1166,25 @@ def magic_create_article_api(request):
     try:
         data = json.loads(request.body)
         raw_text = data.get('text', '').strip()
+        sources_raw = data.get('sources', [])
+
+        if isinstance(sources_raw, str):
+            sources = [line.strip() for line in sources_raw.split('\n') if line.strip()]
+        elif isinstance(sources_raw, list):
+            sources = [str(item).strip() for item in sources_raw if str(item).strip()]
+        else:
+            sources = []
         
         if not raw_text:
             return JsonResponse({'status': 'error', 'message': 'Empty text'}, status=400)
+        if not sources:
+            return JsonResponse({'status': 'error', 'message': 'Vui lòng thêm ít nhất 1 nguồn trích dẫn'}, status=400)
         
         import uuid
         task_id = uuid.uuid4().hex[:12]
         
         from api.core.tasks import magic_create_article_task
-        magic_create_article_task.delay(task_id, raw_text)
+        magic_create_article_task.delay(task_id, raw_text, sources, request.user.id)
         
         return JsonResponse({'status': 'pending', 'task_id': task_id})
         
@@ -1076,6 +1232,16 @@ def magic_create_lesson_api(request):
         raw_text = data.get('text', '').strip()
         include_quiz = bool(data.get('include_quiz', True))
         include_scenario = bool(data.get('include_scenario', True))
+        try:
+            quiz_count = int(data.get('quiz_count', 5))
+        except (TypeError, ValueError):
+            quiz_count = 5
+        try:
+            scenario_steps = int(data.get('scenario_steps', 8))
+        except (TypeError, ValueError):
+            scenario_steps = 8
+        quiz_count = max(1, min(quiz_count, 20))
+        scenario_steps = max(4, min(scenario_steps, 30))
         
         if not raw_text:
             return JsonResponse({'status': 'error', 'message': 'Empty text'}, status=400)
@@ -1084,7 +1250,15 @@ def magic_create_lesson_api(request):
         task_id = uuid.uuid4().hex[:12]
         
         from api.core.tasks import magic_create_lesson_task
-        magic_create_lesson_task.delay(task_id, raw_text, include_quiz, include_scenario)
+        magic_create_lesson_task.delay(
+            task_id,
+            raw_text,
+            include_quiz,
+            include_scenario,
+            quiz_count,
+            scenario_steps,
+            request.user.id,
+        )
         
         return JsonResponse({'status': 'pending', 'task_id': task_id})
         

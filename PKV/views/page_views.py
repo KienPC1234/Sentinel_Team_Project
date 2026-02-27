@@ -2,6 +2,7 @@ from django.conf import settings
 import json
 import logging
 from django.shortcuts import render, get_object_or_404, redirect
+from django.http import Http404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash, logout, get_user_model
 from django.contrib import messages
@@ -14,9 +15,11 @@ from datetime import timedelta
 
 from api.core.models import (
     ScanEvent, Report, Domain, TrendDaily,
-    UserAlert, ForumPost, ForumComment, ScamType, RiskLevel,
+    UserAlert, ScamType, RiskLevel,
+    ForumPost, ForumComment,
     Article, ArticleCategory, ReportStatus,
     LearnLesson, LearnQuiz, LearnScenario,
+    LessonReaction, ArticleReaction, LearnReactionType, ArticleComment,
 )
 from api.core.serializers import ForumPostSerializer, ForumCommentSerializer
 from api.phone_security.models import PhoneNumber
@@ -153,6 +156,14 @@ def scan_lookup_view(request):
 def scan_status_view(request, scan_id):
     """Display scan result page for /scan/status/<id>/."""
     scan = get_object_or_404(ScanEvent, id=scan_id)
+    can_view = bool(
+        request.user.is_staff
+        or (request.user.is_authenticated and scan.user_id == request.user.id)
+        or scan.is_public_referable
+    )
+    if not can_view:
+        raise Http404("Scan không tồn tại")
+
     scan_json = json.dumps({
         'result': scan.result_json or {},
         'risk_score': scan.risk_score,
@@ -252,8 +263,25 @@ def scam_radar_view(request):
         if reports_prev_period > 0:
             pct_change = int(((reports_this_period - reports_prev_period) / reports_prev_period) * 100)
 
-        new_phones = PhoneNumber.objects.filter(created_at__gte=start_date).count() if hasattr(PhoneNumber, 'created_at') else 0
-        phishing_domains = Domain.objects.filter(created_at__gte=start_date).count()
+        new_phones = (
+            Report.objects.filter(created_at__gte=start_date, target_type='phone', status=ReportStatus.APPROVED).count() +
+            ScanEvent.objects.filter(
+                created_at__gte=start_date,
+                status='completed',
+                risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW],
+                scan_type='phone'
+            ).count()
+        )
+        phishing_domains = (
+            Report.objects.filter(created_at__gte=start_date, status=ReportStatus.APPROVED)
+            .filter(Q(target_type='domain') | Q(scam_type='phishing')).count() +
+            ScanEvent.objects.filter(
+                created_at__gte=start_date,
+                status='completed',
+                risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW],
+                scan_type__in=['domain', 'email', 'qr', 'message']
+            ).count()
+        )
 
         # 3. Hot phone numbers (only approved reports)
         hot_phones = (
@@ -403,8 +431,18 @@ def _build_type_distribution(since):
 
 def learn_hub_view(request):
     """Learn Hub with real articles and lessons."""
-    articles = Article.objects.filter(is_published=True).order_by('-created_at')
-    lessons = LearnLesson.objects.filter(is_published=True).order_by('-created_at')
+    articles = (
+        Article.objects
+        .filter(is_published=True)
+        .annotate(reactions_count=Count('reactions', distinct=True), comments_count=Count('comments', distinct=True))
+        .order_by('-created_at')
+    )
+    lessons = (
+        LearnLesson.objects
+        .filter(is_published=True)
+        .annotate(reactions_count=Count('reactions', distinct=True))
+        .order_by('-created_at')
+    )
 
     # All quizzes (from both lessons and articles)
     all_quizzes = LearnQuiz.objects.select_related('lesson', 'article').order_by('-id')
@@ -417,6 +455,16 @@ def learn_hub_view(request):
     alert_articles = articles.filter(category=ArticleCategory.ALERT)[:6]
     story_articles = articles.filter(category=ArticleCategory.STORY)[:6]
 
+    tab = (request.GET.get('tab') or 'lessons').strip().lower()
+    if tab not in {'lessons', 'news', 'quiz', 'scenarios'}:
+        tab = 'lessons'
+
+    filter_cat = (request.GET.get('category') or 'all').strip().lower()
+    if filter_cat not in {'all', 'guide', 'news', 'alert', 'story'}:
+        filter_cat = 'all'
+
+    q = (request.GET.get('q') or '').strip()
+
     return render(request, "LearnHub/learn_hub.html", {
         "title": "Kiến thức phòng tránh",
         "articles": articles,
@@ -427,15 +475,34 @@ def learn_hub_view(request):
         "stories": story_articles,
         "quizzes": all_quizzes,
         "scenarios": all_scenarios,
+        "initial_tab": tab,
+        "initial_filter_cat": filter_cat,
+        "initial_search_query": q,
     })
 
 
 def article_detail_view(request, slug):
     """Article detail page by slug."""
     article = get_object_or_404(Article, slug=slug, is_published=True)
+    reaction_counts = {
+        key: ArticleReaction.objects.filter(article=article, reaction_type=key).count()
+        for key in LearnReactionType.values
+    }
+    my_reaction = None
+    if request.user.is_authenticated:
+        my_reaction = (
+            ArticleReaction.objects
+            .filter(article=article, user=request.user)
+            .values_list('reaction_type', flat=True)
+            .first()
+        )
+    comments_count = ArticleComment.objects.filter(article=article, is_hidden=False).count()
     return render(request, "Learning/article_detail.html", {
         "title": article.title,
         "article": article,
+        "reaction_counts": reaction_counts,
+        "my_reaction": my_reaction,
+        "comments_count": comments_count,
     })
 
 
@@ -447,17 +514,38 @@ def lesson_detail_view(request, slug):
     scenario_steps = []
     if scenario:
         scenario_steps = scenario.content.get('steps', []) if isinstance(scenario.content, dict) else []
+    reaction_counts = {
+        key: LessonReaction.objects.filter(lesson=lesson, reaction_type=key).count()
+        for key in LearnReactionType.values
+    }
+    my_reaction = None
+    if request.user.is_authenticated:
+        my_reaction = (
+            LessonReaction.objects
+            .filter(lesson=lesson, user=request.user)
+            .values_list('reaction_type', flat=True)
+            .first()
+        )
     return render(request, "Learning/lesson_detail.html", {
         "title": lesson.title,
         "lesson": lesson,
         "quizzes": quizzes,
         "scenario": scenario,
         "scenario_steps": scenario_steps,
+        "reaction_counts": reaction_counts,
+        "my_reaction": my_reaction,
     })
 
 
 def emergency_view(request):
     return render(request, "Emergency/emergency.html", {"title": "Hỗ trợ khẩn cấp"})
+
+
+def disclaimer_view(request):
+    return render(request, "Legal/disclaimer.html", {
+        "title": "Điều khoản miễn trừ trách nhiệm",
+        "updated_at": timezone.now(),
+    })
 
 
 def login_view(request):
@@ -639,7 +727,7 @@ def change_password_view(request):
 def forum_view(request):
     """Forum listing page — VOZ-style category layout."""
     from django.db.models import Count, Max, Q, Subquery, OuterRef
-    from api.core.models import ForumCategory, ForumComment
+    from api.core.models import ForumCategory
 
     posts = ForumPost.objects.select_related('author', 'author__profile').order_by('-is_pinned', '-created_at')[:100]
     serializer = ForumPostSerializer(posts, many=True, context={'request': request})
@@ -815,26 +903,118 @@ def scan_audio_view(request):
 
 def scam_radar_list_view(request, list_type):
     """View detailed list of scams (phones, accounts, domains, emails)"""
+    def _mask_sensitive_scan(scan_type: str, raw: str) -> str:
+        value = (raw or '').strip()
+        if not value:
+            return ''
+        if scan_type in ('message', 'file', 'audio', 'qr'):
+            compact = ' '.join(value.split())
+            if len(compact) <= 12:
+                return compact[:2] + '******'
+            return compact[:6] + '******' + compact[-3:]
+        return value
+
     mapping = {
-        'phones': ('phone', 'Danh sách SĐT lừa đảo'),
-        'accounts': ('account', 'Danh sách TK ngân hàng lừa đảo'),
-        'domains': ('domain', 'Danh sách Website/Link lừa đảo'),
-        'emails': ('email', 'Danh sách Email lừa đảo'),
+        'phones': {
+            'target_type': 'phone',
+            'scan_types': ['phone'],
+            'title': 'Danh sách SĐT lừa đảo',
+        },
+        'accounts': {
+            'target_type': 'account',
+            'scan_types': ['account'],
+            'title': 'Danh sách TK ngân hàng lừa đảo',
+        },
+        'domains': {
+            'target_type': 'domain',
+            'scan_types': ['domain'],
+            'title': 'Danh sách Website/Link lừa đảo',
+        },
+        'emails': {
+            'target_type': 'email',
+            'scan_types': ['email'],
+            'title': 'Danh sách Email lừa đảo',
+        },
     }
 
     if list_type not in mapping:
         return redirect('scam-radar')
 
-    mapped_type, title = mapping[list_type]
+    cfg = mapping[list_type]
+    mapped_type = cfg['target_type']
+    title = cfg['title']
+    scan_types = cfg['scan_types']
 
-    # Get approved reports only
-    reports = Report.objects.filter(
+    reports_qs = Report.objects.filter(
         target_type=mapped_type,
         status=ReportStatus.APPROVED
-    ).select_related('reporter').order_by('-created_at')[:200]
+    ).select_related('reporter').order_by('-created_at')[:300]
+
+    scans_qs = ScanEvent.objects.filter(
+        status='completed',
+        risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW],
+        scan_type__in=scan_types,
+    ).select_related('user').order_by('-created_at')[:300]
+
+    rows = []
+
+    for report in reports_qs:
+        target_value = (report.target_value or '').strip()
+        if list_type == 'phones' and len(target_value) > 6:
+            target_value_display = f"{target_value[:4]}****{target_value[-3:]}"
+        elif list_type == 'accounts' and len(target_value) > 6:
+            target_value_display = f"{target_value[:3]}*****{target_value[-3:]} ({report.scammer_bank_name or 'N/A'})"
+        else:
+            target_value_display = target_value
+
+        rows.append({
+            'id': report.id,
+            'source': 'report',
+            'target_value': target_value,
+            'target_value_display': target_value_display,
+            'target_type': report.target_type,
+            'target_type_display': report.get_target_type_display(),
+            'scam_type': report.scam_type,
+            'scam_type_display': report.get_scam_type_display(),
+            'severity': report.severity,
+            'severity_display': report.get_severity_display(),
+            'reporter_name': report.reporter.username if report.reporter else 'Ẩn danh',
+            'scammer_name': report.scammer_name or '',
+            'created_at': report.created_at,
+        })
+
+    for scan in scans_qs:
+        raw_target = (scan.normalized_input or scan.raw_input or '').strip()
+        if not raw_target:
+            continue
+        raw_target = _mask_sensitive_scan(scan.scan_type, raw_target)
+        if list_type == 'phones' and len(raw_target) > 6:
+            target_value_display = f"{raw_target[:4]}****{raw_target[-3:]}"
+        elif list_type == 'accounts' and len(raw_target) > 6:
+            target_value_display = f"{raw_target[:3]}*****{raw_target[-3:]}"
+        else:
+            target_value_display = raw_target
+
+        rows.append({
+            'id': scan.id,
+            'source': 'scan_ai',
+            'target_value': raw_target,
+            'target_value_display': target_value_display,
+            'target_type': scan.scan_type,
+            'target_type_display': scan.get_scan_type_display() if hasattr(scan, 'get_scan_type_display') else scan.scan_type,
+            'scam_type': 'ai_detected',
+            'scam_type_display': 'AI phát hiện rủi ro',
+            'severity': 'high' if scan.risk_level == RiskLevel.RED else 'medium',
+            'severity_display': 'Nguy hiểm' if scan.risk_level == RiskLevel.RED else 'Cảnh báo',
+            'reporter_name': scan.user.username if scan.user else 'Hệ thống',
+            'scammer_name': '',
+            'created_at': scan.created_at,
+        })
+
+    rows = sorted(rows, key=lambda item: item['created_at'], reverse=True)[:200]
 
     return render(request, "ScamRadar/list.html", {
         "title": title,
         "list_type": list_type,
-        "reports": reports,
+        "rows": rows,
     })

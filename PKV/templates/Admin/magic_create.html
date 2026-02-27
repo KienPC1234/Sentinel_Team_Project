@@ -143,7 +143,7 @@
                     <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-purple-500/20">⚡</span>
                     Magic Create
                 </h1>
-                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">AI tạo bài học · 5 quiz · kịch bản hội thoại</p>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">AI tạo bài học · quiz/kịch bản tùy chỉnh</p>
             </div>
         </div>
         <!-- Timer (visible during streaming) -->
@@ -200,6 +200,21 @@
                     </label>
                 </div>
 
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="p-3 rounded-xl bg-white/[0.02] border border-white/5 block">
+                        <p class="text-[11px] font-bold text-white/70 uppercase tracking-wider mb-2">Số lượng Quiz</p>
+                        <input type="number" min="1" max="20" x-model.number="quizCount"
+                               class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500/40"
+                               :disabled="!includeQuiz">
+                    </label>
+                    <label class="p-3 rounded-xl bg-white/[0.02] border border-white/5 block">
+                        <p class="text-[11px] font-bold text-white/70 uppercase tracking-wider mb-2">Số bước kịch bản</p>
+                        <input type="number" min="4" max="30" x-model.number="scenarioStepsCount"
+                               class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500/40"
+                               :disabled="!includeScenario">
+                    </label>
+                </div>
+
                 <div class="relative">
                     <textarea x-model="rawText" class="mc-textarea" rows="10" placeholder="Dán nội dung tin tức/bài báo về lừa đảo vào đây...&#10;&#10;Ví dụ: Công an vừa triệt phá đường dây lừa đảo qua mạng với thủ đoạn giả danh nhân viên ngân hàng gọi điện yêu cầu cung cấp OTP..."></textarea>
                 </div>
@@ -224,10 +239,10 @@
                         <i class="bi bi-journal-richtext text-cyan-500/50"></i> Bài học Markdown
                     </span>
                     <span x-show="includeQuiz" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
-                        <i class="bi bi-patch-question text-purple-500/50"></i> 5 câu Quiz
+                        <i class="bi bi-patch-question text-purple-500/50"></i> <span x-text="quizCount + ' câu Quiz'"></span>
                     </span>
                     <span x-show="includeScenario" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
-                        <i class="bi bi-chat-square-text text-blue-500/50"></i> Kịch bản 10+ bước
+                        <i class="bi bi-chat-square-text text-blue-500/50"></i> <span x-text="'Kịch bản ' + scenarioStepsCount + '+ bước'"></span>
                     </span>
                     <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
                         <i class="bi bi-bell text-amber-500/50"></i> Push khi xong
@@ -548,6 +563,8 @@ function magicCreate() {
         result: {},
         includeQuiz: true,
         includeScenario: true,
+        quizCount: 5,
+        scenarioStepsCount: 8,
         quizzes: [],
         scenarioSteps: [],
         ws: null,
@@ -638,7 +655,9 @@ function magicCreate() {
                     body: JSON.stringify({
                         text: this.rawText,
                         include_quiz: this.includeQuiz,
-                        include_scenario: this.includeScenario
+                        include_scenario: this.includeScenario,
+                        quiz_count: this.quizCount,
+                        scenario_steps: this.scenarioStepsCount
                     })
                 });
                 const res = await resp.json();

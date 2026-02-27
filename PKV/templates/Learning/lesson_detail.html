@@ -28,7 +28,7 @@
                 {{ lesson.get_category_display }}
             </span>
             <span class="px-3 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 text-[8px] font-black uppercase tracking-[0.2em] border border-cyan-500/20">
-                <i class="bi bi-stars mr-1"></i>AI Generated
+                <i class="bi bi-stars mr-1"></i>Admin Curated + AI Support
             </span>
             <span class="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] flex items-center gap-2">
                 <i class="bi bi-calendar3"></i> {{ lesson.created_at|date:"d/m/Y" }}
@@ -47,9 +47,9 @@
                 </div>
             </div>
             <div>
-                <div class="text-xs font-black text-white uppercase tracking-[0.2em]">ShieldCall AI</div>
+                <div class="text-xs font-black text-white uppercase tracking-[0.2em]">Biên tập bởi Admin</div>
                 <div class="text-[9px] font-bold text-white/20 uppercase tracking-[0.2em] mt-1 flex items-center gap-1.5">
-                    <i class="bi bi-cpu-fill text-cyan-500/50"></i> Nội dung được tổng hợp bởi AI
+                    <i class="bi bi-cpu-fill text-cyan-500/50"></i> Nội dung được tổng hợp bởi admin, có sử dụng AI hỗ trợ
                 </div>
             </div>
         </div>
@@ -71,6 +71,22 @@
          class="prose prose-invert prose-cyan max-w-none text-white/80 leading-[1.8] font-medium text-lg sm:text-xl selection:bg-cyan-500/20 px-2" 
          data-aos="fade-up" data-aos-delay="300">
         <div x-html="content" class="rich-text-content"></div>
+    </div>
+
+    <div x-data="lessonReaction('{{ lesson.slug }}', '{{ my_reaction|default:'' }}', {{ reaction_counts.like|default:0 }}, {{ reaction_counts.helpful|default:0 }}, {{ reaction_counts.insightful|default:0 }})"
+         class="liquid-card p-6 border border-white/5 space-y-4" data-aos="fade-up">
+        <div class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Phản ứng bài học</div>
+        <div class="flex flex-wrap gap-3">
+            <button @click="react('like')" class="px-4 py-2 rounded-xl border text-xs font-bold transition-all" :class="my==='like' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-white/5 text-white/60 border-white/10 hover:border-cyan-500/30'">
+                <i class="bi bi-hand-thumbs-up-fill mr-1.5"></i> Thích <span class="ml-1" x-text="counts.like"></span>
+            </button>
+            <button @click="react('helpful')" class="px-4 py-2 rounded-xl border text-xs font-bold transition-all" :class="my==='helpful' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-white/5 text-white/60 border-white/10 hover:border-emerald-500/30'">
+                <i class="bi bi-patch-check-fill mr-1.5"></i> Hữu ích <span class="ml-1" x-text="counts.helpful"></span>
+            </button>
+            <button @click="react('insightful')" class="px-4 py-2 rounded-xl border text-xs font-bold transition-all" :class="my==='insightful' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-white/5 text-white/60 border-white/10 hover:border-purple-500/30'">
+                <i class="bi bi-lightbulb-fill mr-1.5"></i> Bổ ích <span class="ml-1" x-text="counts.insightful"></span>
+            </button>
+        </div>
     </div>
 
     <!-- ═══ QUIZZES SECTION ═══ -->
@@ -287,6 +303,34 @@
 
 <script>
 document.addEventListener('alpine:init', () => {
+    Alpine.data('lessonReaction', (slug, initialReaction, likeCount, helpfulCount, insightfulCount) => ({
+        slug,
+        my: initialReaction || null,
+        counts: {
+            like: Number(likeCount || 0),
+            helpful: Number(helpfulCount || 0),
+            insightful: Number(insightfulCount || 0),
+        },
+        async react(type) {
+            try {
+                const resp = await fetch(`/api/v1/learn/lessons/${this.slug}/reaction/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ reaction_type: type }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    showToast(data.error || 'Không thể thả react', 'error');
+                    return;
+                }
+                this.my = data.my_reaction || null;
+                this.counts = data.counts || this.counts;
+            } catch (_) {
+                showToast('Lỗi kết nối', 'error');
+            }
+        }
+    }));
+
     Alpine.data('scenarioPlayer', () => ({
         open: false,
         currentStep: 0,

@@ -430,7 +430,7 @@ class AssistantPageView(View):
         if not request.user.is_authenticated:
             from django.shortcuts import redirect
             return redirect('login')
-        
+
         context = {
             'initial_session_id': str(session_id) if session_id else ''
         }

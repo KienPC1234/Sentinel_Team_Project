@@ -12,6 +12,11 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+
+def _public_media_url(path: str) -> str:
+    normalized = str(path or '').replace('\\', '/').lstrip('/')
+    return f"{settings.MEDIA_URL.rstrip('/')}/{normalized}"
+
 class EditorImageUploadView(APIView):
     """POST /api/v1/utils/upload-image/ — Editor.js image upload"""
     permission_classes = [IsAuthenticated]
@@ -27,15 +32,16 @@ class EditorImageUploadView(APIView):
             os.path.join('editor_images', f'u_{request.user.id}', file_obj.name),
             ContentFile(file_obj.read())
         )
-        url = os.path.join(settings.MEDIA_URL, path)
+        url = _public_media_url(path)
+        absolute_url = request.build_absolute_uri(url)
 
         # Response compatible with both Editor.js and CKEditor 5
         return Response({
             "success": 1,
-            "url": url,
+            "url": absolute_url,
             "path": path,
             "file": {
-                "url": url
+                "url": absolute_url
             }
         })
 
@@ -56,6 +62,9 @@ class EditorMediaLibraryView(APIView):
 
         items = []
         for name in files:
+            lowered = (name or '').lower()
+            if not lowered.endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg')):
+                continue
             rel_path = os.path.join(base_prefix, name)
             try:
                 modified = default_storage.get_modified_time(rel_path)
@@ -67,10 +76,12 @@ class EditorMediaLibraryView(APIView):
             except Exception:
                 size = 0
 
+            public_url = _public_media_url(rel_path)
             items.append({
                 "name": name,
                 "path": rel_path,
-                "url": os.path.join(settings.MEDIA_URL, rel_path),
+                "url": public_url,
+                "absolute_url": request.build_absolute_uri(public_url),
                 "size": size,
                 "modified_at": modified_iso,
             })
@@ -165,6 +176,7 @@ class MentionUserListView(APIView):
                 
             results.append({
                 'id': f'@{user.username}',
+                'username': user.username,
                 'userId': user.id,
                 'name': user.profile.display_name or user.username,
                 'avatar': avatar

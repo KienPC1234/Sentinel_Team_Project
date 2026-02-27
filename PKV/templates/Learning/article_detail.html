@@ -80,6 +80,132 @@
         <div x-html="content" class="rich-text-content"></div>
     </div>
 
+    <div x-data="articleEngage('{{ article.slug }}', '{{ my_reaction|default:'' }}', {{ reaction_counts.like|default:0 }}, {{ reaction_counts.helpful|default:0 }}, {{ reaction_counts.insightful|default:0 }})"
+         class="space-y-6" data-aos="fade-up">
+        <div class="liquid-card p-6 border border-white/5 space-y-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Phản ứng bài viết</div>
+                <div class="text-[11px] font-bold text-white/45" x-text="totalReactions() + ' phản ứng'"></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button @click="react('like')" class="px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between" :class="my==='like' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-white/5 text-white/70 border-white/10 hover:border-cyan-500/30'">
+                    <span><i class="bi bi-hand-thumbs-up-fill mr-1.5"></i>Thích</span>
+                    <span class="ml-2 text-[11px]" x-text="counts.like"></span>
+                </button>
+                <button @click="react('helpful')" class="px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between" :class="my==='helpful' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-white/5 text-white/70 border-white/10 hover:border-emerald-500/30'">
+                    <span><i class="bi bi-patch-check-fill mr-1.5"></i>Hữu ích</span>
+                    <span class="ml-2 text-[11px]" x-text="counts.helpful"></span>
+                </button>
+                <button @click="react('insightful')" class="px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between" :class="my==='insightful' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-white/5 text-white/70 border-white/10 hover:border-purple-500/30'">
+                    <span><i class="bi bi-lightbulb-fill mr-1.5"></i>Bổ ích</span>
+                    <span class="ml-2 text-[11px]" x-text="counts.insightful"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="liquid-card p-6 border border-white/5 space-y-5">
+            <div class="flex items-center justify-between">
+                <div class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Bình luận tin tức</div>
+                <div class="text-xs font-bold text-white/40" x-text="commentCount + ' bình luận'"></div>
+            </div>
+            <template x-if="isAuth">
+                <div class="space-y-3">
+                    <div class="overflow-hidden bg-black/20 rounded-xl border border-white/10 w-full">
+                        <div id="learn-comment-editor" class="w-full min-h-[110px] text-white/80 p-1 focus:outline-none"></div>
+                    </div>
+                    <div x-show="replyToId" class="px-3 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-between">
+                        <div class="text-[11px] text-cyan-300">Đang trả lời <span class="font-black" x-text="replyToName || 'bình luận'"></span></div>
+                        <button type="button" @click="cancelReply()" class="text-[10px] font-black text-white/60 hover:text-white">Hủy</button>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'" data-size="flexible"></div>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="text-[10px] text-white/30" x-text="commentChars + '/1500'"></div>
+                        <button @click="submitComment()" :disabled="submitting || !commentHasContent" class="px-5 py-2.5 rounded-xl bg-cyan-500 text-black text-xs font-black uppercase tracking-widest hover:bg-cyan-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed" x-text="submitting ? 'Đang gửi...' : 'Gửi bình luận'"></button>
+                    </div>
+                </div>
+            </template>
+            <template x-if="!isAuth">
+                <a href="/login/?next={{ request.path }}" class="inline-flex items-center gap-2 text-xs font-bold text-cyan-400 hover:text-cyan-300 transition-colors">Đăng nhập để bình luận</a>
+            </template>
+            <div class="space-y-3">
+                <template x-if="comments.length === 0">
+                    <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/10 text-xs text-white/40 italic">Chưa có bình luận nào, hãy mở đầu cuộc thảo luận.</div>
+                </template>
+                <template x-for="c in comments" :key="c.id">
+                    <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4 space-y-3">
+                        <div class="flex items-start gap-3">
+                            <a :href="'/profile/@' + c.author_username + '/'" :data-usercard="c.author_username" class="w-9 h-9 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-black flex items-center justify-center shrink-0 overflow-hidden hover:border-cyan-400/40 transition-all">
+                                <template x-if="c.author_avatar">
+                                    <img :src="c.author_avatar" class="w-full h-full object-cover" />
+                                </template>
+                                <template x-if="!c.author_avatar">
+                                    <span x-text="commentInitial(c.author_name)"></span>
+                                </template>
+                            </a>
+                            <div class="min-w-0 flex-1">
+                                <div class="rounded-2xl bg-white/[0.03] border border-white/10 px-4 py-3">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <a :href="'/profile/@' + c.author_username + '/'" :data-usercard="c.author_username" class="text-[12px] font-black text-white/80 hover:text-cyan-300 truncate transition-colors" x-text="c.author_name"></a>
+                                        <div class="text-[10px] text-white/30 shrink-0" x-text="formatTime(c.created_at)"></div>
+                                    </div>
+                                    <div class="text-sm text-white/75 mt-1.5 leading-relaxed break-words rich-text-content" x-html="window.renderRichText(c.content || '')"></div>
+                                </div>
+                                <div class="flex items-center gap-3 mt-2">
+                                    <button type="button" @click="voteComment(c, 'upvote')" class="text-[10px] font-black uppercase tracking-widest transition-colors"
+                                            :class="c.my_vote==='upvote' ? 'text-emerald-400' : 'text-white/45 hover:text-emerald-300'">
+                                        <i class="bi" :class="c.my_vote==='upvote' ? 'bi-caret-up-fill' : 'bi-caret-up'"></i>
+                                        <span class="ml-1" x-text="c.upvotes_count || 0"></span>
+                                    </button>
+                                    <button type="button" @click="voteComment(c, 'downvote')" class="text-[10px] font-black uppercase tracking-widest transition-colors"
+                                            :class="c.my_vote==='downvote' ? 'text-rose-400' : 'text-white/45 hover:text-rose-300'">
+                                        <i class="bi" :class="c.my_vote==='downvote' ? 'bi-caret-down-fill' : 'bi-caret-down'"></i>
+                                        <span class="ml-1" x-text="c.downvotes_count || 0"></span>
+                                    </button>
+                                    <button type="button" @click="startReply(c)" x-show="isAuth" class="text-[10px] font-black uppercase tracking-widest text-cyan-400/70 hover:text-cyan-300">Trả lời</button>
+                                </div>
+                                <div class="mt-3 space-y-2 pl-3 border-l border-white/10" x-show="(c.replies || []).length > 0">
+                                    <template x-for="r in (c.replies || [])" :key="`reply-${r.id}`">
+                                        <div class="flex items-start gap-2.5">
+                                            <a :href="'/profile/@' + r.author_username + '/'" :data-usercard="r.author_username" class="w-7 h-7 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-black flex items-center justify-center shrink-0 overflow-hidden hover:border-purple-400/40 transition-all">
+                                                <template x-if="r.author_avatar">
+                                                    <img :src="r.author_avatar" class="w-full h-full object-cover" />
+                                                </template>
+                                                <template x-if="!r.author_avatar">
+                                                    <span x-text="commentInitial(r.author_name)"></span>
+                                                </template>
+                                            </a>
+                                            <div class="min-w-0 flex-1 rounded-xl bg-white/[0.03] border border-white/10 px-3 py-2.5">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <a :href="'/profile/@' + r.author_username + '/'" :data-usercard="r.author_username" class="text-[11px] font-black text-white/75 hover:text-cyan-300 truncate transition-colors" x-text="r.author_name"></a>
+                                                    <div class="text-[10px] text-white/30 shrink-0" x-text="formatTime(r.created_at)"></div>
+                                                </div>
+                                                <div class="text-[13px] text-white/70 mt-1 break-words rich-text-content" x-html="window.renderRichText(r.content || '')"></div>
+                                                <div class="flex items-center gap-3 mt-1.5">
+                                                    <button type="button" @click="voteComment(r, 'upvote')" class="text-[10px] font-black uppercase tracking-widest transition-colors"
+                                                            :class="r.my_vote==='upvote' ? 'text-emerald-400' : 'text-white/45 hover:text-emerald-300'">
+                                                        <i class="bi" :class="r.my_vote==='upvote' ? 'bi-caret-up-fill' : 'bi-caret-up'"></i>
+                                                        <span class="ml-1" x-text="r.upvotes_count || 0"></span>
+                                                    </button>
+                                                    <button type="button" @click="voteComment(r, 'downvote')" class="text-[10px] font-black uppercase tracking-widest transition-colors"
+                                                            :class="r.my_vote==='downvote' ? 'text-rose-400' : 'text-white/45 hover:text-rose-300'">
+                                                        <i class="bi" :class="r.my_vote==='downvote' ? 'bi-caret-down-fill' : 'bi-caret-down'"></i>
+                                                        <span class="ml-1" x-text="r.downvotes_count || 0"></span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ QUIZZES SECTION (Added support) ═══ -->
     {% if quizzes %}
     <div class="space-y-10 pt-16 border-t border-white/5" data-aos="fade-up">
@@ -209,5 +335,200 @@
       "url": "{{ request.scheme }}://{{ request.get_host }}/learn/"
     }]
 }
+</script>
+<script>
+document.addEventListener('alpine:init', () => {
+    if (!window.__learnCommentEditors) {
+        window.__learnCommentEditors = {};
+    }
+    Alpine.data('articleEngage', (slug, initialReaction, likeCount, helpfulCount, insightfulCount) => ({
+        slug,
+        my: initialReaction || null,
+        counts: {
+            like: Number(likeCount || 0),
+            helpful: Number(helpfulCount || 0),
+            insightful: Number(insightfulCount || 0),
+        },
+        comments: [],
+        commentCount: {{ comments_count|default:0 }},
+        replyToId: null,
+        replyToName: '',
+        submitting: false,
+        isAuth: {{ user.is_authenticated|yesno:"true,false" }},
+        commentChars: 0,
+        commentHasContent: false,
+        getCommentEditor() {
+            return window.__learnCommentEditors?.[this.slug] || null;
+        },
+        totalReactions() {
+            return Number(this.counts.like || 0) + Number(this.counts.helpful || 0) + Number(this.counts.insightful || 0);
+        },
+        commentInitial(name) {
+            const value = String(name || '').trim();
+            return value ? value.charAt(0).toUpperCase() : '?';
+        },
+        formatTime(iso) {
+            if (!iso) return 'Vừa xong';
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return 'Vừa xong';
+            return d.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+        },
+        plainLength() {
+            const editor = this.getCommentEditor();
+            const html = editor ? editor.getData() : '';
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            return String(temp.textContent || '').trim().length;
+        },
+        hasCommentContent() {
+            return this.plainLength() > 0;
+        },
+        syncEditorState() {
+            const length = this.plainLength();
+            this.commentChars = length;
+            this.commentHasContent = length > 0;
+        },
+        getEditorContent() {
+            const editor = this.getCommentEditor();
+            return editor ? String(editor.getData() || '').trim() : '';
+        },
+        clearEditor() {
+            const editor = this.getCommentEditor();
+            if (editor) {
+                editor.setData('');
+            }
+            this.syncEditorState();
+        },
+        async initCommentEditor() {
+            if (!this.isAuth || typeof window.createCKEditor !== 'function') return;
+            try {
+                const editor = await window.createCKEditor('#learn-comment-editor', '', 'Viết bình luận của bạn...');
+                window.__learnCommentEditors[this.slug] = editor;
+                editor.model.document.on('change:data', () => this.syncEditorState());
+                this.syncEditorState();
+            } catch (e) {
+                console.error('Init learn comment CKEditor failed:', e);
+                if (typeof showToast === 'function') showToast('Không thể khởi tạo trình soạn bình luận', 'error');
+            }
+        },
+        async init() {
+            await this.loadComments();
+            await this.initCommentEditor();
+        },
+        async react(type) {
+            try {
+                const resp = await fetch(`/api/v1/learn/articles/${this.slug}/reaction/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ reaction_type: type }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    showToast(data.error || 'Không thể thả react', 'error');
+                    return;
+                }
+                this.my = data.my_reaction || null;
+                this.counts = data.counts || this.counts;
+            } catch (_) {
+                showToast('Lỗi kết nối', 'error');
+            }
+        },
+        async loadComments() {
+            try {
+                const resp = await fetch(`/api/v1/learn/articles/${this.slug}/comments/`);
+                const data = await resp.json();
+                this.comments = data.results || [];
+                this.commentCount = Number(data.count || 0);
+            } catch (_) {}
+        },
+        startReply(comment) {
+            this.replyToId = comment?.id || null;
+            this.replyToName = comment?.author_name || '';
+        },
+        cancelReply() {
+            this.replyToId = null;
+            this.replyToName = '';
+        },
+        findComment(commentId) {
+            const root = this.comments.find((item) => Number(item.id) === Number(commentId));
+            if (root) return root;
+            for (const item of this.comments) {
+                const reply = (item.replies || []).find((r) => Number(r.id) === Number(commentId));
+                if (reply) return reply;
+            }
+            return null;
+        },
+        async voteComment(comment, reactionType) {
+            if (!this.isAuth) {
+                showToast('Vui lòng đăng nhập để tương tác', 'info');
+                return;
+            }
+            try {
+                const resp = await fetch(`/api/v1/learn/articles/${this.slug}/comments/${comment.id}/reaction/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ reaction_type: reactionType }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    showToast(data.error || 'Không thể vote bình luận', 'error');
+                    return;
+                }
+                const target = this.findComment(comment.id);
+                if (!target) return;
+                target.upvotes_count = Number(data.upvotes_count || 0);
+                target.downvotes_count = Number(data.downvotes_count || 0);
+                target.my_vote = data.my_vote || null;
+            } catch (_) {
+                showToast('Lỗi kết nối', 'error');
+            }
+        },
+        async submitComment() {
+            const text = this.getEditorContent();
+            if (!text) return;
+            if (this.submitting) return;
+            const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value || '';
+            if (!tsToken) {
+                showToast('Vui lòng hoàn thành captcha bảo mật', 'warning');
+                return;
+            }
+            this.submitting = true;
+            try {
+                const resp = await fetch(`/api/v1/learn/articles/${this.slug}/comments/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ content: text, parent_id: this.replyToId || null, 'cf-turnstile-response': tsToken }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    showToast(data.error || 'Không gửi được bình luận', 'error');
+                    return;
+                }
+                if (data.parent_id) {
+                    const parent = this.findComment(data.parent_id);
+                    if (parent) {
+                        parent.replies = parent.replies || [];
+                        parent.replies.push(data);
+                    } else {
+                        this.comments.push(data);
+                    }
+                } else {
+                    data.replies = data.replies || [];
+                    this.comments.push(data);
+                }
+                this.commentCount = Number(this.commentCount || 0) + 1;
+                this.clearEditor();
+                this.cancelReply();
+            } catch (_) {
+                showToast('Lỗi kết nối', 'error');
+            } finally {
+                if (window.turnstile) {
+                    try { window.turnstile.reset(); } catch (_) {}
+                }
+                this.submitting = false;
+            }
+        }
+    }));
+});
 </script>
 {% endblock %}

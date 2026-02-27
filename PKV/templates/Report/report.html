@@ -17,51 +17,8 @@
             banks: [],
             showBanks: false,
             loading: false,
-            ocrLoading: false,
-            annotatedImages: [],
-            ocrSuggested: false,
             success: false,
             error: '',
-            async runOCR() {
-                if (!this.evidence) return;
-                this.ocrLoading = true;
-                this.annotatedImages = [];
-                const fd = new FormData();
-                fd.append('images', this.evidence);
-                try {
-                    const resp = await fetch('/api/v1/analyze-images', {
-                        method: 'POST',
-                        headers: { 'X-CSRFToken': getCSRFToken() },
-                        body: fd
-                    });
-                    const res = await resp.json();
-                    if (resp.ok && res.ocr_text) {
-                        this.annotatedImages = res.annotated_images || [];
-                        const extracted = res.ocr_text.trim();
-                        if (extracted) {
-                            // Convert markdown from AI response to clean HTML for CKEditor
-                            let htmlContent = extracted;
-                            if (window.renderMarkdown) {
-                                htmlContent = window.renderMarkdown(extracted);
-                            } else if (window.marked && window.marked.parse) {
-                                htmlContent = window.marked.parse(extracted, { breaks: true, gfm: true });
-                            }
-                            const currentData = reportEditorInstance.getData();
-                            const newData = currentData + (currentData ? '<br><br>' : '') + htmlContent;
-                            reportEditorInstance.setData(newData);
-                            this.description = newData;
-                            this.ocrSuggested = false;
-                            showToast('Đã phân tích thông tin bằng AI!', 'success');
-                        }
-                    } else {
-                        showToast('Không tìm thấy chữ hoặc mã QR trong ảnh', 'info');
-                    }
-                } catch(e) {
-                    showToast('Lỗi khi quét ảnh', 'error');
-                } finally {
-                    this.ocrLoading = false;
-                }
-            },
             async fetchBanks() {
                 try {
                     const resp = await fetch('/api/v1/scan/banks/');
@@ -94,60 +51,13 @@
                 if(!this.target_value.trim()){showToast('Vui lòng nhập thông tin cụ thể', 'warning');return}
                 if(!this.scam_type){showToast('Vui lòng chọn phương thức lừa đảo', 'warning');return}
                 if(!this.description.trim()){showToast('Vui lòng nhập nội dung chi tiết', 'warning');return}
-
-                // OCR Scan Reminder
-                if (this.evidence && !this.description.includes('[Dữ liệu trích xuất từ ảnh]')) {
-                    const confirmScan = await Swal.fire({
-                        title: 'Bạn chưa quét ảnh?',
-                        text: 'Bạn đã tải ảnh lên nhưng chưa sử dụng tính năng "Quét chữ bằng AI". Bạn có muốn quét ảnh để tự động điền thông tin báo cáo không?',
-                        icon: 'question',
-                        background: '#0a0a1a',
-                        color: '#fff',
-                        showCancelButton: true,
-                        confirmButtonText: 'Quét ngay',
-                        cancelButtonText: 'Bỏ qua & Gửi',
-                        customClass: {
-                            popup: 'rounded-[2rem] border border-white/10',
-                            confirmButton: 'liquid-btn bg-cyan-500 text-black px-6 py-2 rounded-xl',
-                            cancelButton: 'liquid-btn bg-white/5 text-white/50 px-6 py-2 rounded-xl'
-                        }
-                    });
-                    if (confirmScan.isConfirmed) {
-                        await this.runOCR();
-                        return; // Stop and let user review scanned text
-                    }
-                }
-
-                if (this.evidence && !this.annotatedImages.length && !this.ocrSuggested) {
-                    this.ocrSuggested = true;
-                    Swal.fire({
-                        title: 'Thông báo!',
-                        text: 'Bạn đã tải ảnh lên nhưng chưa sử dụng AI để quét thông tin. Bạn có muốn quét trước khi gửi không?',
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonText: 'Có, quét ngay!',
-                        cancelButtonText: 'Không, gửi luôn',
-                        background: '#0d0d1f',
-                        color: '#fff',
-                        customClass: {
-                            popup: 'rounded-[2rem] border border-white/10',
-                            confirmButton: 'liquid-btn bg-cyan-500 text-black px-6 py-2 rounded-xl',
-                            cancelButton: 'liquid-btn bg-white/5 text-white/50 px-6 py-2 rounded-xl'
-                        }
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            this.runOCR();
-                        } else {
-                            this.executeSubmit();
-                        }
-                    });
-                    return;
-                }
                 this.executeSubmit();
             },
             async executeSubmit() {
                 this.error = '';
-                const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+                this.loading = true;
+                const tsField = document.querySelector('[name=cf-turnstile-response]');
+                const tsToken = tsField ? tsField.value : '';
                 if(!tsToken){
                     this.error = 'Vui lòng hoàn thành xác minh anti-spam';
                     this.loading = false;
@@ -441,13 +351,13 @@
                         <!-- Main evidence (for OCR) -->
                         <div class="border-2 border-dashed border-white/10 rounded-[2rem] p-8 text-center bg-white/[0.01] hover:bg-white/[0.03] hover:border-red-500/30 transition-all cursor-pointer group relative overflow-hidden"
                             @click="$refs.evidenceInput.click()">
-                            <input type="file" accept="image/*" x-ref="evidenceInput" class="hidden" @change="evidence=$event.target.files[0]; annotatedImages=[]">
+                            <input type="file" accept="image/*" x-ref="evidenceInput" class="hidden" @change="evidence=$event.target.files[0]">
                             
                             <div x-show="!evidence" class="space-y-4">
                                 <div class="w-16 h-16 bg-white/5 rounded-2xl inline-flex items-center justify-center group-hover:scale-110 group-hover:bg-red-500/10 transition-all duration-500">
                                     <i class="bi bi-cloud-arrow-up text-2xl text-white/30 group-hover:text-red-500"></i>
                                 </div>
-                                <p class="text-[9px] font-black text-white/40 tracking-[0.2em] uppercase">Ảnh chính (dùng cho AI quét)</p>
+                                <p class="text-[9px] font-black text-white/40 tracking-[0.2em] uppercase">Ảnh chính</p>
                             </div>
 
                             <div x-show="evidence" class="relative">
@@ -459,16 +369,12 @@
                         </div>
 
                         <div class="flex flex-col justify-center gap-4">
-                            <button type="button" 
-                                @click="runOCR()"
-                                :disabled="!evidence || ocrLoading"
-                                class="liquid-btn py-5 px-6 bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-black tracking-widest uppercase flex items-center justify-center gap-3"
-                                :class="evidence && !annotatedImages.length ? 'animate-pulse ring-2 ring-cyan-500/30' : ''">
-                                <i class="bi bi-eye-fill" :class="ocrLoading ? 'animate-spin' : ''"></i>
-                                <span x-text="ocrLoading ? 'ĐANG QUÉT MẮT THẦN...' : (annotatedImages.length ? 'ĐÃ QUÉT THÀNH CÔNG' : 'QUÉT CHỮ & QR BẰNG AI')"></span>
-                            </button>
+                            <div class="liquid-btn py-5 px-6 bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-[11px] font-black tracking-widest uppercase flex items-center justify-center gap-3">
+                                <i class="bi bi-cpu"></i>
+                                <span>OCR sẽ được xử lý tự động sau khi gửi</span>
+                            </div>
                             <p class="text-[8px] text-white/20 font-bold uppercase tracking-widest text-center italic leading-relaxed">
-                                Mắt thần AI sẽ trích xuất thông tin & giải mã mã QR trong ảnh.
+                                Hệ thống AI sẽ trích xuất OCR/QR bất đồng bộ trong tác vụ nền.
                             </p>
                         </div>
                     </div>
@@ -501,20 +407,6 @@
                     </div>
                 </div>
 
-                <!-- Annotated Results Display -->
-                <div x-show="annotatedImages.length" x-transition class="mt-8 space-y-4">
-                    <h5 class="text-[10px] font-black text-cyan-400 uppercase tracking-widest ml-2 flex items-center gap-2">
-                        <i class="bi bi-layers-half"></i> Bản đồ trích xuất AI (Bao gồm QR & Văn bản)
-                    </h5>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <template x-for="(img, idx) in annotatedImages" :key="idx">
-                            <div class="rounded-3xl border border-cyan-500/20 overflow-hidden bg-black/40 shadow-xl group cursor-zoom-in"
-                                 @click="Swal.fire({imageUrl: img, background: '#000', showConfirmButton: false, customClass: {popup: 'rounded-[3rem] border border-white/10'}})">
-                                <img :src="img" class="w-full h-auto group-hover:scale-105 transition-transform duration-500">
-                            </div>
-                        </template>
-                    </div>
-                </div>
             
             <!-- Cloudflare Turnstile -->
             <!-- Cloudflare Turnstile was here, moved below -->

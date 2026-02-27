@@ -17,34 +17,53 @@
         </div>
     </div>
 
-    {% if messages %}
-    <div class="mb-10 space-y-3">
-        {% for message in messages %}
-        <div class="p-5 rounded-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500
-            {% if message.tags == 'success' %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
-            {% else %}bg-rose-500/10 text-rose-400 border border-rose-500/20{% endif %}">
-            <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% else %}bi-exclamation-triangle-fill{% endif %} text-lg"></i>
-            <span class="text-xs font-black uppercase tracking-widest">{{ message }}</span>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    <div class="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/10 backdrop-blur-xl">
+    <div class="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/10 backdrop-blur-xl relative z-[220]">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <input x-model.debounce.200ms="searchQuery" type="text" placeholder="Tìm username / email..."
                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/30 transition-all">
-            <select x-model="roleFilter" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/30 transition-all">
-                <option value="all">Tất cả vai trò</option>
-                <option value="super_admin">Super Admin</option>
-                <option value="admin">Administrator</option>
-                <option value="member">Member</option>
-            </select>
-            <select x-model="statusFilter" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/30 transition-all">
-                <option value="all">Tất cả trạng thái</option>
-                <option value="active">Hoạt động</option>
-                <option value="inactive">Vô hiệu hóa</option>
-            </select>
+            <div class="dropdown-container liquid-custom-select" x-data="liquidSelect({
+                value: 'all',
+                placeholder: 'Tất cả vai trò',
+                options: [
+                    { value: 'all', label: 'Tất cả vai trò' },
+                    { value: 'super_admin', label: 'Super Admin' },
+                    { value: 'admin', label: 'Administrator' },
+                    { value: 'member', label: 'Member' }
+                ]
+            })" @change="roleFilter = $event.detail">
+                <div class="liquid-select-trigger py-2.5 px-4 text-xs" :class="{ 'active': open }" @click="open = !open">
+                    <span x-text="label" class="truncate"></span>
+                    <i class="bi bi-chevron-down liquid-select-arrow"></i>
+                </div>
+                <div x-show="open" x-transition:enter="liquid-select-dropdown entering" x-transition:enter-end="liquid-select-dropdown entered" x-transition:leave="liquid-select-dropdown entering" class="liquid-select-dropdown">
+                    <template x-for="option in options" :key="option.value">
+                        <div class="liquid-select-option" :class="{ 'selected': value === option.value }" @click="select(option)">
+                            <span x-text="option.label"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="dropdown-container liquid-custom-select" x-data="liquidSelect({
+                value: 'all',
+                placeholder: 'Tất cả trạng thái',
+                options: [
+                    { value: 'all', label: 'Tất cả trạng thái' },
+                    { value: 'active', label: 'Hoạt động' },
+                    { value: 'inactive', label: 'Vô hiệu hóa' }
+                ]
+            })" @change="statusFilter = $event.detail">
+                <div class="liquid-select-trigger py-2.5 px-4 text-xs" :class="{ 'active': open }" @click="open = !open">
+                    <span x-text="label" class="truncate"></span>
+                    <i class="bi bi-chevron-down liquid-select-arrow"></i>
+                </div>
+                <div x-show="open" x-transition:enter="liquid-select-dropdown entering" x-transition:enter-end="liquid-select-dropdown entered" x-transition:leave="liquid-select-dropdown entering" class="liquid-select-dropdown">
+                    <template x-for="option in options" :key="option.value">
+                        <div class="liquid-select-option" :class="{ 'selected': value === option.value }" @click="select(option)">
+                            <span x-text="option.label"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -228,7 +247,7 @@ function userManagement() {
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="text-[10px] text-white/40 font-bold uppercase block mb-1">Loại</label>
-                                <select id="ban-type" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm">
+                                <select id="ban-type" class="liquid-select-native w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm appearance-none">
                                     <option value="temporary">Tạm thời</option>
                                     <option value="permanent">Vĩnh viễn</option>
                                 </select>
@@ -236,6 +255,17 @@ function userManagement() {
                             <div>
                                 <label class="text-[10px] text-white/40 font-bold uppercase block mb-1">Số ngày</label>
                                 <input type="number" id="ban-days" value="7" min="1" max="365" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm">
+                            <style>
+                                .liquid-select-native {
+                                    background-image: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+                                    backdrop-filter: blur(8px);
+                                    -webkit-backdrop-filter: blur(8px);
+                                }
+                                .liquid-select-native option {
+                                    background: #0f172a;
+                                    color: #fff;
+                                }
+                            </style>
                             </div>
                         </div>
                     </div>

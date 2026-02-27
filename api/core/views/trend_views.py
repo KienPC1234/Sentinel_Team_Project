@@ -116,6 +116,8 @@ class ScamRadarStatsView(APIView):
 
             reports_qs = Report.objects.filter(status=ReportStatus.APPROVED)
             scans_qs = ScanEvent.objects.filter(status=ScanStatus.COMPLETED, risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW])
+            reports_base = reports_qs
+            scans_base = scans_qs
 
             if filter_type == 'phone':
                 reports_qs = reports_qs.filter(target_type='phone')
@@ -134,9 +136,14 @@ class ScamRadarStatsView(APIView):
             if reports_prev_period > 0:
                 pct_change = int(((reports_this_period - reports_prev_period) / reports_prev_period) * 100)
 
-            from api.phone_security.models import PhoneNumber
-            new_phones = PhoneNumber.objects.filter(created_at__gte=start_date).count() if hasattr(PhoneNumber, 'created_at') else 0
-            phishing_domains = Domain.objects.filter(created_at__gte=start_date).count()
+            new_phones = (
+                reports_base.filter(created_at__gte=start_date, target_type='phone').count() +
+                scans_base.filter(created_at__gte=start_date, scan_type='phone').count()
+            )
+            phishing_domains = (
+                reports_base.filter(created_at__gte=start_date).filter(Q(target_type='domain') | Q(scam_type='phishing')).count() +
+                scans_base.filter(created_at__gte=start_date, scan_type__in=['domain', 'email', 'qr', 'message']).count()
+            )
 
             scam_labels = dict(ScamType.choices)
             hot_counter = {}

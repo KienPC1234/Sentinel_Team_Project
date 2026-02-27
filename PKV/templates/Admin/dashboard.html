@@ -209,10 +209,10 @@
                     <input x-model="title" type="text" placeholder="Tiêu đề thông báo..."
                         class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/30 transition-all">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
+                <div class="grid grid-cols-2 gap-3 min-w-0">
+                    <div class="min-w-0">
                         <label class="text-[10px] font-black text-white/40 uppercase tracking-widest block mb-2">Loại</label>
-                        <div class="dropdown-container" x-data="liquidSelect({
+                        <div class="dropdown-container w-full" x-data="liquidSelect({
                             value: ntype,
                             placeholder: 'Chọn loại',
                             options: [
@@ -221,8 +221,8 @@
                                 { value: 'warning', label: '⚠️ Cảnh báo' },
                                 { value: 'error', label: '🚨 Khẩn cấp' }
                             ]
-                        })" class="liquid-custom-select" @change="ntype = $event.detail">
-                            <div class="liquid-select-trigger py-3 px-4 text-sm" :class="{ 'active': open }" @click="open = !open">
+                        })" class="liquid-custom-select w-full" @change="ntype = $event.detail">
+                            <div class="liquid-select-trigger py-3 px-4 text-sm w-full min-w-0" :class="{ 'active': open }" @click="open = !open">
                                 <span x-text="label" class="truncate"></span>
                                 <i class="bi bi-chevron-down liquid-select-arrow"></i>
                             </div>
@@ -235,7 +235,7 @@
                             </div>
                         </div>
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <label class="text-[10px] font-black text-white/40 uppercase tracking-widest block mb-2">URL (tùy chọn)</label>
                         <input x-model="url" type="text" placeholder="/learn/..."
                             class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:ring-2 focus:ring-cyan-500/30 transition-all">
@@ -379,6 +379,27 @@
                 <p class="text-slate-400 text-sm leading-relaxed">Kiểm duyệt bài viết, bình luận. Xử lý các báo cáo vi phạm và quản lý dữ liệu diễn đàn cộng đồng.</p>
                 <div class="flex justify-end pt-2">
                     <div class="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-white/20 group-hover:text-amber-400 group-hover:border-amber-500/30 transition-all">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+                </div>
+            </div>
+        </a>
+
+        <!-- Ticket Management -->
+        <a href="{% url 'admin-tickets' %}" class="mgmt-card group p-1 rounded-[2.5rem] bg-gradient-to-br from-rose-500/20 to-transparent hover:from-rose-500/40 transition-all duration-500">
+            <div class="bg-slate-950/80 rounded-[2.3rem] p-8 h-full flex flex-col gap-5 backdrop-blur-3xl">
+                <div class="flex items-center gap-5">
+                    <div class="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-400 group-hover:scale-110 group-hover:bg-rose-500 group-hover:text-white transition-all shadow-xl shadow-rose-500/0 group-hover:shadow-rose-500/20">
+                        <i class="bi bi-life-preserver text-2xl"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-black text-white group-hover:text-rose-400 transition-colors tracking-tight">Quản Lý Ticket</h4>
+                        <div class="text-[10px] font-bold text-rose-500/50 uppercase tracking-widest">/profile/tickets/</div>
+                    </div>
+                </div>
+                <p class="text-slate-400 text-sm leading-relaxed">Xử lý ticket hỗ trợ từ người dùng, theo dõi trạng thái và phản hồi trực tiếp từ Admin.</p>
+                <div class="flex justify-end pt-2">
+                    <div class="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-white/20 group-hover:text-rose-400 group-hover:border-rose-500/30 transition-all">
                         <i class="bi bi-arrow-right"></i>
                     </div>
                 </div>

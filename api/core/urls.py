@@ -21,6 +21,7 @@ urlpatterns = [
     path('auth/mfa/setup/email/', views.MFASetupEmailView.as_view(), name='mfa-setup-email'),
     path('auth/mfa/verify/', views.MFAVerifyView.as_view(), name='mfa-verify'),
     path('auth/mfa/deactivate/', views.MFADeactivateView.as_view(), name='mfa-deactivate'),
+    path('auth/mfa/recovery/', views.MFARecoveryCodesView.as_view(), name='mfa-recovery'),
     path('auth/password/change/', views.PasswordChangeView.as_view(), name='api-password-change'),
 
     # Scan
@@ -35,6 +36,7 @@ urlpatterns = [
     path('scan/banks/', views.ScanBanksView.as_view(), name='api-scan-banks'),
     path('scan/file/', views.ScanFileView.as_view(), name='api-scan-file'),
     path('scan/audio/', views.ScanAudioView.as_view(), name='api-scan-audio'),
+    path('scan/<int:scan_id>/report-admin/', views.ScanReportAdminView.as_view(), name='api-scan-report-admin'),
 
     # Report
     path('report/', views.ReportCreateView.as_view(), name='report'),
@@ -48,6 +50,7 @@ urlpatterns = [
 
     # User
     path('user/scans/', views.UserScansView.as_view(), name='user-scans'),
+    path('user/scan-picker/', views.UserScanPickerView.as_view(), name='user-scan-picker'),
     path('user/reports/', views.UserReportsView.as_view(), name='user-reports'),
     path('user/alerts/', views.UserAlertsView.as_view(), name='user-alerts'),
     path('user/profile/<str:username>/', views.PublicProfileView.as_view(), name='public-profile'),
@@ -76,6 +79,10 @@ urlpatterns = [
     # Articles
     path('articles/', views.ArticleListView.as_view(), name='article-list'),
     path('articles/<slug:slug>/', views.ArticleDetailView.as_view(), name='article-detail'),
+    path('learn/lessons/<slug:slug>/reaction/', views.LessonReactionView.as_view(), name='learn-lesson-reaction'),
+    path('learn/articles/<slug:slug>/reaction/', views.ArticleReactionView.as_view(), name='learn-article-reaction'),
+    path('learn/articles/<slug:slug>/comments/', views.ArticleCommentListCreateView.as_view(), name='learn-article-comments'),
+    path('learn/articles/<slug:slug>/comments/<int:comment_id>/reaction/', views.ArticleCommentReactionView.as_view(), name='learn-article-comment-reaction'),
 
     # Utils
     path('utils/upload-image/', views.EditorImageUploadView.as_view(), name='editor-upload-image'),
