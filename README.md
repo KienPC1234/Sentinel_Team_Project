@@ -38,7 +38,7 @@
 | Layer | Technology |
 |---|---|
 | **Core** | Django 5.2 (Python 3.12), Django REST Framework |
-| **AI Engine** | Multi-Agent Collaboration (Ollama LLM), Faster-Whisper (STT), RAG (FAISS), EasyOCR |
+| **AI Engine** | GPT-OSS Cloud (gpt-oss:120b), Faster-Whisper (STT), RAG (FAISS), EasyOCR |
 | **Async** | Celery & Redis (Background Tasks), Celery Beat (Scheduled Jobs) |
 | **Real-time** | Django Channels (WebSocket), HTTP Polling |
 | **Design** | Liquid Glass Aesthetic (TailwindCSS v4), Alpine.js |
@@ -91,18 +91,21 @@ python manage.py createsuperuser
 python manage.py runserver 0.0.0.0:8000
 ```
 
-### Khởi chạy Ollama (AI Engine)
+### Khởi chạy AI Engine (Ollama)
+Dự án sử dụng **Ollama** để vận hành mô hình ngôn ngữ lớn (LLM). Hiện đã nâng cấp lên model siêu tham số **GPT-OSS:120b** để xử lý các kịch bản lừa đảo phức tạp với độ chính xác cao.
+
 ```bash
-# Cài Ollama
+# 1. Cài đặt Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
 
-# Pull model (chọn 1)
-ollama pull llama3              # Khuyên dùng
-ollama pull qwen2.5:7b          # Hỗ trợ tiếng Việt tốt
+# 2. Pull model chính (hoặc cấu hình remote Ollama endpoint trong PKV/settings.py)
+ollama pull gpt-oss:120b
 
-# Ollama tự chạy background sau khi cài
-# Kiểm tra: curl http://localhost:11434/api/tags
+# 3. Kiểm tra kết nối
+curl http://localhost:11434/api/tags
 ```
+
+> **Lưu ý:** Nếu hạ tầng không đủ tài nguyên để chạy model 120b (Yêu cầu VRAM/RAM lớn), bạn có thể sử dụng giải pháp **Ollama Cloud/Remote** hoặc hạ cấp xuống model nhẹ hơn như `qwen2.5:7b`.
 
 ### Khởi chạy Background Workers
 ```bash
@@ -161,7 +164,7 @@ sudo apt install -y python3.12 python3.12-venv python3.12-dev \
 
 # Cài Ollama trên server
 curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull llama3
+ollama pull gpt-oss:120b
 ```
 
 ### Bước 2: Setup Database
@@ -186,7 +189,7 @@ sudo useradd -m -s /bin/bash shieldcall
 sudo su - shieldcall
 
 # Clone & setup
-git clone <repo-url> /home/shieldcall/PKV_TEAM
+git clone https://github.com/KienPC1234/Sentinel_Team_Project.git /home/shieldcall/PKV_TEAM
 cd /home/shieldcall/PKV_TEAM
 python3.12 -m venv .venv
 source .venv/bin/activate
@@ -416,8 +419,9 @@ PKV_TEAM/
 | `SECRET_KEY` | Django secret key (random 50+ chars) | ✅ |
 | `DATABASES` | MySQL connection | ✅ |
 | `CELERY_BROKER_URL` | Redis broker URL | ✅ |
-| `OLLAMA_BASE_URL` | Ollama API endpoint | ✅ |
-| `LLM_MODEL` | Model name (llama3, qwen2.5, ...) | ✅ |
+| `OLLAMA_BASE_URL` | Local/Remote Ollama API endpoint | ✅ |
+| `OLLAMA_API_KEY` | API Key (nếu sử dụng Cloud AI) | ✅ |
+| `LLM_MODEL` | Tên model (gpt-oss:120b, ...) | ✅ |
 | `VT_API_KEY` | VirusTotal API key | ⚠️ Scan feature |
 | `TURNSTILE_SITEKEY` / `TURNSTILE_SECRET` | Cloudflare anti-spam | ⚠️ Forms |
 | `ONESIGNAL_APP_ID` | OneSignal push notifications | ❌ Optional |

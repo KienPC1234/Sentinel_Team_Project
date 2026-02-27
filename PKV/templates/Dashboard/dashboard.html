@@ -2,7 +2,8 @@
 {% block title %}Dashboard - ShieldCall VN{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-10" x-data="{activeTab:'overview'}">
+<script id="scans-json" type="application/json">{{ recent_scans_json|safe }}</script>
+<div class="max-w-6xl mx-auto space-y-10" x-data="dashboardApp()">
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6" data-aos="fade-down">
         <div class="space-y-2" data-aos="fade-right" data-aos-delay="100">
@@ -16,11 +17,17 @@
                 </span>
             </p>
         </div>
-        <div class="flex gap-4 w-full md:w-auto" data-aos="fade-left" data-aos-delay="200">
-            <a href="/scan/phone/" class="liquid-btn flex-1 md:flex-none py-3 px-8 text-xs font-black bg-white/5 text-white/80 border-white/10 hover:bg-white/10 uppercase tracking-widest">
+        <div class="flex gap-3 w-full md:w-auto flex-wrap" data-aos="fade-left" data-aos-delay="200">
+            <a href="/scan/phone/" class="liquid-btn flex-1 md:flex-none py-3 px-6 text-xs font-black bg-white/5 text-white/80 border-white/10 hover:bg-white/10 uppercase tracking-widest">
                 <i class="bi bi-search mr-2"></i> Scan Mới
             </a>
-            <a href="/report/" class="liquid-btn flex-1 md:flex-none py-3 px-10 text-xs font-black bg-red-500 text-black hover:bg-red-400 uppercase tracking-widest transition-all shadow-lg shadow-red-500/20">
+            <a href="/profile/inbox/" class="liquid-btn flex-1 md:flex-none py-3 px-6 text-xs font-black bg-white/5 text-white/80 border-white/10 hover:bg-white/10 uppercase tracking-widest">
+                <i class="bi bi-envelope mr-2"></i> Hộp thư
+            </a>
+            <a href="/profile/tickets/" class="liquid-btn flex-1 md:flex-none py-3 px-6 text-xs font-black bg-white/5 text-white/80 border-white/10 hover:bg-white/10 uppercase tracking-widest">
+                <i class="bi bi-bug mr-2"></i> Báo lỗi
+            </a>
+            <a href="/report/" class="liquid-btn flex-1 md:flex-none py-3 px-6 text-xs font-black bg-red-500 text-black hover:bg-red-400 uppercase tracking-widest transition-all shadow-lg shadow-red-500/20">
                 <i class="bi bi-flag-fill mr-2"></i> Báo Cáo
             </a>
         </div>
@@ -103,7 +110,7 @@
                     </div>
                     <div class="space-y-4">
                         {% for alert in recent_alerts %}
-                        <div class="group flex items-center gap-5 p-4 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all">
+                        <a href="/scan/status/{{ alert.id }}/" class="group flex items-center gap-5 p-4 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all">
                             <div class="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform"
                                 :class="{'bg-red-500/10 text-red-500 shadow-red-500/10': '{{ alert.risk_level }}' === 'RED', 'bg-yellow-500/10 text-yellow-500 shadow-yellow-500/10': '{{ alert.risk_level }}' === 'YELLOW', 'bg-green-500/10 text-green-500 shadow-green-500/10': '{{ alert.risk_level }}' === 'GREEN'}">
                                 <i class="bi {% if alert.risk_level == 'RED' %}bi-shield-fill-x{% elif alert.risk_level == 'YELLOW' %}bi-shield-fill-exclamation{% else %}bi-shield-fill-check{% endif %}"></i>
@@ -112,7 +119,8 @@
                                 <div class="text-[11px] font-black text-white/90 truncate uppercase tracking-wider">{{ alert.get_scan_type_display }}: {{ alert.raw_input|truncatewords:5 }}</div>
                                 <div class="text-[9px] font-bold text-white/20 uppercase tracking-widest mt-0.5">{{ alert.created_at|timesince }} trước</div>
                             </div>
-                        </div>
+                            <i class="bi bi-chevron-right text-white/10 group-hover:text-cyan-400 transition-colors"></i>
+                        </a>
                         {% empty %}
                         <div class="text-center py-12 space-y-3 opacity-20">
                             <i class="bi bi-shield-check text-5xl"></i>
@@ -125,7 +133,7 @@
                 <!-- Latest Articles Section on Dashboard -->
                 <div class="lg:col-span-2 liquid-card p-8 space-y-6">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-xs font-black text-white uppercase tracking-widest">Kiến thức bảo mật mới nhất</h3>
+                        <h3 class="text-xs font-black text-white uppercase tracking-widest">Tin tức mới nhất về lừa đảo</h3>
                         <a href="/learn/" class="text-[10px] font-black text-cyan-400 uppercase tracking-widest hover:underline">Tất cả bài viết</a>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -143,7 +151,7 @@
                                 <h4 class="text-xs font-black text-white group-hover:text-cyan-400 transition-colors line-clamp-2">{{ article.title }}</h4>
                                 <p class="text-[10px] text-white/40 line-clamp-2 leading-relaxed">{{ article.content|striptags|truncatechars:80 }}</p>
                             </div>
-                            <a href="/learn/?slug={{ article.slug }}" class="absolute inset-0"></a>
+                            <a href="/learn/{{ article.slug }}/" class="absolute inset-0"></a>
                         </div>
                         {% empty %}
                         <div class="col-span-3 text-center py-12 opacity-20 italic text-xs uppercase tracking-widest">Chưa có bài viết mới...</div>
@@ -153,41 +161,65 @@
             </div>
 
             <!-- History Panel -->
-            <div x-show="activeTab==='history'" class="liquid-card overflow-hidden" x-transition.opacity>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-white/[0.02] border-b border-white/5">
-                                <th class="px-8 py-5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Thời Gian</th>
-                                <th class="px-8 py-5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Hạng Mục</th>
-                                <th class="px-8 py-5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Đối Tượng</th>
-                                <th class="px-8 py-5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em] text-center">Kết Quả</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-white/5">
-                            {% for scan in recent_scans %}
-                            <tr class="hover:bg-white/[0.01] transition-colors group">
-                                <td class="px-8 py-5 text-xs font-bold text-white/40 tracking-wide">{{ scan.created_at|date:"d/m H:i" }}</td>
-                                <td class="px-8 py-5">
-                                    <span class="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-black text-white/60 uppercase tracking-widest">
-                                        {{ scan.get_scan_type_display }}
-                                    </span>
-                                </td>
-                                <td class="px-8 py-5">
-                                    <div class="text-xs font-black text-white/80 tracking-wide uppercase truncate max-w-xs">{{ scan.raw_input|truncatewords:3 }}</div>
-                                </td>
-                                <td class="px-8 py-5 text-center">
-                                    <div class="inline-block px-4 py-1.5 rounded-full text-[9px] font-black tracking-widest uppercase border transition-all group-hover:scale-105"
-                                        :class="{'bg-red-500/20 text-red-500 border-red-500/30 shadow-lg shadow-red-500/10': '{{ scan.risk_level }}' === 'RED', 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30 shadow-lg shadow-yellow-500/10': '{{ scan.risk_level }}' === 'YELLOW', 'bg-green-500/20 text-green-500 border-green-500/30 shadow-lg shadow-green-500/10': '{{ scan.risk_level }}' !== 'RED' && '{{ scan.risk_level }}' !== 'YELLOW'}">
-                                        {{ scan.risk_level }}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="4" class="px-8 py-20 text-center text-white/10 font-black uppercase tracking-widest text-[10px]">Lịch sử sạch bóng lừa đảo</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <div x-show="activeTab==='history'" class="space-y-4" x-transition.opacity>
+                <div class="liquid-card overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-white/[0.02] border-b border-white/5">
+                                    <th class="px-8 py-5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Thời Gian</th>
+                                    <th class="px-8 py-5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Hạng Mục</th>
+                                    <th class="px-8 py-5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Đối Tượng</th>
+                                    <th class="px-8 py-5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em] text-center">Kết Quả</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <template x-for="scan in paginatedScans()" :key="scan.id">
+                                    <tr class="hover:bg-white/[0.01] transition-colors group cursor-pointer" @click="window.location.href='/scan/status/' + scan.id + '/'">
+                                        <td class="px-8 py-5 text-xs font-bold text-white/40 tracking-wide" x-text="scan.created_at"></td>
+                                        <td class="px-8 py-5">
+                                            <span class="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-black text-white/60 uppercase tracking-widest" x-text="scan.scan_type"></span>
+                                        </td>
+                                        <td class="px-8 py-5">
+                                            <div class="text-xs font-black text-white/80 tracking-wide uppercase truncate max-w-xs" x-text="scan.raw_input"></div>
+                                        </td>
+                                        <td class="px-8 py-5 text-center">
+                                            <div class="inline-block px-4 py-1.5 rounded-full text-[9px] font-black tracking-widest uppercase border transition-all group-hover:scale-105"
+                                                :class="scan.risk_level === 'RED' ? 'bg-red-500/20 text-red-500 border-red-500/30 shadow-lg shadow-red-500/10' : scan.risk_level === 'YELLOW' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30 shadow-lg shadow-yellow-500/10' : 'bg-green-500/20 text-green-500 border-green-500/30 shadow-lg shadow-green-500/10'"
+                                                x-text="scan.risk_level"></div>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="scans.length === 0">
+                                    <td colspan="4" class="px-8 py-20 text-center text-white/10 font-black uppercase tracking-widest text-[10px]">Lịch sử sạch bóng lừa đảo</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Scan Pagination -->
+                <div x-show="scanTotalPages() > 1" class="flex items-center justify-between">
+                    <div class="text-[10px] font-bold text-white/20 uppercase tracking-widest">
+                        Trang <span x-text="scanPage"></span> / <span x-text="scanTotalPages()"></span>
+                        • <span x-text="scans.length"></span> kết quả
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button @click="scanPage = Math.max(1, scanPage - 1)" :disabled="scanPage <= 1"
+                            class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:bg-white/10 transition disabled:opacity-20">
+                            <i class="bi bi-chevron-left text-xs"></i>
+                        </button>
+                        <template x-for="p in scanPageNumbers()" :key="'sp'+p">
+                            <button @click="if(p !== '...') scanPage = p"
+                                :class="p === scanPage ? 'bg-cyan-400 text-black border-cyan-400' : p === '...' ? 'cursor-default border-transparent text-white/20' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'"
+                                class="w-8 h-8 rounded-lg border flex items-center justify-center text-[10px] font-black transition">
+                                <span x-text="p"></span>
+                            </button>
+                        </template>
+                        <button @click="scanPage = Math.min(scanTotalPages(), scanPage + 1)" :disabled="scanPage >= scanTotalPages()"
+                            class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:bg-white/10 transition disabled:opacity-20">
+                            <i class="bi bi-chevron-right text-xs"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -248,6 +280,32 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    function dashboardApp() {
+        return {
+            activeTab: 'overview',
+            scans: JSON.parse(document.getElementById('scans-json')?.textContent || '[]'),
+            scanPage: 1,
+            scansPerPage: 15,
+            paginatedScans() {
+                const start = (this.scanPage - 1) * this.scansPerPage;
+                return this.scans.slice(start, start + this.scansPerPage);
+            },
+            scanTotalPages() { return Math.ceil(this.scans.length / this.scansPerPage) || 1; },
+            scanPageNumbers() {
+                const total = this.scanTotalPages();
+                const cur = this.scanPage;
+                if (total <= 7) return Array.from({length: total}, (_, i) => i + 1);
+                const pages = [];
+                pages.push(1);
+                if (cur > 3) pages.push('...');
+                for (let i = Math.max(2, cur - 1); i <= Math.min(total - 1, cur + 1); i++) pages.push(i);
+                if (cur < total - 2) pages.push('...');
+                pages.push(total);
+                return pages;
+            }
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const ctx = document.getElementById('activityChart');
         if (ctx) {

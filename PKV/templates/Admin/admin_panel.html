@@ -287,6 +287,57 @@
                 </div>
             </div>
         </div>
+
+        <!-- Broadcast Notification -->
+        <div class="glass-card" style="padding:1.5rem;margin-top:1.5rem;" x-data="{ broadcastTitle: '', broadcastMessage: '', broadcastType: 'info', broadcastUrl: '', sending: false }">
+            <h3 style="font-weight:700;margin-bottom:1rem;"><i class="bi bi-megaphone-fill mr-2 text-cyan-400"></i> Gửi thông báo cho tất cả người dùng</h3>
+            <div style="display:grid;gap:0.75rem;">
+                <div>
+                    <label style="font-size:0.75rem;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:0.25rem;display:block;">Tiêu đề *</label>
+                    <input x-model="broadcastTitle" type="text" placeholder="VD: Cập nhật hệ thống" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:0.75rem;padding:0.6rem 1rem;color:#fff;font-size:0.85rem;outline:none;" onfocus="this.style.borderColor='rgba(24,255,255,0.3)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                </div>
+                <div>
+                    <label style="font-size:0.75rem;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:0.25rem;display:block;">Nội dung *</label>
+                    <textarea x-model="broadcastMessage" rows="3" placeholder="Nội dung thông báo..." style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:0.75rem;padding:0.6rem 1rem;color:#fff;font-size:0.85rem;outline:none;resize:vertical;" onfocus="this.style.borderColor='rgba(24,255,255,0.3)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'"></textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                    <div>
+                        <label style="font-size:0.75rem;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:0.25rem;display:block;">Loại thông báo</label>
+                        <select x-model="broadcastType" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:0.75rem;padding:0.6rem 1rem;color:#fff;font-size:0.85rem;outline:none;">
+                            <option value="info">ℹ️ Thông tin</option>
+                            <option value="success">✅ Thành công</option>
+                            <option value="warning">⚠️ Cảnh báo</option>
+                            <option value="error">❌ Lỗi</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:0.25rem;display:block;">URL (tuỳ chọn)</label>
+                        <input x-model="broadcastUrl" type="text" placeholder="/scan/phone/" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:0.75rem;padding:0.6rem 1rem;color:#fff;font-size:0.85rem;outline:none;" onfocus="this.style.borderColor='rgba(24,255,255,0.3)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                    </div>
+                </div>
+                <button @click="
+                    if (!broadcastTitle.trim() || !broadcastMessage.trim()) { showToast('Vui lòng nhập tiêu đề và nội dung', 'warning'); return; }
+                    sending = true;
+                    fetch('/api/v1/admin/notifications/broadcast/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                        body: JSON.stringify({ title: broadcastTitle, message: broadcastMessage, notification_type: broadcastType, url: broadcastUrl })
+                    }).then(r => r.json()).then(data => {
+                        if (data.status === 'success') {
+                            showAlert('Thành công', data.message, 'success');
+                            broadcastTitle = ''; broadcastMessage = ''; broadcastUrl = '';
+                        } else { showToast(data.error || 'Lỗi gửi thông báo', 'error'); }
+                    }).catch(() => showToast('Lỗi kết nối', 'error')).finally(() => sending = false);
+                " :disabled="sending"
+                    style="background:linear-gradient(135deg,rgba(24,255,255,0.15),rgba(179,136,255,0.15));border:1px solid rgba(24,255,255,0.3);border-radius:0.75rem;padding:0.6rem 1.5rem;color:#18ffff;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;justify-content:center;gap:0.5rem;"
+                    onmouseover="this.style.background='linear-gradient(135deg,rgba(24,255,255,0.25),rgba(179,136,255,0.25))'" 
+                    onmouseout="this.style.background='linear-gradient(135deg,rgba(24,255,255,0.15),rgba(179,136,255,0.15))'">
+                    <template x-if="sending"><span class="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></span></template>
+                    <template x-if="!sending"><i class="bi bi-send-fill"></i></template>
+                    <span x-text="sending ? 'Đang gửi...' : 'Gửi thông báo'"></span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Forum Management -->

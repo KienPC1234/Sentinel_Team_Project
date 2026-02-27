@@ -18,7 +18,7 @@ class EditorImageUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        file_obj = request.FILES.get('image') or request.FILES.get('file')
+        file_obj = request.FILES.get('image') or request.FILES.get('file') or request.FILES.get('upload')
         if not file_obj:
             return Response({"success": 0, "message": "No file uploaded"}, status=400)
 
@@ -29,8 +29,10 @@ class EditorImageUploadView(APIView):
         )
         url = os.path.join(settings.MEDIA_URL, path)
 
+        # Response compatible with both Editor.js and CKEditor 5
         return Response({
             "success": 1,
+            "url": url,
             "file": {
                 "url": url
             }
