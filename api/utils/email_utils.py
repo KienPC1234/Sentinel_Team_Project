@@ -475,13 +475,15 @@ def send_new_lesson_email(user_emails, lesson_title, lesson_url):
     plain_message = f"Chào bạn,\n\nChúng tôi vừa xuất bản bài học mới: {lesson_title}.\nXem ngay tại: {lesson_url}\n\nShieldCall VN Team"
     
     try:
-        send_mail(
+        sent_count = send_mail(
             subject,
             plain_message,
             settings.DEFAULT_FROM_EMAIL,
             user_emails,
             fail_silently=False
         )
-        logger.info(f"New lesson email sent to {len(user_emails)} users")
+        logger.info(f"New lesson email sent to {len(user_emails)} users (sent_count={sent_count})")
+        return int(sent_count or 0)
     except Exception as e:
         logger.exception(f"Failed to send bulk lesson email to {user_emails}: {e}")
+        return 0

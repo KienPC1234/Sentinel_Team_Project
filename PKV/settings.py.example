@@ -204,7 +204,15 @@ DEFAULT_FROM_EMAIL = 'ShieldCall VN <noreply@yourdomain.com>'
 # VirusTotal
 VT_API_KEY = "your-virustotal-api-key"
 
-# OneSignal (Push Notifications)
-ONESIGNAL_APP_ID = "your-onesignal-app-id"
-ONESIGNAL_REST_API_KEY = os.getenv("ONESIGNAL_REST_API_KEY", "your-rest-api-key")
-ONESIGNAL_SAFARI_WEB_ID = "your-safari-web-id"
+# WebPush VAPID
+WEBPUSH_VAPID_PUBLIC_KEY = os.getenv("WEBPUSH_VAPID_PUBLIC_KEY", "")
+WEBPUSH_VAPID_PRIVATE_KEY = os.getenv("WEBPUSH_VAPID_PRIVATE_KEY", "")
+WEBPUSH_VAPID_SUBJECT = os.getenv("WEBPUSH_VAPID_SUBJECT", "mailto:admin@yourdomain.com")
+
+# WebPush maintenance jobs
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-webpush-subscriptions-nightly': {
+        'task': 'core.cleanup_webpush_subscriptions',
+        'schedule': 60 * 60 * 24,
+    },
+}

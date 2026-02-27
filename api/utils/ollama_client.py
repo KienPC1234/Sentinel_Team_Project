@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+from urllib.parse import quote, urljoin
 from typing import Optional, Dict, Any, Generator, List
 
 from django.conf import settings
@@ -142,6 +143,21 @@ def _tool_lookup_tranco(domain: str):
     return lookup_tranco(domain)
 
 
+def _tool_lookup_tratencongty(query: str):
+    """Tra cứu doanh nghiệp Việt Nam trên TraTenCongTy.
+
+    Dùng cho bối cảnh website/doanh nghiệp Việt Nam để đối chiếu thông tin
+    pháp lý như mã số thuế, tên pháp lý, đại diện pháp luật và địa chỉ.
+
+    Args:
+        query: Mã số thuế hoặc tên công ty cần tra cứu.
+
+    Returns:
+        Dict chuẩn source/title/content/links từ lookup_tratencongty().
+    """
+    return lookup_tratencongty(query)
+
+
 # Map tool name -> our Python dispatcher (used in search_agent loop)
 WEB_TOOLS: Dict[str, Any] = {
     '_tool_web_search': _tool_web_search,
@@ -150,6 +166,7 @@ WEB_TOOLS: Dict[str, Any] = {
     '_tool_lookup_trustpilot': _tool_lookup_trustpilot,
     '_tool_lookup_sitejabber': _tool_lookup_sitejabber,
     '_tool_lookup_tranco': _tool_lookup_tranco,
+    '_tool_lookup_tratencongty': _tool_lookup_tratencongty,
 }
 
 # Tool definitions for ShieldCall AI
@@ -1126,6 +1143,7 @@ SCAM_DB_URLS = {
     'trustpilot':  'https://www.trustpilot.com/review/',
     'sitejabber':  'https://www.sitejabber.com/reviews/',
     'tranco':      'https://tranco-list.eu/api/ranks/domain/',
+    'tratencongty': 'https://tratencongty.com/search/',
 }
 
 
@@ -1447,6 +1465,127 @@ def lookup_tranco(domain: str) -> Optional[Dict]:
     return None
 
 
+def lookup_tratencongty(query: str) -> Optional[Dict]:
+    """
+    Search Vietnamese company registry snapshots on tratencongty.com.
+
+    This lookup supports cross-checking legal company information when a site
+    claims to be a Vietnamese business.
+
+    Args:
+        query: Tax code (MST) or company name.
+
+    Returns:
+        Dict with keys ``source``, ``query_url``, ``title``, ``content``, and
+        ``links``; or ``None`` on failure.
+    """
+    import requests
+    from bs4 import BeautifulSoup
+
+    clean_query = (query or '').strip()
+    if not clean_query:
+        return None
+
+    search_url = f"{SCAM_DB_URLS['tratencongty']}{quote(clean_query)}/"
+    headers = {
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/126.0.0.0 Safari/537.36'
+        ),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+    }
+
+    try:
+        resp = requests.get(search_url, headers=headers, timeout=18)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text or '', 'html.parser')
+
+        company_links = []
+        seen = set()
+        for a in soup.select('a[href*="/company/"]'):
+            href = (a.get('href') or '').strip()
+            title = a.get_text(' ', strip=True)
+            if not href:
+                continue
+            full_url = urljoin('https://tratencongty.com/', href)
+            if '/company/' not in full_url:
+                continue
+            key = full_url.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            company_links.append((title, full_url))
+            if len(company_links) >= 5:
+                break
+
+        if not company_links:
+            return {
+                'source': 'tratencongty',
+                'query_url': search_url,
+                'title': f"TraTenCongTy lookup for {clean_query}",
+                'content': f"Không tìm thấy doanh nghiệp phù hợp cho truy vấn '{clean_query}'.",
+                'links': [search_url],
+            }
+
+        lines = [
+            f"TraTenCongTy: tìm thấy {len(company_links)} kết quả đầu cho '{clean_query}'.",
+            "Kết quả đối chiếu:",
+        ]
+        out_links = [search_url]
+
+        for idx, (title, detail_url) in enumerate(company_links, start=1):
+            company_name = title or 'N/A'
+            tax_id = ''
+            legal_rep = ''
+            address = ''
+            status = ''
+
+            try:
+                detail_resp = requests.get(detail_url, headers=headers, timeout=15)
+                if detail_resp.ok:
+                    detail_soup = BeautifulSoup(detail_resp.text or '', 'html.parser')
+                    detail_text = detail_soup.get_text(' ', strip=True)
+                    detail_text = re.sub(r'\s+', ' ', detail_text)
+
+                    m_tax = re.search(r'Mã\s*số\s*thuế\s*:?\s*([0-9\-]{10,16})', detail_text, re.IGNORECASE)
+                    m_rep = re.search(r'Đại\s*diện\s*pháp\s*luật\s*:?\s*(.+?)(?:Địa\s*chỉ|Tình\s*trạng|Ngành\s*nghề|Điện\s*thoại|$)', detail_text, re.IGNORECASE)
+                    m_addr = re.search(r'Địa\s*chỉ\s*:?\s*(.+?)(?:Điện\s*thoại|Ngành\s*nghề|Tình\s*trạng|Ngày\s*cấp|$)', detail_text, re.IGNORECASE)
+                    m_status = re.search(r'Tình\s*trạng\s*:?\s*(.+?)(?:Ngành\s*nghề|Ngày\s*cấp|Điện\s*thoại|$)', detail_text, re.IGNORECASE)
+
+                    if m_tax:
+                        tax_id = m_tax.group(1).strip()
+                    if m_rep:
+                        legal_rep = m_rep.group(1).strip(' -,.;')
+                    if m_addr:
+                        address = m_addr.group(1).strip(' -,.;')
+                    if m_status:
+                        status = m_status.group(1).strip(' -,.;')
+            except Exception as exc:
+                logger.debug(f"lookup_tratencongty detail parse failed for {detail_url}: {exc}")
+
+            lines.append(
+                f"- #{idx} | Tên: {company_name}"
+                f" | MST: {tax_id or 'N/A'}"
+                f" | Đại diện: {legal_rep or 'N/A'}"
+                f" | Địa chỉ: {address or 'N/A'}"
+                f" | Trạng thái: {status or 'N/A'}"
+            )
+            out_links.append(detail_url)
+
+        return {
+            'source': 'tratencongty',
+            'query_url': search_url,
+            'title': f"TraTenCongTy lookup for {clean_query}",
+            'content': '\n'.join(lines),
+            'links': out_links,
+        }
+    except Exception as e:
+        logger.error(f"lookup_tratencongty error: {e}")
+        return None
+
+
 
 def search_agent(
     query: str,
@@ -1482,6 +1621,7 @@ def search_agent(
         '_tool_lookup_trustpilot': _tool_lookup_trustpilot,
         '_tool_lookup_sitejabber': _tool_lookup_sitejabber,
         '_tool_lookup_tranco': _tool_lookup_tranco,
+        '_tool_lookup_tratencongty': _tool_lookup_tratencongty,
     }
 
     logger.info(f"[search_agent] START query='{query[:120]}', model={model}, "
@@ -1501,6 +1641,7 @@ def search_agent(
                     _tool_lookup_trustpilot,
                     _tool_lookup_sitejabber,
                     _tool_lookup_tranco,
+                    _tool_lookup_tratencongty,
                     _tool_web_search,
                     _tool_web_fetch,
                 ],
@@ -1606,6 +1747,53 @@ def _extract_scam_subject(text: str) -> str:
         return re.sub(r'[\s.-]', '', generic_phone.group(0))
 
     return text[:120]
+
+
+def _is_likely_vietnam_context(text: str, subject: str = '') -> bool:
+    blob = f"{text}\n{subject}".lower()
+
+    vn_markers = [
+        '.vn', 'việt nam', 'viet nam', 'công ty', 'ma so thue', 'mã số thuế',
+        'ho chi minh', 'hà nội', 'da nang', 'zalo', '+84', 'địa chỉ',
+    ]
+    if any(marker in blob for marker in vn_markers):
+        return True
+
+    if re.search(r'(?:\+?84|0)[\s.-]?\d[\d\s.-]{7,12}\d', blob):
+        return True
+
+    if subject and subject.lower().endswith('.vn'):
+        return True
+
+    return False
+
+
+def _extract_tratencongty_query(text: str, subject: str = '') -> str:
+    merged = f"{text}\n{subject}"
+
+    tax_match = re.search(r'\b\d{10}(?:-\d{3})?\b', merged)
+    if tax_match:
+        return tax_match.group(0)
+
+    company_match = re.search(
+        r'((?:CÔNG TY|Công ty|CONG TY)\s+[A-ZÀ-Ỵ0-9\-\.,&()\s]{4,120})',
+        merged,
+    )
+    if company_match:
+        return re.sub(r'\s+', ' ', company_match.group(1)).strip()
+
+    clean_subject = (subject or '').strip().lower()
+    if clean_subject and '.' in clean_subject:
+        domain = re.sub(r'^https?://', '', clean_subject).split('/')[0]
+        labels = [x for x in domain.split('.') if x]
+        if len(labels) >= 2:
+            core = labels[-2]
+            core = re.sub(r'[^a-z0-9-]', '', core)
+            if core and core not in {'www', 'com', 'net', 'org', 'info', 'xyz', 'vip'}:
+                return core.replace('-', ' ')
+
+    fallback = re.sub(r'\s+', ' ', merged).strip()
+    return fallback[:80]
 
 
 def _clean_db_snippet(db_name: str, content: str) -> str:
@@ -1739,6 +1927,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
     web_search_used = False
     agent_searched_urls: List[str] = []
     db_context_parts: List[str] = []
+    db_sources_consulted: List[str] = []
 
     if use_web_search and OLLAMA_API_KEY:
         # ------------------------------------------------------------------
@@ -1761,6 +1950,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                     db_context_parts.append(
                         f"### [Nguồn: {db_name}] cho '{subject}'\n{snippet}"
                     )
+                    db_sources_consulted.append(db_name.lower())
                     logger.debug(
                         f"analyze_text_for_scam: {db_name} returned "
                         f"{len(db_result['content'])} chars"
@@ -1769,6 +1959,27 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                     logger.debug(f"analyze_text_for_scam: {db_name} returned no content")
             except Exception as exc:
                 logger.warning(f"analyze_text_for_scam: {db_name} lookup failed ({exc})")
+
+        # Tra cứu doanh nghiệp VN khi ngữ cảnh có dấu hiệu Việt Nam
+        vn_context = _is_likely_vietnam_context(text, subject)
+        if vn_context:
+            company_query = _extract_tratencongty_query(text, subject)
+            if company_query:
+                try:
+                    company_res = lookup_tratencongty(company_query)
+                    if company_res and company_res.get('content'):
+                        raw_content = company_res.get('content', '')
+                        snippet = _clean_db_snippet('TraTenCongTy', raw_content) or raw_content[:900]
+                        db_context_parts.append(
+                            f"### [Nguồn: TraTenCongTy] cho '{company_query}'\n{snippet}"
+                        )
+                        db_sources_consulted.append('tratencongty')
+                        logger.debug(
+                            f"analyze_text_for_scam: TraTenCongTy returned {len(raw_content)} chars "
+                            f"for query={company_query!r}"
+                        )
+                except Exception as exc:
+                    logger.warning(f"analyze_text_for_scam: TraTenCongTy lookup failed ({exc})")
 
         # Fallback if ALL databases are empty
         if not db_context_parts:
@@ -1789,8 +2000,12 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                     f"2. _tool_lookup_trustpilot  — kiểm tra điểm số và đánh giá người dùng trên Trustpilot\n"
                     f"3. _tool_lookup_sitejabber  — kiểm tra điểm số và đánh giá người dùng trên Sitejabber\n"
                     f"4. _tool_lookup_tranco      — kiểm tra thứ hạng mức độ phổ biến (Tranco Rank). Xếp hạng càng nhỏ (vd < 1000) càng uy tín.\n"
-                    "5. _tool_web_search         — tìm đánh giá trên Reddit, v.v. (dùng query 'site:reddit.com <domain>', ...)\n"
+                    "5. _tool_lookup_tratencongty — (chỉ khi nghi ngờ doanh nghiệp Việt Nam) tra cứu MST/tên công ty để đối chiếu pháp lý.\n"
+                    "6. _tool_web_search         — tìm đánh giá trên Reddit, v.v. (dùng query 'site:reddit.com <domain>', ...)\n"
                     "QUAN TRỌNG: Tập trung vào việc kiểm tra chính trang/nội dung được cung cấp có phải là lừa đảo không.\n"
+                    "ÁP DỤNG THỦ ĐOẠN LỪA ĐẢO KHI PHÂN TÍCH: domain giả mạo/typosquat/Unicode lookalike, link rút gọn, "
+                    "subdomain takeover, web dựng trên nền tảng miễn phí, thông điệp giật gân trúng thưởng, yêu cầu dữ liệu nhạy cảm, "
+                    "thanh toán khó truy vết (crypto/wire), đánh giá giả mạo.\n"
                     "KHÔNG được sao chép nguyên văn nội dung thô từ tool (menu, nút bấm, footer, danh sách link).\n"
                     "KHÔNG xuất block có dạng '### [Nguồn: ...] cho ...'. Chỉ dùng '### [Tên Nguồn]'.\n"
                     "Trình bày kết quả theo định dạng CHÍNH XÁC sau để hệ thống có thể phân tách:\n"
@@ -1804,7 +2019,12 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                     "### [Reddit]\n"
                     "- **Đánh giá**: Nguy hiểm\n"
                     "- **Chi tiết**: ...\n\n"
-                    "Nếu không có thông tin từ nguồn nào, ghi 'Không tìm thấy thông tin cụ thể'."
+                    "Nếu không có thông tin từ nguồn nào, ghi 'Không tìm thấy thông tin cụ thể'.\n"
+                    "Nếu có TraTenCongTy, phải nêu rõ thông tin pháp lý nào KHỚP và KHÔNG KHỚP với website (tên công ty, MST, địa chỉ, số liên hệ).\n"
+                    "Sau khi liệt kê tất cả nguồn, nếu muốn viết kết luận tổng hợp thì BẮT BUỘC dùng:\n"
+                    "### [Kết luận chung]\n"
+                    "Nội dung kết luận...\n"
+                    "TUYỆT ĐỐI KHÔNG dùng **Kết luận chung**: hay **Tổng kết**: hay bất kỳ dạng bold nào — phải là header ### đầy đủ."
                 ),
                 model=model,
                 think='low',
@@ -1860,7 +2080,8 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         web_section += (
             f"\n\n## Dữ liệu từ cơ sở dữ liệu lừa đảo\n"
             f"Các kết quả sau được lấy trực tiếp từ các cơ sở dữ liệu lừa đảo uy tín "
-            f"(ScamAdviser, ScamWave, Trustpilot, Sitejabber). Hãy coi đây là tín hiệu đáng tin cậy cao:\n"
+            f"(ScamAdviser, ScamWave, Trustpilot, Sitejabber, Tranco, TraTenCongTy). "
+            f"Hãy coi đây là tín hiệu đáng tin cậy cao:\n"
             f"{db_combined}\n"
         )
 
@@ -1885,7 +2106,9 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"HƯỚNG DẪN PHÂN TÍCH:\n"
         f"1. TRANG/NỘI DUNG CHÍNH THỨC/AN TOÀN: Nếu đây là trang chính thức của một tổ chức uy tín, đánh giá là an toàn.\n"
         f"2. TRANG LỪA ĐẢO: Nếu trang này giả mạo, lừa đảo, hoặc có dấu hiệu gian lận, đánh giá rủi ro cao.\n"
-        f"3. SỬ DỤNG THÔNG TIN TÌNH BÁO: Dựa vào kết quả từ ScamAdviser, ScamWave và các báo cáo để đưa ra kết luận.\n\n"
+        f"3. SỬ DỤNG THÔNG TIN TÌNH BÁO: Dựa vào kết quả từ ScamAdviser, ScamWave và các báo cáo để đưa ra kết luận.\n"
+        f"4. ĐỐI CHIẾU DOANH NGHIỆP VIỆT NAM: Nếu có dữ liệu TraTenCongTy, kiểm tra mức độ khớp tên pháp lý, MST, địa chỉ, đại diện pháp luật với website.\n"
+        f"5. THỦ ĐOẠN LỪA ĐẢO: Ưu tiên phát hiện typo domain/Unicode, shortlink che đích, subdomain takeover, free-host phishing, yêu cầu dữ liệu nhạy cảm, thanh toán khó truy vết.\n\n"
         f"QUY TẮC CHO 'explanation':\n"
         f"1. Tóm tắt nội dung chính từ các nguồn tình báo (web_section) một cách ngắn gọn, súc tích.\n"
         f"2. Loại bỏ các thông tin rác từ giao diện web (nếu có trong dữ liệu thô) như 'Read Reviews', 'Log in', 'Follow on Facebook'.\n"
@@ -1897,8 +2120,6 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
     response = generate_response(
         prompt, model, num_ctx=8192, max_tokens=2048, tools=[], format_schema=SCAM_ANALYSIS_SCHEMA
     )
-
-    db_sources_consulted = ['scamadviser', 'scamwave', 'trustpilot', 'sitejabber', 'tranco'] if db_context_parts else []
 
     # Frontend should display only structured intelligence context,
     # not raw database page dumps (which can be noisy).
@@ -1963,13 +2184,76 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         result['searched_urls'] = agent_searched_urls
         result['db_sources_consulted'] = db_sources_consulted
 
+        # Deterministic heuristic boosts for website scam patterns
+        has_domain_like_input = bool(re.search(r'(?:https?://|\b[a-z0-9-]+\.[a-z]{2,}\b)', text.lower()))
+        if has_domain_like_input:
+            indicator_blob = ' '.join(str(x) for x in (result.get('indicators') or []))
+            analysis_blob = ' '.join([
+                text or '',
+                combined_web_context or '',
+                str(result.get('explanation') or ''),
+                indicator_blob,
+            ]).lower()
+
+            boost = 0
+            boost_reasons: List[str] = []
+
+            mismatch_terms = [
+                'không khớp thông tin doanh nghiệp', 'khong khop thong tin doanh nghiep',
+                'không trùng khớp thông tin doanh nghiệp', 'không trùng khớp mst',
+                'mã số thuế không khớp', 'ma so thue khong khop',
+                'đối chiếu doanh nghiệp không khớp', 'doi chieu doanh nghiep khong khop',
+            ]
+            if any(t in analysis_blob for t in mismatch_terms):
+                boost += 35
+                boost_reasons.append('Đối chiếu doanh nghiệp VN không khớp')
+
+            if any(t in analysis_blob for t in ['typosquat', 'lookalike', 'homograph', 'unicode', 'giả mạo tên miền']):
+                boost += 15
+                boost_reasons.append('Tên miền có dấu hiệu giả mạo/lookalike')
+
+            if any(t in analysis_blob for t in ['bit.ly', 'tinyurl', 'cutt.ly', 'shortlink', 'rút gọn link']):
+                boost += 12
+                boost_reasons.append('Sử dụng link rút gọn che đích')
+
+            if any(t in analysis_blob for t in ['subdomain takeover', 'dangling cname']):
+                boost += 20
+                boost_reasons.append('Dấu hiệu subdomain takeover')
+
+            if any(t in analysis_blob for t in ['wix.com', 'weebly.com', 'sites.google.com', 'github.io', 'pages.dev', 'herokuapp.com']):
+                boost += 10
+                boost_reasons.append('Dấu hiệu web dựng nhanh trên nền tảng miễn phí')
+
+            if any(t in analysis_blob for t in ['western union', 'moneygram', 'bitcoin', 'usdt', 'crypto only']):
+                boost += 10
+                boost_reasons.append('Phương thức thanh toán khó truy vết')
+
+            if any(t in analysis_blob for t in ['cmnd', 'cccd', 'otp', 'mật khẩu', 'so the', 'thẻ tín dụng']):
+                boost += 15
+                boost_reasons.append('Yêu cầu thông tin nhạy cảm bất thường')
+
+            if boost > 0:
+                boost = min(boost, 45)
+                result['risk_score'] = min(100, result['risk_score'] + boost)
+                for reason in boost_reasons:
+                    if reason not in result['indicators']:
+                        result['indicators'].append(reason)
+
         # Ensure web_sources includes db sources consulted
         existing_sources = result.get('web_sources', []) or []
         existing_sources_l = [str(s).lower() for s in existing_sources]
+        source_display = {
+            'scamadviser': 'ScamAdviser',
+            'scamwave': 'ScamWave',
+            'trustpilot': 'Trustpilot',
+            'sitejabber': 'SiteJabber',
+            'tranco': 'Tranco',
+            'tratencongty': 'TraTenCongTy',
+        }
         if db_sources_consulted:
             for src in db_sources_consulted:
                 if src not in existing_sources_l:
-                    existing_sources.append(src.capitalize())
+                    existing_sources.append(source_display.get(src, src.capitalize()))
             result['web_sources'] = existing_sources
 
         if retry_notice and retry_count > 0:
@@ -1994,7 +2278,16 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         "risk_score": 0,
         "indicators": [],
         "explanation": "⏳ AI cần thêm chút thời gian. Hệ thống đang tạm trả kết quả an toàn để tránh treo phiên phân tích.",
-        "web_sources": [s.capitalize() for s in db_sources_consulted] if db_sources_consulted else ["Offline Analysis"],
+        "web_sources": [
+            {
+                'scamadviser': 'ScamAdviser',
+                'scamwave': 'ScamWave',
+                'trustpilot': 'Trustpilot',
+                'sitejabber': 'SiteJabber',
+                'tranco': 'Tranco',
+                'tratencongty': 'TraTenCongTy',
+            }.get(s, s.capitalize()) for s in db_sources_consulted
+        ] if db_sources_consulted else ["Offline Analysis"],
         "web_context": combined_web_context,
         "web_search_used": web_search_used,
         "searched_urls": agent_searched_urls,

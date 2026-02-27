@@ -29,9 +29,6 @@ class UserProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_super_admin = models.BooleanField(default=False)
     
-    # OneSignal Push Notification
-    onesignal_player_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-
     @property
     def rank_info(self):
         """Returns rank name and icon based on points"""
@@ -574,6 +571,7 @@ class Article(models.Model):
     """Admin articles for educating users (CMS)"""
     title = models.CharField(max_length=300)
     slug = models.SlugField(max_length=350, unique=True, blank=True)
+    summary = models.TextField(blank=True, default='')
     content = models.TextField()
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
@@ -600,6 +598,7 @@ class LearnLesson(models.Model):
     """Educational lessons for users"""
     title = models.CharField(max_length=300)
     slug = models.SlugField(max_length=350, unique=True, blank=True)
+    summary = models.TextField(blank=True, default='')
     content = models.TextField()
     category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
     cover_image = models.ImageField(upload_to='learn/covers/', null=True, blank=True)
@@ -703,6 +702,7 @@ def sync_vector_db(sender, instance, **kwargs):
     Automatically re-build the FAISS index when learning content changes via Celery.
     """
     try:
+        from api.maintenance.tasks import rebuild_vector_index
         rebuild_vector_index.delay(trigger='AUTO')
         logger.info(f"Vector DB sync task queued by {sender.__name__} update.")
     except Exception as e:
@@ -734,6 +734,37 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"[{self.notification_type}] {self.title} for {self.user.username}"
+
+
+class WebPushSubscription(models.Model):
+    """Web Push subscription per browser/device."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='webpush_subscriptions',
+        null=True,
+        blank=True,
+    )
+    endpoint = models.CharField(max_length=700, unique=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    user_agent = models.CharField(max_length=500, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    fail_count = models.PositiveSmallIntegerField(default=0)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"WebPush({self.user_id}) {self.endpoint[:60]}..."
 
 
 # ─── Announcement Model (Admin-only posts, no comments, reactions only) ────

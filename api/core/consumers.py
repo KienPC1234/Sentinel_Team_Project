@@ -123,6 +123,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             await self._set_online(True)
                 
             await self.accept()
+            unread_count = await self._get_unread_count()
+            await self.send(text_data=json.dumps({
+                'type': 'notification_count',
+                'unread_count': unread_count,
+            }))
         else:
             await self.close()
 
@@ -142,13 +147,25 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         else:
             cache.delete(key)
 
+    @database_sync_to_async
+    def _get_unread_count(self):
+        from api.core.models import Notification
+        return Notification.objects.filter(user=self.user, is_read=False).count()
+
     async def user_notification(self, event):
         await self.send(text_data=json.dumps({
             'type': 'notification',
             'title': event['title'],
             'message': event['message'],
             'url': event.get('url'),
-            'notification_type': event.get('notification_type', 'info')
+            'notification_type': event.get('notification_type', 'info'),
+            'unread_count': event.get('unread_count'),
+        }))
+
+    async def user_unread_count(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'notification_count',
+            'unread_count': event.get('unread_count', 0),
         }))
 
 
