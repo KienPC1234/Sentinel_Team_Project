@@ -1,69 +1,214 @@
 {% extends "base.html" %}
 {% load static %}
-{% load martortags %}
 
-{% block css %}
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.min.css" type="text/css" rel="stylesheet" />
-  <link href="{% static 'martor/css/martor.bootstrap.min.css' %}" type="text/css" media="all" rel="stylesheet" />
-  <style>
-    .martor-field { background-color: #1e293b; border-radius: 1rem; border: 1px solid #334155; overflow: hidden; }
-    .martor-toolbar { background-color: #0f172a !important; border-bottom: 1px solid #334155 !important; }
-    .martor-toolbar button { color: #94a3b8 !important; }
-    .martor-toolbar button:hover { background-color: #1e293b !important; color: #fff !important; }
-    .ace_editor { background-color: #0f172a !important; color: #cbd5e1 !important; }
-    .martor-preview { background-color: #1e293b; color: #e2e8f0; padding: 2rem; min-height: 400px; }
-  </style>
+{% block title %}{{ title }} - ShieldCall VN Admin{% endblock %}
+
+{% block head_extra %}
+<style>
+    .ck-editor__editable {
+        min-height: 500px !important;
+        background: rgba(15, 23, 42, 0.6) !important;
+        backdrop-filter: blur(12px);
+        color: #e2e8f0 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 0 0 1.5rem 1.5rem !important;
+        padding: 2rem !important;
+    }
+    .ck-toolbar {
+        background: rgba(30, 41, 59, 0.8) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 1.5rem 1.5rem 0 0 !important;
+    }
+    .ck-content pre { background: #000 !important; border-radius: 12px; padding: 1rem; }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8 mt-16">
-    <div class="flex items-center gap-4 mb-8">
-        <a href="{% url 'admin-manage-articles' %}" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
-            <i class="bi bi-chevron-left"></i>
-        </a>
-        <h1 class="text-2xl font-bold text-white">{{ title }}</h1>
+<div class="container mx-auto px-4 py-10 mt-16" x-data="{
+    quizzes: {{ existing_quizzes_json|safe|default:'[]' }},
+    scenarios: {{ existing_scenarios_json|safe|default:'[]' }},
+    addQuiz() {
+        this.quizzes.push({ question: '', options: ['', '', '', ''], correct_answer: '', explanation: '' });
+    },
+    removeQuiz(index) {
+        this.quizzes.splice(index, 1);
+    },
+    addScenario() {
+        this.scenarios.push({ title: '', description: '', content: {} });
+    },
+    removeScenario(index) {
+        this.scenarios.splice(index, 1);
+    }
+}">
+    <div class="flex items-center justify-between mb-10">
+        <div class="flex items-center gap-6">
+            <a href="{% url 'admin-manage-articles' %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">
+                <i class="bi bi-chevron-left text-xl"></i>
+            </a>
+            <div>
+                <h1 class="text-3xl font-black text-white tracking-tight">{{ title }}</h1>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Quản lý nội dung học tập & Cẩm nang</p>
+            </div>
+        </div>
+        
+        <button type="submit" form="articleForm" class="px-8 py-3.5 rounded-2xl bg-cyan-500 text-black font-black uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2">
+            <i class="bi bi-cloud-arrow-up-fill text-lg"></i>
+            Lưu thay đổi
+        </button>
     </div>
 
-    <form method="post" enctype="multipart/form-data" class="space-y-8">
+    <form id="articleForm" method="post" enctype="multipart/form-data" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {% csrf_token %}
-        
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-2 space-y-6">
-                <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl space-y-4">
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Tiêu đề tin tức</label>
-                        {{ form.title }}
-                        {% if form.title.errors %}<p class="text-red-500 text-xs mt-1">{{ form.title.errors }}</p>{% endif %}
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Slug</label>
+        <input type="hidden" name="quizzes_json" :value="JSON.stringify(quizzes)">
+        <input type="hidden" name="scenarios_json" :value="JSON.stringify(scenarios)">
+
+        <!-- Main Column -->
+        <div class="lg:col-span-8 space-y-8">
+            <div class="liquid-card p-8 space-y-6 border-white/5 bg-slate-900/40">
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Tiêu đề bài viết</label>
+                    {{ form.title }}
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Đường dẫn tĩnh (Slug)</label>
+                    <div class="relative">
                         {{ form.slug }}
+                        <div class="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-white/10 uppercase">Auto-generated if empty</div>
                     </div>
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Nội dung (Markdown)</label>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Nội dung chi tiết</label>
+                    <div class="rounded-3xl overflow-hidden border border-white/10">
                         {{ form.content }}
                     </div>
                 </div>
             </div>
 
-            <div class="space-y-6">
-                <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl space-y-6">
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Danh mục</label>
-                        {{ form.category }}
+            <!-- Quiz Section -->
+            <div class="liquid-card p-8 space-y-6 border-white/5 bg-slate-900/40">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                            <i class="bi bi-patch-question-fill text-lg"></i>
+                        </div>
+                        <h2 class="text-xl font-black text-white tracking-tight">Bộ câu hỏi (Quiz)</h2>
                     </div>
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Ảnh bìa</label>
+                    <button type="button" @click="addQuiz()" class="text-[10px] font-black text-purple-400 hover:text-purple-300 uppercase tracking-widest px-4 py-2 rounded-xl bg-purple-500/5 border border-purple-500/10 transition-all">
+                        + Thêm câu hỏi
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <template x-for="(q, index) in quizzes" :key="index">
+                        <div class="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4 relative group">
+                            <button type="button" @click="removeQuiz(index)" class="absolute top-4 right-4 text-white/10 hover:text-red-400 transition-colors">
+                                <i class="bi bi-trash3-fill"></i>
+                            </button>
+                            
+                            <div class="space-y-2">
+                                <label class="text-[9px] font-black text-white/20 uppercase">Câu hỏi <span x-text="index + 1"></span></label>
+                                <input type="text" x-model="q.question" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-purple-500 outline-none transition-all" placeholder="Nhập nội dung câu hỏi...">
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <template x-for="(opt, oIdx) in q.options" :key="oIdx">
+                                    <div class="space-y-1">
+                                        <label class="text-[8px] font-black text-white/10 uppercase">Lựa chọn <span x-text="oIdx + 1"></span></label>
+                                        <input type="text" x-model="q.options[oIdx]" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs text-white/80 focus:border-purple-500/50 outline-none">
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-2">
+                                    <label class="text-[9px] font-black text-white/20 uppercase">Đáp án đúng</label>
+                                    <input type="text" x-model="q.correct_answer" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-green-400 font-bold focus:border-green-500 outline-none" placeholder="Nhập chính xác text đáp án...">
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-[9px] font-black text-white/20 uppercase">Giải thích</label>
+                                    <input type="text" x-model="q.explanation" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white/50 focus:border-purple-500 outline-none" placeholder="Tại sao đáp án này đúng?">
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="quizzes.length === 0" class="py-10 text-center border-2 border-dashed border-white/5 rounded-2xl text-white/10 uppercase font-black text-[10px] tracking-widest">
+                        Chưa có câu hỏi nào được thêm
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Column -->
+        <div class="lg:col-span-4 space-y-8">
+            <div class="liquid-card p-6 space-y-6 border-white/5 bg-slate-900/40">
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Danh mục bài viết</label>
+                    {{ form.category }}
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Ảnh đại diện (Cover)</label>
+                    <div class="p-4 rounded-2xl bg-black/40 border border-white/5">
                         {{ form.cover_image }}
                     </div>
-                    <div class="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
-                        {{ form.is_published }}
-                        <label class="text-white font-bold text-sm">Xuất bản ngay</label>
+                </div>
+
+                <div class="flex items-center justify-between p-4 rounded-2xl bg-cyan-500/5 border border-cyan-500/10">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+                            <i class="bi bi-eye-fill"></i>
+                        </div>
+                        <span class="text-xs font-black text-white/80 uppercase tracking-wider">Xuất bản</span>
                     </div>
-                    
-                    <button type="submit" class="w-full py-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-widest transition-all shadow-lg shadow-cyan-500/20">
-                        <i class="bi bi-save2 me-2"></i> LƯU BÀI VIẾT
-                    </button>
+                    {{ form.is_published }}
+                </div>
+            </div>
+
+            <!-- Scenarios Section -->
+            <div class="liquid-card p-6 space-y-6 border-white/5 bg-slate-900/40">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                            <i class="bi bi-interactive"></i>
+                        </div>
+                        <h2 class="text-sm font-black text-white uppercase tracking-widest">Kịch bản tương tác (Scenarios)</h2>
+                    </div>
+                    {% if article %}
+                    <a href="{% url 'admin-add-scenario' article.id %}" class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 hover:bg-blue-500/20 transition-all">
+                        <i class="bi bi-plus-lg"></i>
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <div class="space-y-3">
+                    {% for s in article.scenarios.all %}
+                        <div class="p-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between group">
+                            <div>
+                                <h3 class="text-xs font-bold text-white">{{ s.title }}</h3>
+                                <p class="text-[10px] text-white/40 mt-1">{{ s.description|truncatechars:60 }}</p>
+                            </div>
+                            <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="{% url 'admin-edit-scenario' s.id %}" class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+                                <a href="{% url 'admin-delete-scenario' s.id %}" class="w-8 h-8 rounded-lg bg-white/5 border border-red-500/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-500/30 transition-all">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        </div>
+                    {% empty %}
+                        {% if not article %}
+                        <div class="py-6 text-center border-2 border-dashed border-white/5 rounded-2xl">
+                            <p class="text-[9px] font-black text-white/10 uppercase tracking-widest">Lưu bài viết trước khi thêm kịch bản</p>
+                        </div>
+                        {% else %}
+                        <div class="py-6 text-center border-2 border-dashed border-white/5 rounded-2xl">
+                            <p class="text-[9px] font-black text-white/10 uppercase tracking-widest">Chưa có kịch bản tương tác</p>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -72,18 +217,21 @@
 {% endblock %}
 
 {% block js %}
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-markdown.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ext-language_tools.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-github.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
-  <script type="text/javascript" src="{% static 'martor/js/martor.bootstrap.min.js' %}"></script>
-  
-  <script>
-    document.querySelectorAll('input[type="text"], input[type="file"], select, textarea').forEach(el => {
-        if (!el.closest('.martor-field')) {
-            el.classList.add('w-full', 'bg-slate-900/50', 'border', 'border-slate-700', 'rounded-xl', 'px-4', 'py-3', 'text-white', 'focus:border-cyan-500', 'focus:outline-none', 'transition-all', 'text-sm');
-        }
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Initialize CKEditor
+        const editor = await window.createCKEditor('#editor');
+
+        // Apply shared styles to other inputs
+        document.querySelectorAll('input[type="text"], input[type="file"], select').forEach(el => {
+            if (el.id !== 'editor') {
+                el.classList.add('w-full', 'bg-black/40', 'border', 'border-white/10', 'rounded-2xl', 'px-5', 'py-3.5', 'text-sm', 'text-white', 'focus:border-cyan-500', 'outline-none', 'transition-all', 'placeholder:text-white/10');
+            }
+        });
+        
+        document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+            el.classList.add('w-5', 'h-5', 'rounded-lg', 'bg-black/40', 'border-white/10', 'text-cyan-500', 'focus:ring-cyan-500/20', 'focus:ring-offset-0');
+        });
     });
-  </script>
+</script>
 {% endblock %}

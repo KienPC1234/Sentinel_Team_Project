@@ -317,6 +317,7 @@ class ScanEmailView(APIView):
             'security_checks': security_details,
             'extracted_info': {
                 'subject': email_data['subject'],
+                'from': email_data['from'],
                 'url_count': len(email_data['urls']),
                 'attachment_count': len(email_data['attachments'])
             }
@@ -360,17 +361,29 @@ def _analyze_message_text(text: str) -> dict:
     """
     Enhanced AI Text Analyzer.
     Prioritizes AI analysis and incorporates domain risk checks.
+    Falls back gracefully to rule-based scoring when AI (Ollama) is unavailable.
     """
-    # 1. AI Analysis (Ollama)
-    ai_result = analyze_text_for_scam(text)
-    ai_score = ai_result.get('risk_score', 0)
-    ai_explanation = ai_result.get('explanation') or ai_result.get('reason') or ''
-    
+    # 1. AI Analysis (Ollama) — with graceful fallback
+    ai_score = 0
+    ai_explanation = ''
+    ai_available = True
+    try:
+        ai_result = analyze_text_for_scam(text)
+        if ai_result:
+            ai_score = ai_result.get('risk_score', 0) or 0
+            ai_explanation = ai_result.get('explanation') or ai_result.get('reason') or ''
+        else:
+            ai_available = False
+            logger.warning("_analyze_message_text: AI returned None, falling back to rule-based scoring.")
+    except Exception as exc:
+        ai_available = False
+        logger.warning(f"_analyze_message_text: AI error ({exc}), falling back to rule-based scoring.")
+
     # 2. Extract and Scan Domains
     found_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', text)
     domain_risks = []
     max_domain_score = 0
-    
+
     vt = VTClient()
     for url in found_urls:
         domain = normalize_domain(url)
@@ -381,10 +394,7 @@ def _analyze_message_text(text: str) -> dict:
             if score > 0:
                 domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
 
-    # 3. Final Ensemble (AI + Domain Risk)
-    final_score = max(ai_score, max_domain_score)
-    
-    # 4. Patterns (Heuristic)
+    # 3. Heuristic Patterns
     patterns_found = []
     scam_keywords = {
         r'otp|mã xác': 'Yêu cầu OTP',
@@ -397,36 +407,36 @@ def _analyze_message_text(text: str) -> dict:
         if re.search(pattern, text.lower()):
             patterns_found.append(label)
 
+    # Rule-based score (used as sole score when AI is unavailable)
+    rule_score = min(100, len(patterns_found) * 15 + max_domain_score)
+
+    # 4. Final Ensemble
+    if ai_available:
+        # Combine AI judgement with domain signals; AI takes precedence
+        final_score = max(ai_score, max_domain_score)
+    else:
+        # AI offline — fall back entirely to heuristics + domain risk
+        final_score = rule_score
+
     level = RiskLevel.SAFE
     if final_score >= 70: level = RiskLevel.RED
     elif final_score >= 40: level = RiskLevel.YELLOW
     elif final_score >= 10: level = RiskLevel.GREEN
 
-    return {
-        'risk_score': final_score,
-        'risk_level': level,
-        'explanation': ai_explanation,
-        'patterns_found': list(set(patterns_found + domain_risks)),
-        'ai_insight': ai_explanation
-    }
-
-    # Determine scam type
+    # Determine scam type from detected patterns
     scam_type = 'other'
     if any('công an' in p for p in patterns_found):
         scam_type = 'police_impersonation'
-    elif any('ngân hàng' in p for p in patterns_found):
-        scam_type = 'bank_impersonation'
     elif any('OTP' in p for p in patterns_found):
         scam_type = 'otp_steal'
     elif any('chuyển khoản' in p for p in patterns_found):
         scam_type = 'investment_scam'
     elif any('trúng thưởng' in p.lower() for p in patterns_found):
-        scam_type = 'other'
-    elif any('link' in p.lower() for p in patterns_found):
+        scam_type = 'prize_scam'
+    elif domain_risks:
         scam_type = 'phishing'
 
-    # Action checklist
-    actions = []
+    # Actionable advice based on risk level
     if final_score >= 70:
         actions = ['🚫 KHÔNG chuyển tiền', '🚫 KHÔNG cung cấp OTP',
                    '📞 Gọi 113 báo công an', '📸 Lưu bằng chứng']
@@ -436,14 +446,22 @@ def _analyze_message_text(text: str) -> dict:
     else:
         actions = ['✅ Tin nhắn có vẻ an toàn', '🔍 Vẫn nên cẩn thận với link lạ']
 
+    # Build explanation — prefer AI's if available, else use rule summary
+    if ai_available and ai_explanation:
+        explanation = ai_explanation
+    elif patterns_found or domain_risks:
+        explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu đáng ngờ (phân tích quy tắc).'
+    else:
+        explanation = 'Không phát hiện dấu hiệu lừa đảo rõ ràng.'
+
     return {
         'risk_score': final_score,
         'risk_level': level,
         'scam_type': scam_type,
-        'patterns_found': patterns_found,
-        'ai_analysis': ai_result.get('reason', ''),
-        'explanation': f'Phát hiện {len(patterns_found)} dấu hiệu đáng ngờ.' if patterns_found
-                       else 'Không phát hiện dấu hiệu lừa đảo rõ ràng.',
+        'patterns_found': list(set(patterns_found + domain_risks)),
+        'explanation': explanation,
+        'ai_insight': ai_explanation,
+        'ai_available': ai_available,
         'actions': actions,
         'rule_score': rule_score,
         'ai_score': ai_score,

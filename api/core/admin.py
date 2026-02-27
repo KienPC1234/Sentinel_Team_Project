@@ -7,6 +7,12 @@ from .models import (
     Article, LearnLesson, LearnQuiz, LearnScenario, ForumPost, ForumComment,
     ForumPostReport, UserProfile
 )
+from django.utils.html import format_html
+from django.utils.safestring import mark_safe
+
+admin.site.site_header = mark_safe('<img src="/static/logo.png" style="height: 32px; vertical-align: middle; margin-right: 10px; border-radius: 6px;"> ShieldCall VN Administration')
+admin.site.site_title = "ShieldCall Admin Portal"
+admin.site.index_title = "Bảng điều khiển hệ thống ShieldCall"
 
 
 @admin.register(Domain)

@@ -128,7 +128,10 @@
         this.ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
             console.log('WebSocket Message:', data);
-            this.progress.push({ message: data.message, step: data.step });
+            // Filter out internal ping messages
+            <!-- if (data.step !== 'ping') { -->
+                this.progress.push({ message: data.message, step: data.step });
+            <!-- } -->
 
             if (data.step === 'completed' && data.data) {
                 console.log('Scan completed successfully!');
@@ -372,6 +375,101 @@
                                  x-text="result.ocr_text"></div>
                         </div>
                     </div>
+
+                    <!-- Grounded Intelligence / Proofs -->
+                    <template x-if="result.web_context || (result.web_sources && result.web_sources.length > 0)">
+                        <div class="p-8 border-t border-white/5 bg-white/[0.01]">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                                    <i class="bi bi-search"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black text-white uppercase tracking-wider">Thông tin tình báo (OSINT)</h4>
+                                    <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Grounded Proofs & Sources</p>
+                                </div>
+                            </div>
+
+                        <!-- NEW: Structured Intelligence -->
+                        <div class="grid grid-cols-1 gap-6" x-data="{
+                            sources: [],
+                            parseContext() {
+                                if (!result || !result.web_context) { 
+                                    this.sources = []; 
+                                    return; 
+                                }
+                                const raw = result.web_context;
+                                
+                                // Clean up any 'thinking' artifacts if present
+                                const cleanRaw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+                                // Robust splitting logic to handle ### [Source] or ### Source
+                                // Matches: ### [Title] or ### Title followed by newline or end of string
+                                const parts = cleanRaw.split(/###\s+(?:\[)?(.*?)(?:\])?(?:\n|$)/);
+                                
+                                if (parts.length >= 3) {
+                                    // split results in [preamble, title1, content1, title2, content2...]
+                                    let newSources = [];
+                                    for (let i = 1; i < parts.length; i += 2) {
+                                        const title = (parts[i] || '').trim();
+                                        const content = (parts[i+1] || '').trim();
+                                        if (title && content) {
+                                            newSources.push({
+                                                title: title,
+                                                html: (window.marked && window.marked.parse) ? window.marked.parse(content) : content
+                                            });
+                                        }
+                                    }
+                                    this.sources = newSources;
+                                } else {
+                                    // Fallback for unstructured text
+                                    this.sources = [{ 
+                                        title: 'TỔNG HỢP TÌNH BÁO', 
+                                        html: (window.marked && window.marked.parse) ? window.marked.parse(cleanRaw) : cleanRaw 
+                                    }];
+                                }
+                            }
+                        }" x-effect="parseContext()">
+                            
+                            <!-- Sources Badges (Still useful for quick glance) -->
+                            <div class="flex flex-wrap gap-2 mb-2" x-show="result.web_sources && result.web_sources.length">
+                                <template x-for="source in result.web_sources" :key="source">
+                                    <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20 uppercase" x-text="source"></span>
+                                </template>
+                            </div>
+
+                            <!-- Structured Proof Cards -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <template x-for="item in sources">
+                                    <div class="p-5 rounded-xl bg-black/40 border border-white/10 hover:border-cyan-500/30 transition-all group relative overflow-hidden">
+                                        <!-- Header -->
+                                        <div class="flex items-center gap-3 mb-3 border-b border-white/5 pb-3">
+                                            <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400">
+                                                <i class="bi bi-shield-check text-xs"></i>
+                                            </div>
+                                            <h4 class="text-xs font-black text-cyan-100 uppercase tracking-wider" x-text="item.title"></h4>
+                                        </div>
+                                        
+                                        <!-- Content -->
+                                        <div class="prose prose-invert prose-sm text-xs text-gray-400 leading-relaxed font-mono [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>strong]:text-cyan-300" 
+                                             x-html="item.html"></div>
+                                             
+                                        <!-- Deco -->
+                                        <div class="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-10 transition-opacity">
+                                            <i class="bi bi-crosshair text-4xl text-cyan-500"></i>
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <!-- Empty State -->
+                                <template x-if="sources.length === 0 && !result.web_context">
+                                    <div class="col-span-full p-6 text-center border dashed border-white/10 rounded-xl">
+                                        <p class="text-white/30 text-xs italic">Đang chờ dữ liệu tình báo...</p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- Footer Actions -->
