@@ -148,7 +148,7 @@ chmod +x setup.sh
 ### Kiến trúc Production
 ```
                     ┌─────────────┐
-     Internet ────▶│  Nginx/LB   │
+     Internet ────> │  Nginx/LB   │
                     │ (SSL + WS)  │
                     └──────┬──────┘
                            │
