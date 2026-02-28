@@ -129,10 +129,12 @@ class AdminRAGManagementView(APIView):
         logs = RAGIndexLog.objects.all()[:50]
         
         # Current stats
+        from api.utils.vector_db import MODEL_NAME
         stats = {
             'total_items': len(vector_db.metadata),
             'last_sync': logs[0].completed_at if logs.exists() else None,
-            'is_ready': vector_db.index is not None
+            'is_ready': vector_db.index is not None,
+            'model_name': MODEL_NAME
         }
         
         # If it's a JSON request or has json=1 param

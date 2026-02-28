@@ -1,77 +1,196 @@
 {% extends "base.html" %}
+{% load static %}
+
+{% block title %}Quản lý Báo cáo - ShieldCall VN Admin{% endblock %}
+
 {% block content %}
-<div class="container mx-auto px-4 py-8 mt-16">
-    <div class="flex items-center gap-4 mb-8">
-        <a href="{% url 'admin-dashboard' %}" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
-            <i class="bi bi-chevron-left"></i>
-        </a>
-        <h1 class="text-2xl font-bold text-white">Quản Lý Báo Cáo Cộng Đồng</h1>
+<div class="container mx-auto px-4 py-10 mt-16 max-w-6xl">
+    <div class="flex items-center justify-between mb-12">
+        <div class="flex items-center gap-6">
+            <a href="{% url 'admin-dashboard' %}" class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-cyan-400 hover:border-cyan-500/30 transition-all shadow-lg">
+                <i class="bi bi-chevron-left text-2xl"></i>
+            </a>
+            <div>
+                <h1 class="text-3xl font-black text-white tracking-tight">Báo cáo Cộng đồng</h1>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Quản lý phản hồi và báo lừa đảo</p>
+            </div>
+        </div>
     </div>
 
-    <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden">
+    <div class="p-1 rounded-2xl bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
         <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="w-full text-left border-separate border-spacing-0">
                 <thead>
-                    <tr class="bg-slate-900/50 border-b border-slate-700/50">
-                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Thời gian</th>
-                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Người báo cáo</th>
-                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Đối tượng</th>
-                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Loại lừa đảo</th>
-                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Trạng thái</th>
-                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Bằng chứng</th>
-                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Hành động</th>
+                    <tr class="bg-white/[0.02]">
+                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">
+                            <a href="?sort={% if current_sort == 'created_at' %}-created_at{% else %}created_at{% endif %}" class="flex items-center gap-2 hover:text-cyan-400 transition-colors">
+                                <i class="bi bi-clock"></i> Thời gian {% if current_sort == 'created_at' %}↑{% elif current_sort == '-created_at' %}↓{% endif %}
+                            </a>
+                        </th>
+                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">
+                            <a href="?sort={% if current_sort == 'reporter__username' %}-reporter__username{% else %}reporter__username{% endif %}" class="flex items-center gap-2 hover:text-cyan-400 transition-colors">
+                                <i class="bi bi-person"></i> Người báo {% if current_sort == 'reporter__username' %}↑{% elif current_sort == '-reporter__username' %}↓{% endif %}
+                            </a>
+                        </th>
+                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Đối tượng</th>
+                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-center">Trạng thái</th>
+                        <th class="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-700/50">
+                <tbody class="divide-y divide-white/[0.02]">
                     {% for report in reports %}
-                    <tr class="hover:bg-slate-700/20 transition-colors">
-                        <td class="px-6 py-4 text-slate-300 text-sm whitespace-nowrap">{{ report.created_at|date:"d/m/Y H:i" }}</td>
-                        <td class="px-6 py-4 text-white font-medium">{{ report.reporter.username }}</td>
-                        <td class="px-6 py-4">
-                            <span class="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300 uppercase me-2">{{ report.target_type }}</span>
-                            <span class="text-slate-200">{{ report.target_value }}</span>
-                        </td>
-                        <td class="px-6 py-4 text-slate-300">{{ report.scam_type }}</td>
-                        <td class="px-6 py-4">
-                            {% if report.status == 'pending' %}
-                            <span class="px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-xs font-bold border border-yellow-500/20">CHỜ DUYỆT</span>
-                            {% elif report.status == 'approved' %}
-                            <span class="px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-bold border border-green-500/20">ĐÃ DUYỆT</span>
-                            {% else %}
-                            <span class="px-3 py-1 rounded-full bg-red-500/10 text-red-500 text-xs font-bold border border-red-500/20">TỪ CHỐI</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-4">
-                            {% if report.evidence_file %}
-                            <a href="{{ report.evidence_file.url }}" target="_blank" class="group relative block w-10 h-10 rounded-lg overflow-hidden border border-slate-700 hover:border-cyan-500/50 transition-all">
-                                <img src="{{ report.evidence_file.url }}" class="w-full h-full object-cover group-hover:scale-110 transition-transform">
-                                <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <i class="bi bi-eye text-white text-xs"></i>
+                    <tr class="group hover:bg-white/[0.03] transition-all duration-300">
+                        <td class="px-8 py-7 text-[11px] font-bold text-white/60 whitespace-nowrap">{{ report.created_at|date:"d/m H:i" }}</td>
+                        <td class="px-8 py-7">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-white/10 flex items-center justify-center text-cyan-400 font-black text-xs shadow-lg">
+                                    {{ report.reporter.username|slice:":1"|upper }}
                                 </div>
-                            </a>
-                            {% else %}
-                            <span class="text-slate-600 text-[10px] italic">Không có</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-4">
-                            {% if report.status == 'pending' %}
-                            <div class="flex gap-2">
-                                <a href="{% url 'admin-approve-report' report.id %}" class="px-3 py-1 rounded bg-green-500/20 text-green-500 text-xs font-bold hover:bg-green-500 hover:text-white transition-all">DUYỆT</a>
-                                <a href="{% url 'admin-reject-report' report.id %}" class="px-3 py-1 rounded bg-red-500/20 text-red-500 text-xs font-bold hover:bg-red-500 hover:text-white transition-all">TỪ CHỐI</a>
+                                <span class="text-sm font-black text-white tracking-tight">{{ report.reporter.username }}</span>
                             </div>
-                            {% else %}
-                            <span class="text-slate-500 text-xs italic">Đã xử lý</span>
-                            {% endif %}
+                        </td>
+                        <td class="px-8 py-7">
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 rounded-md bg-white/5 text-white/30 text-[8px] font-black uppercase tracking-widest border border-white/10">
+                                        {{ report.target_type }}
+                                    </span>
+                                    <span class="text-[10px] font-bold text-cyan-500/50 uppercase tracking-tighter">{{ report.get_scam_type_display|default:report.scam_type }}</span>
+                                </div>
+                                <div class="text-sm font-black text-white/90 tracking-tight">{{ report.target_value }}</div>
+                            </div>
+                        </td>
+                        <td class="px-8 py-7">
+                            <div class="flex justify-center">
+                                {% if report.status == 'pending' %}
+                                <span class="px-3 py-1.5 rounded-xl bg-yellow-500/10 text-yellow-500 text-[9px] font-black uppercase border border-yellow-500/20 tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.1)]">Chờ duyệt</span>
+                                {% elif report.status == 'approved' %}
+                                <span class="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-[9px] font-black uppercase border border-emerald-500/20 tracking-widest shadow-[0_0_15px_rgba(16,185,129,0.1)]">Đã duyệt</span>
+                                {% else %}
+                                <span class="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-500 text-[9px] font-black uppercase border border-red-500/20 tracking-widest">Từ chối</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-8 py-7 text-right">
+                            <div class="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
+                                <button onclick="showReportDetails({
+                                    id: '{{ report.id }}',
+                                    created_at: '{{ report.created_at|date:'d/m/Y H:i' }}',
+                                    reporter: '{{ report.reporter.username|escapejs }}',
+                                    target_type: '{{ report.target_type|escapejs }}',
+                                    target_value: '{{ report.target_value|escapejs }}',
+                                    scam_type: '{{ report.get_scam_type_display|escapejs }}',
+                                    severity: '{{ report.severity|escapejs }}',
+                                    description: `{{ report.description|safe|escapejs }}`,
+                                    scammer_name: '{{ report.scammer_name|default:''|escapejs }}',
+                                    scammer_phone: '{{ report.scammer_phone|default:''|escapejs }}',
+                                    scammer_bank_name: '{{ report.scammer_bank_name|default:''|escapejs }}',
+                                    scammer_bank_account: '{{ report.scammer_bank_account|default:''|escapejs }}',
+                                    evidence_url: '{% if report.evidence_file %}{{ report.evidence_file.url }}{% endif %}'
+                                })" class="w-10 h-10 rounded-2xl bg-white/5 text-white/40 flex items-center justify-center hover:bg-cyan-500 hover:text-black transition-all border border-white/10 hover:border-cyan-500 shadow-xl" title="Xem chi tiết">
+                                    <i class="bi bi-eye-fill"></i>
+                                </button>
+                                {% if report.status == 'pending' %}
+                                <a href="{% url 'admin-approve-report' report.id %}" class="w-10 h-10 rounded-2xl bg-white/5 text-white/40 flex items-center justify-center hover:bg-emerald-500 hover:text-black transition-all border border-white/10 hover:border-emerald-500 shadow-xl" title="Duyệt báo cáo">
+                                    <i class="bi bi-check-lg"></i>
+                                </a>
+                                <a href="{% url 'admin-reject-report' report.id %}" class="w-10 h-10 rounded-2xl bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all border border-white/10 hover:border-red-500 shadow-xl" title="Từ chối">
+                                    <i class="bi bi-x-lg"></i>
+                                </a>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-6 py-10 text-center text-slate-500 italic">Không có báo cáo nào.</td>
+                        <td colspan="5" class="px-8 py-32 text-center">
+                            <div class="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">No Community Reports Found</div>
+                            <p class="text-xs text-white/10">All systems are quiet or everything has been processed.</p>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+
+    <script>
+        function showReportDetails(data) {
+            let severityColor = '#10b981'; // green
+            if (data.severity === 'medium') severityColor = '#f59e0b';
+            if (data.severity === 'high') severityColor = '#ef4444';
+            if (data.severity === 'critical') severityColor = '#dc2626';
+
+            Swal.fire({
+                title: `<div class="flex items-center gap-4 text-left">
+                            <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20">
+                                <i class="bi bi-file-earmark-text text-xl"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-black text-white tracking-tight">Chi tiết báo cáo #${data.id}</h2>
+                                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">${data.created_at}</p>
+                            </div>
+                        </div>`,
+                width: '800px',
+                background: '#0d0d1f',
+                color: '#fff',
+                showConfirmButton: false,
+                showCloseButton: true,
+                customClass: {
+                    popup: 'rounded-[3rem] border border-white/10 backdrop-blur-3xl',
+                    htmlContainer: 'text-left p-0'
+                },
+                html: `
+                    <div class="space-y-8 p-10">
+                        <div class="grid grid-cols-2 gap-8 p-6 rounded-3xl bg-white/[0.02] border border-white/5">
+                            <div class="space-y-1">
+                                <p class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Người báo cáo</p>
+                                <p class="text-sm font-bold text-white">${data.reporter}</p>
+                            </div>
+                            <div class="space-y-1">
+                                <p class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Cấp độ</p>
+                                <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border border-opacity-20" 
+                                      style="background: ${severityColor}10; color: ${severityColor}; border-color: ${severityColor}">${data.severity}</span>
+                            </div>
+                            <div class="space-y-1">
+                                <p class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Đối tượng</p>
+                                <p class="text-sm font-bold text-white">${data.target_type}: ${data.target_value}</p>
+                            </div>
+                            <div class="space-y-1">
+                                <p class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Loại lừa đảo</p>
+                                <p class="text-sm font-bold text-white">${data.scam_type}</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <h3 class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] ml-1">Mô tả chi tiết</h3>
+                            <div class="p-6 rounded-3xl bg-white/[0.03] border border-white/5 text-sm text-white/70 leading-relaxed ai-markdown">
+                                ${data.description}
+                            </div>
+                        </div>
+
+                        ${(data.scammer_name || data.scammer_phone) ? `
+                        <div class="space-y-4">
+                            <h3 class="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] ml-1">Thông tin kẻ lừa đảo</h3>
+                            <div class="p-6 rounded-3xl bg-cyan-500/[0.03] border border-cyan-500/10 grid grid-cols-2 gap-6">
+                                ${data.scammer_name ? `<div><p class="text-[9px] font-black text-cyan-400/40 uppercase tracking-widest">Họ tên</p><p class="text-sm font-bold text-white">${data.scammer_name}</p></div>` : ''}
+                                ${data.scammer_phone ? `<div><p class="text-[9px] font-black text-cyan-400/40 uppercase tracking-widest">SĐT</p><p class="text-sm font-bold text-white">${data.scammer_phone}</p></div>` : ''}
+                                ${data.scammer_bank_name ? `<div><p class="text-[9px] font-black text-cyan-400/40 uppercase tracking-widest">Ngân hàng</p><p class="text-sm font-bold text-white">${data.scammer_bank_name}</p></div>` : ''}
+                                ${data.scammer_bank_account ? `<div><p class="text-[9px] font-black text-cyan-400/40 uppercase tracking-widest">STK</p><p class="text-sm font-bold text-white">${data.scammer_bank_account}</p></div>` : ''}
+                            </div>
+                        </div>` : ''}
+
+                        ${data.evidence_url ? `
+                        <div class="space-y-4">
+                            <h3 class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] ml-1">Bằng chứng</h3>
+                            <div class="rounded-3xl overflow-hidden border border-white/10 bg-black/40">
+                                <img src="${data.evidence_url}" class="w-full h-auto">
+                            </div>
+                        </div>` : ''}
+                    </div>
+                `
+            });
+        }
+    </script>
 </div>
 {% endblock %}

@@ -6,6 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hỏi đáp AI - ShieldCall VN</title>
     
+    <script>
+        (function() {
+            const saved = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', saved);
+            if (saved === 'dark') document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+        })();
+    </script>
+
     {% tailwind_css %}
     <link rel="icon" type="image/png" href="{% static 'logo.png' %}">
 
@@ -20,21 +29,44 @@
 
     <style>
         /* Liquid Glass Redesign */
-        :root {
+        :root, [data-theme="dark"] {
             --glass-bg: rgba(255, 255, 255, 0.03);
             --glass-border: rgba(255, 255, 255, 0.08);
             --glass-blur: blur(40px) saturate(180%);
             --accent-cyan: #06b6d4;
             --accent-blue: #3b82f6;
             --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --body-bg: #020617;
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --glass-border: rgba(0, 0, 0, 0.08);
+            --glass-blur: blur(20px);
+            --glass-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            --text-primary: #1a1a2e;
+            --text-secondary: #475569;
+            --body-bg: #f8fafc;
+        }
+
+        .markdown-content hr {
+            border: 0;
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--accent-cyan), transparent);
+            margin: 1.5rem 0;
+            opacity: 0.4;
         }
 
         body {
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background-color: #020617;
+            background-color: var(--body-bg);
+            color: var(--text-primary);
             font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .mesh-bg {
@@ -43,7 +75,7 @@
             height: 100vh;
             top: 0;
             left: 0;
-            background-color: #020617;
+            background-color: var(--body-bg);
             background-image: 
                 radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.1) 0px, transparent 50%),
                 radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
@@ -51,6 +83,28 @@
                 radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.05) 0px, transparent 50%);
             z-index: -10;
         }
+
+        [data-theme="light"] .mesh-bg {
+            background-image: none;
+        }
+
+        .msg-assistant {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            margin-right: auto;
+            border-bottom-left-radius: 0.25rem;
+            backdrop-filter: var(--glass-blur);
+            color: var(--text-primary);
+        }
+
+        /* Light mode specific text overrides */
+        [data-theme="light"] .text-white { color: var(--text-primary) !important; }
+        [data-theme="light"] .text-white\/40 { color: var(--text-secondary) !important; }
+        [data-theme="light"] .text-white\/70 { color: var(--text-secondary) !important; }
+        [data-theme="light"] .bg-white\/5 { background-color: rgba(0,0,0,0.05) !important; }
+        [data-theme="light"] .border-white\/10 { border-color: rgba(0,0,0,0.1) !important; }
+        [data-theme="light"] h1, [data-theme="light"] h2 { color: var(--text-primary) !important; }
+        [data-theme="light"] .markdown-content { color: var(--text-primary) !important; }
 
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); }
@@ -69,7 +123,6 @@
         .msg-actions {
             position: absolute;
             bottom: -20px;
-            right: 10px;
             z-index: 10;
             display: flex;
             gap: 0.5rem;
@@ -78,6 +131,8 @@
             transform: translateY(10px);
             pointer-events: none;
         }
+        .msg-actions-user { right: 0; }
+        .msg-actions-assistant { left: 0; }
 
         .msg-group:hover .msg-actions {
             opacity: 1;
@@ -92,23 +147,18 @@
             max-width: 85%;
             line-height: 1.6;
             position: relative;
-            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+            box-shadow: var(--glass-shadow);
         }
 
         .msg-user {
-            background: linear-gradient(135deg, rgba(6, 182, 212, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%);
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.4) 0%, rgba(37, 99, 235, 0.4) 100%);
             border: 1px solid rgba(6, 182, 212, 0.3);
             margin-left: auto;
             border-bottom-right-radius: 0.25rem;
+            color: white !important;
         }
 
-        .msg-assistant {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            margin-right: auto;
-            border-bottom-left-radius: 0.25rem;
-            backdrop-filter: blur(10px);
-        }
+        /* Assistants bubble is handled above via .msg-assistant */
 
         /* Thinking Block */
         .thinking-container {
@@ -153,6 +203,14 @@
             border-radius: 10px;
         }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        @keyframes title-reveal {
+            from { opacity: 0; transform: translateY(-8px); filter: blur(3px); }
+            to { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+        .title-reveal {
+            animation: title-reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
 
         .markdown-content h1, .markdown-content h2 { font-weight: 800; margin: 1.25rem 0 0.5rem; color: #fff; font-size: 1.1rem; }
         .markdown-content p { margin-bottom: 0.75rem; line-height: 1.6; }
@@ -503,14 +561,31 @@
                                 }
                                 if (data.chunk && (data.chunk.startsWith('__SEARCH_RESULTS__:') || data.chunk.startsWith('__METADATA__:'))) {
                                     const marker = data.chunk.startsWith('__METADATA__:') ? '__METADATA__:' : '__SEARCH_RESULTS__:';
-                                    const results = JSON.parse(data.chunk.substring(marker.length));
-                                    renderSearchResults(assistantMsgDiv, marker === '__METADATA__' ? results : {web_search: results});
+                                    const metaStr = data.chunk.substring(marker.length);
+                                    try {
+                                        const metaData = JSON.parse(metaStr);
+                                        // If it's __SEARCH_RESULTS__, it's just the web search array
+                                        // If it's __METADATA__, it might contain both web_search and internal_knowledge
+                                        const processedMeta = marker === '__SEARCH_RESULTS__:' ? { web_search: metaData } : metaData;
+                                        renderSearchResults(assistantMsgDiv, processedMeta);
+                                    } catch (e) { console.warn("Meta parse error", e); }
                                 }
                                 if (data.annotated_image) {
                                     addAnnotatedImage(assistantMsgDiv, data.annotated_image);
                                 }
                                 if (data.session_id) currentSessionId = data.session_id;
-                                if (data.title) chatTitle.innerText = data.title;
+                                if (data.title && data.title !== 'Guest Session') {
+                                    if (data.title !== chatTitle.innerText) {
+                                        chatTitle.classList.remove('title-reveal');
+                                        void chatTitle.offsetWidth; // Trigger reflow for animation restart
+                                        chatTitle.innerText = data.title;
+                                        chatTitle.classList.add('title-reveal');
+                                        
+                                        if (data.title !== 'Cuộc trò chuyện mới') {
+                                            loadSessions(); // Update sidebar list
+                                        }
+                                    }
+                                }
                                 if (data.done) {
                                     finishStream(contentDiv, assistantMsgDiv, fullContent);
                                 }
@@ -547,6 +622,9 @@
             if (contentDiv && fullContent) {
                 contentDiv.innerHTML = marked.parse(fullContent);
                 processToolInText(assistantMsgDiv, fullContent);
+                // Update raw text for copying
+                const actions = assistantMsgDiv.querySelector('.msg-actions');
+                if (actions) actions.dataset.rawText = encodeURIComponent(fullContent);
             }
             scrollToBottom();
             loadSessions();
@@ -589,6 +667,9 @@
                         <div class="markdown-content prose prose-invert text-[13.5px]">
                             ${isNew ? '<span class="typing-cursor"></span>' : (() => {
                                 let content = text;
+                                // Clean legacy SCAN tags if any leak
+                                content = content.replace(/\[\[SCAN_[^\]]*\]\]/g, "");
+                                
                                 if (role === 'user' && content.includes('[Nội dung từ ảnh]')) {
                                     const ocrPart = text.match(/\[Nội dung từ ảnh\]:?([\s\S]*)/)?.[1] || "";
                                     content = content.replace(/\[Nội dung từ ảnh\]:?[\s\S]*/g, '').trim();
@@ -604,13 +685,13 @@
                                         ${marked.parse(content || "[Gửi ảnh]")}
                                     `;
                                 }
-                                return marked.parse(text);
+                                return marked.parse(content);
                             })()}
                         </div>
                         <div class="search-results-container mt-4 space-y-2 empty:hidden"></div>
                     </div>
-                    <div class="msg-actions">
-                        <button onclick="copyToClipboard(this, \`${text.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-all"><i class="bi bi-clipboard"></i></button>
+                    <div class="msg-actions ${role === 'user' ? 'msg-actions-user' : 'msg-actions-assistant'}" data-raw-text="${encodeURIComponent(text)}">
+                        <button onclick="copyToClipboard(this)" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-all"><i class="bi bi-clipboard"></i></button>
                         ${role === 'user' ? `<button onclick="editMessage(this, ${messageId}, \`${text.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-all"><i class="bi bi-pencil"></i></button>` : ''}
                     </div>
                 </div>
@@ -684,11 +765,14 @@
             d.ondragend = () => d.classList.remove('opacity-50');
             d.onclick = (e) => { if (!e.target.closest('button')) loadSessionDetail(s.id); };
             d.innerHTML = `
-                <div class="flex items-center gap-3 overflow-hidden">
+                <div class="flex items-center gap-3 overflow-hidden flex-1">
                     <i class="bi bi-chat-left-text text-[10px] ${currentSessionId === s.id ? 'text-cyan-400' : 'text-slate-500'}"></i>
                     <span class="text-[11px] font-semibold truncate ${currentSessionId === s.id ? 'text-cyan-100' : 'text-slate-400'}">${s.title}</span>
                 </div>
-                <button onclick="event.stopPropagation(); deleteSession('${s.id}')" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-all"><i class="bi bi-trash text-[10px]"></i></button>
+                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button onclick="event.stopPropagation(); renameSession('${s.id}', \`${s.title.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="p-1 text-slate-500 hover:text-cyan-400"><i class="bi bi-pencil text-[10px]"></i></button>
+                    <button onclick="event.stopPropagation(); deleteSession('${s.id}')" class="p-1 text-slate-500 hover:text-red-400"><i class="bi bi-trash text-[10px]"></i></button>
+                </div>
             `;
             return d;
         }
@@ -764,7 +848,7 @@
         }
 
         async function deleteSession(id) {
-            Swal.fire({
+            const { isConfirmed } = await Swal.fire({
                 title: 'Xóa hội thoại?',
                 icon: 'warning',
                 showCancelButton: true,
@@ -773,13 +857,33 @@
                 confirmButtonText: 'Xóa',
                 background: '#0f172a',
                 color: '#f1f5f9'
-            }).then(async (result) => {
-                if (result.isConfirmed) {
-                    await fetch(`/api/v1/chat/sessions/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
-                    if (currentSessionId === id) startNewChat();
-                    else loadSessions();
-                }
             });
+            if (isConfirmed) {
+                await fetch(`/api/v1/chat/sessions/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+                if (currentSessionId === id) startNewChat();
+                else loadSessions();
+            }
+        }
+
+        async function renameSession(id, currentTitle) {
+            const { value: newTitle } = await Swal.fire({
+                title: 'Đổi tên cuộc trò chuyện',
+                input: 'text',
+                inputValue: currentTitle,
+                showCancelButton: true,
+                background: '#0f172a',
+                color: '#f1f5f9',
+                confirmButtonColor: '#06b6d4'
+            });
+            if (newTitle && newTitle !== currentTitle) {
+                await fetch(`/api/v1/chat/sessions/${id}/`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                    body: JSON.stringify({ title: newTitle })
+                });
+                if (currentSessionId === id) chatTitle.innerText = newTitle;
+                loadSessions();
+            }
         }
 
         function startNewChat() {
@@ -833,7 +937,10 @@
             });
         }
 
-        function copyToClipboard(btn, text) {
+        function copyToClipboard(btn) {
+            const actions = btn.closest('.msg-actions');
+            const raw = actions.dataset.rawText;
+            const text = decodeURIComponent(raw);
             navigator.clipboard.writeText(text).then(() => {
                 const icon = btn.querySelector('i');
                 icon.className = 'bi bi-check';
@@ -855,7 +962,7 @@
             const bubble = assistantMsgDiv.querySelector('.msg-bubble');
             const imgDiv = document.createElement('div');
             imgDiv.className = 'mt-3 mb-4 rounded-xl overflow-hidden border border-cyan-500/30 shadow-lg';
-            imgDiv.innerHTML = `<img src="data:image/jpeg;base64,${base64}" class="w-full h-auto cursor-zoom-in" onclick="window.open(this.src)">`;
+            imgDiv.innerHTML = `<img src="${base64}" class="w-full h-auto cursor-zoom-in" onclick="window.open(this.src)">`;
             bubble.appendChild(imgDiv);
         }
 
@@ -863,23 +970,32 @@
             const container = assistantMsgDiv.querySelector('.search-results-container');
             if (!metadata) return;
             
-            let html = `<div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <i class="bi bi-globe"></i> Nguồn tham khảo
-            </div>`;
-            
             const results = [];
-            if (metadata.web_search) results.push(...metadata.web_search.map(r => ({...r, type: 'web'})));
+            if (metadata.internal_knowledge) {
+                results.push(...metadata.internal_knowledge.map(r => ({ ...r, type: 'rag' })));
+            }
+            if (metadata.web_search) {
+                results.push(...metadata.web_search.map(r => ({ ...r, type: 'web' })));
+            }
             
             if (results.length === 0) return;
 
+            let html = `<div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                <i class="bi bi-globe"></i> Nguồn tham khảo
+            </div>`;
+
             results.forEach(res => {
+                const isRag = res.type === 'rag';
                 html += `
-                <a href="${res.url}" target="_blank" class="block p-2 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-all text-xs mb-2">
+                <a href="${res.url}" target="_blank" class="block p-2 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 hover:border-cyan-500/20 transition-all text-xs mb-2">
                     <div class="flex items-center gap-2 mb-1">
-                        <span class="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold uppercase">${res.type === 'web' ? 'Web' : 'ShieldCall'}</span>
-                        <div class="font-bold text-cyan-400 truncate flex-1">${res.title}</div>
+                        <span class="text-[8px] px-1.5 py-0.5 rounded ${isRag ? 'bg-purple-500/20 text-purple-400' : 'bg-cyan-500/20 text-cyan-400'} font-bold uppercase">
+                            ${isRag ? 'ShieldCall Knowledge' : 'Web Resource'}
+                        </span>
+                        <div class="font-bold text-slate-200 truncate flex-1">${res.title}</div>
                     </div>
-                    <div class="text-[10px] text-slate-500 truncate">${res.url}</div>
+                    ${res.text ? `<div class="text-[10px] text-slate-500 line-clamp-2 mb-1 font-medium italic">"${res.text}"</div>` : ''}
+                    <div class="text-[9px] text-slate-600 truncate opacity-50">${res.url}</div>
                 </a>`;
             });
             container.innerHTML = html;

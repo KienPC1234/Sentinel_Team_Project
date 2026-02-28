@@ -8,10 +8,13 @@ from django.contrib import messages
 from django.db.models import Count, F
 from django.http import HttpResponseForbidden
 from api.core.models import (
-    Report, ForumPostReport, ForumCommentReport, ScanEvent, 
-    LearnLesson, ForumPost, Article, LearnQuiz, LearnScenario
+    LearnLesson, ForumPost, Article, LearnQuiz, LearnScenario, BankAccount, Domain,
+    Report, ScanEvent, ForumPostReport, ForumCommentReport
 )
 from api.core.forms import LearnLessonForm, ArticleForm, LearnScenarioForm
+from django.http import HttpResponseForbidden, JsonResponse
+from django.utils import timezone
+from datetime import timedelta
 # The instruction implies these are from a local file, but the original code doesn't have a .page_views.
 # Assuming the user wants to add these imports, but the functions admin_required and super_admin_required are defined in this file.
 # If they were meant to be imported from .page_views, the local definitions would be redundant or cause issues.
@@ -51,6 +54,8 @@ def admin_dashboard(request):
         'total_scans': ScanEvent.objects.count(),
         'total_lessons': LearnLesson.objects.count(),
         'total_posts': ForumPost.objects.count(),
+        'total_bank_accounts': BankAccount.objects.count(),
+        'total_domains': Domain.objects.count(),
     }
     return render(request, "Admin/dashboard.html", {
         "title": "Admin Dashboard",
@@ -58,10 +63,54 @@ def admin_dashboard(request):
     })
 
 @admin_required
+def admin_stats_api(request):
+    """API for real-time dashboard stats and charts"""
+    now = timezone.now()
+    seven_days_ago = now - timedelta(days=7)
+    
+    try:
+        # Simple count-up stats
+        stats = {
+            'users': User.objects.count(),
+            'reports': Report.objects.filter(status='pending').count(),
+            'scans': ScanEvent.objects.count(),
+            'forum_reports': ForumPostReport.objects.filter(status='pending').count() + ForumCommentReport.objects.filter(status='pending').count(),
+        }
+        
+        # Chart data (last 7 days)
+        chart_data = {
+            'labels': [(seven_days_ago + timedelta(days=i)).strftime('%d/%m') for i in range(8)],
+            'reports': [],
+            'scans': []
+        }
+        
+        for i in range(8):
+            day = (seven_days_ago + timedelta(days=i)).date()
+            report_count = Report.objects.filter(created_at__date=day).count()
+            scan_count = ScanEvent.objects.filter(created_at__date=day).count()
+            chart_data['reports'].append(report_count)
+            chart_data['scans'].append(scan_count)
+            
+        return JsonResponse({
+            'status': 'success',
+            'stats': stats,
+            'charts': chart_data
+        })
+    except Exception as e:
+        logger.error(f"Error in admin_stats_api: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@admin_required
 def manage_reports(request):
-    """List and manage community reports"""
-    reports = Report.objects.select_related('reporter').all().order_by('-created_at')
-    return render(request, "Admin/reports.html", {"reports": reports})
+    """List and manage community reports with sorting"""
+    sort_by = request.GET.get('sort', '-created_at')
+    # Validate sort field to prevent malicious input
+    allowed_sorts = ['created_at', '-created_at', 'status', '-status', 'target_type', '-target_type', 'reporter__username', '-reporter__username']
+    if sort_by not in allowed_sorts:
+        sort_by = '-created_at'
+        
+    reports = Report.objects.select_related('reporter').all().order_by(sort_by)
+    return render(request, "Admin/reports.html", {"reports": reports, "current_sort": sort_by})
 
 @admin_required
 def manage_forum(request):
@@ -157,6 +206,15 @@ def manage_articles(request):
     return render(request, "Admin/article_management.html", {"articles": articles})
 
 @admin_required
+def manage_scenarios(request):
+    """List and manage Scenarios stand-alone"""
+    scenarios = LearnScenario.objects.select_related('article').all().order_by('-created_at')
+    return render(request, "Admin/scenario_management.html", {
+        "scenarios": scenarios,
+        "articles_exist": Article.objects.exists()
+    })
+
+@admin_required
 def edit_article(request, article_id=None):
     """View to create or edit an Article"""
     article = None
@@ -221,11 +279,16 @@ def edit_scenario(request, scenario_id=None, article_id=None):
     if request.method == 'POST':
         form = LearnScenarioForm(request.POST, instance=scenario)
         if form.is_valid():
-            scenario = form.save(commit=False)
-            scenario.article = article
-            scenario.save()
+            scenario = form.save()
+            # If created from an article edit page, and it wasn't linked yet
+            if article and not scenario.article:
+                scenario.article = article
+                scenario.save()
+            
             messages.success(request, "Kịch bản đã được lưu.")
-            return redirect('admin-edit-article', article_id=article.id)
+            if article_id:
+                return redirect('admin-edit-article', article_id=article.id)
+            return redirect('admin-manage-scenarios')
     else:
         form = LearnScenarioForm(instance=scenario)
 
@@ -240,8 +303,14 @@ def edit_scenario(request, scenario_id=None, article_id=None):
 def delete_scenario(request, scenario_id):
     """Delete a scenario"""
     scenario = get_object_or_404(LearnScenario, id=scenario_id)
-    article_id = scenario.article.id
+    article_id = scenario.article.id if scenario.article else None
     scenario.delete()
     messages.success(request, "Kịch bản đã được xóa.")
-    return redirect('admin-edit-article', article_id=article_id)
+    
+    next_page = request.GET.get('next')
+    if next_page == 'admin-manage-scenarios':
+        return redirect('admin-manage-scenarios')
+    if article_id:
+        return redirect('admin-edit-article', article_id=article_id)
+    return redirect('admin-manage-scenarios')
 
