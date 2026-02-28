@@ -6,6 +6,7 @@ from .page_views import (
     scan_email_view,
     scan_bank_view,
     scan_qr_view,
+    scan_status_view,
     report_view,
     scam_radar_view,
     learn_hub_view,
@@ -22,5 +23,7 @@ from .page_views import (
     forum_create_view,
     public_profile_view,
     scan_file_view,
+    scan_audio_view,
     article_detail_view,
+    scam_radar_list_view,
 )

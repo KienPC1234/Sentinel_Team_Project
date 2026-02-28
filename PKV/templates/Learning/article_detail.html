@@ -13,7 +13,7 @@
 {% block content %}
 <div class="animate-fadein max-w-4xl mx-auto space-y-8 py-10">
     <!-- Breadcrumbs -->
-    <nav class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/20">
+    <nav class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/20" data-aos="fade-right">
         <a href="/" class="hover:text-cyan-400 transition-colors">Trang chủ</a>
         <i class="bi bi-chevron-right text-[8px]"></i>
         <a href="/learn/" class="hover:text-cyan-400 transition-colors">Kiến thức</a>
@@ -22,7 +22,7 @@
     </nav>
 
     <!-- Article Header -->
-    <div class="space-y-6">
+    <div class="space-y-6" data-aos="fade-up" data-aos-delay="100">
         <div class="flex items-center gap-4">
             <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black uppercase tracking-widest">
                 {{ article.get_category_display }}
@@ -57,13 +57,13 @@
 
     <!-- Featured Image -->
     {% if article.cover_image %}
-    <div class="aspect-[21/9] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 shadow-2xl">
+    <div class="aspect-[21/9] rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 shadow-2xl" data-aos="zoom-in" data-aos-delay="200">
         <img src="{{ article.cover_image.url }}" class="w-full h-full object-cover">
     </div>
     {% endif %}
 
     <!-- Article Content -->
-    <div class="prose prose-invert prose-cyan max-w-none text-white/70 leading-relaxed font-medium text-base sm:text-lg selection:bg-cyan-500/20">
+    <div class="prose prose-invert prose-cyan max-w-none text-white/70 leading-relaxed font-medium text-base sm:text-lg selection:bg-cyan-500/20" data-aos="fade-up" data-aos-delay="300">
         {{ article.content|safe }}
     </div>
 

@@ -14,7 +14,8 @@ window.NotificationManager = {
         // Only connect user notifications if we want legacy WS support
         // this.connectNotifications(); 
         
-        if (isStaff) {
+        // Only connect RAG WebSocket if user is staff AND on the specific admin page
+        if (isStaff && window.location.pathname.includes('/api/v1/admin/rag/')) {
             this.connectRagStatus();
         }
         this.setupPermissionHandler();
@@ -39,6 +40,11 @@ window.NotificationManager = {
     },
 
     connectRagStatus() {
+        // Double check condition before connecting (in case of reconnect)
+        if (!this.isStaff || !window.location.pathname.includes('/api/v1/admin/rag/')) {
+            return; 
+        }
+
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
         this.ragWs = new WebSocket(`${proto}://${window.location.host}/ws/rag/`);
 
@@ -50,7 +56,10 @@ window.NotificationManager = {
         };
 
         this.ragWs.onclose = () => {
-            setTimeout(() => this.connectRagStatus(), 5000);
+             // Only reconnect if still on the correct page
+            if (this.isStaff && window.location.pathname.includes('/api/v1/admin/rag/')) {
+                setTimeout(() => this.connectRagStatus(), 5000);
+            }
         };
     },
 

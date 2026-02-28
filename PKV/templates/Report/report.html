@@ -15,8 +15,52 @@
             banks: [],
             showBanks: false,
             loading: false,
+            ocrLoading: false,
+            annotatedImages: [],
+            ocrSuggested: false,
             success: false,
             error: '',
+            async runOCR() {
+                if (!this.evidence) return;
+                this.ocrLoading = true;
+                this.annotatedImages = [];
+                const fd = new FormData();
+                fd.append('images', this.evidence);
+                try {
+                    const resp = await fetch('/api/v1/analyze-images', {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': getCSRFToken() },
+                        body: fd
+                    });
+                    const res = await resp.json();
+                    if (resp.ok && res.ocr_text) {
+                        this.annotatedImages = res.annotated_images || [];
+                        const extracted = res.ocr_text.trim();
+                        if (extracted) {
+                            const currentData = reportEditorInstance.getData();
+                            const newData = currentData + (currentData ? '<br><br>' : '') + 
+                                            '<div class="ai-ocr-summary p-6 rounded-[2rem] bg-cyan-500/[0.03] border border-cyan-500/10 shadow-inner">' +
+                                            '<div class="flex items-center gap-2 mb-3 text-cyan-400 font-black text-[10px] uppercase tracking-[0.2em]">' +
+                                            '<i class="bi bi-robot"></i> AI TRÍCH XUẤT & TÓM TẮT THÔNG TIN' +
+                                            '</div>' +
+                                            '<div class="text-sm text-white/80 leading-relaxed font-medium">' +
+                                            extracted.replace(/\n/g, '<br>') +
+                                            '</div>' +
+                                            '</div>';
+                            reportEditorInstance.setData(newData);
+                            this.description = newData;
+                            this.ocrSuggested = false;
+                            showToast('Đã phân tích thông tin bằng AI!', 'success');
+                        }
+                    } else {
+                        showToast('Không tìm thấy chữ hoặc mã QR trong ảnh', 'info');
+                    }
+                } catch(e) {
+                    showToast('Lỗi khi quét ảnh', 'error');
+                } finally {
+                    this.ocrLoading = false;
+                }
+            },
             async fetchBanks() {
                 try {
                     const resp = await fetch('/api/v1/scan/banks/');
@@ -50,7 +94,57 @@
                 if(!this.scam_type){showToast('Vui lòng chọn phương thức lừa đảo', 'warning');return}
                 if(!this.description.trim()){showToast('Vui lòng nhập nội dung chi tiết', 'warning');return}
 
-                this.loading = true;
+                // OCR Scan Reminder
+                if (this.evidence && !this.description.includes('[Dữ liệu trích xuất từ ảnh]')) {
+                    const confirmScan = await Swal.fire({
+                        title: 'Bạn chưa quét ảnh?',
+                        text: 'Bạn đã tải ảnh lên nhưng chưa sử dụng tính năng "Quét chữ bằng AI". Bạn có muốn quét ảnh để tự động điền thông tin báo cáo không?',
+                        icon: 'question',
+                        background: '#0a0a1a',
+                        color: '#fff',
+                        showCancelButton: true,
+                        confirmButtonText: 'Quét ngay',
+                        cancelButtonText: 'Bỏ qua & Gửi',
+                        customClass: {
+                            popup: 'rounded-[2rem] border border-white/10',
+                            confirmButton: 'liquid-btn bg-cyan-500 text-black px-6 py-2 rounded-xl',
+                            cancelButton: 'liquid-btn bg-white/5 text-white/50 px-6 py-2 rounded-xl'
+                        }
+                    });
+                    if (confirmScan.isConfirmed) {
+                        await this.runOCR();
+                        return; // Stop and let user review scanned text
+                    }
+                }
+
+                if (this.evidence && !this.annotatedImages.length && !this.ocrSuggested) {
+                    this.ocrSuggested = true;
+                    Swal.fire({
+                        title: 'Thông báo!',
+                        text: 'Bạn đã tải ảnh lên nhưng chưa sử dụng AI để quét thông tin. Bạn có muốn quét trước khi gửi không?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Có, quét ngay!',
+                        cancelButtonText: 'Không, gửi luôn',
+                        background: '#0d0d1f',
+                        color: '#fff',
+                        customClass: {
+                            popup: 'rounded-[2rem] border border-white/10',
+                            confirmButton: 'liquid-btn bg-cyan-500 text-black px-6 py-2 rounded-xl',
+                            cancelButton: 'liquid-btn bg-white/5 text-white/50 px-6 py-2 rounded-xl'
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            this.runOCR();
+                        } else {
+                            this.executeSubmit();
+                        }
+                    });
+                    return;
+                }
+                this.executeSubmit();
+            },
+            async executeSubmit() {
                 this.error = '';
                 const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
                 if(!tsToken){
@@ -100,16 +194,17 @@
 {% endblock %}
 
 {% block content %}
+<div class="max-w-7xl mx-auto px-4 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
 <div class="animate-fadein max-w-3xl mx-auto space-y-10" x-data="reportManager()">
     <!-- Page Header -->
-    <div class="text-center space-y-4">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-red-500/10 text-red-500 mb-2 border border-red-500/20 shadow-lg shadow-red-500/10">
+    <div class="text-center space-y-4" data-aos="fade-up">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-red-500/10 text-red-500 mb-2 border border-red-500/20 shadow-lg shadow-red-500/10" data-aos="zoom-in" data-aos-delay="100">
             <i class="bi bi-clipboard-pulse text-4xl"></i>
         </div>
-        <h1 class="text-4xl font-black text-white tracking-tight">
+        <h1 class="text-4xl font-black text-white tracking-tight" data-aos="fade-up" data-aos-delay="200">
             Gửi <span class="glow-text text-red-500">Báo cáo Xấu</span>
         </h1>
-        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed">
+        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed" data-aos="fade-up" data-aos-delay="300">
             Mỗi báo cáo của bạn giúp hàng ngàn người khác tránh khỏi bẫy lừa đảo. Cảm ơn bạn đã hiệp lực!
         </p>
     </div>
@@ -134,21 +229,50 @@
         <div class="space-y-8">
             <!-- Target Type & Value -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="space-y-2">
+                <div class="space-y-4 dropdown-container">
                     <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Loại đối tượng</label>
-                    <select class="liquid-input w-full py-4 px-6 text-sm font-bold bg-white/5 border-white/10" x-model="target_type">
-                        <option value="" class="bg-slate-900">-- Chọn loại --</option>
-                        <option value="phone" class="bg-slate-900">📞 Số điện thoại</option>
-                        <option value="domain" class="bg-slate-900">🌐 Website / URL</option>
-                        <option value="account" class="bg-slate-900">🏦 Tài khoản ngân hàng</option>
-                        <option value="message" class="bg-slate-900">💬 Tin nhắn</option>
-                        <option value="qr" class="bg-slate-900">📷 QR Code</option>
-                    </select>
+                    <div x-data="liquidSelect({
+                        value: target_type,
+                        placeholder: 'Chọn loại đối tượng',
+                        options: [
+                            { value: 'phone', label: '📞 Số điện thoại lừa đảo' },
+                            { value: 'domain', label: '🌐 Website / Phishing Link' },
+                            { value: 'email', label: '📧 Địa chỉ Email giả mạo' },
+                            { value: 'account', label: '🏦 Tài khoản ngân hàng' },
+                            { value: 'message', label: '💬 Nội dung tin nhắn' },
+                            { value: 'qr', label: ' Scan QR Code' }
+                        ]
+                    })" 
+                    x-init="$watch('target_type', v => value = v)"
+                    class="liquid-custom-select" @change="target_type = $event.detail">
+                        <div class="liquid-select-trigger" :class="{ 'active': open }" @click="open = !open">
+                            <span x-text="label"></span>
+                            <i class="bi bi-chevron-down liquid-select-arrow" :class="{ 'rotate-180': open }"></i>
+                        </div>
+                        <div x-show="open" 
+                             x-transition:enter="liquid-select-dropdown entering"
+                             x-transition:enter-end="liquid-select-dropdown entered"
+                             x-transition:leave="liquid-select-dropdown entering"
+                             class="liquid-select-dropdown">
+                            <template x-for="option in options" :key="option.value">
+                                <div class="liquid-select-option" 
+                                     :class="{ 'selected': value === option.value }"
+                                     @click="select(option)">
+                                    <span x-text="option.label"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <select name="target_type" x-model="target_type" class="hidden">
+                            <template x-for="option in options" :key="option.value">
+                                <option :value="option.value" x-text="option.label"></option>
+                            </template>
+                        </select>
+                    </div>
                 </div>
                 <div class="space-y-2">
                     <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Thông tin cụ thể</label>
                     <input type="text" class="liquid-input w-full py-4 px-6 text-sm font-bold" x-model="target_value"
-                        :placeholder="target_type==='phone'?'VD: 0912...':target_type==='domain'?'VD: bank-phish.com':'Nhập dữ liệu...'">
+                        :placeholder="target_type==='phone'?'VD: 0912...':target_type==='domain'?'VD: bank-phish.com':target_type==='email'?'VD: kien@scam.com':'Nhập dữ liệu...'">
                 </div>
             </div>
 
@@ -166,33 +290,43 @@
                         <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Số điện thoại đối tượng</label>
                         <input type="text" class="liquid-input w-full py-3 px-5 text-xs font-bold" x-model="scammer_phone" placeholder="VD: 09... hoặc N/A">
                     </div>
-                    <div class="space-y-2" x-init="fetchBanks()">
+                    <div class="space-y-2 dropdown-container" x-init="fetchBanks()">
                         <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Ngân hàng</label>
-                        <div class="relative" @click.away="showBanks = false">
-                            <input type="text" class="liquid-input w-full py-3 px-5 text-xs font-bold" 
-                                x-model="scammer_bank_name" 
-                                @focus="showBanks = true"
-                                placeholder="Chọn hoặc nhập tên ngân hàng...">
-                            
-                            <div x-show="showBanks && filteredBanks.length" 
-                                 x-transition:enter="transition ease-out duration-200"
-                                 x-transition:enter-start="opacity-0 translate-y-2"
-                                 x-transition:enter-end="opacity-100 translate-y-0"
-                                 class="absolute z-50 w-full mt-2 bg-[#0a0f18] border border-white/10 rounded-2xl max-h-60 overflow-y-auto shadow-2xl">
-                                <template x-for="bank in filteredBanks" :key="bank.code">
-                                    <div @click="scammer_bank_name = bank.shortName; showBanks = false" 
-                                         class="p-3 hover:bg-white/5 cursor-pointer flex items-center gap-3 border-b border-white/5 last:border-0 transition-colors">
-                                        <div class="w-8 h-8 rounded bg-white p-1 flex items-center justify-center">
-                                            <img :src="bank.logo" class="max-w-full max-h-full object-contain" x-show="bank.logo">
-                                            <i class="bi bi-bank" x-show="!bank.logo"></i>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <p class="text-white text-[10px] font-bold truncate" x-text="bank.shortName"></p>
-                                            <p class="text-white/40 text-[8px] truncate" x-text="bank.name"></p>
-                                        </div>
-                                    </div>
-                                </template>
+                        <div x-data="liquidSelect({
+                            value: scammer_bank_name,
+                            placeholder: 'Chọn hoặc nhập tên ngân hàng...',
+                            options: () => banks.map(b => ({ value: b.shortName, label: b.shortName + ' - ' + b.name, logo: b.logo }))
+                        })" 
+                        x-init="$watch('scammer_bank_name', v => value = v)"
+                        class="liquid-custom-select" @change="scammer_bank_name = $event.detail">
+                            <div class="liquid-select-trigger py-3 px-5 text-xs font-bold" :class="{ 'active': open }" @click="open = !open">
+                                <span class="flex items-center gap-2 truncate">
+                                    <template x-if="options.find(o => o.value === value)?.logo">
+                                        <img :src="options.find(o => o.value === value).logo" class="w-4 h-4 object-contain">
+                                    </template>
+                                    <span x-text="label" class="truncate"></span>
+                                </span>
+                                <i class="bi bi-chevron-down liquid-select-arrow" :class="{ 'rotate-180': open }"></i>
                             </div>
+                            <div x-show="open" 
+                                 x-transition:enter="liquid-select-dropdown entering"
+                                 x-transition:enter-end="liquid-select-dropdown entered"
+                                 x-transition:leave="liquid-select-dropdown entering"
+                                 class="liquid-select-dropdown">
+                                <div class="max-h-60 overflow-y-auto custom-scrollbar">
+                                    <template x-for="option in options" :key="option.value">
+                                        <div class="liquid-select-option text-[10px]" 
+                                             :class="{ 'selected': value === option.value }"
+                                             @click="select(option)">
+                                            <template x-if="option.logo">
+                                                <img :src="option.logo" class="w-4 h-4 object-contain bg-white rounded-sm p-0.5">
+                                            </template>
+                                            <span x-text="option.label"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            <input type="hidden" name="scammer_bank_name" :value="value">
                         </div>
                     </div>
                     <div class="space-y-2">
@@ -203,19 +337,47 @@
             </div>
 
             <!-- Scam Category -->
-            <div class="space-y-2">
+            <div class="space-y-2 dropdown-container" data-aos="fade-up" data-aos-delay="200">
                 <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Phương thức lừa đảo</label>
-                <select class="liquid-input w-full py-4 px-6 text-sm font-bold bg-white/5 border-white/10" x-model="scam_type">
-                    <option value="" class="bg-slate-900">-- Chọn danh mục --</option>
-                    <option value="police_impersonation" class="bg-slate-900">Giả danh Công an / Viện kiểm sát</option>
-                    <option value="bank_impersonation" class="bg-slate-900">🏦 Giả mạo Ngân hàng</option>
-                    <option value="recruitment_scam" class="bg-slate-900">💼 Lừa tuyển dụng việc làm</option>
-                    <option value="investment_scam" class="bg-slate-900">📊 Lừa đầu tư Forex / Crypto</option>
-                    <option value="delivery_scam" class="bg-slate-900">📦 Giả mạo Giao hàng / Trúng thưởng</option>
-                    <option value="loan_scam" class="bg-slate-900">💰 Lừa vay tiền qua app / người thân</option>
-                    <option value="phishing" class="bg-slate-900">🎣 Website giả mạo (Phishing)</option>
-                    <option value="other" class="bg-slate-900">Hình thức khác...</option>
-                </select>
+                <div x-data="liquidSelect({
+                    value: scam_type,
+                    placeholder: '-- Chọn hình thức lừa đảo --',
+                    options: [
+                        { value: 'police_impersonation', label: '🚓 Giả danh Công an / Viện kiểm sát' },
+                        { value: 'bank_impersonation', label: '🏦 Giả mạo Ngân hàng / Ví điện tử' },
+                        { value: 'recruitment_scam', label: '💼 Lừa tuyển dụng (Việc nhẹ lương cao)' },
+                        { value: 'investment_scam', label: '📊 Lừa đầu tư tài chính / Crypto' },
+                        { value: 'delivery_scam', label: '📦 Lừa đảo Giao hàng / Nhận quà' },
+                        { value: 'loan_scam', label: '💰 Lừa vay tiền nhanh qua App' },
+                        { value: 'phishing', label: '🎣 Website đánh cắp thông tin (Phishing)' },
+                        { value: 'other', label: 'Hình thức lừa đảo khác...' }
+                    ]
+                })" 
+                x-init="$watch('scam_type', v => value = v)"
+                class="liquid-custom-select" @change="scam_type = $event.detail">
+                    <div class="liquid-select-trigger" :class="{ 'active': open }" @click="open = !open">
+                        <span x-text="label"></span>
+                        <i class="bi bi-chevron-down liquid-select-arrow" :class="{ 'rotate-180': open }"></i>
+                    </div>
+                    <div x-show="open" 
+                         x-transition:enter="liquid-select-dropdown entering"
+                         x-transition:enter-end="liquid-select-dropdown entered"
+                         x-transition:leave="liquid-select-dropdown entering"
+                         class="liquid-select-dropdown">
+                        <template x-for="option in options" :key="option.value">
+                            <div class="liquid-select-option" 
+                                 :class="{ 'selected': value === option.value }"
+                                 @click="select(option)">
+                                <span x-text="option.label"></span>
+                            </div>
+                        </template>
+                    </div>
+                    <select name="scam_type" x-model="scam_type" class="hidden">
+                        <template x-for="option in options" :key="option.value">
+                            <option :value="option.value" x-text="option.label"></option>
+                        </template>
+                    </select>
+                </div>
             </div>
 
             <!-- Severity Selector -->
@@ -243,21 +405,56 @@
                 <p class="text-[9px] text-white/20 font-black uppercase tracking-widest ml-1 mt-1">Thông tin càng chi tiết sẽ càng giúp ích cho cộng đồng.</p>
             </div>
 
-            <!-- Evidence -->
-            <div class="space-y-3">
-                <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
-                    <i class="bi bi-images text-red-500/40"></i> Bằng chứng liên quan
-                </label>
-                <div class="border-2 border-dashed border-white/10 rounded-[2rem] p-10 text-center bg-white/[0.01] hover:bg-white/[0.03] hover:border-red-500/30 transition-all cursor-pointer group relative overflow-hidden"
-                    @click="$refs.evidenceInput.click()">
-                    <input type="file" accept="image/*" x-ref="evidenceInput" class="hidden" @change="evidence=$event.target.files[0]">
-                    <div class="w-20 h-20 bg-white/5 rounded-3xl inline-flex items-center justify-center mb-5 group-hover:scale-110 group-hover:bg-red-500/10 transition-all duration-500">
-                        <i class="bi bi-cloud-arrow-up text-3xl text-white/30 group-hover:text-red-500"></i>
+                <!-- Evidence & AI OCR -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="border-2 border-dashed border-white/10 rounded-[2rem] p-8 text-center bg-white/[0.01] hover:bg-white/[0.03] hover:border-red-500/30 transition-all cursor-pointer group relative overflow-hidden"
+                        @click="$refs.evidenceInput.click()">
+                        <input type="file" accept="image/*" x-ref="evidenceInput" class="hidden" @change="evidence=$event.target.files[0]; annotatedImages=[]">
+                        
+                        <div x-show="!evidence" class="space-y-4">
+                            <div class="w-16 h-16 bg-white/5 rounded-2xl inline-flex items-center justify-center group-hover:scale-110 group-hover:bg-red-500/10 transition-all duration-500">
+                                <i class="bi bi-cloud-arrow-up text-2xl text-white/30 group-hover:text-red-500"></i>
+                            </div>
+                            <p class="text-[9px] font-black text-white/40 tracking-[0.2em] uppercase">Bấm để tải ảnh bằng chứng</p>
+                        </div>
+
+                        <div x-show="evidence" class="relative">
+                            <img :src="evidence ? URL.createObjectURL(evidence) : ''" class="w-full h-32 object-cover rounded-2xl border border-white/10">
+                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity rounded-2xl">
+                                <i class="bi bi-arrow-repeat text-white text-xl"></i>
+                            </div>
+                        </div>
                     </div>
-                    <p class="text-[11px] font-black text-white/40 tracking-[0.2em] uppercase transition-colors group-hover:text-white/60" 
-                       x-text="evidence ? 'FILE: ' + evidence.name : 'NHẤP ĐỂ TẢI ẢNH BẰNG CHỨNG (MAX 5MB)'"></p>
+
+                    <div class="flex flex-col justify-center gap-4">
+                        <button type="button" 
+                            @click="runOCR()"
+                            :disabled="!evidence || ocrLoading"
+                            class="liquid-btn py-5 px-6 bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-black tracking-widest uppercase flex items-center justify-center gap-3"
+                            :class="evidence && !annotatedImages.length ? 'animate-pulse ring-2 ring-cyan-500/30' : ''">
+                            <i class="bi bi-eye-fill" :class="ocrLoading ? 'animate-spin' : ''"></i>
+                            <span x-text="ocrLoading ? 'ĐANG QUÉT MẮT THẦN...' : (annotatedImages.length ? 'ĐÃ QUÉT THÀNH CÔNG' : 'QUÉT CHỮ & QR BẰNG AI')"></span>
+                        </button>
+                        <p class="text-[8px] text-white/20 font-bold uppercase tracking-widest text-center italic leading-relaxed">
+                            Mắt thần AI sẽ trích xuất thông tin & giải mã mã QR trong ảnh.
+                        </p>
+                    </div>
                 </div>
-            </div>
+
+                <!-- Annotated Results Display -->
+                <div x-show="annotatedImages.length" x-transition class="mt-8 space-y-4">
+                    <h5 class="text-[10px] font-black text-cyan-400 uppercase tracking-widest ml-2 flex items-center gap-2">
+                        <i class="bi bi-layers-half"></i> Bản đồ trích xuất AI (Bao gồm QR & Văn bản)
+                    </h5>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <template x-for="(img, idx) in annotatedImages" :key="idx">
+                            <div class="rounded-3xl border border-cyan-500/20 overflow-hidden bg-black/40 shadow-xl group cursor-zoom-in"
+                                 @click="Swal.fire({imageUrl: img, background: '#000', showConfirmButton: false, customClass: {popup: 'rounded-[3rem] border border-white/10'}})">
+                                <img :src="img" class="w-full h-auto group-hover:scale-105 transition-transform duration-500">
+                            </div>
+                        </template>
+                    </div>
+                </div>
             
             <!-- Cloudflare Turnstile -->
             <!-- Cloudflare Turnstile was here, moved below -->
@@ -285,5 +482,7 @@
             </div>
         </div>
     </div>
+</div>
+{% include 'Scan/_scan_guide.html' with scan_type='report' %}
 </div>
 {% endblock %}

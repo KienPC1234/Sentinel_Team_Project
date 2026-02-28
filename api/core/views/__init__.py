@@ -8,13 +8,13 @@ from .mfa_views import MFAStatusView, MFASetupTOTPView, MFASetupEmailView, MFAVe
 from .scan_views import (
     ScanPhoneView, ScanMessageView, ScanDomainView,
     ScanAccountView, ScanImageView, ScanEmailView, ScanBanksView,
-    ScanStatusView,
+    ScanAudioView, ScanStatusView,
 )
 from .article_views import ArticleListView, ArticleDetailView
-from .report_views import ReportCreateView
+from .report_views import ReportCreateView, ReportDetailView
 from .trend_views import TrendDailyView, TrendHotView, ScamRadarStatsView
 from .user_views import UserScansView, UserReportsView, UserAlertsView, PublicProfileView
-from .scan_views import ScanFileView
+from .scan_views import ScanFileView, ScanAudioView as _ScanAudioView  # noqa: already imported above
 from .admin_views import AdminReportsView, AdminReportActionView, AdminStatsView, AdminRAGManagementView, AdminRAGRebuildView
 from .forum_views import ForumPostListCreateView, ForumPostCommentView, ForumPostLikeView, ForumPostReactionView, ForumPostReportView, ForumPostDetailView, ForumCommentLikeView
 from .utils_views import EditorImageUploadView, EditorFetchUrlView, MentionUserListView
@@ -27,8 +27,8 @@ __all__ = [
     'PasswordChangeView',
     'ScanPhoneView', 'ScanMessageView', 'ScanDomainView',
     'ScanAccountView', 'ScanImageView', 'ScanEmailView', 'ScanBanksView', 'ScanFileView',
-    'ScanStatusView',
-    'ReportCreateView',
+    'ScanAudioView', 'ScanStatusView',
+    'ReportCreateView', 'ReportDetailView',
     'TrendDailyView', 'TrendHotView', 'ScamRadarStatsView',
     'UserScansView', 'UserReportsView', 'UserAlertsView', 'PublicProfileView',
     'AdminReportsView', 'AdminReportActionView', 'AdminStatsView',

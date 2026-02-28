@@ -172,9 +172,13 @@ class ChatAIStreamView(APIView):
         session_id = request.data.get('session_id')
         images_data = request.data.get('images', [])
         preview_ocr = request.data.get('preview_ocr', False)
+        scan_context = request.data.get('scan_context', '')
+        debug = request.data.get('debug', False)
 
         user = request.user if request.user.is_authenticated else None
         agent = get_agent(session_id=session_id, user=user)
+        if scan_context:
+            agent._scan_context = scan_context
 
         async def event_stream():
             from asgiref.sync import sync_to_async
@@ -224,7 +228,7 @@ class ChatAIStreamView(APIView):
                 class_future = executor.submit(classify_message, user_message or ocr_text)
 
                 # Use sync_to_async for the blocking generator
-                agent_stream = await sync_to_async(agent.chat_stream)(final_query, images_data=images_data)
+                agent_stream = await sync_to_async(agent.chat_stream)(final_query, images_data=images_data, debug=debug)
                 
                 chunk_count = 0
                 # We need to handle the agent_stream correctly if it's a generator
@@ -245,6 +249,18 @@ class ChatAIStreamView(APIView):
                     elif chunk.startswith("__STATUS__:"):
                         status_val = chunk.replace("__STATUS__:", "")
                         yield f"data: {json.dumps({'status': status_val})}\n\n"
+                    elif chunk.startswith("__TOOL_CALLS__:"):
+                        try:
+                            tc_data = json.loads(chunk[len("__TOOL_CALLS__:"):])
+                            yield f"data: {json.dumps({'tool_calls': tc_data})}\n\n"
+                        except Exception:
+                            pass
+                    elif chunk.startswith("__TOOL_RESULT__:"):
+                        try:
+                            tr_data = json.loads(chunk[len("__TOOL_RESULT__:"):])
+                            yield f"data: {json.dumps({'tool_result': tr_data})}\n\n"
+                        except Exception:
+                            pass
                     else:
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
                         chunk_count += 1

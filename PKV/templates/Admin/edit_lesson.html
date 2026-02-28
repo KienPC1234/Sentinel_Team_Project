@@ -20,8 +20,7 @@
         border-radius: 1.5rem 1.5rem 0 0 !important;
     }
     .ck-content pre { background: #000 !important; border-radius: 12px; padding: 1rem; }
-    
-    /* Custom form styling */
+
     .admin-form-input {
         width: 100%;
         background: rgba(15, 23, 42, 0.4);
@@ -30,17 +29,48 @@
         padding: 0.75rem 1rem;
         color: white;
         transition: all 0.3s;
+        font-size: 0.875rem;
     }
     .admin-form-input:focus {
         border-color: #3b82f6;
         outline: none;
         background: rgba(15, 23, 42, 0.6);
     }
+    .admin-form-input::placeholder { color: rgba(255,255,255,0.25); }
+    textarea.admin-form-input { resize: vertical; min-height: 80px; }
+
+    .quiz-option { display: flex; align-items: center; gap: 0.75rem; }
+    .quiz-option input[type="radio"] {
+        accent-color: #22c55e;
+        width: 16px; height: 16px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .step-card {
+        background: rgba(255,255,255,0.02);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 1rem;
+        padding: 1rem;
+        transition: all 0.2s;
+    }
+    .step-card:hover { border-color: rgba(59,130,246,0.3); }
+
+    .section-header {
+        display: flex; align-items: center; gap: 0.75rem;
+        padding-bottom: 1rem; margin-bottom: 1.5rem;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .section-icon {
+        width: 2.5rem; height: 2.5rem; border-radius: 0.75rem;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8 mt-16">
+<div class="container mx-auto px-4 py-8 mt-16" x-data="lessonEditor()">
     <div class="flex items-center justify-between mb-10">
         <div class="flex items-center gap-6">
             <a href="{% url 'admin-manage-learn' %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-blue-400 hover:border-blue-500/30 transition-all">
@@ -48,76 +78,218 @@
             </a>
             <div>
                 <h1 class="text-3xl font-black text-white tracking-tight">{{ title }}</h1>
-                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Quản lý bài học & Kiến thức bảo mật</p>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Bài học · Quiz · Kịch bản</p>
             </div>
         </div>
-        
+
         <button type="submit" form="lessonForm" class="px-8 py-3.5 rounded-2xl bg-blue-600 text-white font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2">
             <i class="bi bi-save2 text-lg"></i>
-            Lưu bài học
+            Lưu tất cả
         </button>
     </div>
 
-    <form id="lessonForm" method="post" enctype="multipart/form-data" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <form id="lessonForm" method="post" enctype="multipart/form-data">
         {% csrf_token %}
-        
-        <!-- Main Column -->
-        <div class="lg:col-span-8 space-y-8">
-            <div class="liquid-card p-8 space-y-6 border-white/5 bg-slate-900/40">
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Tiêu đề bài học</label>
-                    {{ form.title }}
-                </div>
 
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Slug (Đường dẫn)</label>
-                    {{ form.slug }}
-                </div>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Main Column -->
+            <div class="lg:col-span-8 space-y-8">
 
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Nội dung bài học</label>
-                    <div class="rounded-3xl overflow-hidden border border-white/10">
-                        {{ form.content }}
+                <!-- Lesson Content -->
+                <div class="liquid-card p-8 space-y-6 border-white/5 bg-slate-900/40">
+                    <div class="section-header">
+                        <div class="section-icon bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><i class="bi bi-journal-text"></i></div>
+                        <div>
+                            <h2 class="text-sm font-black text-white uppercase tracking-widest">Nội dung bài học</h2>
+                            <p class="text-[10px] text-white/30 mt-0.5">Viết nội dung HTML hoặc dùng CKEditor</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Tiêu đề bài học</label>
+                            {{ form.title }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Slug (Đường dẫn)</label>
+                            {{ form.slug }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Nội dung bài học</label>
+                            <div class="rounded-3xl overflow-hidden border border-white/10">
+                                {{ form.content }}
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Quiz Section -->
+                <div class="liquid-card p-8 space-y-6 border-white/5 bg-slate-900/40">
+                    <div class="section-header">
+                        <div class="section-icon bg-purple-500/10 text-purple-400 border border-purple-500/20"><i class="bi bi-list-check"></i></div>
+                        <div>
+                            <h2 class="text-sm font-black text-white uppercase tracking-widest">Quiz kiểm tra</h2>
+                            <p class="text-[10px] text-white/30 mt-0.5">Câu hỏi trắc nghiệm 4 đáp án</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Câu hỏi</label>
+                            <textarea name="quiz_question" class="admin-form-input" rows="2" placeholder="Nhập câu hỏi trắc nghiệm...">{{ quiz.question|default:"" }}</textarea>
+                        </div>
+
+                        <div class="space-y-3">
+                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Đáp án (chọn radio = đáp án đúng)</label>
+                            <div class="quiz-option">
+                                <input type="radio" name="quiz_correct_idx" value="0">
+                                <input type="text" name="quiz_option_0" class="admin-form-input flex-1" placeholder="Đáp án A" value="">
+                            </div>
+                            <div class="quiz-option">
+                                <input type="radio" name="quiz_correct_idx" value="1">
+                                <input type="text" name="quiz_option_1" class="admin-form-input flex-1" placeholder="Đáp án B" value="">
+                            </div>
+                            <div class="quiz-option">
+                                <input type="radio" name="quiz_correct_idx" value="2">
+                                <input type="text" name="quiz_option_2" class="admin-form-input flex-1" placeholder="Đáp án C" value="">
+                            </div>
+                            <div class="quiz-option">
+                                <input type="radio" name="quiz_correct_idx" value="3">
+                                <input type="text" name="quiz_option_3" class="admin-form-input flex-1" placeholder="Đáp án D" value="">
+                            </div>
+                            <input type="hidden" name="quiz_correct" id="quizCorrectHidden" value="{{ quiz.correct_answer|default:'' }}">
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Giải thích đáp án</label>
+                            <textarea name="quiz_explanation" class="admin-form-input" rows="2" placeholder="Giải thích tại sao đáp án đúng...">{{ quiz.explanation|default:"" }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scenario Section -->
+                <div class="liquid-card p-8 space-y-6 border-white/5 bg-slate-900/40">
+                    <div class="section-header">
+                        <div class="section-icon bg-blue-500/10 text-blue-400 border border-blue-500/20"><i class="bi bi-chat-dots"></i></div>
+                        <div>
+                            <h2 class="text-sm font-black text-white uppercase tracking-widest">Kịch bản hội thoại</h2>
+                            <p class="text-[10px] text-white/30 mt-0.5">Mô phỏng tình huống lừa đảo</p>
+                        </div>
+                    </div>
+
+                    {% if scenario %}<input type="hidden" name="scenario_id" value="{{ scenario.id }}">{% endif %}
+
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="space-y-2">
+                                <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Tiêu đề kịch bản</label>
+                                <input type="text" name="scenario_title" class="admin-form-input" placeholder="VD: Cuộc gọi giả mạo ngân hàng" value="{{ scenario.title|default:'' }}">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Mô tả ngắn</label>
+                                <input type="text" name="scenario_description" class="admin-form-input" placeholder="Mô tả vắn tắt tình huống..." value="{{ scenario.description|default:'' }}">
+                            </div>
+                        </div>
+
+                        <!-- Steps Editor -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Các bước hội thoại</label>
+                                <button type="button" @click="addStep()" class="px-4 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 text-[10px] font-black uppercase tracking-widest border border-blue-500/20 hover:bg-blue-500/20 transition-all">
+                                    <i class="bi bi-plus-lg mr-1"></i> Thêm bước
+                                </button>
+                            </div>
+
+                            <div class="space-y-3" id="stepsContainer">
+                                <template x-for="(step, idx) in steps" :key="idx">
+                                    <div class="step-card">
+                                        <div class="flex items-start gap-3">
+                                            <div class="flex flex-col items-center gap-1 pt-1">
+                                                <span class="text-[9px] font-black text-white/20" x-text="idx + 1"></span>
+                                                <button type="button" @click="removeStep(idx)" class="w-6 h-6 rounded-md bg-red-500/10 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-all text-xs">
+                                                    <i class="bi bi-trash3"></i>
+                                                </button>
+                                            </div>
+                                            <div class="flex-1 space-y-2">
+                                                <div class="flex gap-2">
+                                                    <select x-model="step.speaker" class="admin-form-input" style="width: 160px; flex-shrink: 0;">
+                                                        <option value="scammer">🦹 Kẻ lừa đảo</option>
+                                                        <option value="victim">👤 Nạn nhân</option>
+                                                        <option value="narrator">📝 Người kể</option>
+                                                    </select>
+                                                    <input type="text" x-model="step.text" class="admin-form-input flex-1" placeholder="Nội dung lời thoại...">
+                                                </div>
+                                                <input type="text" x-model="step.note" class="admin-form-input text-[11px]" placeholder="Ghi chú phân tích (tùy chọn)..." style="background: rgba(168,85,247,0.05); border-color: rgba(168,85,247,0.1);">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div x-show="steps.length === 0" class="p-8 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center">
+                                <i class="bi bi-chat-square-text text-3xl text-white/10 mb-2 block"></i>
+                                <p class="text-white/20 text-xs font-bold">Chưa có bước hội thoại nào</p>
+                                <button type="button" @click="addStep()" class="mt-3 px-4 py-2 rounded-lg bg-blue-500/10 text-blue-400 text-xs font-bold border border-blue-500/20 hover:bg-blue-500/20 transition-all">
+                                    <i class="bi bi-plus-lg mr-1"></i> Thêm bước đầu tiên
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Hidden field for steps JSON -->
+                        <input type="hidden" name="scenario_steps" :value="JSON.stringify(steps)">
+                    </div>
+                </div>
+
             </div>
-        </div>
 
-        <!-- Sidebar Column -->
-        <div class="lg:col-span-4 space-y-8">
-            <div class="liquid-card p-6 space-y-6 border-white/5 bg-slate-900/40">
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Danh mục</label>
-                    {{ form.category }}
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Ảnh đại diện (Cover)</label>
-                    <div class="p-4 rounded-2xl bg-black/40 border border-white/5">
-                        {{ form.cover_image }}
-                        {% if lesson.cover_image %}
-                        <div class="mt-4 rounded-lg overflow-hidden border border-white/10">
-                            <img src="{{ lesson.cover_image.url }}" class="w-full h-auto">
-                        </div>
-                        {% endif %}
+            <!-- Sidebar Column -->
+            <div class="lg:col-span-4 space-y-8">
+                <div class="liquid-card p-6 space-y-6 border-white/5 bg-slate-900/40 sticky top-24">
+                    <div class="space-y-2">
+                        <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Danh mục</label>
+                        {{ form.category }}
                     </div>
-                </div>
 
-                <div class="flex items-center justify-between p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                            <i class="bi bi-eye-fill"></i>
+                    <div class="space-y-2">
+                        <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Ảnh đại diện (Cover)</label>
+                        <div class="p-4 rounded-2xl bg-black/40 border border-white/5">
+                            {{ form.cover_image }}
+                            {% if lesson.cover_image %}
+                            <div class="mt-4 rounded-lg overflow-hidden border border-white/10">
+                                <img src="{{ lesson.cover_image.url }}" class="w-full h-auto">
+                            </div>
+                            {% endif %}
                         </div>
-                        <span class="text-xs font-black text-white/80 uppercase tracking-wider">Công khai</span>
                     </div>
-                    {{ form.is_published }}
-                </div>
 
-                {% if lesson %}
-                <button type="button" class="w-full py-4 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white font-black uppercase tracking-widest transition-all border border-red-500/20">
-                    <i class="bi bi-trash3 me-2 text-lg"></i> Xóa bài học
-                </button>
-                {% endif %}
+                    <div class="flex items-center justify-between p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                                <i class="bi bi-eye-fill"></i>
+                            </div>
+                            <span class="text-xs font-black text-white/80 uppercase tracking-wider">Công khai</span>
+                        </div>
+                        {{ form.is_published }}
+                    </div>
+
+                    <!-- Summary -->
+                    <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                        <h4 class="text-[10px] font-black text-white/30 uppercase tracking-widest">Tóm tắt</h4>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-white/40">Quiz</span>
+                            <span class="font-bold" :class="quizHasData ? 'text-green-400' : 'text-yellow-500'" x-text="quizHasData ? '✓ Đã tạo' : '⚠ Chưa có'"></span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-white/40">Kịch bản</span>
+                            <span class="font-bold" :class="steps.length > 0 ? 'text-green-400' : 'text-yellow-500'" x-text="steps.length > 0 ? '✓ ' + steps.length + ' bước' : '⚠ Chưa có'"></span>
+                        </div>
+                    </div>
+
+                    {% if lesson %}
+                    <button type="button" onclick="if(confirm('Xóa bài học này?')) location.href='{% url 'admin-delete-lesson' lesson.id %}'" class="w-full py-4 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white font-black uppercase tracking-widest transition-all border border-red-500/20">
+                        <i class="bi bi-trash3 me-2 text-lg"></i> Xóa bài học
+                    </button>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </form>
@@ -126,14 +298,90 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-        // Initialize CKEditor
-        const editor = await window.createCKEditor('#editor');
-        
-        // Add classes to form elements for consistent styling
-        document.querySelectorAll('input[type="text"], select').forEach(el => {
+function lessonEditor() {
+    let initSteps = [];
+    try { initSteps = JSON.parse('{{ scenario_steps_json|escapejs }}') || []; } catch(e) { initSteps = []; }
+
+    let quizOptions = [];
+    try { quizOptions = JSON.parse('{{ quiz_options_json|escapejs }}') || []; } catch(e) { quizOptions = []; }
+
+    const quizCorrect = "{{ quiz.correct_answer|default:''|escapejs }}";
+
+    return {
+        steps: initSteps,
+        quizHasData: false,
+
+        addStep() {
+            this.steps.push({ speaker: 'scammer', text: '', note: '' });
+        },
+
+        removeStep(idx) {
+            this.steps.splice(idx, 1);
+        },
+
+        updateQuizStatus() {
+            const q = document.querySelector('[name="quiz_question"]');
+            this.quizHasData = q && q.value.trim().length > 0;
+        },
+
+        init() {
+            // Populate quiz option values
+            if (quizOptions.length) {
+                quizOptions.forEach((opt, i) => {
+                    const input = document.querySelector('[name="quiz_option_' + i + '"]');
+                    if (input) input.value = opt;
+                });
+                // Set correct radio
+                const correctIdx = quizOptions.indexOf(quizCorrect);
+                if (correctIdx >= 0) {
+                    const radio = document.querySelector('[name="quiz_correct_idx"][value="' + correctIdx + '"]');
+                    if (radio) radio.checked = true;
+                }
+            }
+
+            // Sync quiz_correct hidden field when radio changes
+            document.querySelectorAll('[name="quiz_correct_idx"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const idx = parseInt(radio.value);
+                    const optInput = document.querySelector('[name="quiz_option_' + idx + '"]');
+                    if (optInput) {
+                        document.getElementById('quizCorrectHidden').value = optInput.value;
+                    }
+                });
+            });
+
+            // Sync when option text changes
+            for (let i = 0; i < 4; i++) {
+                const optInput = document.querySelector('[name="quiz_option_' + i + '"]');
+                if (optInput) {
+                    optInput.addEventListener('input', () => {
+                        const checked = document.querySelector('[name="quiz_correct_idx"]:checked');
+                        if (checked && parseInt(checked.value) === i) {
+                            document.getElementById('quizCorrectHidden').value = optInput.value;
+                        }
+                        this.updateQuizStatus();
+                    });
+                }
+            }
+
+            // Quiz question change
+            const qEl = document.querySelector('[name="quiz_question"]');
+            if (qEl) qEl.addEventListener('input', () => this.updateQuizStatus());
+
+            this.updateQuizStatus();
+        }
+    };
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    if (window.createCKEditor) {
+        await window.createCKEditor('#editor');
+    }
+    document.querySelectorAll('#lessonForm input[type="text"], #lessonForm select').forEach(el => {
+        if (!el.classList.contains('admin-form-input') && !el.closest('.quiz-option') && !el.closest('.step-card')) {
             el.classList.add('admin-form-input');
-        });
+        }
     });
+});
 </script>
 {% endblock %}

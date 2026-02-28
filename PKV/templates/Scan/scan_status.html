@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}Kết quả quét #{{ scan.id }} — ShieldCall{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-6 py-8 space-y-8" x-data="scanStatusApp()">
+
+    <!-- Header -->
+    <div class="text-center space-y-2">
+        <h1 class="text-2xl font-black text-white tracking-wider uppercase">Kết quả quét #{{ scan.id }}</h1>
+        <p class="text-xs text-white/40 font-mono">{{ scan.created_at|date:"d/m/Y H:i" }} &middot; {{ scan.get_scan_type_display }}</p>
+    </div>
+
+    <!-- Still Processing -->
+    <template x-if="status === 'pending' || status === 'processing'">
+        <div class="liquid-card p-8 text-center space-y-6">
+            <div class="spinner w-12 h-12 mx-auto text-blue-400"></div>
+            <h2 class="text-xl font-black text-white">Đang xử lý...</h2>
+            <p class="text-white/50 text-sm">Kết quả sẽ tự động cập nhật khi hoàn tất.</p>
+
+            <!-- WS Progress -->
+            <div x-show="progress.length > 0" class="text-left mt-6 p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                <h4 class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3">Tiến trình</h4>
+                <div class="space-y-2 font-mono text-[11px] max-h-[250px] overflow-y-auto custom-scrollbar">
+                    <template x-for="(item, index) in progress" :key="index">
+                        <div class="flex items-start gap-3 animate-fadein">
+                            <span class="flex-shrink-0 mt-0.5"
+                                :class="item.step === 'completed' ? 'text-green-500' : item.step === 'error' ? 'text-red-500' : 'text-blue-500/50'">
+                                <i :class="item.step === 'completed' ? 'bi bi-check-circle-fill' : item.step === 'error' ? 'bi bi-x-circle-fill' : (index === progress.length - 1 ? 'bi bi-arrow-right' : 'bi bi-dot')"></i>
+                            </span>
+                            <span class="text-white/80 flex-1" x-text="item.message"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded border inline-block"
+                 :class="wsState==='connected' ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10'"
+                 x-text="wsState==='connected' ? 'WebSocket kết nối' : 'Đang kết nối...'"></div>
+        </div>
+    </template>
+
+    <!-- Failed -->
+    <template x-if="status === 'failed'">
+        <div class="liquid-card p-8 text-center space-y-4">
+            <div class="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center">
+                <i class="bi bi-exclamation-triangle-fill text-3xl text-red-500"></i>
+            </div>
+            <h2 class="text-xl font-black text-red-400">Phân tích thất bại</h2>
+            <p class="text-white/50 text-sm">Đã xảy ra lỗi trong quá trình phân tích. Vui lòng thử lại.</p>
+        </div>
+    </template>
+
+    <!-- Completed Result -->
+    <template x-if="status === 'completed'">
+        <div class="space-y-6 animate-fadein">
+            <div class="liquid-card overflow-hidden">
+                <!-- Status Header -->
+                <div class="p-8 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
+                    <div class="absolute inset-0 opacity-10 -z-10 blur-[80px]"
+                        :class="result.risk_level==='RED'?'bg-red-500':result.risk_level==='YELLOW'?'bg-yellow-500':'bg-green-500'"></div>
+
+                    <div class="text-[10px] font-black text-white/30 uppercase tracking-widest mb-4" x-text="scanTypeLabel"></div>
+
+                    <div class="inline-block px-8 py-3 rounded-full text-xs font-black tracking-[0.3em] uppercase mb-6"
+                        :class="result.risk_level==='RED'?'bg-red-500/20 text-red-500 border border-red-500/30':result.risk_level==='YELLOW'?'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30':'bg-green-500/20 text-green-500 border border-green-500/30'"
+                        x-text="result.risk_level"></div>
+
+                    <div class="text-5xl font-black text-white mb-2" x-text="(result.risk_score || 0) + '/100'"></div>
+                    <div class="text-[10px] text-white/30 font-black tracking-widest uppercase mb-6">Điểm rủi ro</div>
+
+                    <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden max-w-md mx-auto">
+                        <div class="h-full transition-all duration-1000"
+                            :style="'width:'+(result.risk_score||0)+'%;background:'+((result.risk_score||0)>=70?'#ef4444':(result.risk_score||0)>=40?'#f59e0b':'#10b981')"></div>
+                    </div>
+                </div>
+
+                <!-- Info Grid -->
+                <div class="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-white/5">
+                    <div class="p-4 rounded-2xl bg-white/[0.03] space-y-1">
+                        <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Đối tượng kiểm tra</div>
+                        <div class="text-sm font-bold text-white/80 truncate" x-text="rawInput"></div>
+                    </div>
+                    <template x-if="result.scam_type">
+                        <div class="p-4 rounded-2xl bg-white/[0.03] space-y-1">
+                            <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Loại hình</div>
+                            <div class="text-sm font-bold text-white/80" x-text="result.scam_type"></div>
+                        </div>
+                    </template>
+                    <template x-if="result.domain">
+                        <div class="p-4 rounded-2xl bg-white/[0.03] space-y-1">
+                            <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Domain</div>
+                            <div class="text-sm font-bold text-white/80 truncate" x-text="result.domain"></div>
+                        </div>
+                    </template>
+                    <template x-if="result.page_title">
+                        <div class="p-4 rounded-2xl bg-white/[0.03] space-y-1">
+                            <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Tiêu đề trang</div>
+                            <div class="text-sm font-bold text-white/80 truncate" x-text="result.page_title"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Details / Patterns -->
+                <template x-if="detailItems.length > 0">
+                    <div class="p-8 border-b border-white/5 space-y-3">
+                        <h4 class="text-xs font-black text-white/40 uppercase tracking-widest">Chi tiết phân tích</h4>
+                        <div class="space-y-2">
+                            <template x-for="(item, i) in detailItems.slice(0, 15)" :key="i">
+                                <div class="flex items-start gap-2 text-xs text-white/60">
+                                    <i class="bi bi-dot text-blue-400 mt-0.5 flex-shrink-0"></i>
+                                    <span x-text="typeof item === 'object' ? (item.label || JSON.stringify(item)) : item"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- AI Explanation -->
+                <template x-if="result.explanation || result.ai_insight">
+                    <div class="p-8 bg-blue-500/[0.02]">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
+                                <i class="bi bi-robot"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-white uppercase tracking-wider">AI Analysis</h4>
+                                <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Phân tích chuyên sâu</p>
+                            </div>
+                        </div>
+                        <div class="ai-markdown text-white/70 text-sm leading-relaxed"
+                             x-html="renderMd(result.explanation || result.ai_insight || '')"></div>
+                    </div>
+                </template>
+
+                <!-- OSINT / Web Context -->
+                <template x-if="result.web_context || (result.web_sources && result.web_sources.length > 0)">
+                    <div class="p-8 border-t border-white/5 bg-white/[0.01]">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                                <i class="bi bi-search"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-white uppercase tracking-wider">Thông tin tình báo (OSINT)</h4>
+                                <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Grounded Proofs & Sources</p>
+                            </div>
+                        </div>
+                        <!-- Sources Badges -->
+                        <div class="flex flex-wrap gap-2 mb-4" x-show="result.web_sources && result.web_sources.length">
+                            <template x-for="source in result.web_sources" :key="source">
+                                <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20 uppercase" x-text="source"></span>
+                            </template>
+                        </div>
+                        <!-- Web Context (render as markdown) -->
+                        <template x-if="result.web_context">
+                            <div class="ai-markdown text-white/60 text-xs leading-relaxed"
+                                 x-html="renderMd(result.web_context)"></div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Actions -->
+                <div class="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-center">
+                    <a :href="scanPageUrl"
+                        class="liquid-btn py-2 px-6 text-xs bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 font-black">
+                        <i class="bi bi-arrow-counterclockwise"></i> Quét lại
+                    </a>
+                    <button class="liquid-btn py-2 px-6 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 font-black"
+                        @click="$dispatch('start-contextual-chat', { context: 'Scan #{{ scan.id }}: ' + rawInput + '\nScore: ' + (result.risk_score||0) + '/100\n' + (result.explanation || '') })">
+                        <i class="bi bi-chat-dots-fill"></i> Chat với AI
+                    </button>
+                    <a href="/dashboard/"
+                        class="liquid-btn py-2 px-6 text-xs bg-white/5 text-white/60 border-white/10 hover:text-white">
+                        <i class="bi bi-house"></i> Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+
+<script>
+function scanStatusApp() {
+    const scanData = JSON.parse('{{ scan_json|escapejs }}');
+    const scanType = '{{ scan.scan_type }}';
+    const typeMap = {
+        phone: 'Số điện thoại',
+        message: 'Tin nhắn',
+        domain: 'Website/URL',
+        account: 'Tài khoản ngân hàng',
+        qr: 'QR / Ảnh',
+        email: 'Email',
+        file: 'Tệp tin',
+    };
+    const pageMap = {
+        phone: '/scan/phone/',
+        message: '/scan/message/',
+        domain: '/scan/website/',
+        account: '/scan/bank/',
+        qr: '/scan/qr/',
+        email: '/scan/email/',
+        file: '/scan/file/',
+    };
+
+    return {
+        status: '{{ scan.status }}',
+        result: scanData.result || {},
+        rawInput: '{{ scan.raw_input|truncatechars:200|escapejs }}',
+        scanTypeLabel: typeMap[scanType] || scanType,
+        scanPageUrl: pageMap[scanType] || '/scan/phone/',
+        progress: [],
+        ws: null,
+        wsState: 'disconnected',
+
+        init() {
+            if (this.status === 'pending' || this.status === 'processing') {
+                this.connectWS();
+                this.pollInterval = setInterval(() => this.fetchStatus(), 5000);
+            }
+            // If completed, populate result from scan data
+            if (this.status === 'completed' && scanData.result) {
+                this.result = {
+                    ...scanData.result,
+                    risk_score: scanData.risk_score,
+                    risk_level: scanData.risk_level,
+                };
+            }
+        },
+
+        get detailItems() {
+            const r = this.result;
+            const items = [];
+            if (r.patterns_found) items.push(...(Array.isArray(r.patterns_found) ? r.patterns_found : []));
+            if (r.indicators) items.push(...(Array.isArray(r.indicators) ? r.indicators : []));
+            if (r.details) items.push(...(Array.isArray(r.details) ? r.details : []));
+            if (r.security_checks) items.push(...(Array.isArray(r.security_checks) ? r.security_checks : []));
+            if (r.analysis_result) items.push(...(Array.isArray(r.analysis_result) ? r.analysis_result : []));
+            // Deduplicate
+            return [...new Set(items.map(i => typeof i === 'string' ? i : JSON.stringify(i)))];
+        },
+
+        renderMd(text) {
+            if (!text) return '';
+            if (window.marked && window.marked.parse) return window.marked.parse(text);
+            return text.replace(/\n/g, '<br>');
+        },
+
+        connectWS() {
+            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            const url = `${proto}://${location.host}/ws/scan/{{ scan.id }}/`;
+            try {
+                this.ws = new WebSocket(url);
+                this.wsState = 'connecting';
+                this.ws.onopen = () => {
+                    this.wsState = 'connected';
+                    // Ask server for current status to catch results missed during disconnection
+                    this.ws.send(JSON.stringify({ type: 'get_status' }));
+                };
+                this.ws.onmessage = (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        if (data.message) {
+                            this.progress.push({ message: data.message, step: data.step || '' });
+                        }
+                        if (data.step === 'completed' || data.status === 'completed') {
+                            this.status = 'completed';
+                            if (data.data && data.data.result) {
+                                this.result = {
+                                    ...data.data.result,
+                                    risk_score: data.data.risk_score || data.data.result.risk_score,
+                                    risk_level: data.data.risk_level || data.data.result.risk_level,
+                                };
+                            } else {
+                                this.fetchStatus();
+                            }
+                            clearInterval(this.pollInterval);
+                        }
+                        if (data.step === 'error' || data.status === 'failed') {
+                            this.status = 'failed';
+                            clearInterval(this.pollInterval);
+                        }
+                    } catch (err) {}
+                };
+                this.ws.onclose = () => {
+                    this.wsState = 'disconnected';
+                    if (this.status === 'pending' || this.status === 'processing') {
+                        setTimeout(() => this.connectWS(), 3000);
+                    }
+                };
+            } catch (e) { this.wsState = 'disconnected'; }
+        },
+
+        async fetchStatus() {
+            try {
+                const resp = await fetch(`/api/v1/scan/status/{{ scan.id }}/`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (data.status === 'completed') {
+                    this.status = 'completed';
+                    this.result = {
+                        ...(data.result || {}),
+                        risk_score: data.risk_score,
+                        risk_level: data.risk_level,
+                    };
+                    clearInterval(this.pollInterval);
+                    if (this.ws) this.ws.close();
+                } else if (data.status === 'failed') {
+                    this.status = 'failed';
+                    clearInterval(this.pollInterval);
+                }
+            } catch (e) {}
+        },
+
+        destroy() {
+            clearInterval(this.pollInterval);
+            if (this.ws) this.ws.close();
+        }
+    };
+}
+</script>
+{% endblock %}

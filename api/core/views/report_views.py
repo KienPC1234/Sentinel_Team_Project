@@ -25,10 +25,11 @@ from api.core.models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
     EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
 )
+from api.utils.media_utils import extract_ocr_text
 from api.core.serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
     DomainSerializer, BankAccountSerializer,
-    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer,
+    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer, ReportDetailSerializer,
     ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
     ScanAccountSerializer, ScanImageSerializer, ScanEventListSerializer,
     TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
@@ -49,7 +50,7 @@ class ReportCreateView(APIView):
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
-             return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
+             return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
         serializer = ReportCreateSerializer(data=request.data,
                                             context={'request': request})
@@ -60,7 +61,7 @@ class ReportCreateView(APIView):
         target = report.target_value
         if report.target_type == 'phone':
             from api.utils.normalization import normalize_phone_e164
-            normalized = normalize_phone_e164(target, strict=True)
+            normalized = normalize_phone_e164(target, strict=False)
             if normalized != target:
                 report.target_value = normalized
                 report.save()
@@ -74,6 +75,13 @@ class ReportCreateView(APIView):
             Domain.objects.filter(domain_name=target).update(
                 report_count=F('report_count') + 1
             )
+        elif report.target_type == 'email':
+            from api.utils.normalization import normalize_email
+            normalized = normalize_email(target)
+            if normalized != target:
+                report.target_value = normalized
+                report.save()
+                target = normalized
 
         # Auto-link to the most recent ScanEvent for this user and target
         if request.user.is_authenticated:
@@ -86,6 +94,33 @@ class ReportCreateView(APIView):
                 report.scan_event = recent_scan
                 report.save()
 
+        # --- AI and OCR Integration ---
+        # 1. OCR (if evidence exists)
+        if report.evidence_file:
+            try:
+                ocr_text = extract_ocr_text(report.evidence_file)
+                if ocr_text:
+                    report.ocr_text = ocr_text
+                    report.save()
+            except Exception as e:
+                logger.error(f"[ReportOCR] Error: {e}")
+
+        # 2. AI Analysis
+        try:
+            full_context = f"Target Type: {report.target_type}\n"
+            full_context += f"Target Value: {report.target_value}\n"
+            full_context += f"Scam Type: {report.scam_type}\n"
+            full_context += f"Description: {report.description}\n"
+            if report.ocr_text:
+                full_context += f"OCR Evidence Text: {report.ocr_text}\n"
+            
+            # Use general scam analysis
+            analysis = analyze_text_for_scam(full_context)
+            report.ai_analysis = analysis
+            report.save()
+        except Exception as e:
+            logger.error(f"[ReportAI] Analysis error: {e}")
+
         return Response({
             'message': 'Báo cáo đã được gửi thành công! Cảm ơn bạn đã giúp cộng đồng.',
             'report_id': report.pk,
@@ -93,3 +128,9 @@ class ReportCreateView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
+
+class ReportDetailView(generics.RetrieveAPIView):
+    """GET /api/report/<pk>/ — Get detail of a report"""
+    queryset = Report.objects.all()
+    serializer_class = ReportDetailSerializer
+    permission_classes = [AllowAny]

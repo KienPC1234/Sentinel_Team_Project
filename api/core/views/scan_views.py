@@ -359,15 +359,15 @@ class ScanPhoneView(APIView):
         serializer = ScanPhoneSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # Turnstile Verification (before expensive work)
+        cf_token = request.data.get('cf-turnstile-response')
+        if not verify_turnstile_token(cf_token):
+            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+
         # Already validated as E.164 by serializer (requires country flag).
         phone = serializer.validated_data['phone']
 
         result = _phone_risk_score(phone)
-
-        # Turnstile Verification
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
 
         # Log scan event
         from api.core.models import ScanStatus
@@ -391,6 +391,11 @@ class ScanEmailView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
+        # Turnstile Verification
+        cf_token = request.data.get('cf-turnstile-response')
+        if not verify_turnstile_token(cf_token):
+            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+
         file_obj = request.FILES.get('file')
         content_text = request.data.get('content', '')
         sender_input = request.data.get('email', '')
@@ -665,59 +670,53 @@ class ScanMessageView(APIView):
         serializer.is_valid(raise_exception=True)
 
         text = serializer.validated_data.get('message', '')
-        
-        # Multiple images support
-        images = request.FILES.getlist('image') or request.FILES.getlist('images')
-        combined_ocr_text = []
-        ocr_regions = []
-        annotated_image = ""
-        
-        from api.utils.media_utils import extract_ocr_with_boxes
-        
-        for img in images:
-            try:
-                ocr_result = extract_ocr_with_boxes(img)
-                if ocr_result.get("text"):
-                    combined_ocr_text.append(ocr_result["text"])
-                if ocr_result.get("regions"):
-                    ocr_regions.extend(ocr_result["regions"])
-                if not annotated_image and ocr_result.get("annotated_image_b64"):
-                    annotated_image = ocr_result["annotated_image_b64"]
-            except Exception as e:
-                logger.error(f"OCR Error for image: {str(e)}")
 
-        full_text = text
-        if combined_ocr_text:
-            full_text = (text + '\n' + '\n'.join(combined_ocr_text)).strip()
-
-        if not full_text:
-            return Response({'error': 'Không có nội dung để phân tích.'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        result = _analyze_message_text(full_text)
-        if combined_ocr_text:
-            result['ocr_text'] = '\n'.join(combined_ocr_text)
-        result['ocr_regions'] = ocr_regions
-        result['annotated_image'] = annotated_image
-
-        # Turnstile Verification
+        # Turnstile Verification (before any processing)
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
+            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
-        # Log scan event
-        log_result = {k: v for k, v in result.items() if k != 'annotated_image'}
-        ScanEvent.objects.create(
+        # Multiple images support
+        images = request.FILES.getlist('image') or request.FILES.getlist('images')
+
+        if not text.strip() and not images:
+            return Response({'error': 'Vui lòng nhập tin nhắn hoặc tải ảnh.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Create PENDING scan event
+        from api.core.models import ScanStatus
+        scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='message',
-            raw_input=full_text[:2000],
-            normalized_input=full_text[:500],
-            result_json=log_result,
-            risk_score=result['risk_score'],
-            risk_level=result['risk_level'],
+            raw_input=(text or '')[:2000],
+            status=ScanStatus.PENDING
         )
 
-        return Response(result)
+        # Convert images to base64 for Celery task
+        import base64
+        images_b64 = []
+        for img in images:
+            try:
+                img.seek(0)
+                images_b64.append(base64.b64encode(img.read()).decode('utf-8'))
+            except Exception as e:
+                logger.error(f"Image encode error: {e}")
+
+        # Dispatch to Celery
+        from api.core.tasks import perform_message_scan_task
+        try:
+            perform_message_scan_task.delay(scan_event.id, text.strip(), images_b64)
+        except Exception as e:
+            logger.error(f"Failed to dispatch message scan task: {e}")
+            scan_event.status = ScanStatus.FAILED
+            scan_event.save()
+            return Response({'error': 'Lỗi hệ thống khi bắt đầu quét.'}, status=500)
+
+        return Response({
+            'scan_id': scan_event.id,
+            'status': 'pending',
+            'message': 'Đang phân tích tin nhắn...'
+        })
 
 
 def _analyze_network(url: str, domain: str) -> dict:
@@ -858,6 +857,20 @@ def _analyze_domain(url: str) -> dict:
     score = 0
     details = []
 
+    # 0. Fetch page content using requests + BeautifulSoup
+    fetch_success = False
+    page_title = ""
+    content_length = 0
+    try:
+        from api.utils.ollama_client import web_fetch_url
+        fetch_result = web_fetch_url(full_url)
+        if fetch_result and fetch_result.get('content'):
+            fetch_success = True
+            page_title = fetch_result.get('title', '') or ''
+            content_length = len(fetch_result.get('content', ''))
+    except Exception as e:
+        logger.warning(f"[ScanDomain] content fetch failed for {url}: {e}")
+
     # 1. Network Analysis (SSL, Redirects, Headers)
     network_info = _analyze_network(full_url, domain)
     
@@ -987,6 +1000,9 @@ def _analyze_domain(url: str) -> dict:
         'details': details if details else ['Không phát hiện dấu hiệu phishing'],
         'ssl': network_info['ssl_valid'],
         'network_info': network_info,
+        'fetch_success': fetch_success,
+        'page_title': page_title,
+        'content_length': content_length,
     }
 
     if similarity_warning:
@@ -1060,6 +1076,11 @@ class ScanDomainView(APIView):
         url = serializer.validated_data['url'].strip()
         deep_scan = serializer.validated_data.get('deep_scan', False)
 
+        # Turnstile Verification (before any processing)
+        cf_token = request.data.get('cf-turnstile-response')
+        if not verify_turnstile_token(cf_token):
+            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+
         if deep_scan:
             from api.core.models import ScanStatus
             from api.core.tasks import perform_web_scrapping_task
@@ -1079,13 +1100,15 @@ class ScanDomainView(APIView):
                 'message': 'Đang tiến hành quét sâu nội dung website...'
             })
 
-        # Standard scan
-        result = _analyze_domain(url)
-
-        # Turnstile Verification
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
+        # Standard scan with error handling
+        try:
+            result = _analyze_domain(url)
+        except Exception as e:
+            logger.error(f"[ScanDomain] _analyze_domain failed for {url}: {e}")
+            return Response({
+                'error': 'Không thể phân tích tên miền. Vui lòng thử lại sau.',
+                'url': url,
+            }, status=502)
 
         ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
@@ -1174,7 +1197,7 @@ class ScanAccountView(APIView):
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
+            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
         ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
@@ -1220,7 +1243,7 @@ class ScanImageView(APIView):
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
+            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
         # Create PENDING event
         scan_event = ScanEvent.objects.create(
@@ -1273,13 +1296,12 @@ class ScanFileView(APIView):
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
+            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
         # Create PENDING event
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
-            scan_type='message', # Reusing scan_type enums or extending them? spec said TargetType.QR for image. 
-                                # Let's use 'message' or add FILE to ScanType maybe.
+            scan_type='file',
             raw_input=f"File: {uploaded_file.name}",
             status=ScanStatus.PENDING
         )
@@ -1310,6 +1332,86 @@ class ScanFileView(APIView):
             if os.path.exists(file_path):
                 os.remove(file_path)
             return Response({'error': 'Lỗi hệ thống khi bắt đầu quét file.'}, status=500)
+
+
+class ScanAudioView(APIView):
+    """
+    POST /api/scan/audio — Audio transcription + AI scam analysis.
+    Accepts audio file upload, offloads to Celery for Faster-Whisper + AI.
+    """
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    ALLOWED_EXTENSIONS = ('.mp3', '.m4a', '.wav', '.ogg', '.webm', '.flac', '.aac')
+    MAX_SIZE = 50 * 1024 * 1024  # 50 MB
+
+    def post(self, request):
+        audio_file = request.FILES.get('audio')
+        if not audio_file:
+            return Response(
+                {'error': 'Vui lòng cung cấp file âm thanh.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate extension
+        ext = '.' + audio_file.name.rsplit('.', 1)[-1].lower() if '.' in audio_file.name else ''
+        if ext not in self.ALLOWED_EXTENSIONS:
+            return Response(
+                {'error': f'Định dạng không hỗ trợ. Chấp nhận: {", ".join(self.ALLOWED_EXTENSIONS)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate size
+        if audio_file.size > self.MAX_SIZE:
+            return Response(
+                {'error': 'File quá lớn. Tối đa 50 MB.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Turnstile verification
+        cf_token = request.data.get('cf-turnstile-response')
+        if not verify_turnstile_token(cf_token):
+            return Response(
+                {'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'},
+                status=400,
+            )
+
+        # Create PENDING scan event
+        from api.core.models import ScanEvent, ScanStatus
+        scan_event = ScanEvent.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            scan_type='audio',
+            raw_input=f"Audio: {audio_file.name} ({audio_file.size} bytes)",
+            status=ScanStatus.PENDING,
+        )
+
+        # Save audio to temp path for Celery worker
+        import tempfile, os
+        temp_dir = tempfile.gettempdir()
+        file_path = os.path.join(temp_dir, f"audio_{scan_event.id}_{audio_file.name}")
+        with open(file_path, 'wb+') as dest:
+            for chunk in audio_file.chunks():
+                dest.write(chunk)
+
+        # Dispatch Celery task
+        from api.core.tasks import perform_audio_scan_task
+        try:
+            perform_audio_scan_task.delay(scan_event.id, file_path)
+        except Exception as e:
+            logger.error(f"Failed to dispatch audio scan task: {e}")
+            scan_event.status = ScanStatus.FAILED
+            scan_event.result_json = {'error': f'Task dispatch failed: {str(e)}'}
+            scan_event.save()
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            return Response({'error': 'Lỗi hệ thống khi bắt đầu quét.'}, status=500)
+
+        return Response({
+            'scan_id': scan_event.id,
+            'status': scan_event.status,
+            'message': 'Đang xử lý âm thanh...',
+        })
+
 
 class ScanStatusView(APIView):
     """

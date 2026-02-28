@@ -66,7 +66,7 @@ class ForumPostListCreateView(APIView):
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
-             return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
+             return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
         serializer = ForumPostSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -107,7 +107,7 @@ class ForumPostCommentView(APIView):
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
-             return Response({'error': 'Xác minh anti-spam không lệ. Vui lòng thử lại.'}, status=400)
+             return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
         serializer = ForumCommentSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)

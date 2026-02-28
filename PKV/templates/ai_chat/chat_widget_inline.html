@@ -217,6 +217,7 @@
             typing: false,
             imagePreviews: [],
             imageFiles: [],
+            scanContext: '',
             messages: [
                 { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là **ShieldCall AI**. Hãy gửi số điện thoại hoặc tin nhắn lạ để tôi kiểm tra giúp bạn!', time: new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }), html: '' }
             ],
@@ -250,9 +251,10 @@
             startContextualChat(systemContext, userMsg = 'Hãy giải thích thêm về kết quả này.') {
                 this.open = true;
                 this.hasInteracted = true;
+                this.scanContext = systemContext || '';
                 const botMsg = { 
                     from: 'bot', 
-                    text: '<i class="bi bi-info-circle text-cyan-400"></i> **Đã nhận ngữ cảnh.** Tôi đã sẵn sàng phân tích kết quả trên cùng bạn.',
+                    text: '<i class="bi bi-info-circle text-cyan-400"></i> **Đã nhận ngữ cảnh scan.** Tôi đã sẵn sàng phân tích kết quả trên cùng bạn.',
                     time: this.now(),
                     html: ''
                 };
@@ -308,8 +310,11 @@
                         user_message: messageToSend,
                         session_id: sessionId,
                         context: 'chat',
-                        images: imagesToSend
+                        images: imagesToSend,
+                        scan_context: this.scanContext || undefined
                     });
+                    // Clear scan context after first use (it's been sent)
+                    this.scanContext = '';
                 } catch (err) {
                     console.error('Chat Widget send error:', err);
                     if (window.SCDebug) window.SCDebug.error('Send error:', err);

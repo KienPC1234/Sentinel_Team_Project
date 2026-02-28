@@ -102,7 +102,8 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         model = Report
         fields = ['target_type', 'target_value', 'scam_type', 'severity',
                   'description', 'evidence_file', 'scammer_phone', 
-                  'scammer_bank_account', 'scammer_bank_name', 'scammer_name']
+                  'scammer_bank_account', 'scammer_bank_name', 'scammer_name',
+                  'ocr_text', 'ai_analysis']
 
     def validate(self, attrs):
         target_type = attrs.get('target_type')
@@ -132,12 +133,54 @@ class ReportListSerializer(serializers.ModelSerializer):
         model = Report
         fields = ['id', 'target_type', 'target_value', 'scam_type', 'severity',
                   'description', 'status', 'reporter_email', 'moderation_note',
-                  'created_at']
+                  'ocr_text', 'ai_analysis', 'created_at']
 
     def get_reporter_email(self, obj):
         if obj.reporter:
-            return obj.reporter.email
+            # Mask reporter email for public list
+            email = obj.reporter.email
+            try:
+                username, domain = email.split('@')
+                return f"{username[:3]}***@{domain}"
+            except:
+                return "User"
         return 'Ẩn danh'
+
+class ReportDetailSerializer(serializers.ModelSerializer):
+    reporter_email = serializers.SerializerMethodField()
+    scammer_info = serializers.SerializerMethodField()
+    evidence_url = serializers.SerializerMethodField()
+    scam_type_display = serializers.CharField(source='get_scam_type_display', read_only=True)
+
+    class Meta:
+        model = Report
+        fields = ['id', 'target_type', 'target_value', 'scam_type', 'scam_type_display', 'severity',
+                  'description', 'status', 'created_at', 'reporter_email',
+                  'scammer_name', 'scammer_phone', 'scammer_bank_account', 'scammer_bank_name',
+                  'evidence_file', 'evidence_url', 'ocr_text', 'ai_analysis', 'moderation_note']
+
+    def get_reporter_email(self, obj):
+        if obj.reporter:
+            email = obj.reporter.email
+            try:
+                username, domain = email.split('@')
+                return f"{username[:3]}***@{domain}"
+            except:
+                return "User"
+        return 'Ẩn danh'
+
+    def get_scammer_info(self, obj):
+        return {
+            "name": obj.scammer_name,
+            "phone": obj.scammer_phone,
+            "bank_account": obj.scammer_bank_account, 
+            "bank_name": obj.scammer_bank_name
+        }
+
+    def get_evidence_url(self, obj):
+        if obj.evidence_file:
+            return obj.evidence_file.url
+        return None
 
 
 class ReportModerateSerializer(serializers.Serializer):
@@ -150,14 +193,23 @@ class ReportModerateSerializer(serializers.Serializer):
 class ScanFileSerializer(serializers.Serializer):
     file = serializers.FileField()
 
+
+class ScanAudioSerializer(serializers.Serializer):
+    """Serializer for audio scan upload."""
+    audio = serializers.FileField()
+
+
 class ScanPhoneSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=20)
 
     def validate_phone(self, value):
         try:
-            normalized = normalize_phone_e164(value, strict=True)
+            normalized = normalize_phone_e164(value, strict=False)
         except ValueError:
-            raise serializers.ValidationError('Số điện thoại phải có mã quốc gia, ví dụ +84xxxxxxxxx hoặc +1xxxxxxxxxx.')
+            raise serializers.ValidationError(
+                'Số điện thoại không hợp lệ. '
+                'Hỗ trợ: +84xxxxxxxxx, 0xxxxxxxxx (VN), +1xxxxxxxxxx...'
+            )
         return normalized
 
 
