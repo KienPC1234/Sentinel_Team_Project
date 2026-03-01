@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - ShieldCall VN{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-10">
+    <div class="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl overflow-hidden">
+        <div class="px-6 md:px-10 py-8 border-b border-white/10 bg-gradient-to-r from-cyan-500/10 to-purple-500/10">
+            <h1 class="text-2xl md:text-3xl font-black text-white">Điều khoản miễn trừ trách nhiệm & điều kiện sử dụng</h1>
+            <p class="text-sm text-white/60 mt-2">Áp dụng cho toàn bộ dịch vụ của ShieldCall VN. Cập nhật lần cuối: {{ updated_at|date:"d/m/Y H:i" }}</p>
+        </div>
+
+        <div class="px-6 md:px-10 py-8 space-y-8 text-white/80 leading-relaxed">
+            <section id="terms" class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">1) Phạm vi và chấp thuận</h2>
+                <p>Bằng việc truy cập hoặc sử dụng website, bạn xác nhận đã đọc, hiểu và đồng ý với toàn bộ điều khoản trên trang này. Nếu không đồng ý, bạn phải ngừng sử dụng dịch vụ ngay.</p>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">2) Miễn trừ trách nhiệm đối với nội dung</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>Nội dung trên website (tin tức, bài viết, tài liệu học tập, hình ảnh, dữ liệu hiển thị) chỉ mang tính tham khảo, có thể thay đổi, chỉnh sửa, gián đoạn hoặc không còn chính xác theo thời gian.</li>
+                    <li>Nội dung do người dùng cung cấp (bình luận, bài đăng, báo cáo, tệp tải lên, thông tin scan nhập vào hệ thống) thuộc trách nhiệm của chính người dùng đã đăng tải.</li>
+                    <li>ShieldCall VN không bảo đảm tính đầy đủ, cập nhật, phù hợp mục đích cụ thể hoặc không sai sót của bất kỳ nội dung nào.</li>
+                    <li>Website có quyền gỡ, ẩn, chỉnh sửa, hạn chế hiển thị bất kỳ nội dung nào khi cần cho an toàn hệ thống, tuân thủ pháp luật hoặc chính sách nội bộ.</li>
+                </ul>
+            </section>
+
+            <section id="data" class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">3) Quyền sử dụng dữ liệu do người dùng cung cấp và dữ liệu kỹ thuật client</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>Bạn cấp cho website quyền thu thập, lưu trữ, xử lý, phân tích và sử dụng thông tin bạn gửi lên hệ thống (bao gồm dữ liệu scan, báo cáo, văn bản, hình ảnh, file, metadata liên quan) để vận hành dịch vụ, tăng cường bảo mật, phát hiện gian lận/lừa đảo và cải thiện chất lượng mô hình.</li>
+                    <li>Website có thể thu thập dữ liệu kỹ thuật phía client ở mức cần thiết cho vận hành và an ninh (ví dụ: địa chỉ IP, user-agent, fingerprint kỹ thuật hợp lệ, nhật ký truy cập, trạng thái trình duyệt/thiết bị, thông tin phiên làm việc, lỗi hệ thống).</li>
+                    <li>Dữ liệu có thể được tổng hợp, ẩn danh hoặc giả danh để phục vụ thống kê, nghiên cứu và tối ưu hệ thống; việc sử dụng này không tạo nghĩa vụ bồi thường riêng cho người dùng.</li>
+                    <li>Website có thể cung cấp dữ liệu cho cơ quan có thẩm quyền hoặc bên thứ ba hỗ trợ kỹ thuật khi có căn cứ pháp lý/chính đáng.</li>
+                </ul>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">4) Kết quả scan AI và giới hạn độ chính xác</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>Kết quả scan/đánh giá rủi ro từ AI chỉ là tín hiệu hỗ trợ quyết định, không phải kết luận pháp lý, kết luận điều tra hoặc tư vấn nghề nghiệp bắt buộc.</li>
+                    <li>Website không bảo đảm độ chính xác tuyệt đối và không cam kết kết quả đúng 100% trong mọi trường hợp.</li>
+                    <li>Người dùng phải tự thẩm định độc lập trước khi thực hiện hành động tài chính, pháp lý, giao dịch hoặc cung cấp thông tin nhạy cảm cho bên thứ ba.</li>
+                </ul>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">5) Trách nhiệm pháp lý của người dùng</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>Người dùng tự chịu toàn bộ trách nhiệm pháp lý phát sinh từ hành vi tham gia, đăng tải, tương tác, giao dịch hoặc sử dụng dữ liệu trên website.</li>
+                    <li>Nghiêm cấm sử dụng website để vu khống, bôi nhọ, quấy rối, gian lận, xâm phạm quyền riêng tư, xâm phạm sở hữu trí tuệ hoặc vi phạm pháp luật hiện hành.</li>
+                    <li>Khi phát sinh tranh chấp với bên thứ ba do hành vi của người dùng, website có quyền từ chối trách nhiệm liên đới trong phạm vi pháp luật cho phép.</li>
+                </ul>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">6) Bồi hoàn và giới hạn trách nhiệm</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>Người dùng đồng ý bồi hoàn cho website và đơn vị vận hành đối với các tổn thất/chi phí (bao gồm chi phí pháp lý hợp lý) phát sinh từ việc người dùng vi phạm điều khoản hoặc vi phạm pháp luật.</li>
+                    <li>Trong phạm vi pháp luật cho phép, website không chịu trách nhiệm cho thiệt hại gián tiếp, ngẫu nhiên, đặc biệt, hậu quả hoặc mất lợi nhuận/dữ liệu phát sinh từ việc sử dụng hoặc không thể sử dụng dịch vụ.</li>
+                </ul>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">7) Bên thứ ba, liên kết ngoài và dịch vụ phụ trợ</h2>
+                <p>Website có thể tích hợp hoặc liên kết tới nền tảng/dịch vụ bên thứ ba. Website không kiểm soát nội dung/chính sách của các bên đó và không chịu trách nhiệm cho mọi rủi ro phát sinh ngoài phạm vi kiểm soát hợp lý.</p>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">8) Quyền sở hữu trí tuệ và quyền vận hành</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>Toàn bộ cấu trúc hệ thống, giao diện, nhãn hiệu, mã nguồn, cơ sở dữ liệu, tài liệu nội bộ thuộc quyền của website hoặc chủ thể cấp phép hợp pháp.</li>
+                    <li>Website có quyền tạm dừng, giới hạn, khóa tài khoản, từ chối truy cập hoặc thay đổi tính năng bất kỳ lúc nào vì lý do an ninh, vận hành hoặc pháp lý.</li>
+                </ul>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">9) Sự kiện bất khả kháng</h2>
+                <p>Website không chịu trách nhiệm cho gián đoạn hoặc thiệt hại do sự kiện bất khả kháng, tấn công mạng quy mô lớn, lỗi hạ tầng, thiên tai, chiến tranh, dịch bệnh, sự cố điện/viễn thông hoặc yêu cầu từ cơ quan nhà nước.</p>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">10) Luật áp dụng, hiệu lực từng phần, sửa đổi điều khoản</h2>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>Điều khoản này được diễn giải theo pháp luật Việt Nam và/hoặc pháp luật áp dụng tại địa điểm vận hành dịch vụ theo từng thời điểm.</li>
+                    <li>Nếu một điều khoản bị xác định vô hiệu, các điều khoản còn lại vẫn giữ nguyên hiệu lực.</li>
+                    <li>Website có quyền cập nhật điều khoản bất kỳ lúc nào; phiên bản công bố trên website là phiên bản có hiệu lực mới nhất.</li>
+                </ul>
+            </section>
+
+            <section class="space-y-3">
+                <h2 class="text-lg font-black text-cyan-300">11) Khuyến nghị pháp lý</h2>
+                <p>Nội dung trên website không thay thế tư vấn pháp lý chuyên nghiệp. Khi cần quyết định quan trọng hoặc xử lý tranh chấp, bạn nên tham vấn luật sư/cơ quan chức năng có thẩm quyền.</p>
+            </section>
+
+            <div class="rounded-2xl border border-yellow-400/25 bg-yellow-500/10 p-4 text-yellow-100 text-sm">
+                Việc tiếp tục sử dụng website sau khi điều khoản được cập nhật được xem là bạn đã chấp thuận phiên bản điều khoản mới.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

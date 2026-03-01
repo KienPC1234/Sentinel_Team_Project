@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kết quả xử lý báo cáo</title>
+</head>
+<body style="margin:0;padding:0;background:#020617;color:#e2e8f0;font-family:Inter,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 12px;background:#020617;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="620" cellspacing="0" cellpadding="0" style="max-width:620px;width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.08);border-radius:24px;overflow:hidden;">
+          <tr>
+            <td style="padding:28px 28px 20px;background:linear-gradient(135deg,#0f172a,#111827);border-bottom:1px solid rgba(255,255,255,0.08);">
+              <div style="font-size:22px;font-weight:900;letter-spacing:1px;color:#22d3ee;text-transform:uppercase;">ShieldCall VN</div>
+              <div style="margin-top:8px;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:1.5px;">Kết quả xử lý báo cáo</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px;">
+              <p style="margin:0 0 12px;font-size:15px;color:#cbd5e1;">Chào {{ user.username }},</p>
+              <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#94a3b8;">Báo cáo của bạn cho mục <strong style="color:#e2e8f0;">{{ report_type }}</strong> với đối tượng <strong style="color:#e2e8f0;">{{ target }}</strong> đã được cập nhật trạng thái.</p>
+
+              {% if status == 'approved' %}
+              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);color:#a7f3d0;font-size:13px;font-weight:700;">✅ Trạng thái: ĐÃ CHẤP THUẬN</div>
+              {% elif status == 'ai_flagged' %}
+              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#fde68a;font-size:13px;font-weight:700;">🟡 Trạng thái: AI GẮN CỜ · CHỜ ADMIN XÁC MINH</div>
+              {% else %}
+              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#fecaca;font-size:13px;font-weight:700;">⚠️ Trạng thái: TỪ CHỐI</div>
+              {% endif %}
+
+              {% if reason %}
+              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.2);">
+                <div style="font-size:11px;color:#67e8f9;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Lý do</div>
+                <div style="font-size:14px;line-height:1.6;color:#cbd5e1;">{{ reason }}</div>
+              </div>
+              {% endif %}
+
+              <p style="margin:0;font-size:14px;line-height:1.65;color:#94a3b8;">Cảm ơn bạn đã góp phần xây dựng cộng đồng số an toàn hơn cùng ShieldCall VN.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 28px;background:rgba(255,255,255,0.02);border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:#64748b;line-height:1.6;">
+              © 2026 ShieldCall VN · Nền tảng bảo vệ người dùng Việt Nam khỏi lừa đảo số.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

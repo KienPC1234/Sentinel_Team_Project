@@ -5,6 +5,7 @@ import logging
 import json
 from urllib.parse import urlparse
 from api.utils.security import verify_turnstile_token
+from django.core.cache import cache
 
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Count, Sum, F, Q
@@ -47,10 +48,34 @@ class ReportCreateView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Basic anti-spam throttle: 8 report submits / 10 minutes / IP
+        client_ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', 'unknown')
+        throttle_key = f"report_submit_ip:{client_ip}"
+        current_hits = int(cache.get(throttle_key, 0))
+        if current_hits >= 8:
+            return Response({'error': 'Bạn gửi quá nhanh. Vui lòng thử lại sau vài phút.'}, status=429)
+
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
              return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+
+        evidence_files = request.FILES.getlist('evidence_images')
+        if len(evidence_files) > 4:
+            return Response({'error': 'Tối đa 4 ảnh bổ sung.'}, status=400)
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/jpg'}
+        for ef in evidence_files:
+            if getattr(ef, 'content_type', '') not in allowed_types:
+                return Response({'error': 'Chỉ chấp nhận ảnh JPG/PNG/WEBP.'}, status=400)
+            if getattr(ef, 'size', 0) > 6 * 1024 * 1024:
+                return Response({'error': 'Mỗi ảnh bổ sung tối đa 6MB.'}, status=400)
+
+        main_evidence = request.FILES.get('evidence_file')
+        if main_evidence:
+            if getattr(main_evidence, 'content_type', '') not in allowed_types:
+                return Response({'error': 'Ảnh chính phải là JPG/PNG/WEBP.'}, status=400)
+            if getattr(main_evidence, 'size', 0) > 8 * 1024 * 1024:
+                return Response({'error': 'Ảnh chính tối đa 8MB.'}, status=400)
 
         serializer = ReportCreateSerializer(data=request.data,
                                             context={'request': request})
@@ -78,6 +103,8 @@ class ReportCreateView(APIView):
         evidence_files = request.FILES.getlist('evidence_images')
         for ef in evidence_files:
             ReportEvidence.objects.create(report=report, image=ef)
+
+        cache.set(throttle_key, current_hits + 1, timeout=600)
 
         # Update report counts on related entities
         target = report.target_value
@@ -116,32 +143,25 @@ class ReportCreateView(APIView):
                 report.scan_event = recent_scan
                 report.save()
 
-        # --- AI and OCR Integration ---
-        # 1. OCR (if evidence exists)
-        if report.evidence_file:
-            try:
-                ocr_text = extract_ocr_text(report.evidence_file)
-                if ocr_text:
-                    report.ocr_text = ocr_text
-                    report.save()
-            except Exception as e:
-                logger.error(f"[ReportOCR] Error: {e}")
-
-        # 2. AI Analysis
+        # Background AI/OCR task (non-blocking for user submit flow)
         try:
-            full_context = f"Target Type: {report.target_type}\n"
-            full_context += f"Target Value: {report.target_value}\n"
-            full_context += f"Scam Type: {report.scam_type}\n"
-            full_context += f"Description: {report.description}\n"
-            if report.ocr_text:
-                full_context += f"OCR Evidence Text: {report.ocr_text}\n"
-            
-            # Use general scam analysis
-            analysis = analyze_text_for_scam(full_context)
-            report.ai_analysis = analysis
-            report.save()
+            from api.core.tasks import process_report_ai_async
+            process_report_ai_async.delay(report.id)
         except Exception as e:
-            logger.error(f"[ReportAI] Analysis error: {e}")
+            logger.error(f"[ReportAI] Failed to enqueue background task for report #{report.id}: {e}")
+
+        # Notify admins right after report is created
+        try:
+            from api.utils.push_service import push_service
+            target_preview = (str(report.target_value or '')[:64]).strip()
+            push_service.broadcast_admin(
+                title='Báo cáo mới từ cộng đồng',
+                message=f'#{report.id} · {report.get_target_type_display()} · {target_preview}',
+                url='/admin-cp/reports/',
+                notification_type='warning',
+            )
+        except Exception as e:
+            logger.error(f"[ReportNotify] Failed to notify admins for report #{report.id}: {e}")
 
         return Response({
             'message': 'Báo cáo đã được gửi thành công! Cảm ơn bạn đã giúp cộng đồng.',
@@ -155,4 +175,11 @@ class ReportDetailView(generics.RetrieveAPIView):
     """GET /api/report/<pk>/ — Get detail of a report"""
     queryset = Report.objects.all()
     serializer_class = ReportDetailSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if not request.user.is_staff and instance.reporter_id != request.user.id:
+            return Response({'error': 'Không có quyền truy cập báo cáo này.'}, status=403)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)

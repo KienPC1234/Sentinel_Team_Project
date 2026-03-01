@@ -7,10 +7,15 @@ window.NotificationManager = {
     ws: null,
     ragWs: null,
     isStaff: false,
-    _version: '2026-03-02-v3-toast-policy',
+    _version: '2026-03-03-v5',
     _recentHashes: {},  // dedup: hash → timestamp
     _prefKey: 'sc_notification_pref',
     _snoozeKey: 'sc_notification_snooze_until',
+    _tabId: null,
+    _leaderKey: 'sc_notification_leader',
+    _leaderTtlMs: 10000,
+    _leaderHeartbeatMs: 3000,
+    _leaderHeartbeatTimer: null,
 
     _log(...args) {
         console.info('[WebPush]', ...args);
@@ -73,8 +78,10 @@ window.NotificationManager = {
 
     init(isStaff = false) {
         this.isStaff = isStaff;
+        this._tabId = this._tabId || (`sc-tab-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
         console.log("[NotificationManager] Initializing (isStaff=" + isStaff + ", version=" + this._version + ")...");
         this._log('permission=', (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'));
+        this._initTabLeadership();
         // Connect WebSocket for real-time notifications
         if (window.is_authenticated) {
             this.connectNotifications();
@@ -88,8 +95,83 @@ window.NotificationManager = {
         }
 
         if (window.is_authenticated && typeof Notification !== 'undefined' && Notification.permission === 'denied') {
-            this.showReliableToast('Bạn đã chặn thông báo. Vào Site settings của trình duyệt để bật lại.', 'warning');
+            localStorage.setItem(this._prefKey, 'deny');
+            localStorage.removeItem(this._snoozeKey);
         }
+    },
+
+    _readLeader() {
+        try {
+            const raw = localStorage.getItem(this._leaderKey);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (!data || typeof data !== 'object') return null;
+            return data;
+        } catch (_) {
+            return null;
+        }
+    },
+
+    _writeLeader() {
+        const payload = { id: this._tabId, ts: Date.now() };
+        try {
+            localStorage.setItem(this._leaderKey, JSON.stringify(payload));
+        } catch (_) {}
+    },
+
+    _isLeaderTab() {
+        const leader = this._readLeader();
+        if (!leader) return false;
+        if (!leader.id || !leader.ts) return false;
+        if ((Date.now() - Number(leader.ts || 0)) > this._leaderTtlMs) return false;
+        return leader.id === this._tabId;
+    },
+
+    _attemptClaimLeadership(force = false) {
+        const leader = this._readLeader();
+        const leaderExpired = !leader || !leader.id || ((Date.now() - Number(leader.ts || 0)) > this._leaderTtlMs);
+        if (force || leaderExpired || leader.id === this._tabId) {
+            this._writeLeader();
+            return true;
+        }
+        return false;
+    },
+
+    _initTabLeadership() {
+        this._attemptClaimLeadership(document.visibilityState === 'visible');
+
+        if (this._leaderHeartbeatTimer) {
+            clearInterval(this._leaderHeartbeatTimer);
+        }
+        this._leaderHeartbeatTimer = setInterval(() => {
+            if (this._isLeaderTab()) {
+                this._writeLeader();
+            } else if (document.visibilityState === 'visible') {
+                this._attemptClaimLeadership(true);
+            }
+        }, this._leaderHeartbeatMs);
+
+        window.addEventListener('storage', (event) => {
+            if (event.key !== this._leaderKey) return;
+            if (document.visibilityState === 'visible') {
+                this._attemptClaimLeadership(true);
+            }
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                this._attemptClaimLeadership(true);
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            try {
+                const leader = this._readLeader();
+                if (leader && leader.id === this._tabId) {
+                    localStorage.removeItem(this._leaderKey);
+                }
+            } catch (_) {}
+        });
     },
 
     initNotificationBanner() {
@@ -103,6 +185,11 @@ window.NotificationManager = {
         if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window) || !window.is_authenticated) {
             banner.classList.add('hidden');
             return;
+        }
+
+        if (Notification.permission === 'denied') {
+            localStorage.setItem(this._prefKey, 'deny');
+            localStorage.removeItem(this._snoozeKey);
         }
 
         const pref = localStorage.getItem(this._prefKey) || 'later';
@@ -123,8 +210,8 @@ window.NotificationManager = {
                         await this.ensureWebPushSubscription();
                     } else if (permission === 'denied') {
                         localStorage.setItem(this._prefKey, 'deny');
+                        localStorage.removeItem(this._snoozeKey);
                         banner.classList.add('hidden');
-                        this.showReliableToast('Bạn đã từ chối thông báo. Có thể bật lại trong Site settings.', 'warning');
                     } else {
                         localStorage.setItem(this._prefKey, 'later');
                         localStorage.setItem(this._snoozeKey, String(Date.now() + (2 * 24 * 60 * 60 * 1000)));
@@ -268,7 +355,6 @@ window.NotificationManager = {
             }
 
             this._log('Subscribe API success');
-            this.showReliableToast('Đã đăng ký thông báo trình duyệt thành công.', 'success');
         } catch (e) {
             console.warn('[WebPush] Subscription setup failed', e);
             this.showReliableToast('Lỗi khi đăng ký WebPush. Mở Console để kiểm tra.', 'error');
@@ -383,6 +469,23 @@ window.NotificationManager = {
             .trim();
     },
 
+    stripHtml(text) {
+        if (!text) return '';
+        try {
+            const holder = document.createElement('div');
+            holder.innerHTML = String(text);
+            const plain = holder.textContent || holder.innerText || '';
+            return plain.replace(/\s+/g, ' ').trim();
+        } catch (_) {
+            return String(text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+    },
+
+    sanitizeNotificationText(text) {
+        const noHtml = this.stripHtml(text);
+        return this.stripMd(noHtml);
+    },
+
     /**
      * Deduplicate pushes across tabs using a hash + 8s window.
      * Returns true if this message is a duplicate and should be skipped.
@@ -416,7 +519,13 @@ window.NotificationManager = {
             return;
         }
 
-        const cleanMsg = this.stripMd(data.message);
+        if (!this._isLeaderTab()) {
+            this._log('Skip UI notification on non-leader tab');
+            window.dispatchEvent(new CustomEvent('sc:notification', { detail: data }));
+            return;
+        }
+
+        const cleanMsg = this.sanitizeNotificationText(data.message);
 
         const permission = (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
         if (permission !== 'granted') {
@@ -444,14 +553,20 @@ window.NotificationManager = {
             if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
 
             const title = data?.title || 'ShieldCall VN';
-            const body = this.stripMd(data?.message || 'Bạn có thông báo mới');
+            const body = this.sanitizeNotificationText(data?.message || 'Bạn có thông báo mới');
             const url = data?.url || '/dashboard/';
+            const raw = `${title}|${body}|${data?.notification_type || 'info'}`;
+            let hash = 0;
+            for (let i = 0; i < raw.length; i++) {
+                hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+                hash |= 0;
+            }
             const options = {
                 body,
                 icon: '/static/logo.png',
                 badge: '/static/logo.png',
                 data: { url },
-                tag: `ws-${data?.notification_type || 'info'}-${Date.now()}`,
+                tag: `ws-${data?.notification_type || 'info'}-${Math.abs(hash)}`,
                 renotify: false,
                 requireInteraction: false,
             };
@@ -523,6 +638,9 @@ window.NotificationManager = {
                 if (typeof showToast === 'function') {
                     showToast("Đã bật thông báo hệ thống", "success");
                 }
+            } else if (permission === 'denied') {
+                localStorage.setItem(this._prefKey, 'deny');
+                localStorage.removeItem(this._snoozeKey);
             }
         }
     },
@@ -566,25 +684,16 @@ window.WEBPUSH_VERSION = function () {
 };
 
 window.REBUILDRAG = async function () {
-    if (typeof Swal === 'undefined') {
-        if (confirm("Bạn có chắc chắn muốn xóa DB cũ và rebuild index từ đầu không?")) {
-            executeRebuildRag();
-        }
-        return;
-    }
+    const confirmed = typeof window.scConfirm === 'function'
+        ? await window.scConfirm("Bạn có chắc chắn muốn xóa DB cũ và rebuild index từ đầu không?", {
+            title: 'Xác nhận xóa?',
+            icon: 'warning',
+            confirmButtonText: 'Xóa & Rebuild',
+            cancelButtonText: 'Hủy'
+        })
+        : false;
 
-    const result = await Swal.fire({
-        title: 'Xác nhận xóa?',
-        text: "Bạn có chắc chắn muốn xóa DB cũ và rebuild index từ đầu không?",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#ff1744',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Xóa & Rebuild',
-        cancelButtonText: 'Hủy'
-    });
-
-    if (result.isConfirmed) {
+    if (confirmed) {
         executeRebuildRag();
     }
 };

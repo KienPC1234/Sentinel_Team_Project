@@ -4,16 +4,16 @@ Re-exports all views so urls.py continues to work unchanged.
 """
 from .stream_views import ChatStreamView, ScanAnalyzeSSEView
 from .auth_views import RegisterView, LoginView, LogoutView, MeView, PasswordChangeView
-from .mfa_views import MFAStatusView, MFASetupTOTPView, MFASetupEmailView, MFAVerifyView, MFADeactivateView
+from .mfa_views import MFAStatusView, MFASetupTOTPView, MFASetupEmailView, MFAVerifyView, MFADeactivateView, MFARecoveryCodesView
 from .scan_views import (
     ScanPhoneView, ScanMessageView, ScanDomainView,
     ScanAccountView, ScanImageView, ScanEmailView, ScanBanksView,
-    ScanAudioView, ScanStatusView,
+    ScanAudioView, ScanStatusView, ScanReportAdminView,
 )
 from .article_views import ArticleListView, ArticleDetailView
 from .report_views import ReportCreateView, ReportDetailView
 from .trend_views import TrendDailyView, TrendHotView, ScamRadarStatsView, ScanLookupView
-from .user_views import UserScansView, UserReportsView, UserAlertsView, PublicProfileView
+from .user_views import UserScansView, UserScanPickerView, UserReportsView, UserAlertsView, PublicProfileView
 from .scan_views import ScanFileView, ScanAudioView as _ScanAudioView  # noqa: already imported above
 from .admin_views import AdminReportsView, AdminReportActionView, AdminStatsView, AdminRAGManagementView, AdminRAGRebuildView, AdminRAGClearLogsView
 from .forum_views import (ForumPostListCreateView, ForumPostCommentView, ForumPostLikeView, ForumPostReactionView, 
@@ -31,18 +31,24 @@ from .community_views import (
     TicketListCreateView, AdminTicketListView,
     UserCardView,
 )
+from .learn_views import (
+    LessonReactionView,
+    ArticleReactionView,
+    ArticleCommentListCreateView,
+    ArticleCommentReactionView,
+)
 
 __all__ = [
     'ChatStreamView', 'ScanAnalyzeSSEView',
     'RegisterView', 'LoginView', 'LogoutView', 'MeView',
-    'MFAStatusView', 'MFASetupTOTPView', 'MFASetupEmailView', 'MFAVerifyView', 'MFADeactivateView',
+    'MFAStatusView', 'MFASetupTOTPView', 'MFASetupEmailView', 'MFAVerifyView', 'MFADeactivateView', 'MFARecoveryCodesView',
     'PasswordChangeView',
     'ScanPhoneView', 'ScanMessageView', 'ScanDomainView',
     'ScanAccountView', 'ScanImageView', 'ScanEmailView', 'ScanBanksView', 'ScanFileView',
-    'ScanAudioView', 'ScanStatusView',
+    'ScanAudioView', 'ScanStatusView', 'ScanReportAdminView',
     'ReportCreateView', 'ReportDetailView',
     'TrendDailyView', 'TrendHotView', 'ScamRadarStatsView', 'ScanLookupView',
-    'UserScansView', 'UserReportsView', 'UserAlertsView', 'PublicProfileView',
+    'UserScansView', 'UserScanPickerView', 'UserReportsView', 'UserAlertsView', 'PublicProfileView',
     'AdminReportsView', 'AdminReportActionView', 'AdminStatsView',
     'AdminRAGManagementView', 'AdminRAGRebuildView', 'AdminRAGClearLogsView',
     'ForumPostListCreateView', 'ForumPostCommentView', 'ForumPostLikeView',
@@ -58,4 +64,5 @@ __all__ = [
     'DirectMessageInboxView', 'DirectMessageThreadView',
     'TicketListCreateView', 'AdminTicketListView',
     'UserCardView',
+    'LessonReactionView', 'ArticleReactionView', 'ArticleCommentListCreateView', 'ArticleCommentReactionView',
 ]

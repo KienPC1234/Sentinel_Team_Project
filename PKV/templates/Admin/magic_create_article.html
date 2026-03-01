@@ -135,6 +135,12 @@
                     <textarea x-model="rawText" class="mc-textarea" rows="10" placeholder="Dán nội dung tin tức/bài báo về lừa đảo vào đây...&#10;&#10;Ví dụ: Công an vừa triệt phá đường dây lừa đảo qua mạng với thủ đoạn giả danh nhân viên ngân hàng gọi điện yêu cầu cung cấp OTP..."></textarea>
                 </div>
 
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/35 uppercase tracking-widest ml-1">Nguồn trích dẫn (mỗi dòng 1 nguồn)</label>
+                    <textarea x-model="sourceText" class="mc-textarea" rows="4" placeholder="https://example.com/bao-1&#10;https://example.com/bao-2"></textarea>
+                    <p class="text-[10px] text-white/20" x-text="sources.length + ' nguồn hợp lệ'"></p>
+                </div>
+
                 <div class="flex items-center justify-between pt-2">
                     <div class="flex items-center gap-3">
                         <span class="text-[10px] text-white/15 font-mono" x-text="rawText.length.toLocaleString() + ' ký tự'"></span>
@@ -142,7 +148,7 @@
                             <i class="bi bi-exclamation-triangle mr-0.5"></i> Nên nhập ít nhất 100 ký tự
                         </span>
                     </div>
-                    <button @click="startCreate()" :disabled="!rawText.trim() || rawText.trim().length < 50 || creating"
+                    <button @click="startCreate()" :disabled="!rawText.trim() || rawText.trim().length < 50 || creating || sources.length === 0"
                         class="mc-glow-btn px-8 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2.5">
                         <i class="bi bi-lightning-charge-fill text-base"></i>
                         Magic Create
@@ -323,6 +329,7 @@ function magicCreateArticle() {
     return {
         stage: 'input',
         rawText: '',
+        sourceText: '',
         creating: false,
         saving: false,
         currentStep: 0,
@@ -344,6 +351,13 @@ function magicCreateArticle() {
             { name: 'Nội dung', icon: 'bi bi-newspaper' },
             { name: 'Xong', icon: 'bi bi-check-lg' },
         ],
+
+        get sources() {
+            return String(this.sourceText || '')
+                .split('\n')
+                .map(line => line.trim())
+                .filter(Boolean);
+        },
 
         startTimer() {},
 
@@ -400,6 +414,10 @@ function magicCreateArticle() {
 
         async startCreate() {
             if (!this.rawText.trim()) return;
+            if (!this.sources.length) {
+                this.errorMsg = 'Vui lòng thêm ít nhất 1 nguồn trích dẫn.';
+                return;
+            }
             this.creating = true;
             this.stage = 'streaming';
             this.resetResult();
@@ -411,7 +429,7 @@ function magicCreateArticle() {
                 const resp = await fetch('/api/v1/admin/articles/ai-generate/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCSRF() },
-                    body: JSON.stringify({ text: this.rawText })
+                    body: JSON.stringify({ text: this.rawText, sources: this.sources })
                 });
                 const res = await resp.json();
                 this._log('API response: ' + resp.status + ' ' + JSON.stringify(res));

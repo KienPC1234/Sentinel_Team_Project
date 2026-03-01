@@ -42,6 +42,105 @@ from api.core.serializers import (
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+AUTO_ADMIN_REPORT_THRESHOLD = 85
+
+
+def _scan_to_target_type(scan_type: str) -> str:
+    mapping = {
+        'phone': 'phone',
+        'domain': 'domain',
+        'account': 'account',
+        'message': 'message',
+        'qr': 'qr',
+        'email': 'email',
+        'file': 'message',
+        'audio': 'message',
+    }
+    return mapping.get(scan_type, 'message')
+
+
+def _safe_target_value(scan_event: ScanEvent) -> str:
+    raw = (scan_event.normalized_input or scan_event.raw_input or '').strip()
+    if not raw:
+        return f'scan:{scan_event.id}'
+
+    if scan_event.scan_type in ('message', 'file', 'audio'):
+        compact = re.sub(r'\s+', ' ', raw)
+        if len(compact) <= 12:
+            return f'{compact[:2]}******'
+        return f'{compact[:6]}******{compact[-3:]}'
+
+    if scan_event.scan_type == 'phone' and len(raw) > 6:
+        return f'{raw[:4]}****{raw[-2:]}'
+
+    if scan_event.scan_type == 'account' and len(raw) > 6:
+        return f'{raw[:3]}*****{raw[-3:]}'
+
+    return raw[:500]
+
+
+def _normalize_scam_type(scan_event: ScanEvent) -> str:
+    value = (scan_event.result_json or {}).get('scam_type') or ScamType.OTHER
+    valid = {choice[0] for choice in ScamType.choices}
+    return value if value in valid else ScamType.OTHER
+
+
+def _severity_from_score(score: int) -> str:
+    if score >= 90:
+        return 'critical'
+    if score >= 70:
+        return 'high'
+    if score >= 40:
+        return 'medium'
+    return 'low'
+
+
+def _document_scan_for_admin(scan_event: ScanEvent, *, force_report: bool = False, reason: str = ''):
+    if scan_event.status != 'completed':
+        return None, False
+
+    result_json = dict(scan_event.result_json or {})
+    if result_json.get('admin_documented') and not force_report:
+        report_id = result_json.get('admin_report_id')
+        report = Report.objects.filter(id=report_id).first() if report_id else None
+        return report, bool(report)
+
+    score = int(scan_event.risk_score or 0)
+    should_report = force_report or score >= AUTO_ADMIN_REPORT_THRESHOLD
+    report = None
+
+    if should_report:
+        target_type = _scan_to_target_type(scan_event.scan_type)
+        target_value = _safe_target_value(scan_event)
+        desc_reason = reason.strip() if reason else ''
+        description = (
+            desc_reason
+            or f'Scan #{scan_event.id} ({scan_event.scan_type}) cần admin verify. Risk score: {score}/100.'
+        )
+
+        report, _ = Report.objects.get_or_create(
+            scan_event=scan_event,
+            defaults={
+                'reporter': scan_event.user,
+                'target_type': target_type,
+                'target_value': target_value,
+                'scam_type': _normalize_scam_type(scan_event),
+                'severity': _severity_from_score(score),
+                'description': description,
+                'status': ReportStatus.PENDING,
+            },
+        )
+
+    result_json['admin_documented'] = True
+    result_json['admin_documented_at'] = timezone.now().isoformat()
+    result_json['admin_auto_reported'] = bool(should_report and not force_report)
+    if report:
+        result_json['admin_report_id'] = report.id
+
+    scan_event.result_json = result_json
+    scan_event.save(update_fields=['result_json'])
+    return report, should_report
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SCAN APIs — Real business logic
@@ -494,6 +593,8 @@ class ScanPhoneView(APIView):
             risk_level=result['risk_level'],
             status=ScanStatus.COMPLETED
         )
+
+        _document_scan_for_admin(scan_event)
 
         return Response(result)
 
@@ -1223,7 +1324,7 @@ class ScanDomainView(APIView):
                 'url': url,
             }, status=502)
 
-        ScanEvent.objects.create(
+        scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='domain',
             raw_input=url,
@@ -1232,6 +1333,8 @@ class ScanDomainView(APIView):
             risk_score=result['risk_score'],
             risk_level=result['risk_level'],
         )
+
+        _document_scan_for_admin(scan_event)
 
         return Response(result)
 
@@ -1312,7 +1415,7 @@ class ScanAccountView(APIView):
         if not verify_turnstile_token(cf_token):
             return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
-        ScanEvent.objects.create(
+        scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='account',
             raw_input=f'{bank}:{account_masked}',
@@ -1321,6 +1424,8 @@ class ScanAccountView(APIView):
             risk_score=score,
             risk_level=level,
         )
+
+        _document_scan_for_admin(scan_event)
 
         return Response(result)
 
@@ -1536,6 +1641,16 @@ class ScanStatusView(APIView):
         from api.core.models import ScanEvent, ScanStatus
         try:
             event = ScanEvent.objects.get(id=scan_id)
+            can_view = bool(
+                request.user.is_staff
+                or (request.user.is_authenticated and event.user_id == request.user.id)
+                or event.is_public_referable
+            )
+            if not can_view:
+                return Response({'error': 'Không tìm thấy kết quả scan.'}, status=404)
+
+            if event.status == ScanStatus.COMPLETED:
+                _document_scan_for_admin(event)
             return Response({
                 'id': event.id,
                 'status': event.status,
@@ -1546,6 +1661,35 @@ class ScanStatusView(APIView):
             })
         except ScanEvent.DoesNotExist:
             return Response({'error': 'Scan không tồn tại.'}, status=404)
+
+
+class ScanReportAdminView(APIView):
+    """POST /api/scan/<id>/report-admin — User requests admin verification for a scan result."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, scan_id):
+        from api.core.models import ScanEvent, ScanStatus
+        try:
+            event = ScanEvent.objects.get(id=scan_id)
+        except ScanEvent.DoesNotExist:
+            return Response({'error': 'Scan không tồn tại.'}, status=404)
+
+        if event.user_id and event.user_id != request.user.id and not request.user.is_staff:
+            return Response({'error': 'Bạn không có quyền gửi xác minh cho scan này.'}, status=403)
+
+        if event.status != ScanStatus.COMPLETED:
+            return Response({'error': 'Scan chưa hoàn tất để gửi xác minh.'}, status=400)
+
+        reason = (request.data.get('reason') or '').strip()
+        report, _ = _document_scan_for_admin(event, force_report=True, reason=reason)
+        if not report:
+            return Response({'error': 'Không thể tạo yêu cầu xác minh.'}, status=500)
+
+        return Response({
+            'message': 'Đã gửi yêu cầu admin verify cho kết quả scan.',
+            'report_id': report.id,
+            'scan_id': event.id,
+        })
 
 
 def _extract_entities_from_text(text: str) -> dict:
