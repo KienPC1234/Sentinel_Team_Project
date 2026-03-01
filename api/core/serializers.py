@@ -146,10 +146,21 @@ class ReportListSerializer(serializers.ModelSerializer):
                 return "User"
         return 'Ẩn danh'
 
+class ReportEvidenceSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    class Meta:
+        from api.core.models import ReportEvidence
+        model = ReportEvidence
+        fields = ['id', 'url', 'caption', 'created_at']
+    def get_url(self, obj):
+        return obj.image.url if obj.image else None
+
+
 class ReportDetailSerializer(serializers.ModelSerializer):
     reporter_email = serializers.SerializerMethodField()
     scammer_info = serializers.SerializerMethodField()
     evidence_url = serializers.SerializerMethodField()
+    evidence_images_data = ReportEvidenceSerializer(source='evidence_images', many=True, read_only=True)
     scam_type_display = serializers.CharField(source='get_scam_type_display', read_only=True)
 
     class Meta:
@@ -157,7 +168,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'target_type', 'target_value', 'scam_type', 'scam_type_display', 'severity',
                   'description', 'status', 'created_at', 'reporter_email',
                   'scammer_name', 'scammer_phone', 'scammer_bank_account', 'scammer_bank_name',
-                  'evidence_file', 'evidence_url', 'ocr_text', 'ai_analysis', 'moderation_note']
+                  'evidence_file', 'evidence_url', 'evidence_images_data', 'ocr_text', 'ai_analysis', 'moderation_note']
 
     def get_reporter_email(self, obj):
         if obj.reporter:
@@ -288,6 +299,9 @@ class ForumCommentSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='author.username', read_only=True)
     author_avatar = serializers.ImageField(source='author.profile.avatar', read_only=True)
     author_is_staff = serializers.BooleanField(source='author.is_staff', read_only=True)
+    author_rank = serializers.SerializerMethodField()
+    author_posts_count = serializers.SerializerMethodField()
+    author_joined = serializers.SerializerMethodField()
     parent_author_name = serializers.SerializerMethodField()
     user_liked = serializers.SerializerMethodField()
     user_disliked = serializers.SerializerMethodField()
@@ -296,13 +310,23 @@ class ForumCommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ForumComment
-        fields = ['id', 'author_name', 'author_username', 'author_avatar', 'author_is_staff', 'content', 'parent', 'parent_author_name', 
+        fields = ['id', 'author_name', 'author_username', 'author_avatar', 'author_is_staff', 'author_rank', 'author_posts_count', 'author_joined',
+                  'content', 'parent', 'parent_author_name', 
                   'replies', 'likes_count', 'dislikes_count', 'helpful_count', 'user_liked', 'user_disliked', 'user_helpful', 'created_at']
-        read_only_fields = ['id', 'author_name', 'author_username', 'author_avatar', 'author_is_staff', 'created_at', 
-                            'parent_author_name', 'likes_count', 'dislikes_count', 'helpful_count']
+        read_only_fields = ['id', 'author_name', 'author_username', 'author_avatar', 'author_is_staff', 'author_rank', 'author_posts_count', 'author_joined',
+                            'created_at', 'parent_author_name', 'likes_count', 'dislikes_count', 'helpful_count']
 
     def get_author_name(self, obj):
         return obj.author.profile.display_name or obj.author.username
+
+    def get_author_rank(self, obj):
+        return obj.author.profile.rank_info
+
+    def get_author_posts_count(self, obj):
+        return obj.author.forum_posts.count()
+
+    def get_author_joined(self, obj):
+        return obj.author.date_joined.strftime('%d/%m/%Y')
 
     def get_parent_author_name(self, obj):
         if obj.parent:
@@ -343,21 +367,32 @@ class ForumPostSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='author.username', read_only=True)
     author_is_staff = serializers.BooleanField(source='author.is_staff', read_only=True)
     author_avatar = serializers.ImageField(source='author.profile.avatar', read_only=True)
+    author_rank = serializers.SerializerMethodField()
+    author_posts_count = serializers.SerializerMethodField()
+    author_comments_count = serializers.SerializerMethodField()
+    author_joined = serializers.SerializerMethodField()
     comments = serializers.SerializerMethodField()
     user_liked = serializers.SerializerMethodField()
     user_helpful = serializers.SerializerMethodField()
     user_shared = serializers.SerializerMethodField()
     user_disliked = serializers.SerializerMethodField()
     unique_views_count = serializers.SerializerMethodField()
+    last_comment_author = serializers.SerializerMethodField()
+    last_comment_at = serializers.SerializerMethodField()
 
     class Meta:
         model = ForumPost
-        fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar', 'title', 'content', 'category', 'image', 
+        fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar',
+                  'author_rank', 'author_posts_count', 'author_comments_count', 'author_joined',
+                  'title', 'content', 'category', 'image', 
                   'views_count', 'unique_views_count', 'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
                   'comments_count', 'is_pinned', 'is_locked', 'user_liked', 'user_helpful', 'user_shared', 'user_disliked',
-                  'comments', 'created_at']
-        read_only_fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar', 'views_count', 'unique_views_count',
-                            'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count', 'comments_count', 'created_at']
+                  'comments', 'last_comment_author', 'last_comment_at', 'created_at']
+        read_only_fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar',
+                            'author_rank', 'author_posts_count', 'author_comments_count', 'author_joined',
+                            'views_count', 'unique_views_count',
+                            'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
+                            'comments_count', 'last_comment_author', 'last_comment_at', 'created_at']
 
     def get_comments(self, obj):
         # Only return top-level comments
@@ -366,6 +401,32 @@ class ForumPostSerializer(serializers.ModelSerializer):
 
     def get_author_name(self, obj):
         return obj.author.profile.display_name or obj.author.username
+
+    def get_author_rank(self, obj):
+        return obj.author.profile.rank_info
+
+    def get_author_posts_count(self, obj):
+        return obj.author.forum_posts.count()
+
+    def get_author_comments_count(self, obj):
+        return obj.author.forum_comments.count()
+
+    def get_author_joined(self, obj):
+        return obj.author.date_joined.strftime('%d/%m/%Y')
+
+    def get_last_comment_author(self, obj):
+        last = obj.comments.order_by('-created_at').select_related('author', 'author__profile').first()
+        if last:
+            return {
+                'name': last.author.profile.display_name or last.author.username,
+                'username': last.author.username,
+                'avatar': last.author.profile.avatar.url if last.author.profile.avatar else None,
+            }
+        return None
+
+    def get_last_comment_at(self, obj):
+        last = obj.comments.order_by('-created_at').first()
+        return last.created_at.isoformat() if last else None
 
     def get_unique_views_count(self, obj):
         from api.core.models import ForumPostView

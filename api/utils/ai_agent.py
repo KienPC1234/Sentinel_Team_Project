@@ -58,6 +58,45 @@ class AIAgent:
             history.append({"role": msg.role, "content": msg.message})
         return history
 
+    def _get_personalization_prompt(self) -> str:
+        """Get personalization instructions from user's ChatbotConfig, if any."""
+        if not self.user:
+            return ""
+        try:
+            from api.ai_chat.models import ChatbotConfig
+            config = ChatbotConfig.objects.filter(user=self.user).first()
+            if not config:
+                return ""
+            
+            parts = []
+            tone_map = {
+                'professional': 'chuyên nghiệp, lịch sự, sử dụng ngôn ngữ trang trọng',
+                'friendly': 'thân thiện, thoải mái, sử dụng biểu cảm nhẹ nhàng',
+                'casual': 'tự nhiên, trẻ trung, giống như nói chuyện với bạn bè',
+                'formal': 'rất trang trọng, kính trọng, sử dụng kính ngữ',
+                'humorous': 'vui vẻ, hài hước, thêm chút đùa vui khi phù hợp',
+            }
+            style_map = {
+                'simple': 'giải thích đơn giản, dễ hiểu, tránh thuật ngữ phức tạp',
+                'detailed': 'giải thích chi tiết, chuyên sâu, cung cấp nhiều ví dụ',
+                'concise': 'trả lời ngắn gọn, súc tích, đi thẳng vào vấn đề',
+            }
+            
+            if config.tone and config.tone in tone_map:
+                parts.append(f"Giọng điệu: {tone_map[config.tone]}")
+            if config.language_style and config.language_style in style_map:
+                parts.append(f"Phong cách: {style_map[config.language_style]}")
+            if config.custom_name:
+                parts.append(f"Người dùng muốn gọi bạn là: {config.custom_name}")
+            if config.custom_instructions:
+                parts.append(f"Yêu cầu bổ sung từ người dùng: {config.custom_instructions}")
+            
+            if parts:
+                return "\n\nCÁ NHÂN HÓA (tuân thủ các tùy chỉnh sau của người dùng):\n" + "\n".join(parts)
+        except Exception as e:
+            logger.error(f"Error loading chatbot config: {e}")
+        return ""
+
     def _get_rag_context(self, user_query: str) -> str:
         # We can't yield directly from a helper if it's not a generator
         # but we can log or just let chat_stream handle the status.
@@ -130,7 +169,7 @@ class AIAgent:
         now = datetime.now()
         time_str = now.strftime("%A, ngày %d/%m/%Y, %H:%M:%S")
         
-        messages = [{"role": "system", "content": SYSTEM_PROMPT.format(current_time=time_str)}]
+        messages = [{"role": "system", "content": SYSTEM_PROMPT.format(current_time=time_str) + self._get_personalization_prompt()}]
         if rag_context:
             messages.append({"role": "system", "content": f"SỬ DỤNG BỐI CẢNH SAU ĐỂ TRẢ LỜI:\n{rag_context}"})
         

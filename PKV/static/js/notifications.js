@@ -14,10 +14,7 @@ window.NotificationManager = {
         // Only connect user notifications if we want legacy WS support
         // this.connectNotifications(); 
         
-        // Only connect RAG WebSocket if user is staff AND on the specific admin page
-        if (isStaff && window.location.pathname.includes('/api/v1/admin/rag/')) {
-            this.connectRagStatus();
-        }
+        // RAG status is now handled via HTTP polling on the admin page
         this.setupPermissionHandler();
     },
 

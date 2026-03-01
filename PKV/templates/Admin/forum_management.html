@@ -4,99 +4,202 @@
 {% block title %}Điều phối Diễn đàn - ShieldCall VN Admin{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-10 mt-16 max-w-6xl" x-data="forumAdmin()">
-    <div class="flex items-center justify-between mb-12">
+<div class="container mx-auto px-4 py-10 mt-16 max-w-7xl" x-data="forumAdmin()">
+    <div class="flex items-center justify-between mb-8">
         <div class="flex items-center gap-6">
-            <a href="{% url 'admin-dashboard' %}" class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-cyan-400 hover:border-cyan-500/30 transition-all shadow-lg">
-                <i class="bi bi-chevron-left text-2xl"></i>
+            <a href="{% url 'admin-dashboard' %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">
+                <i class="bi bi-chevron-left text-xl"></i>
             </a>
             <div>
-                <h1 class="text-3xl font-black text-white tracking-tight">Điều phối Diễn đàn</h1>
-                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Quản lý bài viết, báo cáo & nội dung vi phạm</p>
+                <h1 class="text-2xl font-black text-white tracking-tight">Điều phối Diễn đàn</h1>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Quản lý bài viết, báo cáo, thành viên & nội dung</p>
             </div>
         </div>
-        <a href="/forum/" target="_blank" class="px-5 py-2.5 rounded-xl bg-white/5 text-white/50 text-[10px] font-black uppercase tracking-widest border border-white/10 hover:border-cyan-500/30 hover:text-cyan-400 transition-all flex items-center gap-2">
+        <a href="/forum/" target="_blank" class="px-4 py-2 rounded-xl bg-white/5 text-white/50 text-[10px] font-black uppercase tracking-widest border border-white/10 hover:border-cyan-500/30 hover:text-cyan-400 transition-all flex items-center gap-2">
             <i class="bi bi-box-arrow-up-right"></i> Xem diễn đàn
         </a>
     </div>
 
+    <!-- Dashboard Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8" data-aos="fade-up">
+        <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-black text-cyan-400" x-text="stats.total_posts"></div>
+            <div class="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-1">Bài viết</div>
+        </div>
+        <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-black text-purple-400" x-text="stats.total_comments"></div>
+            <div class="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-1">Bình luận</div>
+        </div>
+        <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-black text-blue-400" x-text="stats.total_members"></div>
+            <div class="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-1">Thành viên</div>
+        </div>
+        <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-black text-red-400" x-text="stats.total_bans"></div>
+            <div class="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-1">Đang cấm</div>
+        </div>
+        <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-black text-amber-400" x-text="stats.pending_reports"></div>
+            <div class="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-1">Báo cáo chờ</div>
+        </div>
+        <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+            <div class="text-2xl font-black text-green-400" x-text="stats.posts_today"></div>
+            <div class="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-1">Hôm nay</div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" data-aos="fade-up" data-aos-delay="100">
+        <!-- Posts over time chart -->
+        <div class="md:col-span-2 bg-slate-900/40 border border-white/5 rounded-2xl p-5 backdrop-blur-xl">
+            <h3 class="text-[10px] font-black text-white/50 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-cyan-500"></span> Bài viết 14 ngày qua
+            </h3>
+            <div class="h-48">
+                <canvas id="dailyPostsChart"></canvas>
+            </div>
+        </div>
+        <!-- Posts by category chart -->
+        <div class="bg-slate-900/40 border border-white/5 rounded-2xl p-5 backdrop-blur-xl">
+            <h3 class="text-[10px] font-black text-white/50 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-purple-500"></span> Theo danh mục
+            </h3>
+            <div class="h-48">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Status Mini Chart -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8" data-aos="fade-up" data-aos-delay="150">
+        <div class="bg-slate-900/40 border border-white/5 rounded-2xl p-4 backdrop-blur-xl flex items-center gap-4">
+            <div class="w-20 h-20 shrink-0"><canvas id="reportStatusChart"></canvas></div>
+            <div class="text-[10px] space-y-1.5">
+                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-400"></span><span class="text-white/40">Chờ: <span class="text-white font-bold" x-text="reportStatusData.pending"></span></span></div>
+                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-400"></span><span class="text-white/40">Duyệt: <span class="text-white font-bold" x-text="reportStatusData.approved"></span></span></div>
+                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-400"></span><span class="text-white/40">Từ chối: <span class="text-white font-bold" x-text="reportStatusData.rejected"></span></span></div>
+                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-yellow-400"></span><span class="text-white/40">AI Flag: <span class="text-white font-bold" x-text="reportStatusData.ai_flagged"></span></span></div>
+            </div>
+        </div>
+        <!-- Moderators quick overview -->
+        <div class="md:col-span-3 bg-slate-900/40 border border-white/5 rounded-2xl p-4 backdrop-blur-xl">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-[10px] font-black text-white/50 uppercase tracking-widest flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Kiểm duyệt viên
+                </h3>
+                <button @click="tab='moderators'" class="text-[9px] font-bold text-cyan-400/60 hover:text-cyan-400 transition-colors uppercase tracking-widest">Quản lý →</button>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <template x-for="mod in moderators" :key="mod.id">
+                    <div class="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
+                        <div class="w-6 h-6 rounded-full overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                            <template x-if="mod.avatar">
+                                <img :src="mod.avatar" class="w-full h-full object-cover">
+                            </template>
+                            <template x-if="!mod.avatar">
+                                <span class="text-[8px] font-bold text-cyan-400" x-text="mod.display_name?.charAt(0)?.toUpperCase()"></span>
+                            </template>
+                        </div>
+                        <span class="text-[10px] font-bold text-white/60" x-text="mod.display_name"></span>
+                        <span x-show="mod.is_superuser" class="text-[7px] font-black text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase">SA</span>
+                    </div>
+                </template>
+                <template x-if="moderators.length === 0">
+                    <span class="text-[10px] text-white/20 italic">Chưa có kiểm duyệt viên</span>
+                </template>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabs -->
-    <div class="flex gap-2 p-1.5 rounded-2xl bg-slate-900/60 border border-white/5 backdrop-blur-xl mb-10 w-fit">
-        <button @click="tab='posts'" class="px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+    <div class="flex gap-1.5 p-1 rounded-2xl bg-slate-900/60 border border-white/5 backdrop-blur-xl mb-8 w-fit flex-wrap">
+        <button @click="tab='posts'" class="px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all"
                 :class="tab==='posts' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20' : 'bg-transparent text-white/40 hover:text-white'">
             <i class="bi bi-chat-square-text mr-1"></i> Bài viết (<span x-text="posts.length"></span>)
         </button>
-        <button @click="tab='post_reports'" class="px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+        <button @click="tab='post_reports'" class="px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all"
                 :class="tab==='post_reports' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'bg-transparent text-white/40 hover:text-white'">
-            <i class="bi bi-flag mr-1"></i> Báo cáo bài viết (<span x-text="postReports.length"></span>)
+            <i class="bi bi-flag mr-1"></i> Báo cáo (<span x-text="postReports.length"></span>)
         </button>
-        <button @click="tab='comment_reports'" class="px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+        <button @click="tab='comment_reports'" class="px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all"
                 :class="tab==='comment_reports' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-transparent text-white/40 hover:text-white'">
-            <i class="bi bi-flag mr-1"></i> Báo cáo bình luận (<span x-text="commentReports.length"></span>)
+            <i class="bi bi-flag mr-1"></i> BL Báo cáo (<span x-text="commentReports.length"></span>)
+        </button>
+        <button @click="tab='members'" class="px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all"
+                :class="tab==='members' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-transparent text-white/40 hover:text-white'">
+            <i class="bi bi-people mr-1"></i> Thành viên (<span x-text="members.length"></span>)
+        </button>
+        <button @click="tab='bans'" class="px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all"
+                :class="tab==='bans' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'bg-transparent text-white/40 hover:text-white'">
+            <i class="bi bi-slash-circle mr-1"></i> Đang cấm (<span x-text="bans.length"></span>)
+        </button>
+        <button @click="tab='moderators'" class="px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all"
+                :class="tab==='moderators' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-transparent text-white/40 hover:text-white'">
+            <i class="bi bi-shield-check mr-1"></i> Kiểm duyệt (<span x-text="moderators.length"></span>)
         </button>
     </div>
 
     <!-- ═══════ Tab: Posts Management ═══════ -->
     <div x-show="tab==='posts'" x-transition>
-        <div class="p-1 rounded-[3rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
-            <div class="p-8 border-b border-white/[0.02] flex items-center justify-between">
+        <div class="rounded-2xl bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-white/5 flex items-center justify-between">
                 <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-3">
                     <span class="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"></span>
                     Tất cả bài viết
                 </h3>
-                <input type="text" x-model="postSearch" placeholder="Tìm bài viết..." class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/30 w-64">
+                <input type="text" x-model="postSearch" placeholder="Tìm bài viết..." class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/30 w-56">
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-separate border-spacing-0">
+                <table class="w-full text-left">
                     <thead>
                         <tr class="bg-white/[0.02]">
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Bài viết</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Tác giả</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Danh mục</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Tương tác</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Trạng thái</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Bài viết</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Tác giả</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Danh mục</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Tương tác</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Trạng thái</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/[0.02]">
                         <template x-for="post in filteredPosts()" :key="post.id">
-                            <tr class="group hover:bg-white/[0.03] transition-all duration-300">
-                                <td class="px-6 py-5 max-w-xs">
-                                    <a :href="'/forum/' + post.id + '/'" target="_blank" class="text-sm font-bold text-white/80 hover:text-cyan-400 transition-colors leading-snug line-clamp-2" x-text="post.title"></a>
+                            <tr class="group hover:bg-white/[0.03] transition-all">
+                                <td class="px-5 py-4 max-w-xs">
+                                    <a :href="'/forum/' + post.id + '/'" target="_blank" class="text-sm font-bold text-white/80 hover:text-cyan-400 transition-colors line-clamp-2" x-text="post.title"></a>
                                     <div class="text-[10px] text-white/30 mt-1" x-text="post.created_at_display"></div>
                                 </td>
-                                <td class="px-6 py-5">
+                                <td class="px-5 py-4">
                                     <div class="flex items-center gap-2">
                                         <div class="w-7 h-7 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold text-[10px]" x-text="post.author_name?.charAt(0)?.toUpperCase()"></div>
                                         <span class="text-xs font-bold text-white/60" x-text="post.author_name"></span>
                                     </div>
                                 </td>
-                                <td class="px-6 py-5">
-                                    <span class="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest" :class="categoryColor(post.category)" x-text="post.category"></span>
+                                <td class="px-5 py-4">
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase" :class="categoryColor(post.category)" x-text="post.category"></span>
                                 </td>
-                                <td class="px-6 py-5">
+                                <td class="px-5 py-4">
                                     <div class="flex items-center gap-3 text-[10px] text-white/40">
                                         <span><i class="bi bi-heart-fill text-red-400/50 mr-1"></i><span x-text="post.likes_count || 0"></span></span>
                                         <span><i class="bi bi-chat-left mr-1"></i><span x-text="post.comments_count || 0"></span></span>
                                         <span><i class="bi bi-eye mr-1"></i><span x-text="post.views_count || 0"></span></span>
                                     </div>
                                 </td>
-                                <td class="px-6 py-5">
+                                <td class="px-5 py-4">
                                     <div class="flex flex-wrap gap-1">
-                                        <span x-show="post.is_pinned" class="px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-500 text-[9px] font-black uppercase">Ghim</span>
-                                        <span x-show="post.is_locked" class="px-2 py-0.5 rounded bg-red-500/15 text-red-500 text-[9px] font-black uppercase">Khóa</span>
-                                        <span x-show="!post.is_pinned && !post.is_locked" class="px-2 py-0.5 rounded bg-green-500/15 text-green-500 text-[9px] font-black uppercase">Bình thường</span>
+                                        <span x-show="post.is_pinned" class="px-2 py-0.5 rounded bg-yellow-500/15 text-yellow-500 text-[8px] font-black uppercase">Ghim</span>
+                                        <span x-show="post.is_locked" class="px-2 py-0.5 rounded bg-red-500/15 text-red-500 text-[8px] font-black uppercase">Khóa</span>
+                                        <span x-show="!post.is_pinned && !post.is_locked" class="px-2 py-0.5 rounded bg-green-500/15 text-green-500 text-[8px] font-black uppercase">OK</span>
                                     </div>
                                 </td>
-                                <td class="px-6 py-5">
-                                    <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                        <button @click="postAction(post.id, 'pin')" class="h-8 px-3 rounded-lg bg-white/5 text-[10px] font-bold border border-white/10 hover:border-yellow-500/30 hover:text-yellow-400 transition-all" :title="post.is_pinned ? 'Bỏ ghim' : 'Ghim'">
+                                <td class="px-5 py-4">
+                                    <div class="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
+                                        <button @click="postAction(post.id, 'pin')" class="h-7 px-2.5 rounded-lg bg-white/5 text-[10px] font-bold border border-white/10 hover:border-yellow-500/30 hover:text-yellow-400 transition-all" :title="post.is_pinned ? 'Bỏ ghim' : 'Ghim'">
                                             <i class="bi" :class="post.is_pinned ? 'bi-pin-angle-fill text-yellow-500' : 'bi-pin-angle text-white/40'"></i>
                                         </button>
-                                        <button @click="postAction(post.id, 'lock')" class="h-8 px-3 rounded-lg bg-white/5 text-[10px] font-bold border border-white/10 hover:border-orange-500/30 hover:text-orange-400 transition-all" :title="post.is_locked ? 'Mở khóa' : 'Khóa'">
+                                        <button @click="postAction(post.id, 'lock')" class="h-7 px-2.5 rounded-lg bg-white/5 text-[10px] font-bold border border-white/10 hover:border-orange-500/30 hover:text-orange-400 transition-all" :title="post.is_locked ? 'Mở khóa' : 'Khóa'">
                                             <i class="bi" :class="post.is_locked ? 'bi-lock-fill text-orange-500' : 'bi-unlock text-white/40'"></i>
                                         </button>
-                                        <button @click="confirmDeletePost(post)" class="h-8 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-red-500/30 hover:text-red-500 transition-all" title="Xóa">
+                                        <button @click="confirmDeletePost(post)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-red-500/30 hover:text-red-500 transition-all" title="Xóa">
                                             <i class="bi bi-trash3"></i>
                                         </button>
                                     </div>
@@ -104,7 +207,7 @@
                             </tr>
                         </template>
                         <template x-if="filteredPosts().length === 0">
-                            <tr><td colspan="6" class="px-8 py-16 text-center text-white/20 italic text-xs font-bold">Không có bài viết nào.</td></tr>
+                            <tr><td colspan="6" class="px-6 py-12 text-center text-white/20 italic text-xs font-bold">Không có bài viết.</td></tr>
                         </template>
                     </tbody>
                 </table>
@@ -114,90 +217,69 @@
 
     <!-- ═══════ Tab: Post Reports ═══════ -->
     <div x-show="tab==='post_reports'" x-transition>
-        <div class="p-1 rounded-[3rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
-            <div class="p-8 border-b border-white/[0.02]">
+        <div class="rounded-2xl bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-white/5">
                 <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-3">
                     <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"></span>
                     Báo cáo bài viết
                 </h3>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-separate border-spacing-0">
+                <table class="w-full text-left">
                     <thead>
                         <tr class="bg-white/[0.02]">
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Thời gian</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Người báo cáo</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Bài viết / Lý do</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">AI Analysis</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Trạng thái</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Thời gian</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Người báo cáo</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Bài viết / Lý do</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">AI</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Trạng thái</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/[0.02]">
                         <template x-for="r in postReports" :key="r.id">
-                            <tr class="group hover:bg-white/[0.03] transition-all duration-300">
-                                <td class="px-6 py-6 text-[11px] font-bold text-white/60 whitespace-nowrap" x-text="r.created_at_display"></td>
-                                <td class="px-6 py-6">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-8 h-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs" x-text="r.reporter_name?.charAt(0)?.toUpperCase()"></div>
-                                        <span class="text-sm font-black text-white tracking-tight" x-text="r.reporter_name"></span>
-                                    </div>
+                            <tr class="group hover:bg-white/[0.03] transition-all">
+                                <td class="px-5 py-4 text-[11px] font-bold text-white/60 whitespace-nowrap" x-text="r.created_at_display"></td>
+                                <td class="px-5 py-4">
+                                    <span class="text-xs font-bold text-white/70" x-text="r.reporter_name"></span>
                                 </td>
-                                <td class="px-6 py-6 max-w-xs">
-                                    <div class="text-sm font-bold text-white/80 leading-snug mb-1" x-text="r.post_title"></div>
+                                <td class="px-5 py-4 max-w-xs">
+                                    <div class="text-xs font-bold text-white/80 mb-1" x-text="r.post_title"></div>
                                     <div class="text-[10px] text-white/30 italic" x-text="'Lý do: ' + (r.reason || '—')"></div>
                                 </td>
-                                <td class="px-6 py-6">
+                                <td class="px-5 py-4">
                                     <template x-if="r.ai_status === 'analyzing'">
-                                        <div class="flex items-center gap-2 text-yellow-400">
-                                            <i class="bi bi-cpu animate-pulse"></i>
-                                            <span class="text-[10px] font-black uppercase tracking-widest">Đang phân tích...</span>
-                                        </div>
+                                        <span class="text-yellow-400 text-[10px] font-black"><i class="bi bi-cpu animate-pulse"></i> Đang...</span>
                                     </template>
                                     <template x-if="r.ai_violation === true">
-                                        <div class="flex flex-col gap-1">
-                                            <div class="flex items-center gap-2 text-rose-500">
-                                                <div class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
-                                                <span class="text-[10px] font-black uppercase tracking-widest">Vi phạm</span>
-                                            </div>
-                                            <div class="text-[9px] text-white/30 font-bold" x-text="'Conf: ' + (r.ai_confidence || '—')"></div>
+                                        <div>
+                                            <span class="text-rose-500 text-[10px] font-black"><i class="bi bi-exclamation-triangle-fill"></i> Vi phạm</span>
+                                            <div class="text-[8px] text-white/20" x-text="'Conf: ' + (r.ai_confidence || '—')"></div>
                                         </div>
                                     </template>
                                     <template x-if="r.ai_violation === false">
-                                        <div class="flex items-center gap-2 text-emerald-500">
-                                            <i class="bi bi-shield-check text-sm"></i>
-                                            <span class="text-[10px] font-black uppercase tracking-widest">An toàn</span>
-                                        </div>
+                                        <span class="text-emerald-500 text-[10px] font-black"><i class="bi bi-shield-check"></i> An toàn</span>
                                     </template>
                                     <template x-if="r.ai_status === 'none'">
-                                        <div class="flex items-center gap-2 text-white/20">
-                                            <i class="bi bi-dash-circle text-sm"></i>
-                                            <span class="text-[10px] font-black uppercase tracking-widest">Chưa quét</span>
-                                        </div>
+                                        <span class="text-white/20 text-[10px]"><i class="bi bi-dash-circle"></i> Chưa quét</span>
                                     </template>
                                 </td>
-                                <td class="px-6 py-6">
-                                    <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase border tracking-widest"
+                                <td class="px-5 py-4">
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase border"
                                           :class="r.status === 'approved' ? 'bg-green-500/10 text-green-500 border-green-500/20' : r.status === 'rejected' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-white/5 text-white/40 border-white/10'"
                                           x-text="r.status"></span>
                                 </td>
-                                <td class="px-6 py-6">
-                                    <div class="flex justify-end gap-2" :class="r.status === 'pending' ? '' : 'opacity-30 pointer-events-none'">
-                                        <button @click="reportAction('post', r.id, 'analyze', r)" class="h-8 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-blue-500/30 hover:text-blue-400 transition-all" title="AI Phân tích">
-                                            <i class="bi bi-cpu"></i>
-                                        </button>
-                                        <button @click="reportAction('post', r.id, 'approve', r)" class="h-8 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-green-500/30 hover:text-green-400 transition-all" title="Chấp thuận">
-                                            <i class="bi bi-check-circle"></i>
-                                        </button>
-                                        <button @click="reportAction('post', r.id, 'reject', r)" class="h-8 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all" title="Từ chối">
-                                            <i class="bi bi-x-circle"></i>
-                                        </button>
+                                <td class="px-5 py-4">
+                                    <div class="flex justify-end gap-1.5" :class="r.status === 'pending' ? '' : 'opacity-30 pointer-events-none'">
+                                        <button @click="reportAction('post', r.id, 'analyze', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-blue-500/30 hover:text-blue-400 transition-all" title="AI"><i class="bi bi-cpu"></i></button>
+                                        <button @click="reportAction('post', r.id, 'approve', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-green-500/30 hover:text-green-400 transition-all" title="Duyệt"><i class="bi bi-check-circle"></i></button>
+                                        <button @click="reportAction('post', r.id, 'reject', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all" title="Từ chối"><i class="bi bi-x-circle"></i></button>
                                     </div>
                                 </td>
                             </tr>
                         </template>
                         <template x-if="postReports.length === 0">
-                            <tr><td colspan="6" class="px-8 py-16 text-center text-white/20 italic text-xs font-bold">Không có báo cáo bài viết nào.</td></tr>
+                            <tr><td colspan="6" class="px-6 py-12 text-center text-white/20 italic text-xs">Không có báo cáo.</td></tr>
                         </template>
                     </tbody>
                 </table>
@@ -207,60 +289,309 @@
 
     <!-- ═══════ Tab: Comment Reports ═══════ -->
     <div x-show="tab==='comment_reports'" x-transition>
-        <div class="p-1 rounded-[3rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
-            <div class="p-8 border-b border-white/[0.02]">
+        <div class="rounded-2xl bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-white/5">
                 <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-3">
-                    <span class="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"></span>
+                    <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
                     Báo cáo bình luận
                 </h3>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-separate border-spacing-0">
+                <table class="w-full text-left">
                     <thead>
                         <tr class="bg-white/[0.02]">
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Thời gian</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Người báo cáo</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Nội dung bình luận</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Trạng thái</th>
-                            <th class="px-6 py-5 text-[10px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Thời gian</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Người báo cáo</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Nội dung</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Trạng thái</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/[0.02]">
                         <template x-for="r in commentReports" :key="r.id">
-                            <tr class="group hover:bg-white/[0.03] transition-all duration-300">
-                                <td class="px-6 py-6 text-[11px] font-bold text-white/60 whitespace-nowrap" x-text="r.created_at_display"></td>
-                                <td class="px-6 py-6">
-                                    <span class="text-sm font-black text-white tracking-tight" x-text="r.reporter_name"></span>
-                                </td>
-                                <td class="px-6 py-6 max-w-sm">
-                                    <div class="text-[11px] font-bold text-white/50 leading-relaxed italic line-clamp-3" x-text="'\"' + r.comment_content + '\"'"></div>
+                            <tr class="group hover:bg-white/[0.03] transition-all">
+                                <td class="px-5 py-4 text-[11px] font-bold text-white/60 whitespace-nowrap" x-text="r.created_at_display"></td>
+                                <td class="px-5 py-4"><span class="text-xs font-bold text-white/70" x-text="r.reporter_name"></span></td>
+                                <td class="px-5 py-4 max-w-sm">
+                                    <div class="text-[11px] text-white/50 italic line-clamp-2" x-text="r.comment_content"></div>
                                     <div class="text-[9px] text-white/20 mt-1" x-text="'Lý do: ' + (r.reason || '—')"></div>
                                 </td>
-                                <td class="px-6 py-6">
-                                    <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase border tracking-widest"
+                                <td class="px-5 py-4">
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase border"
                                           :class="r.status === 'approved' ? 'bg-green-500/10 text-green-500 border-green-500/20' : r.status === 'rejected' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-white/5 text-white/40 border-white/10'"
                                           x-text="r.status"></span>
                                 </td>
-                                <td class="px-6 py-6">
-                                    <div class="flex justify-end gap-2" :class="r.status === 'pending' ? '' : 'opacity-30 pointer-events-none'">
-                                        <button @click="reportAction('comment', r.id, 'analyze', r)" class="h-8 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-blue-500/30 hover:text-blue-400 transition-all" title="AI Phân tích">
-                                            <i class="bi bi-cpu"></i>
-                                        </button>
-                                        <button @click="reportAction('comment', r.id, 'approve', r)" class="h-8 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-green-500/30 hover:text-green-400 transition-all" title="Chấp thuận">
-                                            <i class="bi bi-check-circle"></i>
-                                        </button>
-                                        <button @click="reportAction('comment', r.id, 'reject', r)" class="h-8 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all" title="Từ chối">
-                                            <i class="bi bi-x-circle"></i>
-                                        </button>
+                                <td class="px-5 py-4">
+                                    <div class="flex justify-end gap-1.5" :class="r.status === 'pending' ? '' : 'opacity-30 pointer-events-none'">
+                                        <button @click="reportAction('comment', r.id, 'analyze', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-blue-500/30 hover:text-blue-400 transition-all" title="AI"><i class="bi bi-cpu"></i></button>
+                                        <button @click="reportAction('comment', r.id, 'approve', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-green-500/30 hover:text-green-400 transition-all" title="Duyệt"><i class="bi bi-check-circle"></i></button>
+                                        <button @click="reportAction('comment', r.id, 'reject', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all" title="Từ chối"><i class="bi bi-x-circle"></i></button>
                                     </div>
                                 </td>
                             </tr>
                         </template>
                         <template x-if="commentReports.length === 0">
-                            <tr><td colspan="5" class="px-8 py-16 text-center text-white/20 italic text-xs font-bold">Không có báo cáo bình luận nào.</td></tr>
+                            <tr><td colspan="5" class="px-6 py-12 text-center text-white/20 italic text-xs">Không có báo cáo bình luận.</td></tr>
                         </template>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════ Tab: Members Management ═══════ -->
+    <div x-show="tab==='members'" x-transition>
+        <div class="rounded-2xl bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-white/5 flex items-center justify-between">
+                <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-3">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    Thành viên diễn đàn
+                </h3>
+                <input type="text" x-model="memberSearch" placeholder="Tìm thành viên..." class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/30 w-56">
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-white/[0.02]">
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Thành viên</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Hạng</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Bài viết</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Bình luận</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Tham gia</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Trạng thái</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/[0.02]">
+                        <template x-for="m in filteredMembers()" :key="m.id">
+                            <tr class="group hover:bg-white/[0.03] transition-all">
+                                <td class="px-5 py-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                            <template x-if="m.avatar">
+                                                <img :src="m.avatar" class="w-full h-full object-cover">
+                                            </template>
+                                            <template x-if="!m.avatar">
+                                                <span class="text-[10px] font-bold text-cyan-400" x-text="m.display_name?.charAt(0)?.toUpperCase()"></span>
+                                            </template>
+                                        </div>
+                                        <div>
+                                            <a :href="'/profile/@' + m.username + '/'" target="_blank" class="text-xs font-bold text-white/80 hover:text-cyan-400 transition-colors" x-text="m.display_name"></a>
+                                            <div class="text-[9px] text-white/25" x-text="'@' + m.username"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-4">
+                                    <template x-if="m.rank">
+                                        <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase" :class="{
+                                            'bg-cyan-400/15 text-cyan-400': m.rank.level === 'diamond',
+                                            'bg-purple-400/15 text-purple-400': m.rank.level === 'platinum',
+                                            'bg-yellow-400/15 text-yellow-400': m.rank.level === 'gold',
+                                            'bg-slate-300/15 text-slate-300': m.rank.level === 'silver',
+                                            'bg-orange-400/15 text-orange-400': m.rank.level === 'bronze'
+                                        }" x-text="m.rank.name"></span>
+                                    </template>
+                                </td>
+                                <td class="px-5 py-4 text-sm font-bold text-white/60" x-text="m.posts_count"></td>
+                                <td class="px-5 py-4 text-sm font-bold text-white/60" x-text="m.comments_count"></td>
+                                <td class="px-5 py-4 text-[10px] font-bold text-white/40" x-text="m.date_joined"></td>
+                                <td class="px-5 py-4">
+                                    <template x-if="m.is_banned">
+                                        <span class="px-2 py-0.5 rounded bg-red-500/15 text-red-400 text-[8px] font-black uppercase">Đang cấm</span>
+                                    </template>
+                                    <template x-if="m.is_staff && !m.is_banned">
+                                        <span class="px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 text-[8px] font-black uppercase">Admin</span>
+                                    </template>
+                                    <template x-if="!m.is_staff && !m.is_banned">
+                                        <span class="px-2 py-0.5 rounded bg-green-500/15 text-green-400 text-[8px] font-black uppercase">Hoạt động</span>
+                                    </template>
+                                </td>
+                                <td class="px-5 py-4">
+                                    <div class="flex justify-end gap-1.5 transition-all">
+                                        <template x-if="!m.is_banned && !m.is_staff">
+                                            <button @click="promoteModerator(m)" class="h-7 px-3 rounded-lg bg-emerald-500/10 text-emerald-400/70 text-[10px] font-bold border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-400 transition-all" title="Bổ nhiệm KDV">
+                                                <i class="bi bi-shield-plus mr-1"></i> KDV
+                                            </button>
+                                        </template>
+                                        <template x-if="!m.is_banned && !m.is_staff">
+                                            <button @click="banUser(m)" class="h-7 px-3 rounded-lg bg-red-500/10 text-red-400/70 text-[10px] font-bold border border-red-500/20 hover:bg-red-500/20 hover:text-red-400 transition-all" title="Cấm">
+                                                <i class="bi bi-slash-circle mr-1"></i> Cấm
+                                            </button>
+                                        </template>
+                                        <template x-if="m.is_banned">
+                                            <button @click="unbanUser(m)" class="h-7 px-3 rounded-lg bg-green-500/10 text-green-400/70 text-[10px] font-bold border border-green-500/20 hover:bg-green-500/20 hover:text-green-400 transition-all" title="Gỡ cấm">
+                                                <i class="bi bi-check-circle mr-1"></i> Gỡ cấm
+                                            </button>
+                                        </template>
+                                        <template x-if="m.is_staff && !m.is_banned">
+                                            <button @click="demoteModerator(m)" class="h-7 px-3 rounded-lg bg-orange-500/10 text-orange-400/70 text-[10px] font-bold border border-orange-500/20 hover:bg-orange-500/20 hover:text-orange-400 transition-all" title="Gỡ quyền KDV">
+                                                <i class="bi bi-shield-minus mr-1"></i> Gỡ KDV
+                                            </button>
+                                        </template>
+                                        <a :href="'/profile/@' + m.username + '/'" target="_blank" class="h-7 px-3 rounded-lg bg-cyan-500/10 text-cyan-400/70 text-[10px] font-bold border border-cyan-500/20 hover:bg-cyan-500/20 hover:text-cyan-400 transition-all flex items-center" title="Xem hồ sơ">
+                                            <i class="bi bi-person"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="filteredMembers().length === 0">
+                            <tr><td colspan="7" class="px-6 py-12 text-center text-white/20 italic text-xs">Không tìm thấy thành viên.</td></tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════ Tab: Banned Users ═══════ -->
+    <div x-show="tab==='bans'" x-transition>
+        <div class="rounded-2xl bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-white/5">
+                <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-3">
+                    <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+                    Tài khoản bị cấm
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-white/[0.02]">
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Thành viên</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Cấm bởi</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Lý do</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Loại</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Hết hạn</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5">Ngày cấm</th>
+                            <th class="px-5 py-4 text-[9px] font-black text-white/40 uppercase tracking-widest border-b border-white/5 text-right">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/[0.02]">
+                        <template x-for="b in bans" :key="b.id">
+                            <tr class="group hover:bg-white/[0.03] transition-all">
+                                <td class="px-5 py-4">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                                            <span class="text-[10px] font-bold text-red-400" x-text="b.display_name?.charAt(0)?.toUpperCase()"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs font-bold text-white/70" x-text="b.display_name"></span>
+                                            <div class="text-[9px] text-white/25" x-text="'@' + b.username"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-4 text-xs font-bold text-white/50" x-text="b.banned_by"></td>
+                                <td class="px-5 py-4 max-w-xs">
+                                    <div class="text-[11px] text-white/50 line-clamp-2" x-text="b.reason"></div>
+                                </td>
+                                <td class="px-5 py-4">
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase"
+                                          :class="b.ban_type === 'permanent' ? 'bg-red-500/15 text-red-400' : 'bg-yellow-500/15 text-yellow-400'"
+                                          x-text="b.ban_type === 'permanent' ? 'Vĩnh viễn' : 'Tạm thời'"></span>
+                                </td>
+                                <td class="px-5 py-4 text-[10px] font-bold" :class="b.is_expired ? 'text-green-400' : 'text-white/40'" x-text="b.is_expired ? 'Đã hết hạn' : b.expires_at"></td>
+                                <td class="px-5 py-4 text-[10px] font-bold text-white/40" x-text="b.created_at_display"></td>
+                                <td class="px-5 py-4">
+                                    <div class="flex justify-end">
+                                        <button @click="unbanByUsername(b.username)" class="h-7 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-green-500/30 hover:text-green-400 transition-all" title="Gỡ cấm">
+                                            <i class="bi bi-check-circle mr-1"></i> Gỡ cấm
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="bans.length === 0">
+                            <tr><td colspan="7" class="px-6 py-12 text-center text-white/20 italic text-xs">Không có tài khoản bị cấm.</td></tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════ Tab: Moderators Management ═══════ -->
+    <div x-show="tab==='moderators'" x-transition>
+        <div class="rounded-2xl bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-white/5 flex items-center justify-between">
+                <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-3">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
+                    Quản lý Kiểm duyệt viên
+                </h3>
+                <p class="text-[10px] text-white/30">Bổ nhiệm hoặc gỡ quyền kiểm duyệt cho thành viên diễn đàn</p>
+            </div>
+
+            <!-- Current Moderators -->
+            <div class="p-6 border-b border-white/5">
+                <h4 class="text-[10px] font-black text-emerald-400/70 uppercase tracking-widest mb-4">Kiểm duyệt viên hiện tại</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <template x-for="mod in moderators" :key="mod.id">
+                        <div class="bg-white/[0.03] border border-white/5 rounded-xl p-4 flex items-center justify-between group hover:border-emerald-500/20 transition-all">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                    <template x-if="mod.avatar">
+                                        <img :src="mod.avatar" class="w-full h-full object-cover">
+                                    </template>
+                                    <template x-if="!mod.avatar">
+                                        <span class="text-sm font-bold text-emerald-400" x-text="mod.display_name?.charAt(0)?.toUpperCase()"></span>
+                                    </template>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-white/80" x-text="mod.display_name"></div>
+                                    <div class="text-[9px] text-white/30" x-text="'@' + mod.username"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span x-show="mod.is_superuser" class="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-amber-400/10 text-amber-400 border border-amber-400/20">Super Admin</span>
+                                <button x-show="!mod.is_superuser" @click="demoteModerator(mod)" class="h-7 px-3 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100" title="Gỡ quyền">
+                                    <i class="bi bi-person-dash mr-1"></i> Gỡ quyền
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="moderators.length === 0">
+                        <div class="col-span-full text-center py-8 text-white/20 italic text-xs">Chưa có kiểm duyệt viên</div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Promote New Moderator -->
+            <div class="p-6">
+                <h4 class="text-[10px] font-black text-cyan-400/70 uppercase tracking-widest mb-4">Bổ nhiệm kiểm duyệt viên mới</h4>
+                <div class="flex gap-3 mb-4">
+                    <input type="text" x-model="modSearch" placeholder="Tìm thành viên để bổ nhiệm..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/30">
+                </div>
+                <div class="space-y-2 max-h-64 overflow-y-auto">
+                    <template x-for="m in promotableMembersFiltered()" :key="m.id">
+                        <div class="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-xl px-4 py-3 hover:border-cyan-500/20 transition-all">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                    <template x-if="m.avatar">
+                                        <img :src="m.avatar" class="w-full h-full object-cover">
+                                    </template>
+                                    <template x-if="!m.avatar">
+                                        <span class="text-[10px] font-bold text-cyan-400" x-text="m.display_name?.charAt(0)?.toUpperCase()"></span>
+                                    </template>
+                                </div>
+                                <div>
+                                    <span class="text-xs font-bold text-white/80" x-text="m.display_name"></span>
+                                    <span class="text-[9px] text-white/25 ml-2" x-text="'@' + m.username"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[9px] text-white/25" x-text="m.posts_count + ' bài'"></span>
+                                <button @click="promoteModerator(m)" class="h-7 px-3 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20 hover:bg-emerald-500/20 transition-all">
+                                    <i class="bi bi-shield-plus mr-1"></i> Bổ nhiệm
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="modSearch.trim() && promotableMembersFiltered().length === 0">
+                        <div class="text-center py-6 text-white/20 italic text-xs">Không tìm thấy thành viên phù hợp</div>
+                    </template>
+                    <template x-if="!modSearch.trim()">
+                        <div class="text-center py-6 text-white/20 italic text-xs">Nhập tên để tìm kiếm thành viên</div>
+                    </template>
+                </div>
             </div>
         </div>
     </div>
@@ -269,9 +600,17 @@
 {{ posts_json|json_script:"forum-posts-json" }}
 {{ post_reports_json|json_script:"forum-post-reports-json" }}
 {{ comment_reports_json|json_script:"forum-comment-reports-json" }}
+{{ members_json|json_script:"forum-members-json" }}
+{{ bans_json|json_script:"forum-bans-json" }}
+{{ moderators_json|json_script:"forum-moderators-json" }}
+{{ forum_stats|json_script:"forum-stats-json" }}
+{{ category_chart|json_script:"category-chart-json" }}
+{{ daily_chart|json_script:"daily-chart-json" }}
+{{ report_status_chart|json_script:"report-status-chart-json" }}
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 function forumAdmin() {
     return {
@@ -279,23 +618,147 @@ function forumAdmin() {
         posts: [],
         postReports: [],
         commentReports: [],
+        members: [],
+        bans: [],
+        moderators: [],
+        stats: {},
         postSearch: '',
+        memberSearch: '',
+        modSearch: '',
+        categoryChartData: [],
+        dailyChartData: [],
+        reportStatusData: { pending: 0, approved: 0, rejected: 0, ai_flagged: 0 },
 
         init() {
             try {
                 const p = document.getElementById('forum-posts-json');
                 const pr = document.getElementById('forum-post-reports-json');
                 const cr = document.getElementById('forum-comment-reports-json');
+                const m = document.getElementById('forum-members-json');
+                const b = document.getElementById('forum-bans-json');
+                const s = document.getElementById('forum-stats-json');
+                const mod = document.getElementById('forum-moderators-json');
+                const catChart = document.getElementById('category-chart-json');
+                const dailyChart = document.getElementById('daily-chart-json');
+                const reportChart = document.getElementById('report-status-chart-json');
                 if (p) this.posts = JSON.parse(p.textContent);
                 if (pr) this.postReports = JSON.parse(pr.textContent);
                 if (cr) this.commentReports = JSON.parse(cr.textContent);
+                if (m) this.members = JSON.parse(m.textContent);
+                if (b) this.bans = JSON.parse(b.textContent);
+                if (s) this.stats = JSON.parse(s.textContent);
+                if (mod) this.moderators = JSON.parse(mod.textContent);
+                if (catChart) this.categoryChartData = JSON.parse(catChart.textContent);
+                if (dailyChart) this.dailyChartData = JSON.parse(dailyChart.textContent);
+                if (reportChart) this.reportStatusData = JSON.parse(reportChart.textContent);
             } catch (e) { console.error('Forum admin data parse error:', e); }
+
+            this.$nextTick(() => this.renderCharts());
+        },
+
+        renderCharts() {
+            const chartDefaults = {
+                color: 'rgba(255,255,255,0.4)',
+                borderColor: 'rgba(255,255,255,0.05)',
+            };
+            Chart.defaults.color = chartDefaults.color;
+            Chart.defaults.borderColor = chartDefaults.borderColor;
+
+            // Daily Posts Line Chart
+            const dailyCtx = document.getElementById('dailyPostsChart');
+            if (dailyCtx && this.dailyChartData.length) {
+                new Chart(dailyCtx, {
+                    type: 'line',
+                    data: {
+                        labels: this.dailyChartData.map(d => d.date),
+                        datasets: [{
+                            label: 'Bài viết',
+                            data: this.dailyChartData.map(d => d.count),
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6,182,212,0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: '#06b6d4',
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                            x: { ticks: { font: { size: 8 } }, grid: { display: false } }
+                        }
+                    }
+                });
+            }
+
+            // Category Doughnut Chart
+            const catCtx = document.getElementById('categoryChart');
+            if (catCtx && this.categoryChartData.length) {
+                const catColors = {
+                    warning: '#ef4444', discussion: '#06b6d4', experience: '#a855f7',
+                    question: '#eab308', news: '#22c55e', guide: '#3b82f6',
+                };
+                new Chart(catCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: this.categoryChartData.map(d => d.category || 'Khác'),
+                        datasets: [{
+                            data: this.categoryChartData.map(d => d.count),
+                            backgroundColor: this.categoryChartData.map(d => catColors[d.category] || '#6b7280'),
+                            borderWidth: 0,
+                            hoverOffset: 6,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 8, padding: 8, font: { size: 9, weight: 'bold' } } }
+                        }
+                    }
+                });
+            }
+
+            // Report Status Doughnut
+            const reportCtx = document.getElementById('reportStatusChart');
+            if (reportCtx) {
+                const rd = this.reportStatusData;
+                new Chart(reportCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Chờ', 'Duyệt', 'Từ chối', 'AI Flag'],
+                        datasets: [{
+                            data: [rd.pending, rd.approved, rd.rejected, rd.ai_flagged],
+                            backgroundColor: ['#f59e0b', '#22c55e', '#ef4444', '#eab308'],
+                            borderWidth: 0,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
         },
 
         filteredPosts() {
             if (!this.postSearch.trim()) return this.posts;
             const q = this.postSearch.toLowerCase();
             return this.posts.filter(p => (p.title || '').toLowerCase().includes(q) || (p.author_name || '').toLowerCase().includes(q));
+        },
+
+        filteredMembers() {
+            if (!this.memberSearch.trim()) return this.members;
+            const q = this.memberSearch.toLowerCase();
+            return this.members.filter(m => (m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q));
         },
 
         categoryColor(cat) {
@@ -368,6 +831,172 @@ function forumAdmin() {
                 showToast('Lỗi kết nối', 'error');
                 if (action === 'analyze') report.ai_status = 'none';
             }
+        },
+
+        async banUser(member) {
+            const result = await Swal.fire({
+                title: 'Cấm ' + member.display_name + '?',
+                html: `
+                    <div class="space-y-3 text-left mt-4">
+                        <div>
+                            <label class="text-[10px] text-white/40 font-bold uppercase block mb-1">Lý do</label>
+                            <textarea id="ban-reason" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white text-sm min-h-[60px]" placeholder="Vi phạm nội quy..."></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[10px] text-white/40 font-bold uppercase block mb-1">Loại</label>
+                                <select id="ban-type" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm">
+                                    <option value="temporary">Tạm thời</option>
+                                    <option value="permanent">Vĩnh viễn</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-white/40 font-bold uppercase block mb-1">Số ngày</label>
+                                <input type="number" id="ban-days" value="7" min="1" max="365" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm">
+                            </div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonText: 'Hủy',
+                confirmButtonText: 'Cấm',
+                background: '#161235',
+                color: '#fff',
+                preConfirm: () => ({
+                    reason: document.getElementById('ban-reason').value || 'Vi phạm nội quy diễn đàn',
+                    ban_type: document.getElementById('ban-type').value,
+                    days: parseInt(document.getElementById('ban-days').value) || 7,
+                })
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const resp = await fetch('/admin-cp/forum/ban/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                        body: JSON.stringify({
+                            action: 'ban',
+                            username: member.username,
+                            ...result.value
+                        })
+                    });
+                    const data = await resp.json();
+                    if (resp.ok && data.status === 'ok') {
+                        showToast(data.message, 'success');
+                        member.is_banned = true;
+                        member.ban_reason = result.value.reason;
+                        this.stats.total_bans = (this.stats.total_bans || 0) + 1;
+                    } else {
+                        showToast(data.error || 'Lỗi', 'error');
+                    }
+                } catch (e) { showToast('Lỗi kết nối', 'error'); }
+            }
+        },
+
+        async unbanUser(member) {
+            await this.unbanByUsername(member.username);
+            member.is_banned = false;
+        },
+
+        async unbanByUsername(username) {
+            try {
+                const resp = await fetch('/admin-cp/forum/ban/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ action: 'unban', username })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.status === 'ok') {
+                    showToast(data.message, 'success');
+                    this.bans = this.bans.filter(b => b.username !== username);
+                    const m = this.members.find(x => x.username === username);
+                    if (m) m.is_banned = false;
+                    this.stats.total_bans = Math.max(0, (this.stats.total_bans || 0) - 1);
+                } else {
+                    showToast(data.error || 'Lỗi', 'error');
+                }
+            } catch (e) { showToast('Lỗi kết nối', 'error'); }
+        },
+
+        promotableMembersFiltered() {
+            if (!this.modSearch.trim()) return [];
+            const q = this.modSearch.toLowerCase();
+            return this.members.filter(m => 
+                !m.is_staff && 
+                ((m.display_name || '').toLowerCase().includes(q) || (m.username || '').toLowerCase().includes(q))
+            ).slice(0, 10);
+        },
+
+        async promoteModerator(member) {
+            const ok = await Swal.fire({
+                title: 'Bổ nhiệm Kiểm duyệt viên?',
+                html: `<p class="text-white/50 text-sm">Bạn muốn bổ nhiệm <strong class="text-cyan-400">${member.display_name}</strong> (@${member.username}) làm Kiểm duyệt viên?</p>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonText: 'Hủy',
+                confirmButtonText: 'Bổ nhiệm',
+                background: '#161235',
+                color: '#fff',
+            });
+            if (!ok.isConfirmed) return;
+
+            try {
+                const resp = await fetch('/admin-cp/forum/moderator/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ action: 'promote', username: member.username })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.status === 'ok') {
+                    showToast(data.message, 'success');
+                    member.is_staff = true;
+                    this.moderators.push({
+                        id: member.id,
+                        username: member.username,
+                        display_name: member.display_name,
+                        avatar: member.avatar,
+                        is_superuser: false,
+                        date_joined: member.date_joined,
+                    });
+                    this.modSearch = '';
+                } else {
+                    showToast(data.error || 'Lỗi', 'error');
+                }
+            } catch (e) { showToast('Lỗi kết nối', 'error'); }
+        },
+
+        async demoteModerator(mod) {
+            const ok = await Swal.fire({
+                title: 'Gỡ quyền Kiểm duyệt?',
+                html: `<p class="text-white/50 text-sm">Bạn muốn gỡ quyền Kiểm duyệt viên của <strong class="text-red-400">${mod.display_name}</strong>?</p>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonText: 'Hủy',
+                confirmButtonText: 'Gỡ quyền',
+                background: '#161235',
+                color: '#fff',
+            });
+            if (!ok.isConfirmed) return;
+
+            try {
+                const resp = await fetch('/admin-cp/forum/moderator/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ action: 'demote', username: mod.username })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.status === 'ok') {
+                    showToast(data.message, 'success');
+                    this.moderators = this.moderators.filter(m => m.id !== mod.id);
+                    const member = this.members.find(m => m.username === mod.username);
+                    if (member) member.is_staff = false;
+                } else {
+                    showToast(data.error || 'Lỗi', 'error');
+                }
+            } catch (e) { showToast('Lỗi kết nối', 'error'); }
         }
     };
 }

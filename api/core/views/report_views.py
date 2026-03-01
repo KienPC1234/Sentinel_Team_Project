@@ -22,7 +22,7 @@ from rest_framework.authtoken.models import Token
 from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 
 from api.core.models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily,
+    Domain, BankAccount, Report, ReportEvidence, ScanEvent, TrendDaily,
     EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
 )
 from api.utils.media_utils import extract_ocr_text
@@ -56,6 +56,11 @@ class ReportCreateView(APIView):
                                             context={'request': request})
         serializer.is_valid(raise_exception=True)
         report = serializer.save()
+
+        # Save additional evidence images (multi-upload)
+        evidence_files = request.FILES.getlist('evidence_images')
+        for ef in evidence_files:
+            ReportEvidence.objects.create(report=report, image=ef)
 
         # Update report counts on related entities
         target = report.target_value
