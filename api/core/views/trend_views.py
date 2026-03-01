@@ -289,3 +289,139 @@ class ScamRadarStatsView(APIView):
         except Exception as e:
             logger.error(f"Error in ScamRadarStatsView: {e}")
             return Response({'error': str(e)}, status=500)
+
+
+class ScanLookupView(APIView):
+    """
+    GET /api/v1/scan/lookup/?q=...&type=all&risk=all&page=1
+    Unified search across ScanEvent + Report for the lookup page.
+    """
+    permission_classes = [AllowAny]
+
+    SCAN_TYPE_MAP = {
+        'phone': ['phone'],
+        'account': ['account'],
+        'domain': ['domain'],
+        'email': ['email'],
+        'message': ['message'],
+        'audio': ['audio'],
+        'file': ['file'],
+        'qr': ['qr'],
+    }
+
+    def get(self, request):
+        from django.utils.timesince import timesince
+
+        q = request.query_params.get('q', '').strip()
+        type_filter = request.query_params.get('type', 'all')
+        risk_filter = request.query_params.get('risk', 'all')
+        page = max(1, int(request.query_params.get('page', 1)))
+        per_page = 20
+
+        now = timezone.now()
+        results = []
+
+        # --- ScanEvent search ---
+        scan_qs = ScanEvent.objects.filter(status=ScanStatus.COMPLETED)
+        if q:
+            scan_qs = scan_qs.filter(
+                Q(raw_input__icontains=q) | Q(normalized_input__icontains=q)
+            )
+        if type_filter != 'all' and type_filter in self.SCAN_TYPE_MAP:
+            scan_qs = scan_qs.filter(scan_type__in=self.SCAN_TYPE_MAP[type_filter])
+        if risk_filter == 'high':
+            scan_qs = scan_qs.filter(risk_level=RiskLevel.RED)
+        elif risk_filter == 'medium':
+            scan_qs = scan_qs.filter(risk_level=RiskLevel.YELLOW)
+        elif risk_filter == 'low':
+            scan_qs = scan_qs.filter(risk_level__in=[RiskLevel.GREEN, RiskLevel.SAFE])
+
+        scan_type_labels = {
+            'phone': 'Số điện thoại', 'domain': 'Website/URL',
+            'account': 'Tài khoản ngân hàng', 'message': 'Tin nhắn',
+            'qr': 'QR / Ảnh', 'email': 'Email', 'audio': 'Âm thanh', 'file': 'Tệp tin',
+        }
+
+        for scan in scan_qs.order_by('-created_at')[:200]:
+            risk_display = 'Nguy hiểm' if scan.risk_level == RiskLevel.RED else ('Cảnh báo' if scan.risk_level == RiskLevel.YELLOW else 'An toàn')
+            results.append({
+                'id': scan.id,
+                'kind': 'scan',
+                'type': scan.scan_type,
+                'type_display': scan_type_labels.get(scan.scan_type, scan.scan_type),
+                'target': scan.normalized_input or scan.raw_input,
+                'risk_score': scan.risk_score,
+                'risk_level': scan.risk_level,
+                'risk_display': risk_display,
+                'created_at': scan.created_at.isoformat(),
+                'time_ago': f"{timesince(scan.created_at, now).split(',')[0]} trước",
+                'url': f'/scan/status/{scan.id}/',
+            })
+
+        # --- Report search ---
+        report_qs = Report.objects.filter(status=ReportStatus.APPROVED)
+        if q:
+            report_qs = report_qs.filter(
+                Q(target_value__icontains=q) | Q(description__icontains=q) |
+                Q(scammer_phone__icontains=q) | Q(scammer_bank_account__icontains=q)
+            )
+        if type_filter != 'all':
+            mapped = type_filter
+            if type_filter == 'domain':
+                mapped = 'domain'
+            report_qs = report_qs.filter(target_type=mapped)
+        if risk_filter == 'high':
+            report_qs = report_qs.filter(severity__in=['high', 'critical'])
+        elif risk_filter == 'medium':
+            report_qs = report_qs.filter(severity='medium')
+        elif risk_filter == 'low':
+            report_qs = report_qs.filter(severity='low')
+
+        scam_labels = dict(ScamType.choices)
+        target_labels = {
+            'phone': 'Số điện thoại', 'domain': 'Website/URL',
+            'account': 'Tài khoản ngân hàng', 'message': 'Tin nhắn',
+            'qr': 'QR Code', 'email': 'Email',
+        }
+        type_to_page = {
+            'phone': '/scan/phone/',
+            'domain': '/scan/website/',
+            'account': '/scan/bank/',
+            'email': '/scan/email/',
+            'message': '/scan/message/',
+            'qr': '/scan/qr/',
+        }
+
+        for report in report_qs.order_by('-created_at')[:200]:
+            risk_map = {'critical': 'RED', 'high': 'RED', 'medium': 'YELLOW', 'low': 'GREEN'}
+            risk_level = risk_map.get(report.severity, 'YELLOW')
+            risk_display = 'Nguy hiểm' if risk_level == 'RED' else ('Cảnh báo' if risk_level == 'YELLOW' else 'An toàn')
+            results.append({
+                'id': report.id,
+                'kind': 'report',
+                'type': report.target_type,
+                'type_display': target_labels.get(report.target_type, report.target_type),
+                'target': report.target_value,
+                'risk_score': {'critical': 95, 'high': 80, 'medium': 50, 'low': 20}.get(report.severity, 50),
+                'risk_level': risk_level,
+                'risk_display': risk_display,
+                'scam_type': scam_labels.get(report.scam_type, report.scam_type),
+                'created_at': report.created_at.isoformat(),
+                'time_ago': f"{timesince(report.created_at, now).split(',')[0]} trước",
+                'url': type_to_page.get(report.target_type, '/scam-radar/'),
+            })
+
+        # Sort by time (newest first)
+        results.sort(key=lambda x: x['created_at'], reverse=True)
+
+        total = len(results)
+        start = (page - 1) * per_page
+        paginated = results[start:start + per_page]
+
+        return Response({
+            'results': paginated,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'has_next': start + per_page < total,
+        })

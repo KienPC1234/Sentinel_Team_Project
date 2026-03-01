@@ -28,4 +28,5 @@ from .page_views import (
     scam_radar_list_view,
     demo_video_view,
     lesson_detail_view,
+    scan_lookup_view,
 )

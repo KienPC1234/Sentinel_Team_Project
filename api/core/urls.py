@@ -44,6 +44,7 @@ urlpatterns = [
     path('trends/daily/', views.TrendDailyView.as_view(), name='trends-daily'),
     path('trends/hot/', views.TrendHotView.as_view(), name='trends-hot'),
     path('trends/radar-stats/', views.ScamRadarStatsView.as_view(), name='trends-radar-stats'),
+    path('scan/lookup/', views.ScanLookupView.as_view(), name='scan-lookup-api'),
 
     # User
     path('user/scans/', views.UserScansView.as_view(), name='user-scans'),

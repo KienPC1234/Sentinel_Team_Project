@@ -253,56 +253,59 @@
     <template x-if="result">
         <div class="space-y-8 animate-fadein">
             <div class="liquid-card overflow-hidden p-0">
-                <!-- Status Header -->
-                <div class="p-10 text-center relative overflow-hidden">
+                <!-- Score Header -->
+                <div class="relative overflow-hidden">
                     <div class="absolute inset-0 opacity-10 -z-10 blur-[100px]"
                          :class="result.risk_level==='RED' ? 'bg-red-500' : result.risk_level==='YELLOW' ? 'bg-yellow-500' : 'bg-green-500'"></div>
                     <div class="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
 
-                    <!-- Risk Badge -->
-                    <div class="inline-flex items-center gap-2.5 mb-6 px-4 py-2 rounded-full border"
-                         :class="result.risk_level==='RED' ? 'bg-red-500/10 border-red-500/20 text-red-400' : result.risk_level==='YELLOW' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400' : 'bg-green-500/10 border-green-500/20 text-green-400'">
-                        <span class="w-2 h-2 rounded-full animate-pulse"
-                              :class="result.risk_level==='RED' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : result.risk_level==='YELLOW' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]'"></span>
-                        <span class="text-xs font-black uppercase tracking-[0.2em]"
-                              x-text="result.risk_level === 'RED' ? 'Nguy hiểm cao' : result.risk_level === 'YELLOW' ? 'Cần cảnh giác' : 'An toàn'"></span>
-                    </div>
-
-                    <!-- Score Ring -->
-                    <div class="relative inline-block mb-5">
-                        <svg class="w-40 h-40 transform -rotate-90" viewBox="0 0 160 160">
-                            <circle cx="80" cy="80" r="70" stroke="currentColor" stroke-width="6" fill="transparent" class="text-white/5" />
-                            <circle cx="80" cy="80" r="70" stroke="currentColor" stroke-width="6" fill="transparent"
-                                    stroke-linecap="round"
-                                    :stroke-dasharray="440" :stroke-dashoffset="440 * (1 - (result.risk_score || 0)/100)"
-                                    :class="result.risk_level==='RED' ? 'text-red-500' : result.risk_level==='YELLOW' ? 'text-yellow-400' : 'text-green-400'"
-                                    class="transition-all duration-1000 ease-out" />
-                        </svg>
-                        <div class="absolute inset-0 flex flex-col items-center justify-center">
-                            <span class="text-5xl font-black text-white" x-text="result.risk_score || 0"></span>
-                            <span class="text-[9px] uppercase font-black text-white/20 tracking-[0.2em] mt-1">Điểm rủi ro</span>
+                    <div class="flex flex-col items-center py-10 px-6">
+                        <!-- Risk Badge -->
+                        <div class="inline-flex items-center gap-2.5 mb-8 px-5 py-2 rounded-full border"
+                             :class="result.risk_level==='RED' ? 'bg-red-500/10 border-red-500/20 text-red-400' : result.risk_level==='YELLOW' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400' : 'bg-green-500/10 border-green-500/20 text-green-400'">
+                            <span class="w-2 h-2 rounded-full animate-pulse"
+                                  :class="result.risk_level==='RED' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : result.risk_level==='YELLOW' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]'"></span>
+                            <span class="text-xs font-black uppercase tracking-[0.2em]"
+                                  x-text="result.risk_level === 'RED' ? 'Nguy hiểm cao' : result.risk_level === 'YELLOW' ? 'Cần cảnh giác' : 'An toàn'"></span>
                         </div>
-                    </div>
 
-                    <!-- Audio Meta -->
-                    <div class="flex justify-center gap-6 text-[11px] text-white/30 font-bold">
-                        <span x-show="result.language"><i class="bi bi-translate mr-1.5"></i><span x-text="result.language"></span></span>
-                        <span x-show="result.duration"><i class="bi bi-clock mr-1.5"></i><span x-text="result.duration ? result.duration.toFixed(1) + 's' : ''"></span></span>
-                        <span x-show="result.segments"><i class="bi bi-list-ol mr-1.5"></i><span x-text="(result.segments?.length || 0) + ' đoạn'"></span></span>
+                        <!-- Score Ring -->
+                        <div class="relative w-36 h-36 mb-6">
+                            <svg class="w-full h-full" viewBox="0 0 160 160" style="transform: rotate(-90deg)">
+                                <circle cx="80" cy="80" r="68" stroke="currentColor" stroke-width="6" fill="transparent" class="text-white/5" />
+                                <circle cx="80" cy="80" r="68" stroke="currentColor" stroke-width="6" fill="transparent"
+                                        stroke-linecap="round"
+                                        :stroke-dasharray="2 * Math.PI * 68" :stroke-dashoffset="2 * Math.PI * 68 * (1 - (result.risk_score || 0)/100)"
+                                        :class="result.risk_level==='RED' ? 'text-red-500' : result.risk_level==='YELLOW' ? 'text-yellow-400' : 'text-green-400'"
+                                        class="transition-all duration-1000 ease-out" />
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-5xl font-black text-white leading-none" x-text="result.risk_score || 0"></span>
+                                <span class="text-[9px] uppercase font-black text-white/20 tracking-[0.2em] mt-1.5">Điểm rủi ro</span>
+                            </div>
+                        </div>
+
+                        <!-- Audio Meta -->
+                        <div class="flex items-center justify-center gap-5 text-[11px] text-white/30 font-bold">
+                            <span x-show="result.language" class="flex items-center gap-1.5"><i class="bi bi-translate"></i><span x-text="result.language"></span></span>
+                            <span x-show="result.duration" class="flex items-center gap-1.5"><i class="bi bi-clock"></i><span x-text="result.duration ? result.duration.toFixed(1) + 's' : ''"></span></span>
+                            <span x-show="result.segments" class="flex items-center gap-1.5"><i class="bi bi-list-ol"></i><span x-text="(result.segments?.length || 0) + ' đoạn'"></span></span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="p-8 space-y-10">
+                <!-- Content Sections -->
+                <div class="p-6 sm:p-8 space-y-8">
                     <!-- Transcript (Segments) -->
-                    <div class="space-y-4">
+                    <div class="space-y-3">
                         <h4 class="text-[10px] font-black text-violet-400 uppercase tracking-[0.2em] flex items-center gap-2">
                             <i class="bi bi-chat-left-text"></i> Nội dung nhận diện
                         </h4>
                         <template x-if="result.segments && result.segments.length > 0">
-                            <div class="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+                            <div class="space-y-1.5 max-h-[400px] overflow-y-auto custom-scrollbar">
                                 <template x-for="(seg, idx) in result.segments" :key="idx">
                                     <div class="flex gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors group/seg">
-                                        <span class="text-[10px] font-mono text-violet-400/40 whitespace-nowrap pt-0.5 group-hover/seg:text-violet-400/70 transition-colors"
+                                        <span class="text-[10px] font-mono text-violet-400/40 whitespace-nowrap pt-0.5 shrink-0 group-hover/seg:text-violet-400/70 transition-colors"
                                               x-text="formatTimestamp(seg.start) + ' →'"></span>
                                         <span class="text-white/70 text-sm leading-relaxed" x-text="seg.text"></span>
                                     </div>
@@ -318,7 +321,7 @@
 
                     <!-- Full Transcript -->
                     <template x-if="result.transcript">
-                        <div class="space-y-4">
+                        <div class="space-y-3">
                             <div class="flex items-center justify-between">
                                 <h4 class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] flex items-center gap-2">
                                     <i class="bi bi-file-text"></i> Văn bản đầy đủ
@@ -335,26 +338,26 @@
                     </template>
 
                     <!-- AI Analysis -->
-                    <div class="space-y-4">
+                    <div class="space-y-3">
                         <h4 class="text-[10px] font-black text-violet-400 uppercase tracking-[0.2em] flex items-center gap-2">
                             <i class="bi bi-shield-exclamation"></i> Phân tích AI
                         </h4>
-                        <div class="p-6 rounded-3xl bg-violet-500/[0.03] border border-violet-500/10 relative overflow-hidden">
+                        <div class="p-5 rounded-2xl bg-violet-500/[0.03] border border-violet-500/10 relative overflow-hidden">
                             <div class="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 blur-3xl rounded-full -mr-16 -mt-16"></div>
-                            <div class="relative prose prose-invert prose-violet max-w-none text-white/70 text-sm leading-relaxed"
-                                 x-html="renderRichText(result.explanation || '')"></div>
+                            <div class="relative ai-markdown text-white/70 text-sm leading-relaxed"
+                                 x-html="renderMd(result.explanation || '')"></div>
                         </div>
                     </div>
 
-                    <!-- Web Sources -->
+                    <!-- Web Sources (badges, not links - these are source names not URLs) -->
                     <template x-if="result.web_sources && result.web_sources.length > 0">
-                        <div class="space-y-4">
+                        <div class="space-y-3">
                             <h4 class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] flex items-center gap-2">
                                 <i class="bi bi-globe2"></i> Nguồn tham khảo
                             </h4>
                             <div class="flex flex-wrap gap-2">
                                 <template x-for="(src, idx) in result.web_sources" :key="idx">
-                                    <a :href="src" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/5 hover:bg-white/10 hover:text-white/60 transition-all truncate max-w-[280px]" x-text="src"></a>
+                                    <span class="px-3 py-1.5 rounded-full bg-violet-500/10 text-violet-400 text-[10px] font-black border border-violet-500/20 uppercase tracking-wide" x-text="src"></span>
                                 </template>
                             </div>
                         </div>

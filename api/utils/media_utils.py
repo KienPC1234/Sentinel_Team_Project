@@ -46,7 +46,7 @@ def get_easyocr_reader():
         # Detect forked subprocess (Celery prefork) — CUDA cannot reinitialize after fork
         is_forked = multiprocessing.current_process().daemon or multiprocessing.parent_process() is not None
         if is_forked and gpu:
-            logger.info("Forked subprocess detected — forcing EasyOCR to CPU mode.")
+            logger.debug("Forked subprocess detected — forcing EasyOCR to CPU mode.")
             gpu = False
             # Prevent PyTorch from touching CUDA at all in forked process
             os.environ['CUDA_VISIBLE_DEVICES'] = ''

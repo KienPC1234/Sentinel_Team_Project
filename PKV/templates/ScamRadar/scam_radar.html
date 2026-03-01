@@ -12,6 +12,11 @@
             <span class="glow-text">Scam Radar</span>
         </h1>
         <p class="text-white/40 text-sm font-medium tracking-wide prose-sm" data-aos="fade-up" data-aos-delay="300">Theo dõi xu hướng lừa đảo thời gian thực tại Việt Nam</p>
+        <div class="flex justify-center gap-3 mt-4" data-aos="fade-up" data-aos-delay="350">
+            <a href="/scan/lookup/" class="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-black uppercase tracking-widest hover:bg-cyan-500/20 hover:scale-[1.02] transition-all shadow-lg shadow-cyan-500/5">
+                <i class="bi bi-search text-sm"></i> Tra cứu hệ thống
+            </a>
+        </div>
     </div>
 
     <!-- Filters & Stats Segmented Controls -->
@@ -156,7 +161,7 @@
                 </thead>
                 <tbody class="divide-y divide-white/5">
                     <template x-for="report in stats.recent_reports" :key="report.id">
-                        <tr class="group hover:bg-white/[0.02] transition-colors">
+                        <tr class="group hover:bg-white/[0.02] transition-colors cursor-pointer" @click="goToScan(report)">
                             <td class="px-8 py-5">
                                 <span class="inline-flex px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest"
                                       :class="report.source === 'scan_ai' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'"
@@ -223,6 +228,28 @@
                 // Re-fetch on filter/timeRange changes
                 this.$watch('filter', () => this.fetchStats());
                 this.$watch('timeRange', () => this.fetchStats());
+            },
+
+            goToScan(report) {
+                // report.id can be 'scan-123' or 'report-456'
+                const parts = (report.id || '').split('-');
+                const type = parts[0];
+                const id = parts.slice(1).join('-');
+                if (type === 'scan' && id) {
+                    window.location.href = '/scan/status/' + id + '/';
+                } else {
+                    // For reports, navigate to the scan page for that target type
+                    const typeMap = {
+                        'phone': '/scan/phone/',
+                        'domain': '/scan/website/',
+                        'account': '/scan/bank/',
+                        'email': '/scan/email/',
+                        'message': '/scan/message/',
+                        'qr': '/scan/qr/',
+                    };
+                    const url = typeMap[report.target_type] || '/scan/lookup/';
+                    window.location.href = url;
+                }
             },
 
             async fetchStats() {
