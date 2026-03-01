@@ -50,7 +50,7 @@
                         const lines=buf.split('\n');buf=lines.pop();
                         for(const line of lines){
                             if(line.startsWith('data: ')){
-                                try{const d=JSON.parse(line.substring(6));if(d.chunk)aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
+                                try{const d=JSON.parse(line.substring(6));if(d.chunk&&!d.chunk.startsWith('__STATUS__'))aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
                             }
                         }
                         pump();
@@ -171,7 +171,7 @@
                                             const lines=buf.split('\n');buf=lines.pop();
                                             for(const line of lines){
                                                 if(line.startsWith('data: ')){
-                                                    try{const d=JSON.parse(line.substring(6));if(d.chunk)aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
+                                                    try{const d=JSON.parse(line.substring(6));if(d.chunk&&!d.chunk.startsWith('__STATUS__'))aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
                                                 }
                                             }
                                             pump();

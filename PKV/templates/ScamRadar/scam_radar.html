@@ -100,7 +100,7 @@
         <div class="lg:col-span-2 liquid-card p-8 space-y-6">
             <div class="flex justify-between items-center">
                 <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-2">
-                    <i class="bi bi-graph-up text-cyan-400"></i> Xu hướng báo cáo
+                    <i class="bi bi-graph-up text-cyan-400"></i> Xu hướng xác nhận + AI
                 </h3>
             </div>
             <div class="h-[300px] w-full relative">
@@ -111,14 +111,17 @@
         <!-- Hot Numbers Sidebar -->
         <div class="liquid-card p-8 space-y-8">
             <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-2">
-                <i class="bi bi-fire text-red-500"></i> Số điện thoại "Hot"
+                <i class="bi bi-fire text-red-500"></i> Điểm nóng (đã duyệt + AI)
             </h3>
             <div class="space-y-4 overflow-y-auto max-h-[300px] pr-2 scrollbar-hide">
                 <template x-for="hp in stats.hot_phones" :key="hp.target_value">
                     <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex justify-between items-center group hover:bg-white/[0.06] transition-all">
                         <div>
                             <div class="text-sm font-black text-white/90 group-hover:text-cyan-400 transition-colors" x-text="hp.masked"></div>
-                            <div class="text-[9px] font-black text-white/30 uppercase tracking-widest" x-text="hp.label"></div>
+                               <div class="text-[9px] font-black text-white/30 uppercase tracking-widest" x-text="hp.label"></div>
+                               <div class="text-[9px] font-black uppercase tracking-widest mt-1"
+                                   :class="hp.source === 'scan_ai' ? 'text-cyan-400/70' : 'text-yellow-400/70'"
+                                   x-text="hp.source === 'scan_ai' ? 'AI Scan' : 'Báo cáo duyệt'"></div>
                         </div>
                         <span class="px-2 py-1 rounded-lg text-[9px] font-black"
                               :class="hp.count > 30 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'"
@@ -137,13 +140,14 @@
     <div class="liquid-card overflow-hidden" data-aos="fade-up" data-aos-delay="700">
         <div class="p-8 border-b border-white/5">
             <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-2">
-                <i class="bi bi-list-columns-reverse text-cyan-400"></i> Báo cáo mới nhất
+                <i class="bi bi-list-columns-reverse text-cyan-400"></i> Trường hợp mới nhất
             </h3>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left">
                 <thead>
                     <tr class="bg-white/[0.02]">
+                        <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest">Nguồn</th>
                         <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest">Thời gian</th>
                         <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest">Đối tượng</th>
                         <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest">Loại lừa đảo</th>
@@ -153,6 +157,12 @@
                 <tbody class="divide-y divide-white/5">
                     <template x-for="report in stats.recent_reports" :key="report.id">
                         <tr class="group hover:bg-white/[0.02] transition-colors">
+                            <td class="px-8 py-5">
+                                <span class="inline-flex px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest"
+                                      :class="report.source === 'scan_ai' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'"
+                                      x-text="report.source_display">
+                                </span>
+                            </td>
                             <td class="px-8 py-5 text-xs text-white/40" x-text="report.created_at_display"></td>
                             <td class="px-8 py-5">
                                 <div class="text-sm font-black text-white/90" x-text="report.target_value"></div>
@@ -172,7 +182,7 @@
                         </tr>
                     </template>
                     <tr x-show="!stats.recent_reports || stats.recent_reports.length === 0" x-cloak>
-                        <td colspan="4" class="px-8 py-20 text-center">
+                        <td colspan="5" class="px-8 py-20 text-center">
                             <p class="text-xs font-black text-white/20 uppercase tracking-widest">Chưa có báo cáo nào trong hệ thống</p>
                         </td>
                     </tr>

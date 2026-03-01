@@ -70,6 +70,7 @@ python manage.py runserver 0.0.0.0:8000
 ## 👨‍💻 Đội ngũ phát triển
 Dự án được thực hiện bởi **SENTINEL TEAM** (tiền thân là PKV Team).
 - **Quy mô dự án:** ~40,000 dòng code tự viết.
+- **Phương trình phát triển:** **AI-Native Workflow**. Tận dụng mạng lưới **Multi-Agent Collaboration** (Đặc vụ AI cộng tác) và kỹ thuật **Prompt Engineering** nâng cao (Chain-of-Thought, Feedback Loop) để tối ưu hóa kiến trúc và đảm bảo độ ổn định của hệ thống.
 - **Kiến trúc:** Cloud-native, AI-integrated.
 
 **License:** MIT

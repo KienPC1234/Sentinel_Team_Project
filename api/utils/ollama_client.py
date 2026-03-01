@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any, Generator, List
 
 from django.conf import settings
 import ollama
+from ollama._types import ResponseError
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -535,15 +536,30 @@ def generate_response(
     tool_dispatch: Dict[str, Any] = None,
     format_schema: dict = None,
     max_loop_iterations: int = 15,
+    skip_filter: bool = False,
 ) -> Optional[str]:
     """
     Generate a non-streamed response from Ollama.
 
     When ``format_schema`` is provided, the model is guaranteed to return
     valid JSON matching the schema, simplifying the loop logic.
+
+    Args:
+        skip_filter: If True, skip filter_hallucinations on the output.
+                     Use for long-form content where CJK stripping could corrupt text.
     """
     model = model or DEFAULT_MODEL
-    if tools is None:
+    _effective_max_tokens = max_tokens or LLM_MAX_TOKENS
+    logger.info(f"[generate_response] START model={model}, max_tokens={_effective_max_tokens}, "
+                f"format_schema={'yes' if format_schema else 'no'}, "
+                f"tools_param={'explicit' if tools is not None else 'default'}, "
+                f"skip_filter={skip_filter}, prompt_len={len(prompt)}")
+    # When format_schema is set, skip tools to avoid conflict
+    # (structured JSON output and tool calling are mutually exclusive)
+    if format_schema:
+        tools = None
+        logger.info(f"[generate_response] format_schema provided → tools disabled")
+    elif tools is None:
         tools = TOOLS
     tool_dispatch = tool_dispatch or {}
 
@@ -555,10 +571,12 @@ def generate_response(
 
         options: Dict[str, Any] = {
             'temperature': LLM_TEMPERATURE,
-            'num_predict': max_tokens or LLM_MAX_TOKENS,
+            'num_predict': _effective_max_tokens,
         }
         if num_ctx:
             options['num_ctx'] = num_ctx
+
+        logger.info(f"[generate_response] options={options}, tools_count={len(tools) if tools else 0}")
 
         reply = ''
         response = None
@@ -586,35 +604,67 @@ def generate_response(
             part = response.message.content or ''
             tool_calls = response.message.tool_calls
 
+            # Debug: log raw response details
+            _done_reason = getattr(response, 'done_reason', 'N/A')
+            _eval_count = getattr(response, 'eval_count', 'N/A')
+            _prompt_eval_count = getattr(response, 'prompt_eval_count', 'N/A')
+            logger.info(f"[generate_response iter={iteration}] raw response: "
+                        f"content_len={len(part)}, tool_calls={len(tool_calls) if tool_calls else 0}, "
+                        f"done_reason={_done_reason}, eval_count={_eval_count}, "
+                        f"prompt_eval_count={_prompt_eval_count}")
+
             iteration += 1
 
             if tool_calls:
                 for tool_call in tool_calls:
                     tool_name = tool_call.function.name
                     args = tool_call.function.arguments or {}
+                    logger.info(f"[generate_response iter={iteration}] 🔧 tool call: {tool_name}({list(args.keys())})")
                     tool_func = tool_dispatch.get(tool_name)
                     result_str = tool_func(**args) if tool_func else f"Tool '{tool_name}' not available."
+                    logger.info(f"[generate_response iter={iteration}] 🔧 tool result len={len(str(result_str))}")
                     messages.append({'role': 'tool', 'content': result_str, 'tool_name': tool_name})
                 iteration += 1
                 continue
             elif part:
                 reply = part.strip()
-                logger.info(f"[generate_response iter={iteration}] ✅ final answer (no tools), exiting loop")
+                logger.info(f"[generate_response iter={iteration}] ✅ final answer (no tools), "
+                            f"reply_len={len(reply)}, exiting loop")
                 break
+            else:
+                logger.warning(f"[generate_response iter={iteration}] ⚠️ empty content and no tool calls")
 
         if iteration >= max_loop_iterations:
             logger.warning(f"[generate_response] hit max_loop_iterations={max_loop_iterations}, returning best content so far")
 
         _log_llm(prompt, reply, system_prompt)
-        return filter_hallucinations(reply)
+
+        # When format_schema is set or skip_filter requested, do NOT apply
+        # filter_hallucinations as it strips CJK characters and can corrupt output.
+        if format_schema or skip_filter:
+            logger.info(f"[generate_response] returning reply len={len(reply)} (no filter), preview={reply[:200]!r}")
+            return reply
+
+        filtered = filter_hallucinations(reply)
+        if len(filtered) != len(reply):
+            logger.warning(f"[generate_response] filter_hallucinations changed len: {len(reply)} → {len(filtered)} "
+                           f"(diff={len(reply) - len(filtered)})")
+        logger.info(f"[generate_response] returning reply len={len(filtered)}, preview={filtered[:200]!r}")
+        return filtered
 
     except Exception as e:
-        logger.error(f"Error calling Ollama: {e}")
+        logger.error(f"Error calling Ollama: {e}", exc_info=True)
         return None
 
-def stream_response(prompt: str, system_prompt: str = None, model: str = None) -> Generator[str, None, None]:
+def stream_response(prompt: str, system_prompt: str = None, model: str = None, max_tokens: int = None) -> Generator[str, None, None]:
     """
-    Stream a response from Ollama, filtering out igid blocks in real-time.
+    Stream a response from Ollama token-by-token.
+    Properly handles thinking models (qwen3, deepseek, etc.) by using
+    think="low" and separating thinking vs content chunks.
+
+    Args:
+        max_tokens: Override num_predict (default LLM_MAX_TOKENS). Use higher
+                    values for long-form content generation.
     """
     model = model or DEFAULT_MODEL
     messages = []
@@ -628,53 +678,44 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None) -
             messages=messages,
             options={
                 'temperature': LLM_TEMPERATURE,
-                'num_predict': LLM_MAX_TOKENS,
+                'num_predict': max_tokens or LLM_MAX_TOKENS,
             },
+            think="low",
         )
 
-        is_thinking = False
         full_response = []
-        think_buffer = ""
 
         for chunk in stream:
-            content = filter_hallucinations(chunk['message']['content'])
-            if not content:
+            # Handle both dict-like and object-like access (ollama sdk versions)
+            msg = getattr(chunk, 'message', None)
+            if msg is None and isinstance(chunk, dict):
+                msg = chunk.get('message', {})
+
+            if not msg:
                 continue
 
-            if not is_thinking:
-                if "igid" in content:
-                    is_thinking = True
+            # Thinking tokens — skip, just signal status
+            thinking = getattr(msg, 'thinking', '') or ''
+            if not thinking and isinstance(msg, dict):
+                thinking = msg.get('thinking', '') or ''
+            if thinking:
+                if not full_response:
                     yield "__STATUS__:thinking"
-                    parts = content.split("igid", 1)
-                    if parts[0]:
-                        yield parts[0]
-                        full_response.append(parts[0])
-                    if "igid" in parts[1]:
-                        is_thinking = False
-                        subparts = parts[1].split("igid", 1)
-                        if subparts[1]:
-                            yield subparts[1]
-                            full_response.append(subparts[1])
-                    continue
-                else:
-                    yield content
-                    full_response.append(content)
-            else:
-                if "igid" in content:
-                    is_thinking = False
-                    parts = content.split("igid", 1)
-                    if len(parts) > 1 and parts[1]:
-                        yield parts[1]
-                        full_response.append(parts[1])
-                else:
-                    # Optional: periodically yield thinking status to keep connection alive
-                    if len(full_response) % 20 == 0:
-                        yield "__STATUS__:thinking"
+                continue
+
+            # Content tokens — yield immediately
+            content = getattr(msg, 'content', '') or ''
+            if not content and isinstance(msg, dict):
+                content = msg.get('content', '') or ''
+
+            if content:
+                yield content
+                full_response.append(content)
 
         _log_llm(prompt, "".join(full_response), system_prompt)
 
     except Exception as e:
-        logger.error(f"Error in Ollama stream: {e}")
+        logger.error(f"Error in Ollama stream: {e}", exc_info=True)
         yield f"Lỗi kết nối AI: {str(e)}"
 
 
@@ -749,122 +790,167 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
 
     max_loops = 10
     iteration = 0
+    done = False
 
-    while iteration < max_loops:
-        try:
-            chat_params = {
-                'model': model,
-                'messages': messages,
-                'options': {
-                    'temperature': LLM_TEMPERATURE,
-                    'num_predict': LLM_MAX_TOKENS,
-                },
-                'stream': True,
-                'think': True  # Enable thinking if supported
-            }
-            if TOOLS:
-                chat_params['tools'] = TOOLS
+    while iteration < max_loops and not done:
+        max_stream_retries = 3
+        stream_attempt = 0
+        stream_success = False
+        
+        while stream_attempt < max_stream_retries and not stream_success:
+            stream_attempt += 1
+            try:
+                chat_params = {
+                    'model': model,
+                    'messages': messages,
+                    'options': {
+                        'temperature': LLM_TEMPERATURE,
+                        'num_predict': LLM_MAX_TOKENS,
+                    },
+                    'stream': True,
+                    'think': 'low'  # Low thinking for faster responses
+                }
+                if TOOLS:
+                    chat_params['tools'] = TOOLS
 
-            stream = _chat_stream_with_retry(**chat_params)
-            
-            current_tool_calls = []
-            current_content = []
-            is_thinking = False
-
-            for chunk in stream:
-                # Handle both dict-like and object-like access for chunk/message
-                msg = getattr(chunk, 'message', {})
-                if not msg and hasattr(chunk, 'get'):
-                    msg = chunk.get('message', {})
-
-                # Handle Thinking
-                thinking = getattr(msg, 'thinking', "")
-                if not thinking and hasattr(msg, 'get'):
-                    thinking = msg.get('thinking', "")
+                stream = _chat_stream_with_retry(**chat_params)
                 
-                if thinking:
-                    yield f"__THINK__:{thinking}"
-                
-                # Handle Content
-                content = getattr(msg, 'content', "")
-                if not content and hasattr(msg, 'get'):
-                    content = msg.get('content', "")
-                
-                if content:
-                    content = filter_hallucinations(content)
-                    if content: # Could be empty after filtering
-                        yield content
-                        current_content.append(content)
+                current_tool_calls = []
+                current_content = []
+                is_thinking = False
 
-                # Collect Tool Calls
-                tool_calls = getattr(msg, 'tool_calls', [])
-                if not tool_calls and hasattr(msg, 'get'):
-                    tool_calls = msg.get('tool_calls', [])
-                
-                if tool_calls:
-                    current_tool_calls.extend(tool_calls)
+                for chunk in stream:
+                    # Handle both dict-like and object-like access for chunk/message
+                    msg = getattr(chunk, 'message', {})
+                    if not msg and hasattr(chunk, 'get'):
+                        msg = chunk.get('message', {})
 
-            # If no tool calls, we are done
-            if not current_tool_calls:
-                # Log the final response
-                _log_llm("Chat history...", "".join(current_content))
-                break
+                    # Handle Thinking
+                    thinking = getattr(msg, 'thinking', "")
+                    if not thinking and hasattr(msg, 'get'):
+                        thinking = msg.get('thinking', "")
+                    
+                    if thinking:
+                        yield f"__THINK__:{thinking}"
+                    
+                    # Handle Content
+                    content = getattr(msg, 'content', "")
+                    if not content and hasattr(msg, 'get'):
+                        content = msg.get('content', "")
+                    
+                    if content:
+                        content = filter_hallucinations(content)
+                        if content: # Could be empty after filtering
+                            yield content
+                            current_content.append(content)
 
-            # Handle Tool Calls
-            messages.append({'role': 'assistant', 'content': "".join(current_content), 'tool_calls': current_tool_calls})
-            
-            serializable_calls = []
-            for tc in current_tool_calls:
-                tool_name = tc.function.name
-                args = tc.function.arguments or {}
-                
-                # Yield marker for UI
-                yield f"__STATUS__:executing_tool:{tool_name}"
-                
-                serializable_calls.append({
-                    'function': {'name': tool_name, 'arguments': args}
-                })
+                    # Collect Tool Calls
+                    tool_calls = getattr(msg, 'tool_calls', [])
+                    if not tool_calls and hasattr(msg, 'get'):
+                        tool_calls = msg.get('tool_calls', [])
+                    
+                    if tool_calls:
+                        current_tool_calls.extend(tool_calls)
 
-                # Execute
-                tool_func = all_dispatch.get(tool_name)
-                if tool_func:
-                    try:
-                        result = tool_func(**args)
-                        
-                        # Special handling for search results to show in UI
-                        if tool_name == 'web_search' and isinstance(result, list):
-                            yield f"__SEARCH_RESULTS__:{json.dumps(result)}"
-                        
-                        if result is None:
-                            result_str = "Không có kết quả."
-                        elif isinstance(result, (dict, list)):
-                            result_str = json.dumps(result, ensure_ascii=False)
-                            if len(result_str) > 8000:
-                                result_str = result_str[:8000] + "..."
-                        else:
-                            result_str = str(result)[:8000]
-                    except Exception as e:
-                        logger.error(f"Tool {tool_name} execution error: {e}")
-                        result_str = f"Lỗi khi thực thi công cụ: {str(e)}"
+                # Mark stream as successfully completed
+                stream_success = True
+
+                # If no tool calls, we are done — exit both loops
+                if not current_tool_calls:
+                    _log_llm("Chat history...", "".join(current_content))
+                    done = True
+                    break
+
+                # Handle Tool Calls
+                messages.append({'role': 'assistant', 'content': "".join(current_content), 'tool_calls': current_tool_calls})
+                
+                serializable_calls = []
+                for tc in current_tool_calls:
+                    tool_name = tc.function.name
+                    args = tc.function.arguments or {}
+                    
+                    # Yield marker for UI
+                    yield f"__STATUS__:executing_tool:{tool_name}"
+                    
+                    serializable_calls.append({
+                        'function': {'name': tool_name, 'arguments': args}
+                    })
+
+                    # Execute
+                    tool_func = all_dispatch.get(tool_name)
+                    if tool_func:
+                        try:
+                            result = tool_func(**args)
+                            
+                            # Special handling for search results to show in UI
+                            if tool_name == 'web_search' and isinstance(result, list):
+                                yield f"__SEARCH_RESULTS__:{json.dumps(result)}"
+                            
+                            if result is None:
+                                result_str = "Không có kết quả."
+                            elif isinstance(result, (dict, list)):
+                                result_str = json.dumps(result, ensure_ascii=False)
+                                if len(result_str) > 8000:
+                                    result_str = result_str[:8000] + "..."
+                            else:
+                                result_str = str(result)[:8000]
+                        except Exception as e:
+                            logger.error(f"Tool {tool_name} execution error: {e}")
+                            result_str = f"Lỗi khi thực thi công cụ: {str(e)}"
+                    else:
+                        result_str = f"Tool '{tool_name}' not found."
+
+                    messages.append({
+                        'role': 'tool',
+                        'content': result_str,
+                        'tool_name': tool_name
+                    })
+
+                yield f"__TOOL_CALLS__:{json.dumps(serializable_calls)}"
+                iteration += 1
+                continue
+
+            except ResponseError as e:
+                # Handle 503 Service Unavailable errors with retry
+                if '503' in str(e) or 'Service Unavailable' in str(e) or 'Service Temporarily Unavailable' in str(e):
+                    if stream_attempt < max_stream_retries:
+                        wait_time = 2 ** stream_attempt
+                        logger.warning(f"[Ollama] Stream iteration attempt {stream_attempt}/{max_stream_retries} "
+                                     f"failed (503 Service Unavailable), retrying in {wait_time}s...")
+                        import time as _time
+                        _time.sleep(wait_time)
+                        continue  # Retry the stream
+                    else:
+                        # All retries exhausted
+                        logger.error(f"[Ollama] All stream retries exhausted: {e}")
+                        yield "Xin lỗi, hệ thống AI tạm thời quá tải. Vui lòng thử lại sau."
+                        return
                 else:
-                    result_str = f"Tool '{tool_name}' not found."
+                    # Non-503 ResponseError, treat as normal error
+                    logger.error(f"Error in stream_chat_ai: {e}", exc_info=True)
+                    yield f"Đã xảy ra lỗi khi xử lý. Vui lòng thử lại."
+                    return
 
-                messages.append({
-                    'role': 'tool',
-                    'content': result_str,
-                    'tool_name': tool_name
-                })
-
-            yield f"__TOOL_CALLS__:{json.dumps(serializable_calls)}"
-            iteration += 1
-            continue
-
-        except Exception as e:
-            logger.error(f"Error in stream_chat_ai: {e}", exc_info=True)
-            yield f"Error: {str(e)}"
-            if debug or DEBUG_LLM:
-                yield f"__DEBUG_ERROR__:{str(e)}"
-            break
+            except Exception as e:
+                # Other exceptions - check if retryable
+                err_str = str(e)
+                is_retryable = any(tok in err_str for tok in ['503', '502', '504', 'Service Unavailable',
+                                                               'temporarily unavailable', 'overloaded'])
+                if is_retryable and stream_attempt < max_stream_retries:
+                    wait_time = 2 ** stream_attempt
+                    logger.warning(f"[Ollama] Stream attempt {stream_attempt}/{max_stream_retries} "
+                                 f"failed ({err_str[:100]}), retrying in {wait_time}s...")
+                    import time as _time
+                    _time.sleep(wait_time)
+                    continue  # Retry the stream
+                else:
+                    # Non-retryable error or retries exhausted
+                    logger.error(f"Error in stream_chat_ai: {e}", exc_info=True)
+                    if debug or DEBUG_LLM:
+                        yield f"__DEBUG_ERROR__:{str(e)}"
+                    # Don't expose raw error to user
+                    yield "Đã xảy ra lỗi. Vui lòng thử lại sau."
+                    return
 
 def classify_message(message: str, model: str = None) -> Dict[str, Any]:
     """

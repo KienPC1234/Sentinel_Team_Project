@@ -5,22 +5,6 @@
 
 {% block head_extra %}
 <style>
-    .ck-editor__editable {
-        min-height: 500px !important;
-        background: rgba(15, 23, 42, 0.6) !important;
-        backdrop-filter: blur(12px);
-        color: #e2e8f0 !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        border-radius: 0 0 1.5rem 1.5rem !important;
-        padding: 2rem !important;
-    }
-    .ck-toolbar {
-        background: rgba(30, 41, 59, 0.8) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        border-radius: 1.5rem 1.5rem 0 0 !important;
-    }
-    .ck-content pre { background: #000 !important; border-radius: 12px; padding: 1rem; }
-
     .admin-form-input {
         width: 100%;
         background: rgba(15, 23, 42, 0.4);
@@ -128,42 +112,77 @@
                         <div class="section-icon bg-purple-500/10 text-purple-400 border border-purple-500/20"><i class="bi bi-list-check"></i></div>
                         <div>
                             <h2 class="text-sm font-black text-white uppercase tracking-widest">Quiz kiểm tra</h2>
-                            <p class="text-[10px] text-white/30 mt-0.5">Câu hỏi trắc nghiệm 4 đáp án</p>
+                            <p class="text-[10px] text-white/30 mt-0.5">Hỗ trợ chọn 1 đáp án, chọn nhiều đáp án và đúng/sai</p>
+                        </div>
+                        <button type="button" @click="addQuiz()" class="ml-auto px-4 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 text-[10px] font-black uppercase tracking-widest border border-purple-500/20 hover:bg-purple-500/20 transition-all">
+                            <i class="bi bi-plus-lg mr-1"></i> Thêm quiz
+                        </button>
+                    </div>
+
+                    <div class="space-y-5">
+                        <template x-for="(quiz, qi) in quizzes" :key="qi">
+                            <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4 transition-all hover:border-purple-500/15">
+                                <div class="flex items-center justify-between">
+                                    <span class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-purple-500/10 border border-purple-500/15 text-xs font-black text-purple-400">
+                                        <i class="bi bi-patch-question"></i> Quiz #<span x-text="qi + 1"></span>
+                                    </span>
+                                    <button type="button" @click="removeQuiz(qi)" class="px-3 py-1 rounded-lg bg-red-500/10 text-red-400 text-[10px] font-bold border border-red-500/15 hover:bg-red-500/20 transition-all">
+                                        <i class="bi bi-trash3 mr-1"></i> Xóa
+                                    </button>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Câu hỏi</label>
+                                    <textarea x-model="quiz.question" class="admin-form-input" rows="2" placeholder="Nhập câu hỏi trắc nghiệm..."></textarea>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Loại câu hỏi</label>
+                                    <select x-model="quiz.question_type" class="admin-form-input" @change="onTypeChange(quiz)">
+                                        <option value="single_choice">Chọn 1 đáp án</option>
+                                        <option value="multiple_choice">Chọn nhiều đáp án</option>
+                                        <option value="true_false">Đúng / Sai</option>
+                                    </select>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1"
+                                           x-text="quiz.question_type === 'multiple_choice' ? 'Đáp án (checkbox = các đáp án đúng)' : 'Đáp án (radio = đáp án đúng)'"></label>
+                                    <template x-for="(opt, oi) in quiz.options" :key="oi">
+                                        <div class="quiz-option">
+                                            <input type="radio" :name="'quiz_correct_' + qi" :value="oi"
+                                                   :checked="quiz.correct_index === oi"
+                                                   x-show="quiz.question_type !== 'multiple_choice'"
+                                                   @change="quiz.correct_index = oi; quiz.correct_answer = quiz.options[oi]">
+                                            <input type="checkbox"
+                                                   x-show="quiz.question_type === 'multiple_choice'"
+                                                   :checked="quiz.correct_indices.includes(oi)"
+                                                   @change="toggleMultiAnswer(quiz, oi)">
+                                            <input type="text" x-model="quiz.options[oi]" class="admin-form-input flex-1"
+                                                   :placeholder="'Đáp án ' + String.fromCharCode(65 + oi)"
+                                                   @input="syncAnswerText(quiz, oi)">
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Giải thích đáp án</label>
+                                    <textarea x-model="quiz.explanation" class="admin-form-input" rows="2" placeholder="Giải thích tại sao đáp án đúng..."></textarea>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div x-show="quizzes.length === 0" class="p-8 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center">
+                            <i class="bi bi-patch-question text-3xl text-white/10 mb-2 block"></i>
+                            <p class="text-white/20 text-xs font-bold">Chưa có quiz nào</p>
+                            <button type="button" @click="addQuiz()" class="mt-3 px-4 py-2 rounded-lg bg-purple-500/10 text-purple-400 text-xs font-bold border border-purple-500/20 hover:bg-purple-500/20 transition-all">
+                                <i class="bi bi-plus-lg mr-1"></i> Thêm quiz đầu tiên
+                            </button>
                         </div>
                     </div>
 
-                    <div class="space-y-4">
-                        <div class="space-y-2">
-                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Câu hỏi</label>
-                            <textarea name="quiz_question" class="admin-form-input" rows="2" placeholder="Nhập câu hỏi trắc nghiệm...">{{ quiz.question|default:"" }}</textarea>
-                        </div>
-
-                        <div class="space-y-3">
-                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Đáp án (chọn radio = đáp án đúng)</label>
-                            <div class="quiz-option">
-                                <input type="radio" name="quiz_correct_idx" value="0">
-                                <input type="text" name="quiz_option_0" class="admin-form-input flex-1" placeholder="Đáp án A" value="">
-                            </div>
-                            <div class="quiz-option">
-                                <input type="radio" name="quiz_correct_idx" value="1">
-                                <input type="text" name="quiz_option_1" class="admin-form-input flex-1" placeholder="Đáp án B" value="">
-                            </div>
-                            <div class="quiz-option">
-                                <input type="radio" name="quiz_correct_idx" value="2">
-                                <input type="text" name="quiz_option_2" class="admin-form-input flex-1" placeholder="Đáp án C" value="">
-                            </div>
-                            <div class="quiz-option">
-                                <input type="radio" name="quiz_correct_idx" value="3">
-                                <input type="text" name="quiz_option_3" class="admin-form-input flex-1" placeholder="Đáp án D" value="">
-                            </div>
-                            <input type="hidden" name="quiz_correct" id="quizCorrectHidden" value="{{ quiz.correct_answer|default:'' }}">
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Giải thích đáp án</label>
-                            <textarea name="quiz_explanation" class="admin-form-input" rows="2" placeholder="Giải thích tại sao đáp án đúng...">{{ quiz.explanation|default:"" }}</textarea>
-                        </div>
-                    </div>
+                    <!-- Hidden field for quizzes JSON -->
+                    <input type="hidden" name="quizzes_json" :value="JSON.stringify(quizzesForSave())">
                 </div>
 
                 <!-- Scenario Section -->
@@ -276,7 +295,7 @@
                         <h4 class="text-[10px] font-black text-white/30 uppercase tracking-widest">Tóm tắt</h4>
                         <div class="flex items-center justify-between text-xs">
                             <span class="text-white/40">Quiz</span>
-                            <span class="font-bold" :class="quizHasData ? 'text-green-400' : 'text-yellow-500'" x-text="quizHasData ? '✓ Đã tạo' : '⚠ Chưa có'"></span>
+                            <span class="font-bold" :class="quizzes.length > 0 ? 'text-green-400' : 'text-yellow-500'" x-text="quizzes.length > 0 ? '✓ ' + quizzes.length + ' quiz' : '⚠ Chưa có'"></span>
                         </div>
                         <div class="flex items-center justify-between text-xs">
                             <span class="text-white/40">Kịch bản</span>
@@ -302,14 +321,122 @@ function lessonEditor() {
     let initSteps = [];
     try { initSteps = JSON.parse('{{ scenario_steps_json|escapejs }}') || []; } catch(e) { initSteps = []; }
 
-    let quizOptions = [];
-    try { quizOptions = JSON.parse('{{ quiz_options_json|escapejs }}') || []; } catch(e) { quizOptions = []; }
+    let initQuizzes = [];
+    try { initQuizzes = JSON.parse('{{ quizzes_json|escapejs }}') || []; } catch(e) { initQuizzes = []; }
 
-    const quizCorrect = "{{ quiz.correct_answer|default:''|escapejs }}";
+    // Normalize quizzes: ensure proper structure with correct_index
+    initQuizzes = initQuizzes.map(q => {
+        const opts = (q.options && q.options.length === 4) ? [...q.options] : ['', '', '', ''];
+        const qType = q.question_type || 'single_choice';
+        if (qType === 'true_false') {
+            opts[0] = 'Đúng';
+            opts[1] = 'Sai';
+            opts[2] = '';
+            opts[3] = '';
+        }
+        const correctAnswer = q.correct_answer || '';
+        const correctIdx = opts.indexOf(correctAnswer);
+        const rawCorrectAnswers = Array.isArray(q.correct_answers) ? q.correct_answers : (correctAnswer ? [correctAnswer] : []);
+        const correctIndices = rawCorrectAnswers
+            .map(ans => opts.indexOf(ans))
+            .filter(idx => idx >= 0);
+        return {
+            question: q.question || '',
+            question_type: qType,
+            options: opts,
+            correct_answer: correctAnswer,
+            correct_answers: rawCorrectAnswers,
+            correct_index: correctIdx >= 0 ? correctIdx : 0,
+            correct_indices: correctIndices.length ? correctIndices : [0],
+            explanation: q.explanation || '',
+        };
+    });
 
     return {
         steps: initSteps,
-        quizHasData: false,
+        quizzes: initQuizzes,
+
+        addQuiz() {
+            this.quizzes.push({
+                question: '',
+                question_type: 'single_choice',
+                options: ['', '', '', ''],
+                correct_answer: '',
+                correct_answers: [],
+                correct_index: 0,
+                correct_indices: [0],
+                explanation: ''
+            });
+        },
+
+        removeQuiz(idx) {
+            this.quizzes.splice(idx, 1);
+        },
+
+        onTypeChange(quiz) {
+            if (quiz.question_type === 'true_false') {
+                quiz.options = ['Đúng', 'Sai', '', ''];
+                quiz.correct_index = 0;
+                quiz.correct_indices = [0];
+                quiz.correct_answer = quiz.options[0];
+                quiz.correct_answers = [quiz.options[0]];
+                return;
+            }
+            if (quiz.question_type === 'multiple_choice') {
+                if (!Array.isArray(quiz.correct_indices) || !quiz.correct_indices.length) {
+                    quiz.correct_indices = [0];
+                }
+                quiz.correct_answers = quiz.correct_indices.map(i => quiz.options[i]).filter(Boolean);
+                quiz.correct_answer = quiz.correct_answers[0] || '';
+                return;
+            }
+            quiz.correct_index = Number.isInteger(quiz.correct_index) ? quiz.correct_index : 0;
+            quiz.correct_answer = quiz.options[quiz.correct_index] || quiz.options[0] || '';
+            quiz.correct_answers = [quiz.correct_answer].filter(Boolean);
+        },
+
+        toggleMultiAnswer(quiz, optionIndex) {
+            if (!Array.isArray(quiz.correct_indices)) {
+                quiz.correct_indices = [];
+            }
+            if (quiz.correct_indices.includes(optionIndex)) {
+                quiz.correct_indices = quiz.correct_indices.filter(i => i !== optionIndex);
+            } else {
+                quiz.correct_indices.push(optionIndex);
+            }
+            if (!quiz.correct_indices.length) {
+                quiz.correct_indices = [0];
+            }
+            quiz.correct_answers = quiz.correct_indices.map(i => quiz.options[i]).filter(Boolean);
+            quiz.correct_answer = quiz.correct_answers[0] || '';
+        },
+
+        syncAnswerText(quiz, optionIndex) {
+            if (quiz.question_type === 'multiple_choice') {
+                quiz.correct_answers = quiz.correct_indices.map(i => quiz.options[i]).filter(Boolean);
+                quiz.correct_answer = quiz.correct_answers[0] || '';
+                return;
+            }
+            if (quiz.correct_index === optionIndex) {
+                quiz.correct_answer = quiz.options[optionIndex];
+                quiz.correct_answers = [quiz.correct_answer].filter(Boolean);
+            }
+        },
+
+        quizzesForSave() {
+            return this.quizzes.map(q => ({
+                question: q.question,
+                question_type: q.question_type || 'single_choice',
+                options: q.options,
+                correct_answer: q.question_type === 'multiple_choice'
+                    ? (q.correct_indices.map(i => q.options[i]).filter(Boolean)[0] || '')
+                    : (q.options[q.correct_index] || q.options[0] || ''),
+                correct_answers: q.question_type === 'multiple_choice'
+                    ? q.correct_indices.map(i => q.options[i]).filter(Boolean)
+                    : [(q.options[q.correct_index] || q.options[0] || '')].filter(Boolean),
+                explanation: q.explanation,
+            }));
+        },
 
         addStep() {
             this.steps.push({ speaker: 'scammer', text: '', note: '' });
@@ -319,56 +446,8 @@ function lessonEditor() {
             this.steps.splice(idx, 1);
         },
 
-        updateQuizStatus() {
-            const q = document.querySelector('[name="quiz_question"]');
-            this.quizHasData = q && q.value.trim().length > 0;
-        },
-
         init() {
-            // Populate quiz option values
-            if (quizOptions.length) {
-                quizOptions.forEach((opt, i) => {
-                    const input = document.querySelector('[name="quiz_option_' + i + '"]');
-                    if (input) input.value = opt;
-                });
-                // Set correct radio
-                const correctIdx = quizOptions.indexOf(quizCorrect);
-                if (correctIdx >= 0) {
-                    const radio = document.querySelector('[name="quiz_correct_idx"][value="' + correctIdx + '"]');
-                    if (radio) radio.checked = true;
-                }
-            }
-
-            // Sync quiz_correct hidden field when radio changes
-            document.querySelectorAll('[name="quiz_correct_idx"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    const idx = parseInt(radio.value);
-                    const optInput = document.querySelector('[name="quiz_option_' + idx + '"]');
-                    if (optInput) {
-                        document.getElementById('quizCorrectHidden').value = optInput.value;
-                    }
-                });
-            });
-
-            // Sync when option text changes
-            for (let i = 0; i < 4; i++) {
-                const optInput = document.querySelector('[name="quiz_option_' + i + '"]');
-                if (optInput) {
-                    optInput.addEventListener('input', () => {
-                        const checked = document.querySelector('[name="quiz_correct_idx"]:checked');
-                        if (checked && parseInt(checked.value) === i) {
-                            document.getElementById('quizCorrectHidden').value = optInput.value;
-                        }
-                        this.updateQuizStatus();
-                    });
-                }
-            }
-
-            // Quiz question change
-            const qEl = document.querySelector('[name="quiz_question"]');
-            if (qEl) qEl.addEventListener('input', () => this.updateQuizStatus());
-
-            this.updateQuizStatus();
+            // Nothing extra needed — Alpine.js handles everything reactively
         }
     };
 }

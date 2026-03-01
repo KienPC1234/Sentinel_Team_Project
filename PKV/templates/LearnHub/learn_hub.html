@@ -2,7 +2,7 @@
 {% block title %}Kiến thức phòng tránh - ShieldCall VN{% endblock %}
 
 {% block content %}
-<div x-data="{activeTab:'articles'}" class="animate-fadein max-w-6xl mx-auto space-y-10">
+<div x-data="{activeTab:'lessons'}" class="animate-fadein max-w-6xl mx-auto space-y-10">
     <!-- Page Header -->
     <div class="text-center space-y-4" data-aos="fade-up">
         <div class="inline-flex items-center justify-center w-20 h-20 rounded-[2.5rem] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-lg shadow-cyan-500/10 mb-2" data-aos="zoom-in" data-aos-delay="100">
@@ -17,7 +17,7 @@
     <!-- Tab Navigation -->
     <div class="flex justify-center gap-2 p-1.5 bg-white/5 border border-white/10 rounded-[2rem] w-fit mx-auto backdrop-blur-xl" data-aos="fade-up" data-aos-delay="400">
         <button class="px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all" 
-                :class="activeTab==='articles' ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white/60'" @click="activeTab='articles'">
+                :class="activeTab==='lessons' ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white/60'" @click="activeTab='lessons'">
             <i class="bi bi-journal-text mr-2"></i> Bài học
         </button>
         <button class="px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all" 
@@ -30,21 +30,67 @@
         </button>
     </div>
 
-    <!-- Articles Grid -->
-    <div x-show="activeTab==='articles'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" data-aos="fade-up" data-aos-delay="500">
+    <!-- ═══ LESSONS TAB ═══ -->
+    <div x-show="activeTab==='lessons'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {% for article in articles %}
-            <div class="liquid-card p-0 group overflow-hidden border border-white/5 hover:border-cyan-500/30 transition-all">
-                <div class="aspect-video bg-white/5 overflow-hidden">
-                    {% if article.cover_image %}
-                        <img src="{{ article.cover_image.url }}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+
+            <!-- LearnLessons (from Magic Create) -->
+            {% for lesson in lessons %}
+            <div class="liquid-card p-0 group overflow-hidden border border-white/5 hover:border-cyan-500/30 transition-all" data-aos="fade-up" data-aos-delay="{{ forloop.counter0|add:1 }}00">
+                <div class="aspect-video bg-white/5 overflow-hidden relative">
+                    {% if lesson.cover_image %}
+                        <img src="{{ lesson.cover_image.url }}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
                     {% else %}
-                        <div class="w-full h-full flex items-center justify-center text-white/5 uppercase font-black text-xs">ShieldCall Edu</div>
+                        <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-500/5 to-purple-500/5">
+                            <i class="bi bi-shield-check text-5xl text-white/5"></i>
+                        </div>
                     {% endif %}
+                    <div class="absolute top-3 left-3">
+                        <span class="px-2 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 text-[8px] font-black uppercase tracking-widest backdrop-blur-sm border border-cyan-500/20">
+                            <i class="bi bi-stars mr-1"></i>AI
+                        </span>
+                    </div>
                 </div>
                 <div class="p-6 space-y-4">
                     <div class="flex items-center justify-between">
                         <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[9px] font-black uppercase tracking-widest">
+                            {{ lesson.get_category_display }}
+                        </span>
+                        <span class="text-[9px] font-bold text-white/20 uppercase tracking-widest">{{ lesson.created_at|date:"d/m/Y" }}</span>
+                    </div>
+                    <h3 class="text-base font-black text-white line-clamp-2 tracking-tight group-hover:text-cyan-400 transition-colors">
+                        {{ lesson.title }}
+                    </h3>
+                    <p class="text-white/40 text-[11px] font-medium leading-relaxed line-clamp-3">
+                        {{ lesson.content|striptags|truncatechars:150 }}
+                    </p>
+                    <div class="pt-4 border-t border-white/5 flex items-center justify-between">
+                        <a href="{% url 'lesson-detail' lesson.slug %}" class="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center hover:gap-2 transition-all">
+                            ĐỌC BÀI HỌC <i class="bi bi-arrow-right ml-1"></i>
+                        </a>
+                        {% if lesson.quizzes.count > 0 %}
+                        <span class="text-[9px] text-purple-400/60 font-bold"><i class="bi bi-patch-question mr-1"></i>{{ lesson.quizzes.count }} quiz</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Articles -->
+            {% for article in articles %}
+            <div class="liquid-card p-0 group overflow-hidden border border-white/5 hover:border-cyan-500/30 transition-all" data-aos="fade-up" data-aos-delay="{{ forloop.counter0|add:1 }}00">
+                <div class="aspect-video bg-white/5 overflow-hidden">
+                    {% if article.cover_image %}
+                        <img src="{{ article.cover_image.url }}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+                    {% else %}
+                        <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-500/5 to-red-500/5">
+                            <i class="bi bi-newspaper text-5xl text-white/5"></i>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="px-3 py-1 rounded-full bg-orange-500/10 text-orange-400 text-[9px] font-black uppercase tracking-widest">
                             {{ article.get_category_display }}
                         </span>
                         <span class="text-[9px] font-bold text-white/20 uppercase tracking-widest">{{ article.created_at|date:"d/m/Y" }}</span>
@@ -53,7 +99,7 @@
                         {{ article.title }}
                     </h3>
                     <p class="text-white/40 text-[11px] font-medium leading-relaxed line-clamp-3">
-                        {{ article.content|striptags }}
+                        {{ article.content|striptags|truncatechars:150 }}
                     </p>
                     <div class="pt-4 border-t border-white/5">
                         <a href="{% url 'article-detail' article.slug %}" class="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center hover:gap-2 transition-all">
@@ -62,20 +108,335 @@
                     </div>
                 </div>
             </div>
-            {% empty %}
-            <div class="col-span-3 py-20 text-center text-white/10 uppercase font-black tracking-widest">Đang soạn thảo nội dung...</div>
             {% endfor %}
+
+            {% if not lessons and not articles %}
+            <div class="col-span-3 py-20 text-center text-white/10 uppercase font-black tracking-widest">Đang soạn thảo nội dung...</div>
+            {% endif %}
         </div>
     </div>
 
+    <!-- ═══ QUIZ TAB ═══ -->
+    <div x-show="activeTab==='quiz'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
+        {% if quizzes %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {% for q in quizzes %}
+            <div x-data="{selected: null, submitted: false, correct: false}" 
+                 class="liquid-card group flex flex-col h-full border border-white/5 hover:border-cyan-500/20 transition-all duration-500" 
+                 data-aos="fade-up" data-aos-delay="{{ forloop.counter0 }}50">
+                
+                <!-- Card Header -->
+                <div class="p-6 pb-0 flex items-start gap-4">
+                    <div class="relative group-hover:scale-110 transition-transform">
+                        <div class="absolute inset-0 bg-purple-500 blur-xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                        <div class="relative w-12 h-12 flex-shrink-0 rounded-[1.25rem] bg-slate-900 border border-purple-500/30 text-purple-400 flex items-center justify-center font-black text-lg">
+                            {{ forloop.counter }}
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-lg font-black text-white leading-tight mb-2 group-hover:text-cyan-400 transition-colors">{{ q.question }}</h3>
+                        <div class="flex flex-wrap gap-2">
+                            {% if q.lesson %}
+                            <a href="{% url 'lesson-detail' q.lesson.slug %}" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-cyan-500/5 border border-cyan-500/10 text-[9px] text-cyan-400/80 font-black uppercase tracking-widest hover:bg-cyan-500/10 hover:text-cyan-400 transition-all">
+                                <i class="bi bi-book"></i> {{ q.lesson.title|truncatechars:30 }}
+                            </a>
+                            {% elif q.article %}
+                            <a href="{% url 'article-detail' q.article.slug %}" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-orange-500/5 border border-orange-500/10 text-[9px] text-orange-400/80 font-black uppercase tracking-widest hover:bg-orange-500/10 hover:text-orange-400 transition-all">
+                                <i class="bi bi-newspaper"></i> {{ q.article.title|truncatechars:30 }}
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
 
-    <!-- Empty states for other tabs (Mock for now) -->
-    <div x-show="activeTab!=='articles'" class="liquid-card py-20 text-center space-y-4">
-        <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-white/20 mx-auto">
-            <i class="bi bi-hourglass-split text-3xl"></i>
+                <!-- Card Body: Options -->
+                <div class="p-6 flex-1 space-y-3">
+                    {% for opt in q.options %}
+                    <button @click="if(!submitted){selected='{{ opt|escapejs }}'}"
+                            :disabled="submitted"
+                            :class="submitted 
+                                ? ('{{ opt|escapejs }}'==='{{ q.correct_answer|escapejs }}' ? 'border-green-500/40 bg-green-500/10 text-green-400' : (selected==='{{ opt|escapejs }}' ? 'border-red-500/40 bg-red-500/10 text-red-400' : 'border-white/5 text-white/20 opacity-50'))
+                                : (selected==='{{ opt|escapejs }}' ? 'border-cyan-400/50 bg-cyan-400/10 text-white translate-x-1' : 'border-white/5 text-white/60 hover:border-white/20 hover:bg-white/5 hover:text-white')"
+                            class="w-full text-left px-5 py-4 rounded-2xl border text-sm font-bold transition-all duration-300 flex items-center justify-between group/opt">
+                        <div class="flex items-center gap-4">
+                            <span class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-[10px] font-black text-white/40 group-hover/opt:bg-cyan-500/20 group-hover/opt:text-cyan-400"
+                                  :class="selected==='{{ opt|escapejs }}' ? 'bg-cyan-500/20 text-cyan-400' : ''"
+                                  x-text="String.fromCharCode(64 + {{ forloop.counter }})">
+                            </span>
+                            <span>{{ opt }}</span>
+                        </div>
+                        <div class="flex items-center">
+                            <template x-if="submitted && '{{ opt|escapejs }}'==='{{ q.correct_answer|escapejs }}'">
+                                <i class="bi bi-check2-circle text-xl text-green-400"></i>
+                            </template>
+                            <template x-if="submitted && selected==='{{ opt|escapejs }}' && '{{ opt|escapejs }}'!=='{{ q.correct_answer|escapejs }}'">
+                                <i class="bi bi-x-circle text-xl text-red-400"></i>
+                            </template>
+                        </div>
+                    </button>
+                    {% endfor %}
+                </div>
+
+                <!-- Card Footer: Actions & Explanation -->
+                <div class="p-6 pt-0 space-y-4">
+                    <div class="flex items-center justify-between gap-4">
+                        <button @click="if(selected && !submitted){submitted=true; correct=(selected==='{{ q.correct_answer|escapejs }}')}"
+                                :disabled="!selected || submitted"
+                                class="flex-1 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl"
+                                :class="(!selected || submitted) ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5' : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:scale-[1.02] shadow-cyan-500/20'">
+                            <span x-show="!submitted">Kiểm tra đáp án</span>
+                            <span x-show="submitted && correct"><i class="bi bi-hand-thumbs-up-fill mr-2"></i>Chính xác!</span>
+                            <span x-show="submitted && !correct"><i class="bi bi-exclamation-octagon-fill mr-2"></i>Cần xem lại</span>
+                        </button>
+                    </div>
+
+                    {% if q.explanation %}
+                    <div x-show="submitted" 
+                         x-transition:enter="transition ease-out duration-500" 
+                         x-transition:enter-start="opacity-0 -translate-y-2" 
+                         x-transition:enter-end="opacity-100 translate-y-0"
+                         class="p-5 rounded-3xl bg-white/[0.03] border border-white/10 relative overflow-hidden group/exp">
+                        <div class="absolute top-0 right-0 w-24 h-24 bg-yellow-400/5 blur-3xl rounded-full -mr-10 -mt-10"></div>
+                        <span class="text-[9px] font-black text-yellow-400 uppercase tracking-[0.2em] flex items-center gap-2 mb-2">
+                            <i class="bi bi-lightbulb-fill"></i> TẠI SAO NHƯ VẬY?
+                        </span>
+                        <p class="text-[12px] text-white/70 font-medium leading-relaxed italic">
+                            {{ q.explanation }}
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
         </div>
-        <p class="text-white/40 text-xs font-black uppercase tracking-widest">Đang cập nhật nội dung...</p>
+        {% else %}
+        <div class="liquid-card py-24 text-center space-y-6 bg-white/[0.01] border-dashed">
+            <div class="relative w-24 h-24 mx-auto">
+                <div class="absolute inset-0 bg-white/5 blur-3xl rounded-full"></div>
+                <div class="relative w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center text-white/10 border border-white/5">
+                    <i class="bi bi-patch-question text-5xl"></i>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <p class="text-white/40 text-sm font-black uppercase tracking-widest">Đang chuẩn bị bộ câu hỏi</p>
+                <p class="text-white/10 text-xs font-bold prose-sm">Hệ thống AI đang tổng hợp các tình huống mới nhất cho bạn.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ═══ SCENARIOS TAB ═══ -->
+    <div x-show="activeTab==='scenarios'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
+        {% if scenarios %}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {% for sc in scenarios %}
+            <div x-data="scenarioPlayer" 
+            class="liquid-card p-0 flex flex-col h-full border border-white/5 hover:border-purple-500/20 transition-all duration-500 overflow-hidden" 
+            data-aos="fade-up" data-aos-delay="{{ forloop.counter0 }}50">
+                
+                {{ sc.content.steps|json_script }}
+
+                <!-- Card Cover / Header (Overlay when player inactive) -->
+                <div x-show="!open" class="relative aspect-[16/6] bg-slate-900 overflow-hidden group/head">
+                    <div class="absolute inset-0 bg-gradient-to-br from-purple-600/30 via-transparent to-cyan-500/20 z-0"></div>
+                    <div class="absolute inset-0 p-8 flex flex-col justify-center z-10">
+                        <div class="flex items-center gap-6">
+                            <div class="relative">
+                                <div class="absolute inset-0 bg-purple-500 blur-2xl opacity-40 group-hover/head:opacity-70 transition-opacity"></div>
+                                <div class="relative w-16 h-16 rounded-[1.5rem] bg-slate-950/80 border border-white/10 flex items-center justify-center text-white shadow-2xl group-hover/head:scale-110 transition-transform duration-500">
+                                    <i class="bi bi-mask text-3xl text-purple-400"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="text-2xl font-black text-white leading-tight mb-2 group-hover/head:text-purple-400 transition-colors">{{ sc.title }}</h3>
+                                <div class="flex items-center gap-4">
+                                    <span class="flex items-center gap-2 text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">
+                                        <i class="bi bi-layers-half text-purple-500"></i> <span x-text="maxSteps"></span> BƯỚC MÔ PHỎNG
+                                    </span>
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white/10"></span>
+                                    <span class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">{{ sc.created_at|date:"d M Y" }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scenario Description (Shown when player inactive) -->
+                <div x-show="!open" class="p-8 space-y-6 flex-1 flex flex-col relative z-10 bg-slate-950/20">
+                    <p class="text-white/50 text-[13px] font-medium leading-relaxed prose-sm italic line-clamp-3">
+                        "{{ sc.description }}"
+                    </p>
+                    <div class="mt-auto pt-6 flex items-center justify-between">
+                        <button @click="play()" class="relative w-full group/btn overflow-hidden rounded-2xl py-4 bg-purple-500 text-white font-black text-[11px] uppercase tracking-[0.3em] transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(168,85,247,0.3)]">
+                            <div class="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
+                            <span class="relative flex items-center justify-center gap-3">
+                                <i class="bi bi-play-circle-fill text-lg"></i> BẮT ĐẦU TRẢI NGHIỆM
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Immersive Chat Player -->
+                <div x-show="open" 
+                     x-transition:enter="transition ease-out duration-500" 
+                     x-transition:enter-start="opacity-0 scale-95" 
+                     x-transition:enter-end="opacity-100 scale-100"
+                     class="flex flex-col h-[600px] bg-[#03030b] relative border-t border-white/5" x-cloak>
+                    
+                    <!-- Player Header -->
+                    <div class="p-5 bg-white/[0.03] border-b border-white/10 flex items-center justify-between backdrop-blur-3xl sticky top-0 z-20">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 shadow-lg shadow-purple-500/10">
+                                <i class="bi bi-shield-shaded"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-[11px] font-black text-white uppercase tracking-widest">{{ sc.title }}</h4>
+                                <div class="flex items-center gap-2 mt-1.5 h-1.5 w-32">
+                                    <template x-for="(s, i) in steps" :key="i">
+                                        <div class="h-full rounded-full transition-all duration-500"
+                                             :class="i <= currentStep ? 'bg-purple-500 flex-1' : 'bg-white/10 w-1.5'"></div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                        <button @click="open = false" class="w-10 h-10 rounded-2xl hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-all flex items-center justify-center">
+                            <i class="bi bi-x-lg text-lg"></i>
+                        </button>
+                    </div>
+
+                    <!-- Chat Messages Area -->
+                    <div x-ref="chatContainer" class="flex-1 overflow-y-auto p-8 space-y-10 scrollbar-hide bg-[radial-gradient(circle_at_bottom,rgba(168,85,247,0.08),transparent_70%)]">
+                        <template x-for="(s, i) in steps" :key="i">
+                            <div x-show="i <= currentStep" 
+                                 x-transition:enter="transition ease-out duration-400" 
+                                 x-transition:enter-start="opacity-0 translate-y-6 scale-95" 
+                                 x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                                 class="flex flex-col gap-3">
+                                
+                                <div class="flex flex-col"
+                                     :class="s.actor === 'scammer' || s.actor === 'Kẻ lừa đảo' ? 'items-start' : (s.actor === 'victim' || s.actor === 'Nạn nhân' ? 'items-end' : 'items-center')">
+                                    
+                                    <!-- Actor Badge -->
+                                    <div class="flex items-center gap-2 mb-2 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest"
+                                         :class="s.actor === 'scammer' || s.actor === 'Kẻ lừa đảo' ? 'text-red-400 bg-red-400/5 border-red-500/10' : (s.actor === 'victim' || s.actor === 'Nạn nhân' ? 'text-cyan-400 bg-cyan-400/5 border-cyan-500/10' : 'text-purple-400 bg-purple-400/5 border-purple-500/10')">
+                                        <i class="bi" :class="s.actor === 'scammer' || s.actor === 'Kẻ lừa đảo' ? 'bi-exclamation-octagon-fill' : (s.actor === 'victim' || s.actor === 'Nạn nhân' ? 'bi-person-badge-fill' : 'bi-info-circle-fill')"></i>
+                                        <span x-text="s.actor"></span>
+                                    </div>
+
+                                    <!-- Message Bubble -->
+                                    <div class="max-w-[80%] rounded-[2rem] px-6 py-4 text-sm font-medium leading-relaxed shadow-2xl transition-all border relative group/bubble"
+                                         :class="s.actor === 'scammer' || s.actor === 'Kẻ lừa đảo' ? 'bg-gradient-to-br from-[#1a0f0f] to-[#120a0a] border-red-500/20 text-red-100/90 rounded-tl-lg' : (s.actor === 'victim' || s.actor === 'Nạn nhân' ? 'bg-gradient-to-br from-[#0f172a] to-[#0a101f] border-cyan-500/20 text-cyan-50/90 rounded-tr-lg' : 'bg-white/5 border-white/5 text-white/50 text-center italic py-2 px-8 rounded-full')">
+                                        <span x-text="s.text"></span>
+                                        <!-- Ambient glow -->
+                                        <div class="absolute inset-0 bg-white/5 opacity-0 group-hover/bubble:opacity-100 transition-opacity rounded-[2rem]"></div>
+                                    </div>
+
+                                    <!-- Insight Card -->
+                                    <div x-show="s.analysis" 
+                                         class="mt-4 p-5 rounded-3xl bg-yellow-400/[0.02] border border-yellow-400/10 max-w-[75%] relative overflow-hidden group/insight">
+                                        <div class="absolute top-0 right-0 w-16 h-16 bg-yellow-400/5 blur-2xl rounded-full -mr-8 -mt-8"></div>
+                                        <div class="flex items-start gap-3">
+                                            <div class="w-8 h-8 rounded-xl bg-yellow-400/10 flex items-center justify-center text-yellow-500 shrink-0 border border-yellow-500/20 shadow-lg shadow-yellow-500/10">
+                                                <i class="bi bi-eyedropper text-sm"></i>
+                                            </div>
+                                            <div>
+                                                <p class="text-[10px] font-black text-yellow-500/80 uppercase tracking-[0.2em] mb-1.5">Phân tích kỹ thuật lừa đảo</p>
+                                                <p class="text-[12px] text-yellow-50/40 leading-relaxed italic" x-text="s.analysis"></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Player Controls -->
+                    <div class="p-6 bg-[#05050d] border-t border-white/10 flex items-center justify-between gap-6 relative z-20">
+                        <button @click="prev()" :disabled="currentStep === 0"
+                                class="w-14 h-14 rounded-2xl border border-white/5 flex items-center justify-center transition-all bg-white/[0.02]"
+                                :class="currentStep === 0 ? 'text-white/5 cursor-not-allowed' : 'text-white/60 hover:bg-white/10 hover:text-white hover:scale-105'">
+                            <i class="bi bi-arrow-left text-xl"></i>
+                        </button>
+                        
+                        <div class="flex-1 text-center">
+                            <div class="inline-flex items-center justify-center px-4 py-1.5 rounded-full bg-white/5 border border-white/5">
+                                <span class="text-[11px] font-black text-white/20 uppercase tracking-[0.3em]">
+                                    <span class="text-purple-400" x-text="currentStep + 1"></span> <span class="mx-1">/</span> <span x-text="maxSteps"></span> BƯỚC
+                                </span>
+                            </div>
+                        </div>
+
+                        <button @click="next()" :disabled="currentStep >= maxSteps - 1"
+                                class="flex-1 sm:flex-none sm:w-64 h-14 rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] transition-all relative overflow-hidden group/next"
+                                :class="currentStep >= maxSteps - 1 ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5' : 'bg-purple-600 text-white shadow-2xl shadow-purple-600/30 hover:scale-[1.03]'">
+                            <span class="relative z-10 flex items-center justify-center gap-3">
+                                <span x-show="currentStep < maxSteps - 1">Tiếp tục diễn tập <i class="bi bi-arrow-right-short text-xl"></i></span>
+                                <span x-show="currentStep >= maxSteps - 1">Hoàn thành mô phỏng <i class="bi bi-check2-all text-xl"></i></span>
+                            </span>
+                            <div class="absolute inset-0 bg-gradient-to-r from-purple-500 to-indigo-600 opacity-0 group-hover/next:opacity-100 transition-opacity"></div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="liquid-card py-24 text-center space-y-6 bg-white/[0.01] border-dashed">
+            <div class="relative w-24 h-24 mx-auto">
+                <div class="absolute inset-0 bg-white/5 blur-3xl rounded-full"></div>
+                <div class="relative w-full h-full rounded-[2.5rem] bg-slate-900 flex items-center justify-center text-white/10 border border-white/5">
+                    <i class="bi bi-masks text-5xl"></i>
+                </div>
+            </div>
+            <p class="text-white/40 text-sm font-black uppercase tracking-widest">Đang cập nhật kịch bản diễn tập</p>
+        </div>
+        {% endif %}
     </div>
 
 </div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('scenarioPlayer', () => ({
+        open: false,
+        currentStep: 0,
+        steps: [],
+        get maxSteps() { return this.steps.length },
+        init() {
+            try {
+                const el = this.$el.querySelector('script[type="application/json"]');
+                if (el) {
+                    const raw = JSON.parse(el.textContent);
+                    this.steps = (raw || []).map(s => {
+                        if (typeof s === 'string') return { text: s, actor: '', analysis: '' };
+                        return {
+                            text: s.text || '',
+                            actor: s.actor || s.speaker || '',
+                            analysis: s.analysis || s.note || ''
+                        };
+                    });
+                }
+            } catch(e) { console.error('Scenario parse error', e); }
+        },
+        play() {
+            this.open = true;
+            this.currentStep = 0;
+            this.$nextTick(() => { this.scrollToBottom(); });
+        },
+        next() {
+            if (this.currentStep < this.maxSteps - 1) {
+                this.currentStep++;
+                this.$nextTick(() => { this.scrollToBottom(); });
+            }
+        },
+        prev() {
+            if (this.currentStep > 0) this.currentStep--;
+        },
+        scrollToBottom() {
+            const c = this.$refs.chatContainer;
+            if (c) c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' });
+        }
+    }));
+});
+</script>
 {% endblock %}

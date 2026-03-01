@@ -28,7 +28,7 @@
     quizzes: {{ existing_quizzes_json|safe|default:'[]' }},
     scenarios: {{ existing_scenarios_json|safe|default:'[]' }},
     addQuiz() {
-        this.quizzes.push({ question: '', options: ['', '', '', ''], correct_answer: '', explanation: '' });
+        this.quizzes.push({ question: '', question_type: 'single_choice', options: ['', '', '', ''], correct_answer: '', correct_answers: [], explanation: '' });
     },
     removeQuiz(index) {
         this.quizzes.splice(index, 1);
@@ -112,6 +112,16 @@
                                 <input type="text" x-model="q.question" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-purple-500 outline-none transition-all" placeholder="Nhập nội dung câu hỏi...">
                             </div>
 
+                            <div class="space-y-2">
+                                <label class="text-[9px] font-black text-white/20 uppercase">Loại quiz</label>
+                                <select x-model="q.question_type" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-purple-500 outline-none transition-all"
+                                        @change="if(q.question_type==='true_false'){ q.options=['Đúng','Sai','','']; q.correct_answer='Đúng'; q.correct_answers=['Đúng']; }">
+                                    <option value="single_choice">Chọn 1 đáp án</option>
+                                    <option value="multiple_choice">Chọn nhiều đáp án</option>
+                                    <option value="true_false">Đúng / Sai</option>
+                                </select>
+                            </div>
+
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <template x-for="(opt, oIdx) in q.options" :key="oIdx">
                                     <div class="space-y-1">
@@ -123,13 +133,22 @@
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="space-y-2">
-                                    <label class="text-[9px] font-black text-white/20 uppercase">Đáp án đúng</label>
+                                    <label class="text-[9px] font-black text-white/20 uppercase">Đáp án đúng (chuẩn cũ)</label>
                                     <input type="text" x-model="q.correct_answer" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-green-400 font-bold focus:border-green-500 outline-none" placeholder="Nhập chính xác text đáp án...">
                                 </div>
                                 <div class="space-y-2">
                                     <label class="text-[9px] font-black text-white/20 uppercase">Giải thích</label>
                                     <input type="text" x-model="q.explanation" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white/50 focus:border-purple-500 outline-none" placeholder="Tại sao đáp án này đúng?">
                                 </div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="text-[9px] font-black text-white/20 uppercase">Đáp án đúng (nhiều đáp án, ngăn cách bằng dấu |)</label>
+                                <input type="text"
+                                       :value="Array.isArray(q.correct_answers) ? q.correct_answers.join(' | ') : ''"
+                                       @input="q.correct_answers = $event.target.value.split('|').map(v => v.trim()).filter(Boolean)"
+                                       class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold focus:border-cyan-500 outline-none"
+                                       placeholder="Ví dụ: Xác minh nguồn gốc | Không cung cấp OTP">
                             </div>
                         </div>
                     </template>
