@@ -76,6 +76,29 @@ class AdminReportActionView(APIView):
         report.moderation_note = serializer.validated_data.get('note', '')
         report.save()
 
+        # Notify reporter via email + push notification
+        if report.reporter:
+            from api.utils.email_utils import send_report_outcome_email
+            send_report_outcome_email(report.reporter, report.target_type, report.target_value, report.status)
+
+            from api.utils.push_service import push_service
+            if action == 'approve':
+                push_service.send_push(
+                    report.reporter.id,
+                    'Báo cáo đã được chấp thuận',
+                    f'Báo cáo #{report_id} về {report.target_value} đã được chấp thuận.',
+                    url='/my-reports/',
+                    notification_type='success'
+                )
+            else:
+                push_service.send_push(
+                    report.reporter.id,
+                    'Báo cáo đã bị từ chối',
+                    f'Báo cáo #{report_id} về {report.target_value} đã bị từ chối.',
+                    url='/my-reports/',
+                    notification_type='warning'
+                )
+
         # If approved, update entity risk scores
         if action == 'approve':
             if report.target_type == 'phone':

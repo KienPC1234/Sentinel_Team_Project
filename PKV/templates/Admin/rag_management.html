@@ -140,7 +140,11 @@
                     } catch (e) { console.error('Polling failed', e); }
                 },
                 updateCountdown() {
-                    if (!this.last_sync) { this.countdown = 'N/A'; return; }
+                    if (!this.last_sync) {
+                        // No last sync — show time until next scheduled beat from now
+                        this.countdown = 'Theo lịch trình';
+                        return;
+                    }
                     try {
                         const lastSync = new Date(this.last_sync);
                         const nextRun = new Date(lastSync.getTime() + this.beat_interval * 1000);

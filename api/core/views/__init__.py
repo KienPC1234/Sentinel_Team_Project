@@ -20,7 +20,16 @@ from .forum_views import (ForumPostListCreateView, ForumPostCommentView, ForumPo
                           ForumPostReportView, ForumPostDetailView, ForumCommentLikeView, ForumCommentReportView,
                           ForumCommentReactionView, ForumPostReactionMutualView, ForumPostLikeMutualView)
 from .utils_views import EditorImageUploadView, EditorFetchUrlView, MentionUserListView
-from .notification_views import TestPushView, ResetRAGView, OneSignalRegistrationView
+from .notification_views import (TestPushView, ResetRAGView, OneSignalRegistrationView,
+                                NotificationListView, NotificationUnreadCountView,
+                                NotificationMarkReadView, NotificationMarkAllReadView,
+                                AdminNotificationBroadcastView)
+from .community_views import (
+    AnnouncementListCreateView, AnnouncementReactionView,
+    DirectMessageInboxView, DirectMessageThreadView,
+    TicketListCreateView, AdminTicketListView,
+    UserCardView,
+)
 
 __all__ = [
     'ChatStreamView', 'ScanAnalyzeSSEView',
@@ -41,4 +50,11 @@ __all__ = [
     'ArticleListView', 'ArticleDetailView',
     'EditorImageUploadView', 'EditorFetchUrlView', 'MentionUserListView',
     'TestPushView', 'ResetRAGView', 'OneSignalRegistrationView',
+    'NotificationListView', 'NotificationUnreadCountView',
+    'NotificationMarkReadView', 'NotificationMarkAllReadView',
+    'AdminNotificationBroadcastView',
+    'AnnouncementListCreateView', 'AnnouncementReactionView',
+    'DirectMessageInboxView', 'DirectMessageThreadView',
+    'TicketListCreateView', 'AdminTicketListView',
+    'UserCardView',
 ]

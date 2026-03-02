@@ -1,198 +1,343 @@
 {% extends "base.html" %}
 {% block title %}Scam Radar - ShieldCall VN{% endblock %}
 
+{% block head_extra %}
+<style>
+    @keyframes radar-sweep {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    @keyframes pulse-ring {
+        0% { transform: scale(0.5); opacity: 0.8; }
+        100% { transform: scale(1.5); opacity: 0; }
+    }
+    @keyframes threat-glow {
+        0%, 100% { box-shadow: 0 0 20px rgba(239,68,68,0.2); }
+        50% { box-shadow: 0 0 40px rgba(239,68,68,0.4); }
+    }
+    .radar-sweep { animation: radar-sweep 4s linear infinite; }
+    .pulse-ring { animation: pulse-ring 2s ease-out infinite; }
+    .threat-glow { animation: threat-glow 2s ease-in-out infinite; }
+    .stat-value { transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    .scan-card { transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+    .scan-card:hover { transform: translateY(-4px) scale(1.02); }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; animation: pulse-ring 1.5s ease-out infinite; }
+    .threat-bar { height: 6px; border-radius: 3px; transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+</style>
+{% endblock %}
+
 {% block content %}
-<div x-data="scamRadar()" class="animate-fadein max-w-6xl mx-auto space-y-10">
-    <!-- Page Header -->
-    <div class="text-center space-y-4" data-aos="fade-up">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-[2.5rem] bg-red-500/10 text-red-500 border border-red-500/20 shadow-lg shadow-red-500/10 mb-2" data-aos="zoom-in" data-aos-delay="100">
-            <i class="bi bi-radar text-4xl"></i>
+<div x-data="scamRadar()" class="animate-fadein max-w-6xl mx-auto space-y-8">
+
+    <!-- Hero Section with Radar Animation -->
+    <div class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-red-950/30 via-black/40 to-cyan-950/30 border border-white/5 p-8 md:p-12" data-aos="fade-up">
+        <!-- Radar BG -->
+        <div class="absolute top-1/2 right-8 -translate-y-1/2 w-48 h-48 opacity-10 hidden md:block">
+            <div class="absolute inset-0 rounded-full border-2 border-red-500/40"></div>
+            <div class="absolute inset-4 rounded-full border border-red-500/30"></div>
+            <div class="absolute inset-8 rounded-full border border-red-500/20"></div>
+            <div class="absolute top-1/2 left-1/2 w-1 h-1/2 origin-bottom -translate-x-1/2 -translate-y-full radar-sweep">
+                <div class="w-full h-full bg-gradient-to-t from-red-500/60 to-transparent rounded-full"></div>
+            </div>
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full pulse-ring"></div>
         </div>
-        <h1 class="text-4xl font-black text-white tracking-tight leading-none" data-aos="fade-up" data-aos-delay="200">
-            <span class="glow-text">Scam Radar</span>
-        </h1>
-        <p class="text-white/40 text-sm font-medium tracking-wide prose-sm" data-aos="fade-up" data-aos-delay="300">Theo dõi xu hướng lừa đảo thời gian thực tại Việt Nam</p>
-        <div class="flex justify-center gap-3 mt-4" data-aos="fade-up" data-aos-delay="350">
-            <a href="/scan/lookup/" class="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-black uppercase tracking-widest hover:bg-cyan-500/20 hover:scale-[1.02] transition-all shadow-lg shadow-cyan-500/5">
-                <i class="bi bi-search text-sm"></i> Tra cứu hệ thống
-            </a>
+
+        <div class="relative z-10 max-w-2xl space-y-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/20 flex items-center justify-center">
+                    <i class="bi bi-radar text-2xl text-red-400"></i>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="live-dot"></div>
+                    <span class="text-[9px] font-black text-red-400 uppercase tracking-[0.3em]">LIVE MONITORING</span>
+                </div>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-black text-white leading-tight">
+                Scam Radar <span class="text-red-400">Việt Nam</span>
+            </h1>
+            <p class="text-white/40 text-sm leading-relaxed max-w-lg">
+                Giám sát & phân tích xu hướng lừa đảo thời gian thực. Dữ liệu từ AI Scan & báo cáo cộng đồng đã xác minh.
+            </p>
+            <div class="flex flex-wrap gap-3 pt-2">
+                <a href="/scan/lookup/" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-400 text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-cyan-400/20">
+                    <i class="bi bi-search"></i> Tra cứu hệ thống
+                </a>
+                <a href="/report/" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all">
+                    <i class="bi bi-flag"></i> Gửi báo cáo
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Filters & Stats Segmented Controls -->
-    <div class="liquid-card p-6 flex flex-col md:flex-row justify-between items-center gap-6" data-aos="fade-up" data-aos-delay="400">
-        <div class="flex flex-wrap gap-2 p-1.5 bg-white/5 border border-white/10 rounded-[1.5rem] backdrop-blur-xl">
-            <button class="px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all" 
-                    :class="filter==='all' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'" @click="filter='all'">
-                Tất cả
-            </button>
-            <button class="px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all" 
-                    :class="filter==='phone' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'" @click="filter='phone'">
-                Điện thoại
-            </button>
-            <button class="px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all" 
-                    :class="filter==='bank' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'" @click="filter='bank'">
-                Ngân hàng
-            </button>
-            <button class="px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all" 
-                    :class="filter==='phishing' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'" @click="filter='phishing'">
-                Phishing
-            </button>
+    <!-- Quick Scan Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3" data-aos="fade-up" data-aos-delay="100">
+        <a href="/scan/phone/" class="scan-card liquid-card p-5 text-center space-y-3 group">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-green-500/10 border border-green-500/15 flex items-center justify-center group-hover:bg-green-500/20 transition">
+                <i class="bi bi-telephone-fill text-xl text-green-400"></i>
+            </div>
+            <div class="text-[10px] font-black text-white/50 uppercase tracking-widest group-hover:text-green-400 transition">Điện thoại</div>
+        </a>
+        <a href="/scan/website/" class="scan-card liquid-card p-5 text-center space-y-3 group">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-blue-500/10 border border-blue-500/15 flex items-center justify-center group-hover:bg-blue-500/20 transition">
+                <i class="bi bi-globe text-xl text-blue-400"></i>
+            </div>
+            <div class="text-[10px] font-black text-white/50 uppercase tracking-widest group-hover:text-blue-400 transition">Website</div>
+        </a>
+        <a href="/scan/bank/" class="scan-card liquid-card p-5 text-center space-y-3 group">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-yellow-500/10 border border-yellow-500/15 flex items-center justify-center group-hover:bg-yellow-500/20 transition">
+                <i class="bi bi-bank text-xl text-yellow-400"></i>
+            </div>
+            <div class="text-[10px] font-black text-white/50 uppercase tracking-widest group-hover:text-yellow-400 transition">Ngân hàng</div>
+        </a>
+        <a href="/scan/email/" class="scan-card liquid-card p-5 text-center space-y-3 group">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-purple-500/10 border border-purple-500/15 flex items-center justify-center group-hover:bg-purple-500/20 transition">
+                <i class="bi bi-envelope-fill text-xl text-purple-400"></i>
+            </div>
+            <div class="text-[10px] font-black text-white/50 uppercase tracking-widest group-hover:text-purple-400 transition">Email</div>
+        </a>
+        <a href="/scan/message/" class="scan-card liquid-card p-5 text-center space-y-3 group">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-pink-500/10 border border-pink-500/15 flex items-center justify-center group-hover:bg-pink-500/20 transition">
+                <i class="bi bi-chat-dots-fill text-xl text-pink-400"></i>
+            </div>
+            <div class="text-[10px] font-black text-white/50 uppercase tracking-widest group-hover:text-pink-400 transition">Tin nhắn</div>
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4" data-aos="fade-up" data-aos-delay="200">
+        <div class="flex flex-wrap gap-1.5 p-1.5 bg-white/[0.03] border border-white/5 rounded-2xl">
+            <template x-for="f in [{v:'all',l:'Tất cả',i:'bi-globe2'},{v:'phone',l:'SĐT',i:'bi-telephone'},{v:'bank',l:'Ngân hàng',i:'bi-bank'},{v:'phishing',l:'Phishing',i:'bi-bug'}]" :key="f.v">
+                <button @click="filter=f.v" :class="filter===f.v ? 'bg-white/10 text-white shadow-sm' : 'text-white/30 hover:text-white/50'"
+                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                    <i :class="f.i" class="text-xs"></i>
+                    <span x-text="f.l"></span>
+                </button>
+            </template>
         </div>
-        
-        <div class="flex gap-2 p-1.5 bg-white/5 border border-white/10 rounded-[1.5rem] backdrop-blur-xl">
-            <button class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all" 
-                    :class="timeRange==='24h' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'" @click="timeRange='24h'">
-                24h
-            </button>
-            <button class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all" 
-                    :class="timeRange==='7d' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'" @click="timeRange='7d'">
-                7 Ngày
-            </button>
-            <button class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all" 
-                    :class="timeRange==='30d' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'" @click="timeRange='30d'">
-                30 Ngày
-            </button>
-            <button class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all" 
-                    :class="timeRange==='1y' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'" @click="timeRange='1y'">
-                1 Năm
-            </button>
+        <div class="flex gap-1.5 p-1.5 bg-white/[0.03] border border-white/5 rounded-2xl">
+            <template x-for="t in [{v:'24h',l:'24h'},{v:'7d',l:'7 Ngày'},{v:'30d',l:'30 Ngày'},{v:'1y',l:'1 Năm'}]" :key="t.v">
+                <button @click="timeRange=t.v" :class="timeRange===t.v ? 'bg-white/10 text-white shadow-sm' : 'text-white/30 hover:text-white/50'"
+                    class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                    <span x-text="t.l"></span>
+                </button>
+            </template>
         </div>
     </div>
 
-    <!-- Stats Grid -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" data-aos="fade-up" data-aos-delay="500">
-        <div class="liquid-card p-6 space-y-4 bg-white/[0.02] hover:bg-white/[0.04] transition-all">
-            <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-400">
-                    <i class="bi bi-shield-exclamation"></i>
+    <!-- Stats Grid — bigger, more colorful -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" data-aos="fade-up" data-aos-delay="300">
+        <div class="liquid-card relative overflow-hidden p-6 space-y-3 group hover:border-red-500/20 transition-all">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-red-500/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
+                    <i class="bi bi-shield-exclamation text-lg"></i>
                 </div>
-                <div class="text-[10px] font-black text-white/20 uppercase tracking-widest text-right">Báo cáo</div>
+                <div class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Trường hợp</div>
             </div>
-            <div class="text-3xl font-black text-white leading-none" x-text="stats.reports_this_week || '0'">0</div>
+            <div class="text-4xl font-black text-white stat-value" x-text="stats.reports_this_week || '0'">0</div>
+            <div class="flex items-center gap-1.5">
+                <span class="text-[9px] font-black px-2 py-0.5 rounded-full" 
+                    :class="stats.pct_change >= 0 ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'"
+                    x-text="(stats.pct_change >= 0 ? '↑' : '↓') + ' ' + Math.abs(stats.pct_change) + '%'"></span>
+                <span class="text-[8px] text-white/15 font-bold">so với kỳ trước</span>
+            </div>
         </div>
-        <div class="liquid-card p-6 space-y-4 bg-white/[0.02] hover:bg-white/[0.04] transition-all">
-            <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
-                    <i class="bi bi-graph-up-arrow"></i>
+        <div class="liquid-card relative overflow-hidden p-6 space-y-3 group hover:border-cyan-500/20 transition-all">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-cyan-500/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                    <i class="bi bi-graph-up-arrow text-lg"></i>
                 </div>
-                <div class="text-[10px] font-black text-white/20 uppercase tracking-widest text-right">Tăng trưởng</div>
+                <div class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Tăng trưởng</div>
             </div>
-            <div class="text-3xl font-black text-white leading-none" x-text="(stats.pct_change >= 0 ? '+' : '') + stats.pct_change + '%'">+0%</div>
+            <div class="text-4xl font-black stat-value" :class="stats.pct_change >= 0 ? 'text-red-400' : 'text-green-400'"
+                x-text="(stats.pct_change >= 0 ? '+' : '') + stats.pct_change + '%'">+0%</div>
+            <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-1000" 
+                    :class="stats.pct_change >= 0 ? 'bg-red-400' : 'bg-green-400'"
+                    :style="'width:' + Math.min(100, Math.abs(stats.pct_change || 0)) + '%'"></div>
+            </div>
         </div>
-        <div class="liquid-card p-6 space-y-4 bg-white/[0.02] hover:bg-white/[0.04] transition-all">
-            <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-2xl bg-yellow-500/10 flex items-center justify-center text-yellow-400">
-                    <i class="bi bi-telephone-plus"></i>
+        <div class="liquid-card relative overflow-hidden p-6 space-y-3 group hover:border-yellow-500/20 transition-all">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-yellow-500/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 group-hover:scale-110 transition-transform">
+                    <i class="bi bi-telephone-plus text-lg"></i>
                 </div>
-                <div class="text-[10px] font-black text-white/20 uppercase tracking-widest text-right">Số mới</div>
+                <div class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">SĐT lừa đảo</div>
             </div>
-            <div class="text-3xl font-black text-white leading-none" x-text="stats.new_phones || '0'">0</div>
+            <div class="text-4xl font-black text-white stat-value" x-text="stats.new_phones || '0'">0</div>
+            <a href="/scam-radar/list/phones/" class="text-[8px] font-black text-yellow-400/50 uppercase tracking-widest hover:text-yellow-400 transition">Xem danh sách →</a>
         </div>
-        <div class="liquid-card p-6 space-y-4 bg-white/[0.02] hover:bg-white/[0.04] transition-all">
-            <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400">
-                    <i class="bi bi-bug"></i>
+        <div class="liquid-card relative overflow-hidden p-6 space-y-3 group hover:border-purple-500/20 transition-all">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                    <i class="bi bi-bug text-lg"></i>
                 </div>
-                <div class="text-[10px] font-black text-white/20 uppercase tracking-widest text-right">Phishing</div>
+                <div class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Phishing/Domain</div>
             </div>
-            <div class="text-3xl font-black text-white leading-none" x-text="stats.phishing_domains || '0'">0</div>
+            <div class="text-4xl font-black text-white stat-value" x-text="stats.phishing_domains || '0'">0</div>
+            <a href="/scam-radar/list/domains/" class="text-[8px] font-black text-purple-400/50 uppercase tracking-widest hover:text-purple-400 transition">Xem danh sách →</a>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" data-aos="fade-up" data-aos-delay="600">
+    <!-- Chart + Hot Numbers Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" data-aos="fade-up" data-aos-delay="400">
         <!-- Main Chart -->
         <div class="lg:col-span-2 liquid-card p-8 space-y-6">
             <div class="flex justify-between items-center">
-                <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-2">
-                    <i class="bi bi-graph-up text-cyan-400"></i> Xu hướng xác nhận + AI
+                <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+                    <i class="bi bi-graph-up text-cyan-400"></i> Xu hướng (AI Scan + Báo cáo)
                 </h3>
+                <div class="flex items-center gap-4 text-[8px] font-bold text-white/30">
+                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 rounded bg-cyan-400 inline-block"></span> AI Scan</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 rounded bg-yellow-400 inline-block"></span> Báo cáo</span>
+                </div>
             </div>
             <div class="h-[300px] w-full relative">
                 <canvas id="trendChart"></canvas>
             </div>
         </div>
 
-        <!-- Hot Numbers Sidebar -->
-        <div class="liquid-card p-8 space-y-8">
-            <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-2">
-                <i class="bi bi-fire text-red-500"></i> Điểm nóng (đã duyệt + AI)
-            </h3>
-            <div class="space-y-4 overflow-y-auto max-h-[300px] pr-2 scrollbar-hide">
+        <!-- Hot Numbers -->
+        <div class="liquid-card p-6 space-y-5">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+                    <i class="bi bi-fire text-red-500"></i> Điểm nóng
+                </h3>
+                <div class="flex items-center gap-1">
+                    <div class="live-dot"></div>
+                    <span class="text-[8px] font-black text-red-400/60 uppercase tracking-widest">Live</span>
+                </div>
+            </div>
+            <div class="space-y-3 overflow-y-auto max-h-[310px] pr-1">
                 <template x-for="(hp, idx) in stats.hot_phones" :key="`${hp.source}-${hp.target_type}-${idx}`">
-                    <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex justify-between items-center group hover:bg-white/[0.06] transition-all">
-                        <div>
-                            <div class="text-sm font-black text-white/90 group-hover:text-cyan-400 transition-colors" x-text="hp.masked"></div>
-                               <div class="text-[9px] font-black text-white/30 uppercase tracking-widest" x-text="hp.label"></div>
-                               <div class="text-[9px] font-black uppercase tracking-widest mt-1"
-                                   :class="hp.source === 'scan_ai' ? 'text-cyan-400/70' : 'text-yellow-400/70'"
-                                   x-text="hp.source === 'scan_ai' ? 'AI Scan' : 'Báo cáo duyệt'"></div>
+                    <div class="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center gap-3 group hover:bg-white/[0.04] hover:border-white/10 transition-all cursor-pointer">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                            :class="hp.source === 'scan_ai' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-yellow-500/10 text-yellow-400'">
+                            <i class="bi text-xs" :class="hp.target_type === 'phone' ? 'bi-telephone-fill' : hp.target_type === 'domain' ? 'bi-globe' : 'bi-bank'"></i>
                         </div>
-                        <span class="px-2 py-1 rounded-lg text-[9px] font-black"
-                              :class="hp.count > 30 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'"
-                              x-text="'+' + hp.count">
-                        </span>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-black text-white/80 truncate group-hover:text-white transition" x-text="hp.masked"></div>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                <span class="text-[8px] font-bold uppercase tracking-widest" 
+                                    :class="hp.source === 'scan_ai' ? 'text-cyan-400/50' : 'text-yellow-400/50'"
+                                    x-text="hp.source === 'scan_ai' ? 'AI' : 'Report'"></span>
+                                <span class="text-[8px] text-white/15" x-text="hp.label"></span>
+                            </div>
+                        </div>
+                        <div class="px-2.5 py-1 rounded-lg text-[10px] font-black shrink-0"
+                            :class="hp.count >= 50 ? 'bg-red-500/20 text-red-400 threat-glow' : hp.count >= 20 ? 'bg-red-500/15 text-red-400' : 'bg-yellow-500/10 text-yellow-400'"
+                            x-text="hp.count + 'x'"></div>
                     </div>
                 </template>
-                <div x-show="!stats.hot_phones || stats.hot_phones.length === 0" class="py-12 text-center" x-cloak>
-                    <p class="text-[10px] font-black text-white/20 uppercase tracking-widest">Chưa có dữ liệu</p>
+                <div x-show="!stats.hot_phones || stats.hot_phones.length === 0" class="py-10 text-center" x-cloak>
+                    <i class="bi bi-shield-check text-3xl text-white/5 block mb-2"></i>
+                    <p class="text-[10px] font-black text-white/15 uppercase tracking-widest">Không phát hiện mối đe dọa</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Recent Activity Table -->
-    <div class="liquid-card overflow-hidden" data-aos="fade-up" data-aos-delay="700">
-        <div class="p-8 border-b border-white/5">
-            <h3 class="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-2">
-                <i class="bi bi-list-columns-reverse text-cyan-400"></i> Trường hợp mới nhất
+    <!-- Detailed Databases Quick Links -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" data-aos="fade-up" data-aos-delay="500">
+        <a href="/scam-radar/list/phones/" class="scan-card liquid-card p-5 flex items-center gap-4 group">
+            <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-400 shrink-0">
+                <i class="bi bi-telephone-fill"></i>
+            </div>
+            <div>
+                <div class="text-xs font-black text-white/70 group-hover:text-green-400 transition">SĐT lừa đảo</div>
+                <div class="text-[9px] text-white/25 font-bold">Danh sách đầy đủ</div>
+            </div>
+            <i class="bi bi-chevron-right text-white/10 ml-auto group-hover:text-green-400 transition"></i>
+        </a>
+        <a href="/scam-radar/list/accounts/" class="scan-card liquid-card p-5 flex items-center gap-4 group">
+            <div class="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 shrink-0">
+                <i class="bi bi-bank"></i>
+            </div>
+            <div>
+                <div class="text-xs font-black text-white/70 group-hover:text-yellow-400 transition">TK ngân hàng</div>
+                <div class="text-[9px] text-white/25 font-bold">Danh sách đầy đủ</div>
+            </div>
+            <i class="bi bi-chevron-right text-white/10 ml-auto group-hover:text-yellow-400 transition"></i>
+        </a>
+        <a href="/scam-radar/list/domains/" class="scan-card liquid-card p-5 flex items-center gap-4 group">
+            <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 shrink-0">
+                <i class="bi bi-globe"></i>
+            </div>
+            <div>
+                <div class="text-xs font-black text-white/70 group-hover:text-purple-400 transition">Domain phishing</div>
+                <div class="text-[9px] text-white/25 font-bold">Danh sách đầy đủ</div>
+            </div>
+            <i class="bi bi-chevron-right text-white/10 ml-auto group-hover:text-purple-400 transition"></i>
+        </a>
+        <a href="/scam-radar/list/emails/" class="scan-card liquid-card p-5 flex items-center gap-4 group">
+            <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
+                <i class="bi bi-envelope-fill"></i>
+            </div>
+            <div>
+                <div class="text-xs font-black text-white/70 group-hover:text-blue-400 transition">Email lừa đảo</div>
+                <div class="text-[9px] text-white/25 font-bold">Danh sách đầy đủ</div>
+            </div>
+            <i class="bi bi-chevron-right text-white/10 ml-auto group-hover:text-blue-400 transition"></i>
+        </a>
+    </div>
+
+    <!-- Live Threat Feed -->
+    <div class="liquid-card overflow-hidden" data-aos="fade-up" data-aos-delay="600">
+        <div class="p-6 border-b border-white/5 flex items-center justify-between">
+            <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+                <i class="bi bi-broadcast text-red-400"></i> Threat Feed — Trường hợp mới nhất
             </h3>
+            <div class="flex items-center gap-1.5">
+                <div class="live-dot"></div>
+                <span class="text-[8px] font-black text-white/20 uppercase tracking-widest">Cập nhật mỗi 5 giây</span>
+            </div>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left">
-                <thead>
-                    <tr class="bg-white/[0.02]">
-                        <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest">Nguồn</th>
-                        <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest">Thời gian</th>
-                        <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest">Đối tượng</th>
-                        <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest">Loại lừa đảo</th>
-                        <th class="px-8 py-4 text-[10px] font-black text-white/30 uppercase tracking-widest text-center">Mức độ</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-white/5">
-                    <template x-for="report in stats.recent_reports" :key="report.id">
-                        <tr class="group hover:bg-white/[0.02] transition-colors cursor-pointer" @click="goToScan(report)">
-                            <td class="px-8 py-5">
-                                <span class="inline-flex px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest"
-                                      :class="report.source === 'scan_ai' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'"
-                                      x-text="report.source_display">
-                                </span>
-                            </td>
-                            <td class="px-8 py-5 text-xs text-white/40" x-text="report.created_at_display"></td>
-                            <td class="px-8 py-5">
-                                <div class="text-sm font-black text-white/90" x-text="report.target_value"></div>
-                                <div class="text-[9px] font-black text-cyan-400/60 uppercase tracking-widest" x-text="report.target_type_display"></div>
-                            </td>
-                            <td class="px-8 py-5 text-xs text-white/70" x-text="report.scam_type_display"></td>
-                            <td class="px-8 py-5 text-center">
-                                <span class="inline-flex px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest"
-                                      :class="{
-                                          'bg-red-500/10 text-red-400 border-red-500/20': report.severity === 'high' || report.severity === 'critical',
-                                          'bg-yellow-500/10 text-yellow-400 border-yellow-500/20': report.severity === 'medium',
-                                          'bg-green-500/10 text-green-400 border-green-500/20': report.severity === 'low'
-                                      }"
-                                      x-text="report.severity_display">
-                                </span>
-                            </td>
-                        </tr>
-                    </template>
-                    <tr x-show="!stats.recent_reports || stats.recent_reports.length === 0" x-cloak>
-                        <td colspan="5" class="px-8 py-20 text-center">
-                            <p class="text-xs font-black text-white/20 uppercase tracking-widest">Chưa có báo cáo nào trong hệ thống</p>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+        <div class="divide-y divide-white/[0.03]">
+            <template x-for="report in stats.recent_reports" :key="report.id">
+                <div class="flex items-center gap-5 px-6 py-4 hover:bg-white/[0.02] transition-all cursor-pointer group" @click="goToScan(report)">
+                    <!-- Severity indicator -->
+                    <div class="w-2 h-10 rounded-full shrink-0" :class="{
+                        'bg-red-500': report.severity === 'high' || report.severity === 'critical',
+                        'bg-yellow-500': report.severity === 'medium',
+                        'bg-green-500': report.severity === 'low'
+                    }"></div>
+                    <!-- Source badge -->
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        :class="report.source === 'scan_ai' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-yellow-500/10 text-yellow-400'">
+                        <i class="bi text-sm" :class="report.source === 'scan_ai' ? 'bi-cpu' : 'bi-person-check'"></i>
+                    </div>
+                    <!-- Info -->
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-black text-white/80 truncate group-hover:text-white transition" x-text="report.target_value"></span>
+                            <span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-white/30 uppercase tracking-widest shrink-0" x-text="report.target_type_display"></span>
+                        </div>
+                        <div class="flex items-center gap-3 mt-0.5">
+                            <span class="text-[9px] text-white/25" x-text="report.scam_type_display"></span>
+                            <span class="text-[9px] text-white/15">•</span>
+                            <span class="text-[9px] text-white/20" x-text="report.created_at_display"></span>
+                        </div>
+                    </div>
+                    <!-- Severity badge -->
+                    <span class="px-3 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest shrink-0"
+                        :class="{
+                            'bg-red-500/10 text-red-400 border-red-500/20': report.severity === 'high' || report.severity === 'critical',
+                            'bg-yellow-500/10 text-yellow-400 border-yellow-500/20': report.severity === 'medium',
+                            'bg-green-500/10 text-green-400 border-green-500/20': report.severity === 'low'
+                        }"
+                        x-text="report.severity_display"></span>
+                    <i class="bi bi-chevron-right text-white/10 group-hover:text-white/30 transition shrink-0"></i>
+                </div>
+            </template>
+            <div x-show="!stats.recent_reports || stats.recent_reports.length === 0" x-cloak>
+                <div class="px-6 py-16 text-center">
+                    <i class="bi bi-shield-check text-4xl text-white/5 block mb-3"></i>
+                    <p class="text-xs font-black text-white/15 uppercase tracking-widest">Chưa có báo cáo nào trong khoảng thời gian này</p>
+                </div>
+            </div>
         </div>
     </div>
 </div>

@@ -120,6 +120,8 @@ document.addEventListener('alpine:init', () => {
         replyTo: null,
         repliesContent: {},
         loading: false,
+        commentPage: 1,
+        commentsPerPage: 15,
 
         init() {
             try {
@@ -191,7 +193,11 @@ document.addEventListener('alpine:init', () => {
                     }
                     this.post.comments_count = (this.post.comments_count || 0) + 1;
                     showToast('Bình luận đã được đăng!', 'success');
-                } else { showToast('Lỗi khi gửi bình luận', 'error'); }
+                } else {
+                    const errData = await resp.json().catch(() => null);
+                    const errMsg = errData?.error || 'Lỗi khi gửi bình luận';
+                    showToast(errMsg, 'error');
+                }
             } catch(e) { showToast('Lỗi kết nối', 'error'); }
             this.loading = false;
         },
@@ -357,6 +363,32 @@ document.addEventListener('alpine:init', () => {
             const map = { warning: 'Cảnh báo', discussion: 'Thảo luận', experience: 'Kinh nghiệm', question: 'Hỏi đáp' };
             return map[cat] || cat;
         },
+        paginatedComments() {
+            const start = (this.commentPage - 1) * this.commentsPerPage;
+            return this.comments.slice(start, start + this.commentsPerPage);
+        },
+        commentTotalPages() {
+            return Math.max(1, Math.ceil(this.comments.length / this.commentsPerPage));
+        },
+        goToCommentPage(p) {
+            if (p >= 1 && p <= this.commentTotalPages()) {
+                this.commentPage = p;
+                document.getElementById('comments-section')?.scrollIntoView({behavior:'smooth'});
+            }
+        },
+        commentPageNumbers() {
+            const total = this.commentTotalPages();
+            const cur = this.commentPage;
+            const pages = [];
+            let start = Math.max(1, cur - 2);
+            let end = Math.min(total, cur + 2);
+            if (start > 1) pages.push(1);
+            if (start > 2) pages.push('...');
+            for (let i = start; i <= end; i++) pages.push(i);
+            if (end < total - 1) pages.push('...');
+            if (end < total) pages.push(total);
+            return pages;
+        },
         async banUser(username, displayName) {
             const result = await Swal.fire({
                 title: 'Cấm ' + displayName + ' khỏi diễn đàn?',
@@ -421,11 +453,17 @@ document.addEventListener('alpine:init', () => {
 
 <div class="max-w-7xl mx-auto px-4 py-8" x-data="forumDetail">
     
-    <!-- Navigation -->
-    <div class="flex items-center justify-between mb-6" data-aos="fade-right">
-        <a href="/forum/" class="text-white/40 hover:text-cyan-400 flex items-center gap-2 transition-all font-bold text-sm">
-            <i class="bi bi-arrow-left"></i> Quay lại diễn đàn
-        </a>
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm mb-5 text-white/40" data-aos="fade-right">
+        <a href="/" class="hover:text-cyan-400 transition"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <a href="/forum/" class="hover:text-cyan-400 transition">Diễn đàn</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <span class="text-white/60 truncate max-w-[250px]" x-text="post.title"></span>
+    </nav>
+    
+    <div class="flex items-center justify-between mb-6">
+        <div></div>
         <div class="flex items-center gap-3">
             <template x-if="post.is_pinned">
                 <span class="px-3 py-1 bg-yellow-500/10 text-yellow-500 text-[9px] font-black rounded-full border border-yellow-500/20 uppercase">
@@ -471,7 +509,7 @@ document.addEventListener('alpine:init', () => {
                     <div class="flex flex-col md:flex-row">
                         <!-- Author Card (LEFT) -->
                         <div class="voz-author-card w-full md:w-52 shrink-0 p-5 flex flex-row md:flex-col items-center md:items-center gap-4 md:gap-2 text-center">
-                            <a :href="'/profile/@' + post.author_username + '/'" class="author-avatar relative w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-400/20 to-purple-500/20 border-2 border-white/10 overflow-hidden flex items-center justify-center shrink-0 hover:border-cyan-400/40 transition-all shadow-lg shadow-cyan-500/10">
+                            <a :href="'/profile/@' + post.author_username + '/'" :data-usercard="post.author_username" class="author-avatar relative w-20 h-20 rounded-full bg-gradient-to-br from-cyan-400/20 to-purple-500/20 border-2 border-white/10 overflow-hidden flex items-center justify-center shrink-0 hover:border-cyan-400/40 transition-all shadow-lg shadow-cyan-500/10">
                                 <template x-if="post.author_avatar">
                                     <img :src="post.author_avatar" class="w-full h-full object-cover">
                                 </template>
@@ -587,14 +625,14 @@ document.addEventListener('alpine:init', () => {
                 </div>
 
                 <!-- Comments List (VOZ-style: author left, content right) -->
-                <div class="space-y-3">
-                    <template x-for="(comment, cIdx) in comments" :key="'comment-' + comment.id">
+                <div class="space-y-3" id="comments-section">
+                    <template x-for="(comment, cIdx) in paginatedComments()" :key="'comment-' + comment.id">
                         <div class="space-y-3">
                             <div class="comment-card rounded-2xl overflow-hidden" :id="'comment-' + comment.id">
                                 <div class="flex flex-col sm:flex-row">
                                     <!-- Comment Author (LEFT) -->
                                     <div class="sm:w-40 shrink-0 p-4 border-b sm:border-b-0 sm:border-r border-white/5 bg-white/[0.01] flex flex-row sm:flex-col items-center gap-3 sm:gap-2 text-center">
-                                        <a :href="'/profile/@' + comment.author_username + '/'" class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400/10 to-purple-500/10 border border-white/10 overflow-hidden flex items-center justify-center shrink-0 hover:border-cyan-400/30 transition-all">
+                                        <a :href="'/profile/@' + comment.author_username + '/'" :data-usercard="comment.author_username" class="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400/10 to-purple-500/10 border border-white/10 overflow-hidden flex items-center justify-center shrink-0 hover:border-cyan-400/30 transition-all">
                                             <template x-if="comment.author_avatar">
                                                 <img :src="comment.author_avatar" class="w-full h-full object-cover">
                                             </template>
@@ -603,8 +641,10 @@ document.addEventListener('alpine:init', () => {
                                             </template>
                                         </a>
                                         <div class="flex flex-col items-center gap-0.5 min-w-0">
-                                            <a :href="'/profile/@' + comment.author_username + '/'" class="text-xs font-bold text-white/80 hover:text-cyan-400 transition-colors truncate max-w-[120px]" x-text="comment.author_name"></a>
-                                            <i x-show="comment.author_is_staff" class="bi bi-patch-check-fill verified-badge text-xs" title="Quản trị viên"></i>
+                                            <div class="flex items-center gap-1">
+                                                <a :href="'/profile/@' + comment.author_username + '/'" class="text-xs font-bold text-white/80 hover:text-cyan-400 transition-colors truncate max-w-[100px]" x-text="comment.author_name"></a>
+                                                <i x-show="comment.author_is_staff" class="bi bi-patch-check-fill verified-badge text-xs" title="Quản trị viên"></i>
+                                            </div>
                                             <template x-if="comment.author_rank">
                                                 <span class="rank-badge text-[8px]" :class="'rank-' + comment.author_rank.level">
                                                     <i :class="comment.author_rank.icon" class="mr-0.5"></i>
@@ -621,7 +661,7 @@ document.addEventListener('alpine:init', () => {
                                     <div class="flex-1 min-w-0">
                                         <div class="px-4 py-2 bg-white/[0.01] border-b border-white/5 flex items-center justify-between">
                                             <span class="text-[10px] text-white/25 font-bold" x-text="formatDate(comment.created_at)"></span>
-                                            <span class="text-[9px] font-bold text-white/10 uppercase tracking-widest" x-text="'#' + (cIdx + 2)"></span>
+                                            <span class="text-[9px] font-bold text-white/10 uppercase tracking-widest" x-text="'#' + ((commentPage - 1) * commentsPerPage + cIdx + 2)"></span>
                                         </div>
                                         <div class="p-4">
                                             <div class="text-sm text-white/70 leading-relaxed richtext-content" x-html="window.renderRichText(comment.content || '')"></div>
@@ -646,7 +686,7 @@ document.addEventListener('alpine:init', () => {
                                                 </button>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <button @click="replyTo = (replyTo === comment.id ? null : comment.id)" class="text-[10px] font-black text-white/20 hover:text-cyan-400 transition-all flex items-center gap-1">
+                                                <button x-show="!post.is_locked" @click="replyTo = (replyTo === comment.id ? null : comment.id)" class="text-[10px] font-black text-white/20 hover:text-cyan-400 transition-all flex items-center gap-1">
                                                     <i class="bi bi-reply-fill"></i> Trả lời
                                                 </button>
                                                 <button @click="shareComment(comment)" class="text-[10px] font-black text-white/20 hover:text-white/50 transition-all">
@@ -682,7 +722,7 @@ document.addEventListener('alpine:init', () => {
                                     <div class="comment-card rounded-xl overflow-hidden">
                                         <div class="flex flex-col sm:flex-row">
                                             <div class="sm:w-32 shrink-0 p-3 border-b sm:border-b-0 sm:border-r border-white/5 bg-white/[0.01] flex flex-row sm:flex-col items-center gap-2 text-center">
-                                                <a :href="'/profile/@' + reply.author_username + '/'" class="w-8 h-8 rounded-lg bg-white/5 border border-white/5 overflow-hidden flex items-center justify-center shrink-0">
+                                                <a :href="'/profile/@' + reply.author_username + '/'" :data-usercard="reply.author_username" class="w-8 h-8 rounded-full bg-white/5 border border-white/5 overflow-hidden flex items-center justify-center shrink-0">
                                                     <template x-if="reply.author_avatar">
                                                         <img :src="reply.author_avatar" class="w-full h-full object-cover">
                                                     </template>
@@ -708,9 +748,38 @@ document.addEventListener('alpine:init', () => {
                     </template>
                 </div>
 
+                <!-- Comment Pagination -->
+                <div x-show="commentTotalPages() > 1" class="flex items-center justify-center gap-1 mt-4">
+                    <button @click="goToCommentPage(commentPage - 1)" :disabled="commentPage <= 1"
+                        class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/40 hover:text-white hover:bg-white/10 transition disabled:opacity-30 disabled:cursor-not-allowed">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <template x-for="p in commentPageNumbers()" :key="'cpg-'+p">
+                        <button x-text="p" @click="typeof p === 'number' && goToCommentPage(p)"
+                            :disabled="p === '...'"
+                            :class="p === commentPage ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-white/40 border-white/10 hover:text-white hover:bg-white/10'"
+                            class="w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold transition disabled:cursor-default">
+                        </button>
+                    </template>
+                    <button @click="goToCommentPage(commentPage + 1)" :disabled="commentPage >= commentTotalPages()"
+                        class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/40 hover:text-white hover:bg-white/10 transition disabled:opacity-30 disabled:cursor-not-allowed">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <span class="ml-2 text-[10px] text-white/20" x-text="`Trang ${commentPage}/${commentTotalPages()} · ${comments.length} bình luận`"></span>
+                </div>
+
+                <!-- Locked Thread Banner -->
+                <template x-if="post.is_locked">
+                    <div class="mt-8 voz-thread rounded-2xl p-6 text-center border border-red-500/20 bg-red-500/5">
+                        <i class="bi bi-lock-fill text-red-400 text-2xl"></i>
+                        <p class="text-red-400/80 mt-2 font-bold text-sm">Bài viết này đã bị khóa bởi quản trị viên.</p>
+                        <p class="text-white/30 text-xs mt-1">Không thể bình luận hoặc trả lời trong bài viết đã khóa.</p>
+                    </div>
+                </template>
+
                 <!-- New Comment Box -->
                 {% if user.is_authenticated %}
-                <div class="mt-8 voz-thread rounded-2xl overflow-hidden" data-aos="fade-up" data-aos-delay="200">
+                <div x-show="!post.is_locked" class="mt-8 voz-thread rounded-2xl overflow-hidden" data-aos="fade-up" data-aos-delay="200">
                     <div class="px-6 py-3 bg-white/[0.02] border-b border-white/5">
                         <h4 class="text-xs font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
                             <i class="bi bi-pencil-fill text-cyan-400"></i> Viết bình luận

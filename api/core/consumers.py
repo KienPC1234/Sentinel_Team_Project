@@ -118,6 +118,9 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             # Admins also join a shared admin group
             if self.user.is_staff:
                 await self.channel_layer.group_add("admin_notifications", self.channel_name)
+
+            # Track online status in cache for hybrid push
+            await self._set_online(True)
                 
             await self.accept()
         else:
@@ -128,6 +131,16 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_discard(self.user_group, self.channel_name)
             if self.user.is_staff:
                 await self.channel_layer.group_discard("admin_notifications", self.channel_name)
+            await self._set_online(False)
+
+    @database_sync_to_async
+    def _set_online(self, online):
+        from django.core.cache import cache
+        key = f"ws_online_{self.user.id}"
+        if online:
+            cache.set(key, True, timeout=None)
+        else:
+            cache.delete(key)
 
     async def user_notification(self, event):
         await self.send(text_data=json.dumps({

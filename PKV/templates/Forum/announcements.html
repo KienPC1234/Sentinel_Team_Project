@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Thông báo - ShieldCall Community{% endblock %}
+{% block head_extra %}
+<style>
+    .ann-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        border-radius: 1.25rem;
+        transition: all 0.3s ease;
+    }
+    .ann-card:hover {
+        border-color: rgba(24,255,255,0.15);
+    }
+    .ann-card.pinned {
+        border-color: rgba(255,215,0,0.2);
+        background: linear-gradient(135deg, rgba(255,215,0,0.03), var(--glass-bg));
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('announcementsPage', () => ({
+        announcements: [],
+        loading: false,
+        page: 1,
+        totalPages: 1,
+        showCreate: false,
+        newTitle: '',
+        newContent: '',
+        newPinned: false,
+        isAdmin: {{ user.is_staff|yesno:"true,false" }},
+        createLoading: false,
+        editorInstance: null,
+
+        async init() {
+            await this.fetch();
+        },
+
+        async fetch() {
+            this.loading = true;
+            try {
+                const resp = await fetch('/api/v1/announcements/?page=' + this.page);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.announcements = data.results;
+                    this.totalPages = data.pages;
+                }
+            } catch(e) {}
+            this.loading = false;
+        },
+
+        async toggleCreateForm() {
+            this.showCreate = !this.showCreate;
+            if (this.showCreate && !this.editorInstance) {
+                await this.$nextTick();
+                this.editorInstance = await window.createCKEditor('#ann-editor', '', 'Viết nội dung thông báo...');
+                if (this.editorInstance) {
+                    this.editorInstance.model.document.on('change:data', () => {
+                        this.newContent = this.editorInstance.getData();
+                    });
+                }
+            }
+        },
+
+        async submitAnnouncement() {
+            if (!this.newTitle.trim() || !this.newContent.trim()) {
+                showToast('Vui lòng điền đầy đủ tiêu đề và nội dung', 'warning');
+                return;
+            }
+            this.createLoading = true;
+            try {
+                const resp = await fetch('/api/v1/announcements/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
+                    body: JSON.stringify({title: this.newTitle, content: this.newContent, is_pinned: this.newPinned})
+                });
+                if (resp.ok) {
+                    showToast('Đã tạo thông báo!', 'success');
+                    this.newTitle = '';
+                    this.newContent = '';
+                    this.newPinned = false;
+                    this.showCreate = false;
+                    if (this.editorInstance) this.editorInstance.setData('');
+                    await this.fetch();
+                } else {
+                    const err = await resp.json();
+                    showToast(err.error || 'Lỗi', 'error');
+                }
+            } catch(e) { showToast('Lỗi kết nối', 'error'); }
+            this.createLoading = false;
+        },
+
+        async toggleLike(ann) {
+            try {
+                const resp = await fetch(`/api/v1/announcements/${ann.id}/reaction/`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
+                    body: JSON.stringify({reaction_type: 'like'})
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    ann.likes_count = data.likes_count;
+                    ann.user_liked = data.action === 'added';
+                }
+            } catch(e) {}
+        },
+
+        timeAgo(dt) {
+            if (!dt) return '';
+            const diff = (Date.now() - new Date(dt)) / 1000;
+            if(isNaN(diff)) return '';
+            if(diff < 60) return 'Vừa xong';
+            if(diff < 3600) return Math.floor(diff/60) + ' phút trước';
+            if(diff < 86400) return Math.floor(diff/3600) + ' giờ trước';
+            if(diff < 604800) return Math.floor(diff/86400) + ' ngày trước';
+            return new Date(dt).toLocaleDateString('vi-VN');
+        }
+    }));
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="announcementsPage" class="max-w-4xl mx-auto px-4 py-8">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm mb-5 text-white/40">
+        <a href="/" class="hover:text-cyan-400 transition"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <a href="/forum/" class="hover:text-cyan-400 transition">Diễn đàn</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <span class="text-white/60">Thông báo</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8" data-aos="fade-up">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-500/20 flex items-center justify-center border border-yellow-500/20">
+                <i class="bi bi-megaphone-fill text-xl text-yellow-400"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-black text-white">Thông báo</h1>
+                <p class="text-xs text-white/40">Thông báo chính thức từ ban quản trị</p>
+            </div>
+        </div>
+        <button x-show="isAdmin" @click="toggleCreateForm()" class="bg-gradient-to-r from-yellow-400 to-amber-500 text-black px-5 py-2.5 rounded-xl font-bold text-sm hover:scale-105 transition-all shadow-lg shadow-yellow-500/20 flex items-center gap-2">
+            <i class="bi bi-plus-lg"></i> Tạo thông báo
+        </button>
+    </div>
+
+    <!-- Create Form (Admin only) -->
+    <div x-show="showCreate" x-transition class="ann-card p-6 mb-6" data-aos="fade-up">
+        <h3 class="text-sm font-bold text-white/70 mb-4">Tạo thông báo mới</h3>
+        <div class="space-y-4">
+            <input type="text" x-model="newTitle" placeholder="Tiêu đề thông báo..."
+                class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-3 text-white font-semibold focus:outline-none focus:border-cyan-400/30 transition">
+            <div class="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                <div id="ann-editor" class="px-4 py-3 min-h-[200px] text-white/80"></div>
+            </div>
+            <label class="flex items-center gap-2 text-sm text-white/50 cursor-pointer">
+                <input type="checkbox" x-model="newPinned" class="rounded bg-white/10 border-white/20 text-cyan-400">
+                <span>Ghim thông báo</span>
+            </label>
+            <div class="flex items-center justify-end gap-3">
+                <button @click="showCreate = false" class="text-sm font-bold text-white/30 hover:text-white transition">Hủy</button>
+                <button @click="submitAnnouncement()" :disabled="createLoading"
+                    class="bg-yellow-400 text-black px-6 py-2.5 rounded-xl font-bold text-sm hover:scale-105 transition-all disabled:opacity-50">
+                    <span x-show="!createLoading">Đăng thông báo</span>
+                    <span x-show="createLoading">Đang đăng...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12">
+        <div class="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+        <p class="text-white/30 text-sm">Đang tải...</p>
+    </div>
+
+    <!-- Announcements List -->
+    <div x-show="!loading" class="space-y-4">
+        <template x-for="ann in announcements" :key="ann.id">
+            <div class="ann-card p-6" :class="ann.is_pinned && 'pinned'" data-aos="fade-up">
+                <div class="flex items-start gap-4">
+                    <!-- Author Avatar -->
+                    <div class="w-10 h-10 rounded-full bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0" :data-usercard="ann.author_username">
+                        <template x-if="ann.author_avatar">
+                            <img :src="ann.author_avatar" class="w-full h-full object-cover rounded-full">
+                        </template>
+                        <template x-if="!ann.author_avatar">
+                            <span class="text-xs font-bold text-cyan-400" x-text="ann.author_name ? ann.author_name[0].toUpperCase() : '?'"></span>
+                        </template>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span x-show="ann.is_pinned" class="text-yellow-500 text-xs"><i class="bi bi-pin-angle-fill"></i></span>
+                            <h3 class="text-base font-bold text-white" x-text="ann.title"></h3>
+                        </div>
+                        <div class="flex items-center gap-2 text-[10px] text-white/30 mb-4">
+                            <span class="flex items-center gap-1">
+                                <span x-text="ann.author_name"></span>
+                                <i x-show="ann.author_is_staff" class="bi bi-patch-check-fill" style="background:linear-gradient(135deg,#18ffff,#b388ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent"></i>
+                            </span>
+                            <span>·</span>
+                            <span x-text="timeAgo(ann.created_at)"></span>
+                            <span>·</span>
+                            <span><i class="bi bi-eye mr-0.5"></i><span x-text="ann.views_count"></span></span>
+                        </div>
+                        <div class="text-sm text-white/60 leading-relaxed richtext-content" x-html="ann.content"></div>
+                        <div class="flex items-center gap-4 mt-4 pt-3 border-t border-white/5">
+                            <button @click="toggleLike(ann)" class="flex items-center gap-1.5 text-sm transition"
+                                :class="ann.user_liked ? 'text-red-400' : 'text-white/30 hover:text-red-400'">
+                                <i class="bi" :class="ann.user_liked ? 'bi-heart-fill' : 'bi-heart'"></i>
+                                <span class="font-bold" x-text="ann.likes_count"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <div x-show="announcements.length === 0 && !loading" class="text-center py-16">
+            <i class="bi bi-megaphone text-4xl text-white/10 mb-3 block"></i>
+            <p class="text-white/30 text-sm font-bold">Chưa có thông báo nào</p>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="totalPages > 1" class="flex items-center justify-center gap-2 mt-6">
+            <button @click="page > 1 && (page--, fetch())" :disabled="page <= 1"
+                class="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white/40 hover:text-white transition disabled:opacity-30">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            <span class="text-xs text-white/30" x-text="`Trang ${page} / ${totalPages}`"></span>
+            <button @click="page < totalPages && (page++, fetch())" :disabled="page >= totalPages"
+                class="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white/40 hover:text-white transition disabled:opacity-30">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}

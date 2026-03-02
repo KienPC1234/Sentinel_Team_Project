@@ -14,9 +14,18 @@ class PushNotificationService:
     """
     
     @staticmethod
+    def _is_user_online(user_id):
+        """Check if a user has an active WebSocket connection via cache flag."""
+        from django.core.cache import cache
+        return cache.get(f"ws_online_{user_id}", False)
+
+    @staticmethod
     def send_push(user_id, title, message, url=None, notification_type='info'):
         """
-        Sends a notification via OneSignal and saves it to the local DB.
+        Sends a notification with hybrid delivery:
+        - Online users (WebSocket connected) → deliver via WebSocket only
+        - Offline users → deliver via OneSignal only
+        DB record is always created for history.
         """
         from api.core.models import Notification, UserProfile
         from django.contrib.auth import get_user_model
@@ -32,28 +41,32 @@ class PushNotificationService:
                 url=url,
                 notification_type=notification_type
             )
-            
-            # 2. Try OneSignal if Player ID exists
-            try:
-                profile = user.profile
-                if profile.onesignal_player_id:
-                    PushNotificationService._send_onesignal_notification(
-                        [profile.onesignal_player_id], title, message, url
-                    )
-            except Exception as e:
-                logger.error(f"OneSignal delivery failed for user {user_id}: {e}")
 
-            # 3. Real-time delivery via WebSocket (Fallback/Secondary)
-            channel_layer = get_channel_layer()
-            if channel_layer:
-                group_name = f"user_{user_id}"
-                async_to_sync(channel_layer.group_send)(group_name, {
-                    'type': 'user_notification',
-                    'title': title,
-                    'message': message,
-                    'url': url,
-                    'notification_type': notification_type,
-                })
+            online = PushNotificationService._is_user_online(user_id)
+
+            if online:
+                # User is on the site — deliver via WebSocket only
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(f"user_{user_id}", {
+                        'type': 'user_notification',
+                        'title': title,
+                        'message': message,
+                        'url': url,
+                        'notification_type': notification_type,
+                    })
+                logger.debug(f"Push to user {user_id} via WebSocket (online)")
+            else:
+                # User is offline — deliver via OneSignal
+                try:
+                    profile = user.profile
+                    if profile.onesignal_player_id:
+                        PushNotificationService._send_onesignal_notification(
+                            [profile.onesignal_player_id], title, message, url
+                        )
+                except Exception as e:
+                    logger.error(f"OneSignal delivery failed for user {user_id}: {e}")
+                logger.debug(f"Push to user {user_id} via OneSignal (offline)")
                 
             return True
         except Exception as e:
@@ -79,25 +92,36 @@ class PushNotificationService:
             ]
             Notification.objects.bulk_create(notifications)
             
-            # 2. OneSignal Broadcast to Admin segments (if configured) or specific IDs
-            admin_ids = list(
-                admins.exclude(profile__onesignal_player_id__isnull=True)
-                      .exclude(profile__onesignal_player_id='')
-                      .values_list('profile__onesignal_player_id', flat=True)
-            )
-            if admin_ids:
-                PushNotificationService._send_onesignal_notification(admin_ids, title, message, url)
-
-            # 3. WebSocket Broadcast
+            # 2. Hybrid delivery: WS for online admins, OneSignal for offline
+            from django.core.cache import cache
             channel_layer = get_channel_layer()
-            if channel_layer:
-                async_to_sync(channel_layer.group_send)("admin_notifications", {
-                    'type': 'user_notification',
-                    'title': title,
-                    'message': message,
-                    'url': url,
-                    'notification_type': notification_type,
-                })
+            offline_player_ids = []
+
+            for admin in admins:
+                if cache.get(f"ws_online_{admin.id}", False):
+                    # Online — deliver via WebSocket
+                    if channel_layer:
+                        try:
+                            async_to_sync(channel_layer.group_send)(f"user_{admin.id}", {
+                                'type': 'user_notification',
+                                'title': title,
+                                'message': message,
+                                'url': url,
+                                'notification_type': notification_type,
+                            })
+                        except Exception:
+                            pass
+                else:
+                    # Offline — collect for OneSignal
+                    try:
+                        pid = admin.profile.onesignal_player_id
+                        if pid:
+                            offline_player_ids.append(pid)
+                    except Exception:
+                        pass
+
+            if offline_player_ids:
+                PushNotificationService._send_onesignal_notification(offline_player_ids, title, message, url)
             
             return True
         except Exception as e:
@@ -174,6 +198,70 @@ class PushNotificationService:
             logger.error("OneSignal API request timed out")
         except Exception as e:
             logger.error(f"OneSignal API request failed: {e}")
+
+    @staticmethod
+    def broadcast_all(title, message, url=None, notification_type='info'):
+        """
+        Broadcasts a notification to ALL users.
+        Creates Notification records and sends via OneSignal + WebSocket.
+        Returns the number of users notified.
+        """
+        from api.core.models import Notification
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        try:
+            users = User.objects.filter(is_active=True)
+            notifications = [
+                Notification(
+                    user=u, title=title, message=message, url=url, notification_type=notification_type
+                ) for u in users
+            ]
+            Notification.objects.bulk_create(notifications)
+            
+            # Hybrid delivery: WebSocket for online users, OneSignal for offline
+            from django.core.cache import cache
+            channel_layer = get_channel_layer()
+
+            online_ids = set()
+            offline_users_with_player = []
+
+            for u in users:
+                if cache.get(f"ws_online_{u.id}", False):
+                    online_ids.add(u.id)
+                    # Send via WebSocket
+                    if channel_layer:
+                        try:
+                            async_to_sync(channel_layer.group_send)(f"user_{u.id}", {
+                                'type': 'user_notification',
+                                'title': title,
+                                'message': message,
+                                'url': url,
+                                'notification_type': notification_type,
+                            })
+                        except Exception:
+                            pass
+                else:
+                    # Collect for OneSignal batch
+                    try:
+                        pid = u.profile.onesignal_player_id
+                        if pid:
+                            offline_users_with_player.append(pid)
+                    except Exception:
+                        pass
+
+            # OneSignal batch for offline users only
+            if offline_users_with_player:
+                for i in range(0, len(offline_users_with_player), 2000):
+                    batch = offline_users_with_player[i:i+2000]
+                    PushNotificationService._send_onesignal_notification(batch, title, message, url)
+
+            logger.info(f"Broadcast: {len(online_ids)} via WS, {len(offline_users_with_player)} via OneSignal")
+            
+            return users.count()
+        except Exception as e:
+            logger.error(f"Failed to broadcast to all: {e}")
+            return 0
 
     @staticmethod
     def send_rag_status_update(status, message, count=None, error=None):

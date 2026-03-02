@@ -137,10 +137,10 @@ class ForumPostDetailView(APIView):
         except ForumPost.DoesNotExist:
             return Response({'error': 'Bài viết không tồn tại'}, status=404)
 
-        if post.author != request.user:
+        if post.author != request.user and not request.user.is_staff:
             return Response({'error': 'Bạn không có quyền chỉnh sửa bài viết này.'}, status=403)
 
-        if post.is_locked:
+        if post.is_locked and not request.user.is_staff:
             return Response({'error': 'Bài viết đã bị khóa, không thể chỉnh sửa.'}, status=403)
 
         # Update allowed fields
@@ -187,6 +187,35 @@ class ForumPostCommentView(APIView):
 
         # Update post comment count
         ForumPost.objects.filter(id=post_id).update(comments_count=F('comments_count') + 1)
+
+        # Push notification: notify parent comment author OR post author
+        try:
+            from api.utils.push_service import push_service
+            sender_name = getattr(request.user, 'profile', None)
+            sender_name = sender_name.display_name if sender_name and sender_name.display_name else request.user.username
+            post_url = f'/forum/{post.id}/'
+
+            if comment.parent and comment.parent.author != request.user:
+                # Reply to a comment → notify parent comment author
+                push_service.send_push(
+                    comment.parent.author.id,
+                    f'{sender_name} đã trả lời bình luận của bạn',
+                    comment.content[:100] if comment.content else 'Bình luận mới',
+                    url=post_url,
+                    notification_type='info'
+                )
+            elif post.author != request.user:
+                # Top-level comment → notify post author
+                push_service.send_push(
+                    post.author.id,
+                    f'{sender_name} đã bình luận bài viết của bạn',
+                    comment.content[:100] if comment.content else 'Bình luận mới',
+                    url=post_url,
+                    notification_type='info'
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Comment push notification failed: {e}")
 
         return Response(ForumCommentSerializer(comment, context={'request': request}).data, status=201)
 
