@@ -65,6 +65,105 @@
     </div>
 </section>
 
+<!-- Latest Knowledge & News -->
+<section class="max-w-7xl mx-auto px-4 mb-24 space-y-10" data-aos="fade-up">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-2xl font-black text-white tracking-tight">Kiến thức mới</h2>
+                <a href="/learn/" class="text-cyan-400 text-xs font-black uppercase tracking-widest hover:text-cyan-300">Xem tất cả</a>
+            </div>
+            {% if latest_lessons %}
+            {% with featured=latest_lessons.0 %}
+            <a href="/learn/lesson/{{ featured.slug }}/" class="block liquid-card overflow-hidden border-cyan-500/20 hover:border-cyan-400/40 transition-all no-underline group">
+                <div class="relative h-48 sm:h-52">
+                    {% if featured.cover_image %}
+                    <img src="{{ featured.cover_image.url }}" alt="{{ featured.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                    {% else %}
+                    <div class="w-full h-full bg-gradient-to-br from-cyan-500/20 via-blue-500/10 to-transparent"></div>
+                    {% endif %}
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#060611] via-[#060611]/50 to-transparent"></div>
+                    <div class="absolute bottom-0 left-0 right-0 p-5">
+                        <p class="text-[10px] text-cyan-300 font-black uppercase tracking-widest mb-1">Kiến thức nổi bật</p>
+                        <h3 class="text-base font-black text-white leading-snug">{{ featured.title }}</h3>
+                        <p class="text-[11px] text-white/45 mt-2">{{ featured.created_at|date:"d/m/Y" }}</p>
+                    </div>
+                </div>
+            </a>
+            {% endwith %}
+            <div class="space-y-3">
+                {% for lesson in latest_lessons|slice:"1:" %}
+                <a href="/learn/lesson/{{ lesson.slug }}/" class="block liquid-card p-4 hover:border-cyan-500/30 transition-all no-underline">
+                    <div class="flex items-center gap-3">
+                        <div class="w-16 h-16 rounded-xl overflow-hidden border border-white/10 bg-white/5 flex-shrink-0">
+                            {% if lesson.cover_image %}
+                            <img src="{{ lesson.cover_image.url }}" alt="{{ lesson.title }}" class="w-full h-full object-cover">
+                            {% else %}
+                            <div class="w-full h-full bg-gradient-to-br from-cyan-500/25 to-blue-500/10 flex items-center justify-center text-cyan-300"><i class="bi bi-journal-richtext"></i></div>
+                            {% endif %}
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="text-sm font-bold text-white leading-relaxed line-clamp-2">{{ lesson.title }}</h4>
+                            <p class="text-[11px] text-white/35 mt-1">{{ lesson.created_at|date:"d/m/Y" }}</p>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="liquid-card p-5 text-white/35 text-sm">Chưa có bài kiến thức nào.</div>
+            {% endif %}
+        </div>
+
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-2xl font-black text-white tracking-tight">Tin tức mới</h2>
+                <a href="/learn/" class="text-purple-400 text-xs font-black uppercase tracking-widest hover:text-purple-300">Xem tất cả</a>
+            </div>
+            {% if latest_articles %}
+            {% with featured=latest_articles.0 %}
+            <a href="/learn/{{ featured.slug }}/" class="block liquid-card overflow-hidden border-purple-500/20 hover:border-purple-400/40 transition-all no-underline group">
+                <div class="relative h-48 sm:h-52">
+                    {% if featured.cover_image %}
+                    <img src="{{ featured.cover_image.url }}" alt="{{ featured.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                    {% else %}
+                    <div class="w-full h-full bg-gradient-to-br from-purple-500/20 via-fuchsia-500/10 to-transparent"></div>
+                    {% endif %}
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#060611] via-[#060611]/50 to-transparent"></div>
+                    <div class="absolute bottom-0 left-0 right-0 p-5">
+                        <p class="text-[10px] text-purple-300 font-black uppercase tracking-widest mb-1">Tin nổi bật</p>
+                        <h3 class="text-base font-black text-white leading-snug">{{ featured.title }}</h3>
+                        <p class="text-[11px] text-white/45 mt-2">{{ featured.created_at|date:"d/m/Y" }}</p>
+                    </div>
+                </div>
+            </a>
+            {% endwith %}
+            <div class="space-y-3">
+                {% for article in latest_articles|slice:"1:" %}
+                <a href="/learn/{{ article.slug }}/" class="block liquid-card p-4 hover:border-purple-500/30 transition-all no-underline">
+                    <div class="flex items-center gap-3">
+                        <div class="w-16 h-16 rounded-xl overflow-hidden border border-white/10 bg-white/5 flex-shrink-0">
+                            {% if article.cover_image %}
+                            <img src="{{ article.cover_image.url }}" alt="{{ article.title }}" class="w-full h-full object-cover">
+                            {% else %}
+                            <div class="w-full h-full bg-gradient-to-br from-purple-500/25 to-fuchsia-500/10 flex items-center justify-center text-purple-300"><i class="bi bi-newspaper"></i></div>
+                            {% endif %}
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="text-sm font-bold text-white leading-relaxed line-clamp-2">{{ article.title }}</h4>
+                            <p class="text-[11px] text-white/35 mt-1">{{ article.created_at|date:"d/m/Y" }}</p>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="liquid-card p-5 text-white/35 text-sm">Chưa có tin tức nào.</div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
 <!-- Tools Grid -->
 <section class="max-w-7xl mx-auto px-4 mb-24 space-y-12">
     <div class="text-center space-y-4">

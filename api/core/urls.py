@@ -79,10 +79,16 @@ urlpatterns = [
 
     # Utils
     path('utils/upload-image/', views.EditorImageUploadView.as_view(), name='editor-upload-image'),
+    path('utils/editor-media/', views.EditorMediaLibraryView.as_view(), name='editor-media-library'),
     path('utils/fetch-url/', views.EditorFetchUrlView.as_view(), name='editor-fetch-url'),
     path('utils/mentions/', views.MentionUserListView.as_view(), name='mentions'),
     path('notifications/test-push/', views.TestPushView.as_view(), name='test-push'),
-    path('notifications/onesignal-register/', views.OneSignalRegistrationView.as_view(), name='onesignal-register'),
+    path('push/public-key/', views.PushPublicKeyView.as_view(), name='push-public-key'),
+    path('push/subscribe/', views.WebPushSubscribeView.as_view(), name='push-subscribe'),
+    path('push/unsubscribe/', views.WebPushUnsubscribeView.as_view(), name='push-unsubscribe'),
+    # Backward-compatible aliases
+    path('notifications/webpush/subscribe/', views.WebPushSubscribeView.as_view(), name='webpush-subscribe'),
+    path('notifications/webpush/unsubscribe/', views.WebPushUnsubscribeView.as_view(), name='webpush-unsubscribe'),
     path('notifications/', views.NotificationListView.as_view(), name='notification-list'),
     path('notifications/unread-count/', views.NotificationUnreadCountView.as_view(), name='notification-unread-count'),
     path('notifications/<int:notification_id>/read/', views.NotificationMarkReadView.as_view(), name='notification-mark-read'),
