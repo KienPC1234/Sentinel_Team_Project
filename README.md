@@ -12,7 +12,7 @@
 ---
 
 ## 🌟 Giới thiệu
-**ShieldCall VN** là giải pháp công nghệ tiên phong giúp phát hiện, ngăn chặn và giáo dục về các hình thức lừa đảo kỹ thuật số (cuộc gọi rác, tin nhắn giả mạo, website lừa đảo, tài khoản ngân hàng đen) dành riêng cho người dùng tại Việt Nam. Dự án được phát triển bởi **Sentinel Team** cho cuộc thi **AI Young Guru**.
+**ShieldCall VN** là giải pháp công nghệ tiên phong giúp phát hiện, ngăn chặn và giáo dục về các hình thức lừa đảo kỹ thuật số (cuộc gọi rác, tin nhắn giả mạo, website lừa đảo, tài khoản ngân hàng đen) dành riêng cho người dùng tại Việt Nam. Dự án được phát triển bởi **Sentinel Team**.
 
 ## ✨ Tính năng nổi bật
 
@@ -460,8 +460,8 @@ python scripts/generate_vapid_keys.py --subject mailto:admin@yourdomain.com
 ---
 
 ## 👨‍💻 Đội ngũ phát triển
-Dự án được thực hiện bởi **SENTINEL TEAM** (tiền thân là PKV Team).
-- **Quy mô dự án:** ~40,000 dòng code production.
+Dự án được thực hiện bởi **SENTINEL TEAM**.
+- **Quy mô dự án:** ~50,000 dòng code production.
 - **Phương trình phát triển:** **AI-Native Workflow**. Tận dụng mạng lưới **Multi-Agent Collaboration** (Đặc vụ AI cộng tác) và kỹ thuật **Prompt Engineering** nâng cao (Chain-of-Thought, Feedback Loop) để tối ưu hóa kiến trúc và đảm bảo độ ổn định của hệ thống.
 - **Kiến trúc:** Cloud-native, AI-integrated.
 

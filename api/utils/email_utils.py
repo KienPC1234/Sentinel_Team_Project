@@ -17,6 +17,14 @@ from django.utils.html import strip_tags
 logger = logging.getLogger(__name__)
 
 
+def _clean_email_text(value: str, max_len: int = 300) -> str:
+    plain = strip_tags(value or '')
+    plain = re.sub(r'\s+', ' ', plain).strip()
+    if len(plain) > max_len:
+        return plain[:max_len].rstrip() + '...'
+    return plain
+
+
 def _extract_sender_domain(sender_text: str) -> str:
     match = re.search(r'([\w\.-]+@[\w\.-]+)', sender_text or '')
     if not match:
@@ -404,7 +412,7 @@ def send_html_otp_email(to_email, token):
     context = {'token': token, 'site_name': 'ShieldCall VN'}
     
     try:
-        html_message = render_to_string('Emails/otp_email.html', context)
+        html_message = render_to_string('Email/otp_email.html', context)
         plain_message = f"Mã xác thực của bạn là: {token}"
     except Exception:
         plain_message = f"Mã xác thực của bạn là: {token}"
@@ -432,24 +440,32 @@ def send_report_outcome_email(user, report_type, target, status, reason=None):
 
     subject = f"[ShieldCall VN] Kết quả xử lý báo cáo {report_type}"
     
+    clean_target = _clean_email_text(target, max_len=220)
+    clean_reason = _clean_email_text(reason, max_len=600) if reason else ''
+
     context = {
         'user': user,
         'report_type': report_type,
-        'target': target,
+        'target': clean_target,
         'status': status,
-        'reason': reason,
+        'reason': clean_reason,
         'site_name': 'ShieldCall VN'
     }
     
     # Try to use a template, fallback to plain text if template missing
     try:
-        html_message = render_to_string('Emails/report_outcome.html', context)
-        plain_message = render_to_string('Emails/report_outcome.txt', context)
+        html_message = render_to_string('Email/report_outcome.html', context)
+        plain_message = render_to_string('Email/report_outcome.txt', context)
     except Exception:
-        status_text = "đã được chấp thuận" if status == 'approved' else "đã bị từ chối"
-        plain_message = f"Chào {user.username},\n\nBáo cáo của bạn về {target} {status_text}.\n"
-        if reason:
-            plain_message += f"Lý do: {reason}\n"
+        if status == 'approved':
+            status_text = "đã được chấp thuận"
+        elif status == 'ai_flagged':
+            status_text = "đã được AI gắn cờ và chuyển Admin xác minh"
+        else:
+            status_text = "đã bị từ chối"
+        plain_message = f"Chào {user.username},\n\nBáo cáo của bạn về {clean_target} {status_text}.\n"
+        if clean_reason:
+            plain_message += f"Lý do: {clean_reason}\n"
         plain_message += "\nCảm ơn bạn đã góp phần xây dựng cộng đồng an toàn!\n\nShieldCall VN Team"
         html_message = None
 
@@ -472,7 +488,17 @@ def send_new_lesson_email(user_emails, lesson_title, lesson_url):
     """
     subject = f"[ShieldCall VN] Bài học mới: {lesson_title}"
     
-    plain_message = f"Chào bạn,\n\nChúng tôi vừa xuất bản bài học mới: {lesson_title}.\nXem ngay tại: {lesson_url}\n\nShieldCall VN Team"
+    context = {
+        'lesson_title': lesson_title,
+        'lesson_url': lesson_url,
+        'site_name': 'ShieldCall VN',
+    }
+    try:
+        html_message = render_to_string('Email/new_lesson.html', context)
+        plain_message = render_to_string('Email/new_lesson.txt', context)
+    except Exception:
+        plain_message = f"Chào bạn,\n\nChúng tôi vừa xuất bản bài học mới: {lesson_title}.\nXem ngay tại: {lesson_url}\n\nShieldCall VN Team"
+        html_message = None
     
     try:
         sent_count = send_mail(
@@ -480,6 +506,7 @@ def send_new_lesson_email(user_emails, lesson_title, lesson_url):
             plain_message,
             settings.DEFAULT_FROM_EMAIL,
             user_emails,
+            html_message=html_message,
             fail_silently=False
         )
         logger.info(f"New lesson email sent to {len(user_emails)} users (sent_count={sent_count})")

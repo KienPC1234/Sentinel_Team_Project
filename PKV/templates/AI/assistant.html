@@ -23,6 +23,7 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="{% static 'js/notifications.js' %}"></script>
 
     <style>
         /* Liquid Glass Redesign */
@@ -517,10 +518,10 @@
 
             <!-- Chat Content Window -->
             <div id="messages-wrapper" class="flex-1 overflow-y-auto custom-scrollbar relative px-4">
-                <div id="session-loading" class="session-loading-overlay hidden" aria-live="polite" aria-busy="true">
+                <div id="session-loading" class="session-loading-overlay hidden" aria-live="polite" aria-busy="true" style="display:none !important;">
                     <div class="session-loading-card">
                         <span class="session-loading-spinner"></span>
-                        Đang tải hội thoại...
+                        Đang đồng bộ...
                     </div>
                 </div>
                 <div id="messages-container" class="max-w-4xl mx-auto py-10 space-y-10">
@@ -646,13 +647,25 @@
     </div>
 
     <script>
-        let currentSessionId = INITIAL_SESSION_ID;
+        function normalizeSessionId(rawValue) {
+            const value = String(rawValue || '').trim();
+            if (!value) return null;
+            const lowered = value.toLowerCase();
+            if (['none', 'null', 'undefined', 'nan', 'false', '0'].includes(lowered)) return null;
+            const uuidV4Like = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            if (!uuidV4Like.test(value)) return null;
+            return value;
+        }
+
+        const AI_ASSISTANT_DEBUG = false;
+        let currentSessionId = normalizeSessionId(INITIAL_SESSION_ID);
         let isStreaming = false;
         let abortController = null;
         let pendingImages = [];
         let lastRenderedTime = 0;
         let editModeMessageId = null;
         const RENDER_THROTTLE_MS = 60;
+        let sessionLoadingWatchdog = null;
 
         const messagesContainer = document.getElementById('messages-container');
         const messagesWrapper = document.getElementById('messages-wrapper');
@@ -673,12 +686,47 @@
         const mobileToggle = document.getElementById('mobile-sidebar-toggle');
         let isSessionLoading = false;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSessions();
-            if (INITIAL_SESSION_ID) {
-                loadSessionDetail(INITIAL_SESSION_ID);
+        function debugAssistant(...args) {
+            if (!AI_ASSISTANT_DEBUG) return;
+            console.log('[AI_ASSISTANT]', ...args);
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            setSessionLoadingState(false);
+
+            const normalizedInitialSession = normalizeSessionId(INITIAL_SESSION_ID);
+            debugAssistant('DOMContentLoaded', {
+                initialSessionRaw: INITIAL_SESSION_ID,
+                initialSessionNormalized: normalizedInitialSession
+            });
+
+            await loadSessions();
+            if (normalizedInitialSession) {
+                await loadSessionDetail(normalizedInitialSession);
+            } else {
+                resetAssistantHome(false, null);
             }
             userInput.focus();
+
+            const landingPrompt = sessionStorage.getItem('assistant_welcome_prompt');
+            if (landingPrompt && landingPrompt.trim()) {
+                sessionStorage.removeItem('assistant_welcome_prompt');
+                setPrompt(landingPrompt.trim());
+                setTimeout(() => sendMessage(), 100);
+            }
+
+            window.is_staff = {{ user.is_staff|yesno:"true,false" }};
+            const initNotif = () => {
+                if (typeof NotificationManager !== 'undefined' && NotificationManager && typeof NotificationManager.init === 'function') {
+                    NotificationManager.init(window.is_staff);
+                    return true;
+                }
+                return false;
+            };
+            if (!initNotif()) {
+                setTimeout(initNotif, 500);
+                setTimeout(initNotif, 1500);
+            }
 
             userInput.addEventListener('input', () => {
                 userInput.style.height = 'auto';
@@ -708,9 +756,64 @@
                 mobileToggle.onclick = () => sidebar.classList.toggle('hidden');
             }
 
+            initChatSearch();
+
             updateComposerSafeSpace();
             window.addEventListener('resize', updateComposerSafeSpace);
         });
+
+        window.addEventListener('pageshow', () => {
+            debugAssistant('pageshow reset loading state');
+            setSessionLoadingState(false);
+        });
+
+        function resetAssistantHome(pushHistory = true, sessionId = null) {
+            currentSessionId = sessionId ? normalizeSessionId(sessionId) : null;
+            setSessionLoadingState(false);
+            if (pushHistory) {
+                if (currentSessionId) {
+                    window.history.pushState({}, '', `/ai-assistant/${currentSessionId}/`);
+                } else {
+                    window.history.pushState({}, '', `/ai-assistant/`);
+                }
+            }
+            clearRenderedMessages();
+            updateWelcomeVisibility();
+            chatTitle.innerText = "Cuộc trò chuyện mới";
+            chatStatus.innerText = 'AI đang xử lý...';
+            chatStatus.classList.add('hidden');
+            clearEditMode();
+        }
+
+        function clearRenderedMessages() {
+            if (!messagesContainer) return;
+            messagesContainer.querySelectorAll('.msg-group').forEach((el) => el.remove());
+        }
+
+        function updateWelcomeVisibility() {
+            if (!welcomeScreen) return;
+            if (currentSessionId) {
+                welcomeScreen.classList.add('hidden');
+            } else {
+                welcomeScreen.classList.remove('hidden');
+            }
+        }
+
+        async function createNewSession() {
+            const resp = await fetch('/api/v1/chat/sessions/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({})
+            });
+            if (!resp.ok) throw new Error(`create_session_failed_${resp.status}`);
+            const data = await resp.json();
+            const id = normalizeSessionId(data.id);
+            if (!id) throw new Error('create_session_invalid_id');
+            return id;
+        }
 
         function updateComposerSafeSpace() {
             if (!messagesWrapper) return;
@@ -722,12 +825,49 @@
 
         function setSessionLoadingState(isLoading) {
             isSessionLoading = !!isLoading;
-            if (sessionLoading) sessionLoading.classList.toggle('hidden', !isSessionLoading);
+            if (sessionLoading) {
+                sessionLoading.classList.add('hidden');
+                sessionLoading.style.display = 'none';
+            }
+
+            if (sessionLoadingWatchdog) {
+                clearTimeout(sessionLoadingWatchdog);
+                sessionLoadingWatchdog = null;
+            }
+
             if (isSessionLoading) {
-                chatStatus.innerText = 'Đang tải hội thoại...';
-                chatStatus.classList.remove('hidden');
+                chatStatus.innerText = 'AI đang xử lý...';
+                if (!isStreaming) {
+                    chatStatus.classList.add('hidden');
+                }
+                debugAssistant('setSessionLoadingState -> ON', {
+                    currentSessionId,
+                    isStreaming
+                });
+                sessionLoadingWatchdog = setTimeout(() => {
+                    debugAssistant('session loading watchdog fired, forcing reset', {
+                        currentSessionId,
+                        isStreaming,
+                        isSessionLoading
+                    });
+                    isSessionLoading = false;
+                    if (sessionLoading) sessionLoading.classList.add('hidden');
+                    if (!isStreaming) {
+                        if (chatStatus.innerText === 'Đang đồng bộ...') {
+                            chatStatus.innerText = 'AI đang xử lý...';
+                        }
+                        chatStatus.classList.add('hidden');
+                    }
+                }, 12000);
             } else if (!isStreaming) {
+                if (chatStatus.innerText === 'Đang đồng bộ...') {
+                    chatStatus.innerText = 'AI đang xử lý...';
+                }
                 chatStatus.classList.add('hidden');
+                debugAssistant('setSessionLoadingState -> OFF', {
+                    currentSessionId,
+                    isStreaming
+                });
             }
         }
 
@@ -736,11 +876,32 @@
             const images = [...pendingImages];
             if (!text && images.length === 0) return;
 
+            if (!currentSessionId) {
+                try {
+                    const newSessionId = await createNewSession();
+                    currentSessionId = newSessionId;
+                    window.history.pushState({}, '', `/ai-assistant/${newSessionId}/`);
+                    await loadSessions();
+                } catch (e) {
+                    console.error(e);
+                    showToast('Không thể tạo hội thoại mới', 'error');
+                    return;
+                }
+            }
+
+            debugAssistant('sendMessage:start', {
+                currentSessionId,
+                textLength: text.length,
+                imagesCount: images.length
+            });
+            setSessionLoadingState(false);
             isStreaming = true;
             updateSendBtnState();
             sendIcon.classList.add('hidden');
             stopIcon.classList.remove('hidden');
-            welcomeScreen.classList.add('hidden');
+            updateWelcomeVisibility();
+            if (welcomeScreen) welcomeScreen.classList.add('hidden');
+            chatStatus.innerText = 'AI đang xử lý...';
             chatStatus.classList.remove('hidden');
 
             // If editing, remove all messages from the edited one onward in DOM first
@@ -871,7 +1032,13 @@
                                 if (data.annotated_image) {
                                     addAnnotatedImage(assistantMsgDiv, data.annotated_image);
                                 }
-                                if (data.session_id) currentSessionId = data.session_id;
+                                if (data.session_id) {
+                                    const normalizedSession = normalizeSessionId(data.session_id);
+                                    if (normalizedSession) {
+                                        currentSessionId = normalizedSession;
+                                        debugAssistant('stream:updateSessionId', normalizedSession);
+                                    }
+                                }
                                 if (data.title && data.title !== 'Guest Session') {
                                     if (data.title !== chatTitle.innerText) {
                                         chatTitle.classList.remove('title-reveal');
@@ -915,6 +1082,10 @@
             sendIcon.classList.remove('hidden');
             stopIcon.classList.add('hidden');
             chatStatus.classList.add('hidden');
+            debugAssistant('finishStream', {
+                currentSessionId,
+                contentLength: (fullContent || '').length
+            });
             updateSendBtnState();
             
             // Mark any remaining tool cards as done (safety net)
@@ -1182,21 +1353,40 @@
         }
 
         async function loadSessionDetail(id) {
-            if (!id) return;
-            if (isSessionLoading && currentSessionId === id) return;
+            const normalizedId = normalizeSessionId(id);
+            if (!normalizedId) {
+                debugAssistant('loadSessionDetail:invalid id', { id });
+                setSessionLoadingState(false);
+                return;
+            }
+            if (isSessionLoading && currentSessionId === normalizedId) return;
+            debugAssistant('loadSessionDetail:start', { id: normalizedId });
             setSessionLoadingState(true);
-            currentSessionId = id;
-            window.history.pushState({}, '', `/ai-assistant/${id}/`);
+            currentSessionId = normalizedId;
+            window.history.pushState({}, '', `/ai-assistant/${normalizedId}/`);
             try {
-                const res = await fetch(`/api/v1/chat/sessions/${id}/`);
+                const res = await fetch(`/api/v1/chat/sessions/${normalizedId}/`);
+                if (!res.ok) {
+                    throw new Error(`Không thể tải hội thoại (${res.status})`);
+                }
                 const data = await res.json();
                 chatTitle.innerText = data.title;
-                messagesContainer.innerHTML = '';
+                clearRenderedMessages();
                 data.messages.forEach(m => addMessage(m.role, m.message, m.images || [], false, m.id, m.metadata));
-                welcomeScreen.classList.add('hidden');
+                updateWelcomeVisibility();
                 scrollToBottom();
                 loadSessions();
-            } catch (err) { console.error(err); }
+                debugAssistant('loadSessionDetail:success', {
+                    id: normalizedId,
+                    messages: Array.isArray(data.messages) ? data.messages.length : 0
+                });
+            } catch (err) {
+                console.error(err);
+                debugAssistant('loadSessionDetail:error', {
+                    id: normalizedId,
+                    error: err?.message || String(err)
+                });
+            }
             finally { setSessionLoadingState(false); }
         }
 
@@ -1213,8 +1403,12 @@
             });
             if (isConfirmed) {
                 await fetch(`/api/v1/chat/sessions/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
-                if (currentSessionId === id) startNewChat();
-                else loadSessions();
+                if (currentSessionId === id) {
+                    resetAssistantHome(true, null);
+                    loadSessions();
+                } else {
+                    loadSessions();
+                }
             }
         }
 
@@ -1239,15 +1433,11 @@
             }
         }
 
-        function startNewChat() {
-            currentSessionId = null;
-            setSessionLoadingState(false);
-            window.history.pushState({}, '', `/ai-assistant/`);
-            messagesContainer.innerHTML = '';
-            welcomeScreen.classList.remove('hidden');
-            chatTitle.innerText = "Cuộc trò chuyện mới";
-            clearEditMode();
+        async function startNewChat() {
+            debugAssistant('startNewChat', { previousSessionId: currentSessionId });
+            resetAssistantHome(true, null);
             loadSessions();
+            userInput.focus();
         }
 
         function clearEditMode() {
@@ -1604,11 +1794,11 @@
 
         // ===== Chat Search =====
         let searchDebounceTimer = null;
-        document.addEventListener('DOMContentLoaded', () => {
+        function initChatSearch() {
             const searchInput = document.getElementById('chat-search-input');
             const searchClear = document.getElementById('chat-search-clear');
             const searchPanel = document.getElementById('search-results-panel');
-            
+
             if (searchInput) {
                 searchInput.addEventListener('input', () => {
                     const q = searchInput.value.trim();
@@ -1628,7 +1818,7 @@
                     searchPanel.innerHTML = '';
                 });
             }
-        });
+        }
 
         async function performSearch(q) {
             const panel = document.getElementById('search-results-panel');

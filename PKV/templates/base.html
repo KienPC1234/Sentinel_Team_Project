@@ -64,6 +64,72 @@
         transform: translateY(0);
         pointer-events: auto;
     }
+
+    /* ═══ Global Scrollbar (whole website, includes horizontal) ═══ */
+    html, body {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(24,255,255,0.42) rgba(255,255,255,0.04);
+        color-scheme: dark;
+    }
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    html::-webkit-scrollbar-track,
+    body::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.03);
+        border-radius: 999px;
+    }
+    html::-webkit-scrollbar-thumb,
+    body::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(24,255,255,0.5), rgba(179,136,255,0.45));
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+    html::-webkit-scrollbar-thumb:hover,
+    body::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, rgba(24,255,255,0.65), rgba(179,136,255,0.6));
+    }
+
+    /* ═══ Global Native Select (Liquid-like fallback) ═══ */
+    select:not([data-plain-select="true"]):not(.liquid-select-native-off) {
+        width: 100%;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 0.85rem;
+        color: rgba(255,255,255,0.92);
+        font-weight: 700;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        padding: 0.72rem 2.15rem 0.72rem 0.95rem;
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-image:
+            linear-gradient(45deg, transparent 50%, rgba(24,255,255,0.65) 50%),
+            linear-gradient(135deg, rgba(24,255,255,0.65) 50%, transparent 50%);
+        background-position:
+            calc(100% - 16px) calc(50% - 3px),
+            calc(100% - 10px) calc(50% - 3px);
+        background-size: 6px 6px, 6px 6px;
+        background-repeat: no-repeat;
+        transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+    }
+    select:not([data-plain-select="true"]):not(.liquid-select-native-off):hover {
+        border-color: rgba(24,255,255,0.35);
+        background-color: rgba(255,255,255,0.07);
+    }
+    select:not([data-plain-select="true"]):not(.liquid-select-native-off):focus {
+        outline: none;
+        border-color: rgba(24,255,255,0.55);
+        box-shadow: 0 0 0 3px rgba(24,255,255,0.12);
+    }
+    select:not([data-plain-select="true"]):not(.liquid-select-native-off) option,
+    select:not([data-plain-select="true"]):not(.liquid-select-native-off) optgroup {
+        background: #11152b;
+        color: #f8fafc;
+    }
     </style>
 
     {% tailwind_css %}
@@ -143,24 +209,59 @@
             return data.items || [];
         }
 
-        function shieldCallRenderMediaGrid(items) {
-            if (!items.length) {
-                return '<div class="text-center text-white/40 text-sm py-8">Chưa có ảnh nào được upload.</div>';
+        function shieldCallRenderMediaGrid(items, query = '') {
+            const q = (query || '').trim().toLowerCase();
+            const filtered = q
+                ? items.filter((item) => {
+                    const name = (item.name || '').toLowerCase();
+                    const path = (item.path || '').toLowerCase();
+                    return name.includes(q) || path.includes(q);
+                })
+                : items;
+
+            if (!filtered.length) {
+                return '<div class="text-center text-white/40 text-sm py-8">Không tìm thấy ảnh phù hợp.</div>';
             }
-            return `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[420px] overflow-auto pr-1">${items.map((item, idx) => `
-                <div class="rounded-xl border border-white/10 bg-white/5 p-3" data-index="${idx}">
-                    <img src="${item.url}" alt="${item.name}" class="w-full h-32 object-cover rounded-lg border border-white/10 mb-2" />
-                    <div class="text-[11px] text-white/70 truncate mb-2" title="${item.name}">${item.name}</div>
+
+            return `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[430px] overflow-auto pr-1">${filtered.map((item) => {
+                const idx = items.findIndex((src) => src.path === item.path);
+                const kb = Math.max(1, Math.round((item.size || 0) / 1024));
+                const modified = item.modified_at ? new Date(item.modified_at).toLocaleString('vi-VN') : 'Không rõ';
+                const abs = item.absolute_url || new URL(item.url, window.location.origin).href;
+                return `
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-3 space-y-2" data-index="${idx}">
+                    <img src="${item.url}" alt="${item.name}" class="w-full h-36 object-cover rounded-xl border border-white/10 mb-2" loading="lazy" />
+                    <div class="text-[11px] text-white/90 truncate" title="${item.name}">${item.name}</div>
+                    <div class="text-[10px] text-white/40">${kb} KB • ${modified}</div>
+                    <div class="text-[10px] text-cyan-300/70 truncate" title="${abs}">${abs}</div>
                     <div class="flex gap-2">
                         <button type="button" class="shieldcall-insert px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold" data-index="${idx}">Chèn</button>
+                        <button type="button" class="shieldcall-copy px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold" data-index="${idx}">Copy link</button>
+                        <a href="${abs}" target="_blank" rel="noopener" class="px-2.5 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 text-[11px] font-bold">Mở</a>
                         <button type="button" class="shieldcall-delete px-2.5 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-500 text-white text-[11px] font-bold" data-index="${idx}">Xóa</button>
                     </div>
                 </div>
-            `).join('')}</div>`;
+            `;
+            }).join('')}</div>`;
+        }
+
+        function shieldCallRenderMediaManagerBody(items, query = '') {
+            return `
+                <div class="space-y-4 text-left">
+                    <div class="flex items-center gap-3">
+                        <input id="shieldcall-media-search" type="text" value="${(query || '').replace(/"/g, '&quot;')}"
+                               placeholder="Tìm theo tên file..."
+                               class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-cyan-400/40">
+                        <span class="text-[11px] text-white/50 whitespace-nowrap">${items.length} tệp</span>
+                    </div>
+                    ${shieldCallRenderMediaGrid(items, query)}
+                </div>
+            `;
         }
 
         async function openShieldCallMediaManager(editor) {
             let items = [];
+            let query = '';
             try {
                 items = await shieldCallLoadMediaItems();
             } catch (err) {
@@ -178,8 +279,8 @@
             const popupClass = 'rounded-[2rem] border border-white/10';
             await Swal.fire({
                 title: 'Media của bạn',
-                html: shieldCallRenderMediaGrid(items),
-                width: 760,
+                html: shieldCallRenderMediaManagerBody(items, query),
+                width: 920,
                 showConfirmButton: false,
                 showCloseButton: true,
                 background: '#0d0d1f',
@@ -188,16 +289,41 @@
                 didOpen: () => {
                     const popup = Swal.getPopup();
                     if (!popup) return;
+                    const searchInput = popup.querySelector('#shieldcall-media-search');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.addEventListener('input', (event) => {
+                            query = event.target.value || '';
+                            Swal.update({ html: shieldCallRenderMediaManagerBody(items, query) });
+                        });
+                    }
                     popup.addEventListener('click', async (event) => {
                         const insertBtn = event.target.closest('.shieldcall-insert');
+                        const copyBtn = event.target.closest('.shieldcall-copy');
                         const deleteBtn = event.target.closest('.shieldcall-delete');
 
                         if (insertBtn) {
                             const idx = Number(insertBtn.dataset.index);
                             const item = items[idx];
                             if (item?.url) {
-                                editor.execute('insertImage', { source: item.url });
+                                const abs = item.absolute_url || new URL(item.url, window.location.origin).href;
+                                editor.execute('insertImage', { source: abs });
                                 Swal.close();
+                            }
+                            return;
+                        }
+
+                        if (copyBtn) {
+                            const idx = Number(copyBtn.dataset.index);
+                            const item = items[idx];
+                            if (item?.url) {
+                                try {
+                                    const abs = item.absolute_url || new URL(item.url, window.location.origin).href;
+                                    await navigator.clipboard.writeText(abs);
+                                    if (typeof showToast === 'function') showToast('Đã copy link ảnh', 'success');
+                                } catch (e) {
+                                    if (typeof showToast === 'function') showToast('Không thể copy link', 'warning');
+                                }
                             }
                             return;
                         }
@@ -218,7 +344,7 @@
                             });
                             if (resp.ok) {
                                 items.splice(idx, 1);
-                                Swal.update({ html: shieldCallRenderMediaGrid(items) });
+                                Swal.update({ html: shieldCallRenderMediaManagerBody(items, query) });
                             }
                         }
                     });
@@ -244,7 +370,7 @@
             });
         }
 
-        window.createCKEditor = async function(selector, initialData, placeholder = 'Nhập nội dung...') {
+        window.createCKEditor = async function(selector, initialData, placeholder = 'Nhập nội dung...', options = {}) {
             if (!window.CKEDITOR) {
                 console.error('CKEditor not loaded yet');
                 return null;
@@ -262,6 +388,93 @@
 
             shieldCallButtonViewCtor = ButtonView || shieldCallButtonViewCtor;
 
+            const extraCkPlugins = [];
+            if (window.CKEDITOR.SpecialCharactersEssentials) {
+                extraCkPlugins.push(window.CKEDITOR.SpecialCharactersEssentials);
+            }
+            if (window.CKEDITOR.SpecialCharacters) {
+                extraCkPlugins.push(window.CKEDITOR.SpecialCharacters);
+            }
+
+            const enableScanReferenceButton = !!options.enableScanReferenceButton;
+            class ScanReferenceToolbarPlugin {
+                constructor(editor) {
+                    this.editor = editor;
+                }
+
+                static get pluginName() {
+                    return 'ScanReferenceToolbarPlugin';
+                }
+
+                init() {
+                    const editor = this.editor;
+                    const CkButtonView = shieldCallButtonViewCtor || window.CKEDITOR.ButtonView || window.CKEDITOR.ui?.button?.ButtonView;
+                    if (!CkButtonView || !editor?.ui?.componentFactory) return;
+
+                    editor.ui.componentFactory.add('scanReference', locale => {
+                        const button = new CkButtonView(locale);
+                        button.set({
+                            label: 'Scan ID',
+                            withText: true,
+                            tooltip: true
+                        });
+                        button.on('execute', async () => {
+                            const current = typeof options.getCurrentScanId === 'function' ? (options.getCurrentScanId() || '') : '';
+                            let raw = '';
+                            if (typeof Swal !== 'undefined') {
+                                const result = await Swal.fire({
+                                    title: 'Gắn Scan ID tham chiếu',
+                                    input: 'number',
+                                    inputValue: current ? Number(current) : '',
+                                    inputPlaceholder: 'Ví dụ: 123',
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Xác nhận',
+                                    cancelButtonText: 'Hủy',
+                                    background: '#161235',
+                                    color: '#fff',
+                                });
+                                if (!result.isConfirmed) return;
+                                raw = String(result.value || '');
+                            } else {
+                                raw = await window.scPrompt('Nhập ID scan tham chiếu', current ? String(current) : '');
+                                if (raw === null) return;
+                            }
+                            const digits = String(raw).replace(/\D/g, '');
+                            if (!digits) {
+                                if (typeof options.onScanIdChange === 'function') options.onScanIdChange('');
+                                if (typeof options.onScanIdRender === 'function') options.onScanIdRender(editor, '');
+                                if (typeof showToast === 'function') showToast('Đã xóa Scan ID tham chiếu', 'info');
+                                return;
+                            }
+                            const parsed = parseInt(digits, 10);
+                            if (!Number.isFinite(parsed) || parsed < 1) {
+                                if (typeof showToast === 'function') showToast('Scan ID không hợp lệ', 'warning');
+                                return;
+                            }
+                            if (typeof options.onScanIdChange === 'function') options.onScanIdChange(parsed);
+                            if (typeof options.onScanIdRender === 'function') options.onScanIdRender(editor, parsed);
+                            if (typeof showToast === 'function') showToast(`Đã gắn Scan ID #${parsed}`, 'success');
+                        });
+                        return button;
+                    });
+                }
+            }
+
+            const toolbarItems = [
+                'undo', 'redo', '|',
+                'heading', 'style', '|',
+                'bold', 'italic', 'underline', 'strikethrough', 'subscript', 'superscript', '|',
+                'horizontalLine', 'link', 'insertImage', 'shieldCallMedia', 'mediaEmbed', 'insertTable', 'highlight', 'blockQuote', 'codeBlock', '|',
+                'alignment', '|',
+                'bulletedList', 'numberedList', 'todoList', 'outdent', 'indent'
+            ];
+            if (window.CKEDITOR.SpecialCharacters) {
+                toolbarItems.push('|', 'specialCharacters');
+            }
+            if (enableScanReferenceButton) {
+                toolbarItems.push('|', 'scanReference');
+            }
+
             const LICENSE_KEY = '{{ CKEDITOR_LICENSE_KEY|escapejs }}';
             
             const editorConfig = {
@@ -275,17 +488,12 @@
                     ImageToolbar, ImageUpload, ImageUtils, Indent, IndentBlock, Italic,
                     Link, List, MediaEmbed, Mention, Paragraph, Strikethrough,
                     Style, Subscript, Superscript, Table, TableCaption, TableToolbar,
-                    TodoList, Underline, ShieldCallUploadAdapterPlugin, ShieldCallMediaManagerPlugin
+                    TodoList, Underline, ShieldCallUploadAdapterPlugin, ShieldCallMediaManagerPlugin,
+                    ...extraCkPlugins,
+                    ...(enableScanReferenceButton ? [ScanReferenceToolbarPlugin] : [])
                 ],
                 toolbar: {
-                    items: [
-                        'undo', 'redo', '|',
-                        'heading', 'style', '|',
-                        'bold', 'italic', 'underline', 'strikethrough', 'subscript', 'superscript', '|',
-                        'horizontalLine', 'link', 'insertImage', 'shieldCallMedia', 'mediaEmbed', 'insertTable', 'highlight', 'blockQuote', 'codeBlock', '|',
-                        'alignment', '|',
-                        'bulletedList', 'numberedList', 'todoList', 'outdent', 'indent'
-                    ],
+                    items: toolbarItems,
                     shouldNotGroupWhenFull: false
                 },
                 heading: {
@@ -323,31 +531,62 @@
                         {
                             marker: '@',
                             feed: async (query) => {
-                                if (query.length < 1) return [];
+                                const q = String(query || '').trim().replace(/^@+/, '');
+                                if (q.length < 1) return [];
                                 try {
-                                    const response = await fetch(`/api/v1/utils/mentions/?query=${encodeURIComponent(query)}`);
-                                    return await response.json();
+                                    const response = await fetch(`/api/v1/utils/mentions/?query=${encodeURIComponent(q)}`, {
+                                        credentials: 'same-origin',
+                                        headers: { 'Accept': 'application/json' }
+                                    });
+                                    if (!response.ok) {
+                                        return [];
+                                    }
+                                    const rawItems = await response.json();
+                                    if (!Array.isArray(rawItems)) return [];
+                                    return rawItems
+                                        .filter(item => item && item.id)
+                                        .map(item => ({
+                                            ...item,
+                                            id: String(item.id).startsWith('@') ? String(item.id) : `@${item.id}`,
+                                            text: String(item.id).startsWith('@') ? String(item.id) : `@${item.id}`,
+                                            name: String(item.name || item.id || '').trim(),
+                                            avatar: item.avatar || ''
+                                        }));
                                 } catch (error) {
                                     console.error('Mention fetch failed:', error);
                                     return [];
                                 }
                             },
                             minimumCharacters: 1,
+                            dropdownLimit: 10,
                             itemRenderer: (item) => {
+                                const mentionId = String(item.id || '').trim();
+                                const mentionUsername = String(item.username || mentionId.replace(/^@+/, '')).trim();
+                                const mentionHandle = mentionUsername ? `@${mentionUsername}` : mentionId;
                                 const container = document.createElement('div');
-                                container.classList.add('flex', 'items-center', 'gap-3', 'p-1');
+                                container.style.display = 'flex';
+                                container.style.alignItems = 'center';
+                                container.style.gap = '10px';
+                                container.style.padding = '4px 6px';
                                 
                                 const avatar = document.createElement('div');
-                                avatar.classList.add('w-8', 'h-8', 'rounded-lg', 'bg-white/5', 'overflow-hidden', 'flex-shrink-0');
+                                avatar.style.width = '28px';
+                                avatar.style.height = '28px';
+                                avatar.style.borderRadius = '8px';
+                                avatar.style.background = 'rgba(255,255,255,0.06)';
+                                avatar.style.overflow = 'hidden';
+                                avatar.style.flexShrink = '0';
                                 if (item.avatar) {
-                                    avatar.innerHTML = `<img src="${item.avatar}" class="w-full h-full object-cover">`;
+                                    avatar.innerHTML = `<img src="${item.avatar}" style="width:28px;height:28px;object-fit:cover;display:block;">`;
                                 } else {
-                                    avatar.innerHTML = `<div class="w-full h-full flex items-center justify-center text-[10px] font-black bg-cyan-500/20 text-cyan-400">${item.name[0].toUpperCase()}</div>`;
+                                    const firstChar = (item.name && item.name.length ? item.name[0] : '@').toUpperCase();
+                                    avatar.innerHTML = `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;background:rgba(34,211,238,0.18);color:#67e8f9;">${firstChar}</div>`;
                                 }
                                 
                                 const info = document.createElement('div');
-                                info.classList.add('flex', 'flex-col');
-                                info.innerHTML = `<span class="text-sm font-bold text-white">${item.name}</span><span class="text-[10px] text-white/40 font-medium">${item.id}</span>`;
+                                info.style.display = 'flex';
+                                info.style.flexDirection = 'column';
+                                info.innerHTML = `<span style="font-size:12px;font-weight:700;color:#fff;line-height:1.2;">${item.name}</span><span style="font-size:10px;color:rgba(103,232,249,0.8);font-weight:600;line-height:1.2;">${mentionHandle}</span>`;
                                 
                                 container.appendChild(avatar);
                                 container.appendChild(info);
@@ -383,7 +622,13 @@
                 return null;
             }
             
-            return ClassicEditor.create(element, editorConfig);
+            const editor = await ClassicEditor.create(element, editorConfig);
+            const minLines = Number.isFinite(Number(options.minLines)) ? Math.max(1, Number(options.minLines)) : 5;
+            const editable = editor.ui?.view?.editable?.element;
+            if (editable) {
+                editable.style.minHeight = `calc(${minLines} * 1.6em)`;
+            }
+            return editor;
         };
 
         window.renderMd = function(text) {
@@ -433,10 +678,10 @@
             return html
                 // Handle CKEditor mention spans
                 .replace(/<span[^>]*class="[^"]*mention[^"]*"[^>]*data-mention="@([^"]+)"[^>]*>([^<]*)<\/span>/gi, 
-                    '<a href="/profile/@$1/" class="mention-link text-cyan-400 hover:text-white transition-colors font-bold">$2</a>')
+                    '<a href="/profile/@$1/" data-usercard="$1" class="mention-link text-cyan-400 hover:text-white transition-colors font-bold">$2</a>')
                 // Handle plain text @username that is not already in a link
-                .replace(/(?<!href="[^"]*|>)@([a-zA-Z0-9_]+)(?![^<]*<\/a>)/g, 
-                    '<a href="/profile/@$1/" class="mention-link text-cyan-400 hover:text-white transition-colors font-bold">@$1</a>');
+                .replace(/(^|[\s>])@([a-zA-Z0-9_.+-]{3,150})\b/g, 
+                    '$1<a href="/profile/@$2/" data-usercard="$2" class="mention-link text-cyan-400 hover:text-white transition-colors font-bold">@$2</a>');
         };
 
         window.renderEditorJS = function(data) {
@@ -1031,6 +1276,9 @@
                         <a href="/emergency/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
                             onmouseover="this.style.color='var(--accent-cyan)'"
                             onmouseout="this.style.color='rgba(255,255,255,0.5)'">Hỗ trợ khẩn cấp</a>
+                        <a href="mailto:admin@fptoj.com" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-cyan)'"
+                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Liên hệ admin: admin@fptoj.com</a>
                     </div>
                 </div>
                 <div>
@@ -1038,18 +1286,18 @@
                         Hotline</h4>
                     <p style="font-size:1.25rem;font-weight:700;color:var(--accent-cyan);margin-bottom:0.5rem;">
                         1800-1031</p>
-                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.4);">24/7 hỗ trợ khẩn cấp</p>
+                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.4);">Tổng đài An toàn mạng (24/7)</p>
                 </div>
             </div>
             <div
                 style="border-top:1px solid rgba(255,255,255,0.08);padding-top:1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
-                <p style="font-size:0.8rem;color:rgba(255,255,255,0.35);">© 2026 ShieldCall VN. Bảo vệ cộng đồng bằng
+                <p style="font-size:0.8rem;color:rgba(255,255,255,0.35);">© {% now "Y" %} ShieldCall VN. Bảo vệ cộng đồng bằng
                     công nghệ.</p>
                 <div style="display:flex;gap:1rem;font-size:0.8rem;">
-                    <a href="#" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
+                    <a href="/legal/disclaimer/#terms" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
                         onmouseover="this.style.color='var(--accent-cyan)'"
                         onmouseout="this.style.color='rgba(255,255,255,0.35)'">Điều khoản</a>
-                    <a href="#" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
+                    <a href="/legal/disclaimer/#data" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
                         onmouseover="this.style.color='var(--accent-cyan)'"
                         onmouseout="this.style.color='rgba(255,255,255,0.35)'">Chính sách</a>
                     <a href="/api/docs/" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
@@ -1351,6 +1599,75 @@
             setTimeout(() => toast.remove(), 3500);
         }
 
+        (function initSweetDialogs() {
+            const nativeAlert = window.alert ? window.alert.bind(window) : () => {};
+            const nativeConfirm = window.confirm ? window.confirm.bind(window) : () => false;
+            const nativePrompt = window.prompt ? window.prompt.bind(window) : () => null;
+
+            function hasSwal() {
+                return typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function';
+            }
+
+            window.scAlert = async function scAlert(message, options = {}) {
+                const text = String(message ?? '');
+                if (!hasSwal()) {
+                    nativeAlert(text);
+                    return;
+                }
+                await Swal.fire({
+                    title: options.title || 'Thông báo',
+                    text,
+                    icon: options.icon || 'info',
+                    confirmButtonText: options.confirmButtonText || 'OK',
+                    background: '#161235',
+                    color: '#fff',
+                });
+            };
+
+            window.scConfirm = async function scConfirm(message, options = {}) {
+                const text = String(message ?? '');
+                if (!hasSwal()) {
+                    return nativeConfirm(text);
+                }
+                const result = await Swal.fire({
+                    title: options.title || 'Xác nhận',
+                    text,
+                    icon: options.icon || 'question',
+                    showCancelButton: true,
+                    confirmButtonText: options.confirmButtonText || 'Đồng ý',
+                    cancelButtonText: options.cancelButtonText || 'Hủy',
+                    background: '#161235',
+                    color: '#fff',
+                });
+                return !!result.isConfirmed;
+            };
+
+            window.scPrompt = async function scPrompt(message, defaultValue = '', options = {}) {
+                const text = String(message ?? '');
+                if (!hasSwal()) {
+                    return nativePrompt(text, defaultValue ?? '');
+                }
+                const result = await Swal.fire({
+                    title: options.title || 'Nhập thông tin',
+                    text,
+                    input: options.input || 'text',
+                    inputValue: defaultValue ?? '',
+                    inputPlaceholder: options.inputPlaceholder || '',
+                    showCancelButton: true,
+                    confirmButtonText: options.confirmButtonText || 'Xác nhận',
+                    cancelButtonText: options.cancelButtonText || 'Hủy',
+                    background: '#161235',
+                    color: '#fff',
+                });
+                if (!result.isConfirmed) return null;
+                return result.value ?? '';
+            };
+
+            window.alert = function patchedAlert(message) {
+                window.scAlert(message);
+            };
+        })();
+
         async function apiCall(url, options = {}) {
             const defaults = {
                 headers: {
@@ -1448,7 +1765,7 @@
             popup.style.left = left + 'px';
             popup.style.top = top + 'px';
             requestAnimationFrame(() => popup.classList.add('visible'));
-            currentUsername = el.dataset.username;
+            currentUsername = el.dataset.usercard;
         }
 
         function hideCard() {

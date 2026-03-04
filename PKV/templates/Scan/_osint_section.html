@@ -166,7 +166,7 @@ Expects Alpine.js 'result' variable to be available in outer x-data scope.
 
 <!-- OSINT Section Template -->
 <template x-if="result.web_context || (result.web_sources && result.web_sources.length > 0)">
-    <div class="p-8 border-t border-white/5 bg-white/[0.01]">
+    <div class="p-8 border-t border-white/5 bg-white/[0.01]" x-data="osintParser" x-effect="parseContext((result && result.web_context) || '', (result && result.web_sources) || [])">
         <div class="flex items-center gap-3 mb-6">
             <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
                 <i class="bi bi-search"></i>
@@ -189,7 +189,7 @@ Expects Alpine.js 'result' variable to be available in outer x-data scope.
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-6" x-data="osintParser" x-effect="parseContext((result && result.web_context) || '', (result && result.web_sources) || [])">
+        <div class="grid grid-cols-1 gap-6">
 
             <!-- Sources Badges -->
             <div class="flex flex-wrap gap-2 mb-2" x-show="badgeSources && badgeSources.length">

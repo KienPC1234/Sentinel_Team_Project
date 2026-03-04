@@ -2,6 +2,7 @@
 {% block title %}{{ post.title }} - ShieldCall Community{% endblock %}
 {% block head_extra %}
 <style>
+    [x-cloak] { display: none !important; }
     .voz-thread {
         background: var(--glass-bg);
         backdrop-filter: blur(30px);
@@ -113,12 +114,30 @@
 <script>
 document.addEventListener('alpine:init', () => {
     let commentEditorInstance = null;
+    let replyEditorInstance = null;
+    let replyEditorCommentId = null;
     Alpine.data('forumDetail', () => ({
+        MAX_REPLY_DEPTH: 5,
         post: {},
         comments: [],
         newComment: '',
+        commentScanId: '',
+        scanPickerOpen: false,
+        scanPickerLoading: false,
+        scanPickerResults: [],
+        scanPickerTarget: { type: 'comment', commentId: null },
+        scanPickerFilters: {
+            scope: 'mine',
+            type: '',
+            riskLevel: '',
+            q: '',
+            manualId: ''
+        },
+        referencedScan: null,
+        referencedScanLoading: false,
         replyTo: null,
         repliesContent: {},
+        replyScanId: {},
         loading: false,
         commentPage: 1,
         commentsPerPage: 15,
@@ -131,14 +150,347 @@ document.addEventListener('alpine:init', () => {
                 if (commentsData) this.comments = JSON.parse(commentsData.textContent);
                 
                 this.initCommentEditor();
+                this.initRealtime();
+                this.loadReferencedScan();
             } catch (e) {
                 console.error('Forum Data Error:', e);
             }
         },
+        initRealtime() {
+            try {
+                const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+                const ws = new WebSocket(`${wsScheme}://${window.location.host}/ws/forum/`);
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data || '{}');
+                        if (data.type !== 'forum_live_event') return;
+                        const payload = data.payload || {};
+                        if (Number(payload.post_id) !== Number(this.post.id)) return;
+                        if (data.event === 'comment_created' || data.event === 'post_created') {
+                            this.refreshPostDetail();
+                        } else if (data.event === 'comment_moderated') {
+                            this.refreshPostDetail();
+                            showToast('Một bình luận đã bị tạm ẩn để chờ Admin xử lý', 'info');
+                        } else if (data.event === 'post_moderated') {
+                            this.refreshPostDetail();
+                            showToast('Bài viết đã bị tạm ẩn để chờ Admin xử lý', 'warning');
+                        } else if (data.event === 'comment_deleted') {
+                            const deletedId = Number(payload.comment_id || 0);
+                            if (deletedId && this.removeCommentById(deletedId)) {
+                                this.post.comments_count = Math.max(0, Number(this.post.comments_count || 0) - 1);
+                                showToast('Một bình luận đã bị gỡ do vi phạm', 'info');
+                            }
+                        } else if (data.event === 'post_deleted') {
+                            showToast('Bài viết đã bị gỡ do vi phạm', 'warning');
+                            setTimeout(() => {
+                                window.location.href = '/forum/';
+                            }, 700);
+                        }
+                    } catch (_) {}
+                };
+                ws.onopen = () => {
+                    setInterval(() => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'ping' }));
+                        }
+                    }, 30000);
+                };
+                ws.onclose = () => {
+                    setTimeout(() => this.initRealtime(), 2000);
+                };
+            } catch (e) {
+                console.warn('Forum detail WS init failed:', e);
+            }
+        },
+        async refreshPostDetail() {
+            if (!this.post?.id) return;
+            try {
+                const resp = await fetch(`/api/v1/forum/posts/${this.post.id}/`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                this.post = data;
+                if (Array.isArray(data.comments)) {
+                    this.comments = data.comments;
+                }
+                this.loadReferencedScan();
+            } catch (_) {}
+        },
+        async loadReferencedScan() {
+            const scanId = Number(this.post?.scan_reference?.scan_id || 0);
+            if (!scanId) {
+                this.referencedScan = null;
+                return;
+            }
+
+            this.referencedScanLoading = true;
+            try {
+                const resp = await fetch(`/api/v1/scan/status/${scanId}/`, { credentials: 'same-origin' });
+                if (!resp.ok) {
+                    this.referencedScan = {
+                        id: scanId,
+                        status: 'unknown',
+                        scan_type: 'unknown',
+                        risk_score: 0,
+                        risk_level: 'N/A'
+                    };
+                    return;
+                }
+                const payload = await resp.json();
+                this.referencedScan = {
+                    id: Number(payload.id || scanId),
+                    status: String(payload.status || 'unknown'),
+                    scan_type: String(payload.scan_type || 'unknown'),
+                    risk_score: Number(payload.risk_score || 0),
+                    risk_level: String(payload.risk_level || 'N/A'),
+                    result: payload.result || {}
+                };
+            } catch (e) {
+                this.referencedScan = {
+                    id: scanId,
+                    status: 'unknown',
+                    scan_type: 'unknown',
+                    risk_score: 0,
+                    risk_level: 'N/A'
+                };
+            } finally {
+                this.referencedScanLoading = false;
+            }
+        },
+        participantUsers() {
+            const users = [];
+            const seen = new Set();
+            const postAuthor = String(this.post.author_username || '').trim().toLowerCase();
+
+            const addUser = (username, name, avatar) => {
+                const key = String(username || '').trim().toLowerCase();
+                if (!key || seen.has(key)) return;
+                seen.add(key);
+                users.push({
+                    username,
+                    name,
+                    avatar,
+                    role: key === postAuthor ? 'Chủ post' : 'Người comment',
+                });
+            };
+
+            addUser(this.post.author_username, this.post.author_name, this.post.author_avatar);
+            for (const comment of this.flattenedComments()) {
+                addUser(comment.author_username, comment.author_name, comment.author_avatar);
+            }
+            return users;
+        },
+        visibleParticipants() {
+            return this.participantUsers().slice(0, 8);
+        },
+        remainingParticipantsCount() {
+            const total = this.participantUsers().length;
+            return total > 8 ? (total - 8) : 0;
+        },
+        levelClass(level) {
+            const v = String(level || '').toUpperCase();
+            if (v === 'RED') return 'text-red-300 border-red-400/30 bg-red-500/10';
+            if (v === 'YELLOW') return 'text-yellow-300 border-yellow-400/30 bg-yellow-500/10';
+            if (v === 'GREEN') return 'text-green-300 border-green-400/30 bg-green-500/10';
+            return 'text-cyan-300 border-cyan-400/30 bg-cyan-500/10';
+        },
+        scanTypeLabel(scan) {
+            const type = (scan.scan_type || 'scan').toUpperCase();
+            const map = {
+                PHONE: 'Số điện thoại', MESSAGE: 'Tin nhắn', DOMAIN: 'Domain', ACCOUNT: 'Tài khoản',
+                QR: 'QR/Ảnh', EMAIL: 'Email', FILE: 'Tệp', AUDIO: 'Âm thanh'
+            };
+            return map[type] || type;
+        },
+        setPageScrollLock(locked) {
+            const value = locked ? 'hidden' : '';
+            document.documentElement.style.overflow = value;
+            document.body.style.overflow = value;
+        },
+        async openScanPickerDialog(targetType, commentId = null) {
+            this.scanPickerTarget = { type: targetType, commentId };
+            this.scanPickerFilters.manualId = String(
+                targetType === 'reply' ? (this.replyScanId[commentId] || '') : (this.commentScanId || '')
+            );
+            const rows = await this.fetchScanPicker();
+            if (!rows.length) {
+                const manual = await Swal.fire({
+                    title: 'Không có scan phù hợp',
+                    text: 'Bạn có thể nhập Scan ID thủ công',
+                    input: 'text',
+                    inputPlaceholder: 'Nhập Scan ID...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Dùng Scan ID',
+                    cancelButtonText: 'Hủy',
+                    background: '#161235',
+                    color: '#fff'
+                });
+                if (!manual.isConfirmed) return;
+                this.scanPickerFilters.manualId = manual.value || '';
+                await this.applyManualScanId();
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Chọn scan tham chiếu',
+                html: `
+                    <div class="space-y-3 text-left">
+                        <label for="scan-picker-select" class="text-[10px] font-black uppercase tracking-widest text-white/45">Scan khả dụng</label>
+                        <select id="scan-picker-select" class="liquid-input w-full py-3 px-4 text-sm font-bold">
+                            <option value="">-- Chọn 1 scan --</option>
+                            ${rows.slice(0, 100).map((scan) => {
+                                const text = `#${scan.id} · ${this.scanTypeLabel(scan)} · ${(scan.risk_level || 'N/A').toUpperCase()}`;
+                                return `<option value="${scan.id}">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                `,
+                showCancelButton: true,
+                showDenyButton: true,
+                denyButtonText: 'Nhập ID',
+                confirmButtonText: 'Gắn scan',
+                cancelButtonText: 'Hủy',
+                background: '#161235',
+                color: '#fff',
+                customClass: {
+                    popup: 'liquid-card border border-white/10 !rounded-2xl'
+                },
+                preConfirm: () => {
+                    const selected = document.getElementById('scan-picker-select')?.value || '';
+                    if (!selected) {
+                        Swal.showValidationMessage('Vui lòng chọn scan');
+                        return null;
+                    }
+                    return selected;
+                },
+                didOpen: () => {
+                    const selectEl = document.getElementById('scan-picker-select');
+                    if (selectEl) {
+                        selectEl.focus();
+                    }
+                }
+            });
+
+            if (result.isDenied) {
+                const manual = await Swal.fire({
+                    title: 'Nhập Scan ID',
+                    input: 'text',
+                    inputPlaceholder: 'VD: 123',
+                    showCancelButton: true,
+                    confirmButtonText: 'Dùng ID này',
+                    cancelButtonText: 'Hủy',
+                    background: '#161235',
+                    color: '#fff',
+                    customClass: {
+                        popup: 'liquid-card border border-white/10 !rounded-2xl'
+                    }
+                });
+                if (manual.isConfirmed) {
+                    this.scanPickerFilters.manualId = manual.value || '';
+                    await this.applyManualScanId();
+                }
+                return;
+            }
+
+            if (result.isConfirmed && result.value) {
+                this.commitPickedScan({ id: Number(result.value) });
+            }
+        },
+        closeScanPicker() {
+            this.scanPickerOpen = false;
+        },
+        async onPickerFilterChange() {
+            if (!this.scanPickerOpen) return;
+            await this.fetchScanPicker();
+        },
+        async fetchScanPicker(extra = {}) {
+            this.scanPickerLoading = true;
+            try {
+                const params = new URLSearchParams();
+                params.set('scope', this.scanPickerFilters.scope || 'mine');
+                if (this.scanPickerFilters.type) params.set('type', this.scanPickerFilters.type);
+                if (this.scanPickerFilters.riskLevel) params.set('risk_level', this.scanPickerFilters.riskLevel);
+                if (this.scanPickerFilters.q && this.scanPickerFilters.q.trim()) params.set('q', this.scanPickerFilters.q.trim());
+                if (extra.scanId) params.set('scan_id', String(extra.scanId));
+
+                const resp = await fetch(`/api/v1/user/scan-picker/?${params.toString()}`, { credentials: 'same-origin' });
+                if (!resp.ok) {
+                    this.scanPickerResults = [];
+                    return [];
+                }
+                const payload = await resp.json();
+                const rows = Array.isArray(payload) ? payload : (payload.results || []);
+                this.scanPickerResults = rows;
+                return rows;
+            } catch (e) {
+                console.error('Load scan picker failed:', e);
+                this.scanPickerResults = [];
+                return [];
+            } finally {
+                this.scanPickerLoading = false;
+            }
+        },
+        commitPickedScan(scan) {
+            if (!scan || !scan.id) return;
+            const parsed = parseInt(scan.id, 10);
+            if (!Number.isFinite(parsed) || parsed < 1) {
+                showToast('Scan ID không hợp lệ', 'warning');
+                    return null;
+            }
+
+            if (this.scanPickerTarget.type === 'reply' && this.scanPickerTarget.commentId) {
+                this.replyScanId[this.scanPickerTarget.commentId] = parsed;
+                showToast(`Đã gắn Scan ID #${parsed} cho phản hồi`, 'success');
+            } else {
+                this.commentScanId = parsed;
+                this.renderEditorScanReference(parsed);
+                showToast(`Đã gắn Scan ID #${parsed} cho bình luận`, 'success');
+            }
+
+            this.scanPickerFilters.manualId = String(parsed);
+            this.closeScanPicker();
+        },
+        clearPickedScan() {
+            if (this.scanPickerTarget.type === 'reply' && this.scanPickerTarget.commentId) {
+                this.replyScanId[this.scanPickerTarget.commentId] = '';
+                showToast('Đã xóa Scan ID tham chiếu', 'info');
+                return;
+            }
+            this.commentScanId = '';
+            this.renderEditorScanReference('');
+            showToast('Đã xóa Scan ID tham chiếu', 'info');
+        },
+        async applyManualScanId() {
+            const digits = String(this.scanPickerFilters.manualId || '').replace(/\D/g, '');
+            if (!digits) {
+                showToast('Vui lòng nhập Scan ID', 'warning');
+                return;
+            }
+            const rows = await this.fetchScanPicker({ scanId: digits });
+            if (!rows.length) {
+                showToast('Scan ID không thuộc bạn hoặc chưa được public refer bởi chủ scan', 'error');
+                return;
+            }
+            this.commitPickedScan(rows[0]);
+        },
 
         async initCommentEditor() {
             try {
-                commentEditorInstance = await window.createCKEditor('#comment-editor', this.newComment, 'Chia sẻ suy nghĩ của bạn...');
+                commentEditorInstance = await window.createCKEditor(
+                    '#comment-editor',
+                    this.newComment,
+                    'Chia sẻ suy nghĩ của bạn...',
+                    {
+                        minLines: 5,
+                        enableScanReferenceButton: true,
+                        getCurrentScanId: () => this.commentScanId,
+                        onScanIdChange: (value) => {
+                            this.commentScanId = value || '';
+                        },
+                        onScanIdRender: (_editor, value) => {
+                            this.commentScanId = value || '';
+                        }
+                    }
+                );
                 if (commentEditorInstance) {
                     commentEditorInstance.model.document.on('change:data', () => {
                         this.newComment = commentEditorInstance.getData();
@@ -148,24 +500,100 @@ document.addEventListener('alpine:init', () => {
                 console.error('CKEditor init failed:', e);
             }
         },
+        async openReplyEditor(commentId, authorName = '') {
+            if (this.replyTo === commentId) {
+                this.closeReplyEditor();
+                return;
+            }
+
+            this.replyTo = commentId;
+            await this.$nextTick();
+
+            try {
+                if (replyEditorInstance && typeof replyEditorInstance.destroy === 'function') {
+                    await replyEditorInstance.destroy();
+                }
+            } catch (_) {}
+
+            replyEditorInstance = null;
+            replyEditorCommentId = commentId;
+
+            try {
+                const selector = `#reply-editor-${commentId}`;
+                replyEditorInstance = await window.createCKEditor(
+                    selector,
+                    this.repliesContent[commentId] || '',
+                    `Phản hồi @${authorName || 'thành viên'}...`,
+                    {
+                        minLines: 4,
+                        enableScanReferenceButton: false
+                    }
+                );
+                if (replyEditorInstance) {
+                    replyEditorInstance.model.document.on('change:data', () => {
+                        this.repliesContent[commentId] = replyEditorInstance.getData();
+                    });
+                }
+            } catch (e) {
+                console.error('Reply CKEditor init failed:', e);
+            }
+        },
+        async closeReplyEditor() {
+            this.replyTo = null;
+            replyEditorCommentId = null;
+            try {
+                if (replyEditorInstance && typeof replyEditorInstance.destroy === 'function') {
+                    await replyEditorInstance.destroy();
+                }
+            } catch (_) {}
+            replyEditorInstance = null;
+        },
+        stripEditorScanReference(content) {
+            return String(content || '');
+        },
+        renderEditorScanReference(scanId) {
+            this.commentScanId = scanId || '';
+        },
         
         getInitial(name) {
             return name ? name.charAt(0).toUpperCase() : '?';
+        },
+        avatarFallbackStyle(name) {
+            const value = String(name || '').trim().toLowerCase();
+            let hash = 0;
+            for (let index = 0; index < value.length; index += 1) {
+                hash = (hash * 31 + value.charCodeAt(index)) % 360;
+            }
+            const hue = Number.isFinite(hash) ? hash : 180;
+            return `background: hsl(${hue}, 68%, 38%); color: rgba(255,255,255,0.95);`;
         },
 
         async submitComment(parentId = null) {
             const content = parentId ? this.repliesContent[parentId] : this.newComment;
             if(!content || !content.trim()) return;
+
+            if (parentId && !this.canReply(parentId)) {
+                showToast(`Chỉ cho phép trả lời tối đa ${this.MAX_REPLY_DEPTH} tầng`, 'warning');
+                return;
+            }
             
             const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value;
             if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
+
+            const scanId = parentId ? this.replyScanId[parentId] : this.commentScanId;
+            const payloadContent = parentId ? content : this.stripEditorScanReference(content);
 
             this.loading = true;
             try {
                 const resp = await fetch(`/api/v1/forum/posts/${this.post.id}/comment/`, {
                     method: 'POST',
                     headers: {'Content-Type':'application/json', 'X-CSRFToken': getCSRFToken()},
-                    body: JSON.stringify({content: content, parent: parentId, 'cf-turnstile-response': tsToken})
+                    body: JSON.stringify({
+                        content: payloadContent,
+                        parent: parentId,
+                        scan_id: scanId ? Number(scanId) : null,
+                        'cf-turnstile-response': tsToken
+                    })
                 });
                 if(resp.ok) {
                     const comment = await resp.json();
@@ -183,10 +611,15 @@ document.addEventListener('alpine:init', () => {
                         };
                         findAndAdd(this.comments);
                         if (this.repliesContent[parentId]) this.repliesContent[parentId] = '';
-                        this.replyTo = null;
+                        this.replyScanId[parentId] = '';
+                        if (replyEditorCommentId === parentId && replyEditorInstance) {
+                            replyEditorInstance.setData('');
+                        }
+                        await this.closeReplyEditor();
                     } else {
                         this.comments.push(comment);
                         this.newComment = '';
+                        this.commentScanId = '';
                         if (commentEditorInstance) {
                             commentEditorInstance.setData('');
                         }
@@ -195,11 +628,115 @@ document.addEventListener('alpine:init', () => {
                     showToast('Bình luận đã được đăng!', 'success');
                 } else {
                     const errData = await resp.json().catch(() => null);
-                    const errMsg = errData?.error || 'Lỗi khi gửi bình luận';
+                    let errMsg = errData?.error || '';
+                    if (!errMsg && errData && typeof errData === 'object') {
+                        const firstKey = Object.keys(errData)[0];
+                        const firstVal = firstKey ? errData[firstKey] : null;
+                        if (Array.isArray(firstVal) && firstVal.length) {
+                            errMsg = String(firstVal[0]);
+                        } else if (typeof firstVal === 'string') {
+                            errMsg = firstVal;
+                        }
+                    }
+                    if (!errMsg) errMsg = 'Lỗi khi gửi bình luận';
                     showToast(errMsg, 'error');
                 }
             } catch(e) { showToast('Lỗi kết nối', 'error'); }
+            if (window.turnstile) {
+                try {
+                    turnstile.reset();
+                } catch (_) {}
+            }
             this.loading = false;
+        },
+        async setReplyScanId(commentId) {
+            await this.openScanPickerDialog('reply', commentId);
+        },
+        async setCommentScanId() {
+            await this.openScanPickerDialog('comment');
+        },
+        async toggleThreadLock() {
+            if (!this.post?.id) return;
+            const nextState = !this.post.is_locked;
+            const actionLabel = nextState ? 'khóa' : 'mở khóa';
+            const confirm = await Swal.fire({
+                title: `${nextState ? 'Khóa' : 'Mở khóa'} chủ đề?`,
+                text: nextState ? 'Thành viên sẽ không thể bình luận cho tới khi mở khóa lại.' : 'Thành viên có thể bình luận trở lại.',
+                showCancelButton: true,
+                confirmButtonText: nextState ? 'Khóa chủ đề' : 'Mở khóa',
+                cancelButtonText: 'Hủy',
+                background: '#161235',
+                color: '#fff'
+            });
+            if (!confirm.isConfirmed) return;
+
+            try {
+                const resp = await fetch(`/api/v1/forum/posts/${this.post.id}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({ is_locked: nextState })
+                });
+                if (resp.ok) {
+                    this.post.is_locked = nextState;
+                    showToast(`Đã ${actionLabel} chủ đề`, 'success');
+                } else {
+                    const errData = await resp.json().catch(() => null);
+                    showToast(errData?.error || `Không thể ${actionLabel} chủ đề`, 'error');
+                }
+            } catch (e) {
+                showToast('Lỗi kết nối', 'error');
+            }
+        },
+        findCommentById(commentId) {
+            const walk = (nodes) => {
+                for (const node of (nodes || [])) {
+                    if (node.id === commentId) return node;
+                    const found = walk(node.replies || []);
+                    if (found) return found;
+                }
+                return null;
+            };
+            return walk(this.comments);
+        },
+        removeCommentById(commentId) {
+            const targetId = Number(commentId);
+            if (!targetId) return false;
+            const walkRemove = (nodes) => {
+                if (!Array.isArray(nodes) || nodes.length === 0) return false;
+                for (let i = 0; i < nodes.length; i++) {
+                    const item = nodes[i];
+                    if (Number(item.id) === targetId) {
+                        nodes.splice(i, 1);
+                        return true;
+                    }
+                    if (walkRemove(item.replies)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            return walkRemove(this.comments);
+        },
+        canReply(commentId) {
+            const target = this.findCommentById(commentId);
+            if (!target) return false;
+            return (target.depth || 1) < this.MAX_REPLY_DEPTH;
+        },
+        flattenedComments() {
+            const out = [];
+            const walk = (nodes) => {
+                for (const node of (nodes || [])) {
+                    out.push(node);
+                    if (node.replies && node.replies.length) {
+                        walk(node.replies);
+                    }
+                }
+            };
+            walk(this.comments);
+            return out;
         },
         async toggleLike() {
             if (!this.post.id) return;
@@ -364,11 +901,12 @@ document.addEventListener('alpine:init', () => {
             return map[cat] || cat;
         },
         paginatedComments() {
+            const flat = this.flattenedComments();
             const start = (this.commentPage - 1) * this.commentsPerPage;
-            return this.comments.slice(start, start + this.commentsPerPage);
+            return flat.slice(start, start + this.commentsPerPage);
         },
         commentTotalPages() {
-            return Math.max(1, Math.ceil(this.comments.length / this.commentsPerPage));
+            return Math.max(1, Math.ceil(this.flattenedComments().length / this.commentsPerPage));
         },
         goToCommentPage(p) {
             if (p >= 1 && p <= this.commentTotalPages()) {
@@ -451,7 +989,7 @@ document.addEventListener('alpine:init', () => {
 {{ post_data|json_script:"forum-post-data" }}
 {{ comments_data|json_script:"forum-comments-data" }}
 
-<div class="max-w-7xl mx-auto px-4 py-8" x-data="forumDetail">
+<div class="max-w-7xl mx-auto px-4 py-8" x-data="forumDetail()">
     
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-sm mb-5 text-white/40" data-aos="fade-right">
@@ -591,6 +1129,12 @@ document.addEventListener('alpine:init', () => {
                                             <i class="bi bi-pencil-square"></i> Sửa
                                         </a>
                                     </template>
+                                    <template x-if="post.author_username === '{{ user.username }}' || {{ user.is_staff|yesno:'true,false' }}">
+                                        <button @click="toggleThreadLock()" class="text-[10px] font-black text-white/20 hover:text-yellow-400 transition-all uppercase tracking-widest flex items-center gap-1.5">
+                                            <i class="bi" :class="post.is_locked ? 'bi-unlock-fill' : 'bi-lock-fill'"></i>
+                                            <span x-text="post.is_locked ? 'Mở khóa' : 'Khóa chủ đề'"></span>
+                                        </button>
+                                    </template>
                                     {% if user.is_staff %}
                                     <template x-if="post.author_username !== '{{ user.username }}'">
                                         <button @click="banUser(post.author_username, post.author_name)" class="text-[10px] font-black text-white/20 hover:text-red-500 transition-all uppercase tracking-widest flex items-center gap-1.5">
@@ -620,7 +1164,7 @@ document.addEventListener('alpine:init', () => {
                         <span class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-xs font-bold text-cyan-400 border border-cyan-500/20" x-text="post.comments_count || 0"></span>
                     </h3>
                     <div class="text-[9px] font-bold text-white/20 uppercase tracking-widest">
-                        <span x-text="comments.length"></span> trả lời gốc
+                        <span x-text="flattenedComments().length"></span> bình luận
                     </div>
                 </div>
 
@@ -628,7 +1172,8 @@ document.addEventListener('alpine:init', () => {
                 <div class="space-y-3" id="comments-section">
                     <template x-for="(comment, cIdx) in paginatedComments()" :key="'comment-' + comment.id">
                         <div class="space-y-3">
-                            <div class="comment-card rounded-2xl overflow-hidden" :id="'comment-' + comment.id">
+                            <div class="comment-card rounded-2xl overflow-hidden" :id="'comment-' + comment.id"
+                                 :style="'margin-left:' + (Math.max(0, (comment.depth || 1) - 1) * 20) + 'px'">
                                 <div class="flex flex-col sm:flex-row">
                                     <!-- Comment Author (LEFT) -->
                                     <div class="sm:w-40 shrink-0 p-4 border-b sm:border-b-0 sm:border-r border-white/5 bg-white/[0.01] flex flex-row sm:flex-col items-center gap-3 sm:gap-2 text-center">
@@ -664,6 +1209,12 @@ document.addEventListener('alpine:init', () => {
                                             <span class="text-[9px] font-bold text-white/10 uppercase tracking-widest" x-text="'#' + ((commentPage - 1) * commentsPerPage + cIdx + 2)"></span>
                                         </div>
                                         <div class="p-4">
+                                            <template x-if="comment.parent_author_name">
+                                                <div class="mb-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-[10px] font-black tracking-wide">
+                                                    <span class="inline-flex items-center justify-center w-4 h-4 rounded bg-red-500/20 text-red-300 leading-none">↳</span>
+                                                    <span class="text-red-200" x-text="'Trả lời @' + comment.parent_author_name"></span>
+                                                </div>
+                                            </template>
                                             <div class="text-sm text-white/70 leading-relaxed richtext-content" x-html="window.renderRichText(comment.content || '')"></div>
                                         </div>
                                         <!-- Comment reactions -->
@@ -686,9 +1237,10 @@ document.addEventListener('alpine:init', () => {
                                                 </button>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <button x-show="!post.is_locked" @click="replyTo = (replyTo === comment.id ? null : comment.id)" class="text-[10px] font-black text-white/20 hover:text-cyan-400 transition-all flex items-center gap-1">
+                                                <button x-show="!post.is_locked && canReply(comment.id)" @click="openReplyEditor(comment.id, comment.author_name)" class="text-[10px] font-black text-white/20 hover:text-cyan-400 transition-all flex items-center gap-1">
                                                     <i class="bi bi-reply-fill"></i> Trả lời
                                                 </button>
+                                                <span x-show="!canReply(comment.id)" class="text-[9px] font-black text-white/20 uppercase tracking-widest">Đã đạt tầng tối đa</span>
                                                 <button @click="shareComment(comment)" class="text-[10px] font-black text-white/20 hover:text-white/50 transition-all">
                                                     <i class="bi bi-share"></i>
                                                 </button>
@@ -701,10 +1253,16 @@ document.addEventListener('alpine:init', () => {
                                         <!-- Reply Input -->
                                         <div x-show="replyTo === comment.id" x-transition class="mx-4 mb-4 p-4 rounded-xl bg-white/[0.03] border border-cyan-500/10">
                                             <h4 class="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-2" x-text="'Phản hồi ' + comment.author_name"></h4>
-                                            <textarea x-model="repliesContent[comment.id]" placeholder="Viết phản hồi..."
-                                                class="w-full bg-[#0d0d1f]/50 border border-white/5 rounded-lg p-3 text-white text-sm placeholder-white/20 min-h-[70px] resize-none focus:ring-1 focus:ring-cyan-500/30 transition-all"></textarea>
+                                            <div class="overflow-hidden bg-black/20 rounded-xl border border-white/5 w-full">
+                                                <div :id="'reply-editor-' + comment.id" class="w-full min-h-[90px] text-white/80 p-1 focus:outline-none"
+                                                    :class="loading && 'opacity-50 pointer-events-none'"></div>
+                                            </div>
                                             <div class="flex justify-end gap-2 mt-2">
-                                                <button @click="replyTo = null" class="text-[10px] font-bold text-white/30 hover:text-white px-3 py-1.5 uppercase tracking-widest transition-colors">Hủy</button>
+                                                <button @click="setReplyScanId(comment.id)" class="text-[10px] font-bold text-cyan-400/70 hover:text-cyan-300 px-3 py-1.5 uppercase tracking-widest transition-colors border border-cyan-500/20 rounded-lg">
+                                                    <i class="bi bi-search"></i>
+                                                    <span x-text="replyScanId[comment.id] ? ('Scan #' + replyScanId[comment.id]) : 'Scan ID'"></span>
+                                                </button>
+                                                <button @click="closeReplyEditor()" class="text-[10px] font-bold text-white/30 hover:text-white px-3 py-1.5 uppercase tracking-widest transition-colors">Hủy</button>
                                                 <button @click="submitComment(comment.id)" :disabled="loading"
                                                     class="bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 px-5 py-1.5 rounded-lg text-[10px] font-black hover:bg-cyan-400 hover:text-black transition-all uppercase tracking-widest">
                                                     <span x-show="!loading">Gửi</span>
@@ -714,35 +1272,6 @@ document.addEventListener('alpine:init', () => {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            <!-- Nested Replies -->
-                            <div x-show="comment.replies && comment.replies.length" class="ml-6 lg:ml-10 space-y-2 border-l-2 border-white/5 pl-4">
-                                <template x-for="reply in comment.replies" :key="'reply-' + reply.id">
-                                    <div class="comment-card rounded-xl overflow-hidden">
-                                        <div class="flex flex-col sm:flex-row">
-                                            <div class="sm:w-32 shrink-0 p-3 border-b sm:border-b-0 sm:border-r border-white/5 bg-white/[0.01] flex flex-row sm:flex-col items-center gap-2 text-center">
-                                                <a :href="'/profile/@' + reply.author_username + '/'" :data-usercard="reply.author_username" class="w-8 h-8 rounded-full bg-white/5 border border-white/5 overflow-hidden flex items-center justify-center shrink-0">
-                                                    <template x-if="reply.author_avatar">
-                                                        <img :src="reply.author_avatar" class="w-full h-full object-cover">
-                                                    </template>
-                                                    <template x-if="!reply.author_avatar">
-                                                        <span class="text-[10px] font-bold text-cyan-400" x-text="getInitial(reply.author_name)"></span>
-                                                    </template>
-                                                </a>
-                                                <a :href="'/profile/@' + reply.author_username + '/'" class="text-[10px] font-bold text-white/60 hover:text-cyan-400 transition-colors" x-text="reply.author_name"></a>
-                                            </div>
-                                            <div class="flex-1 min-w-0">
-                                                <div class="px-3 py-1.5 bg-white/[0.01] border-b border-white/5 flex items-center justify-between">
-                                                    <span class="text-[9px] text-white/20 font-bold" x-text="timeAgo(reply.created_at) + ' trước'"></span>
-                                                </div>
-                                                <div class="p-3">
-                                                    <div class="text-xs text-white/60 leading-relaxed richtext-content" x-html="window.renderRichText(reply.content || '')"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
                             </div>
                         </div>
                     </template>
@@ -795,7 +1324,16 @@ document.addEventListener('alpine:init', () => {
                                     <div id="comment-editor" class="w-full min-h-[100px] text-white/80 p-1 focus:outline-none"
                                          :class="loading && 'opacity-50 pointer-events-none'"></div>
                                 </div>
+                                <div x-show="commentScanId" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 text-xs font-bold">
+                                    <i class="bi bi-link-45deg"></i>
+                                    <span x-text="'Đang tham chiếu Scan #' + commentScanId"></span>
+                                </div>
+                                <p class="text-[10px] text-white/35 mt-1">Mẹo: gõ <span class="text-cyan-400 font-bold">@username</span> để mention người dùng.</p>
                                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <button @click="setCommentScanId()" type="button" class="w-full sm:w-auto text-[10px] font-bold text-cyan-400/80 hover:text-cyan-300 px-4 py-2 uppercase tracking-widest transition-colors border border-cyan-500/20 rounded-xl bg-cyan-500/5">
+                                        <i class="bi bi-search mr-1"></i>
+                                        <span x-text="commentScanId ? ('Scan #' + commentScanId) : 'Chọn scan tham chiếu'"></span>
+                                    </button>
                                     <div class="flex-shrink-0">
                                         <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'" data-size="flexible"></div>
                                     </div>
@@ -863,6 +1401,61 @@ document.addEventListener('alpine:init', () => {
                         <span class="text-xs font-bold text-cyan-400" x-text="post.helpful_count || 0"></span>
                     </div>
 
+                    <template x-if="post.scan_reference">
+                        <div class="pt-4 mt-1 border-t border-white/5 space-y-2">
+                            <div class="text-[10px] text-white/40 font-bold uppercase flex items-center gap-1.5">
+                                <i class="bi bi-shield-check text-cyan-500/40"></i> Scan tham chiếu
+                            </div>
+                            <div class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 space-y-2">
+                                <template x-if="referencedScanLoading">
+                                    <div class="text-[11px] text-white/45">Đang tải chi tiết scan...</div>
+                                </template>
+                                <template x-if="!referencedScanLoading && referencedScan">
+                                    <div>
+                                        <div class="flex items-center justify-between gap-2">
+                                            <a :href="'/scan/status/' + referencedScan.id + '/'" class="text-xs font-black text-cyan-300 hover:text-white transition-colors" x-text="'#' + referencedScan.id + ' · ' + scanTypeLabel(referencedScan)"></a>
+                                            <span class="px-2 py-0.5 rounded-lg border text-[9px] font-black" :class="levelClass(referencedScan.risk_level)" x-text="referencedScan.risk_level"></span>
+                                        </div>
+                                        <div class="mt-1 text-[10px] text-white/50" x-text="'Risk score: ' + (referencedScan.risk_score || 0) + '/100' "></div>
+                                    </div>
+                                </template>
+                                <template x-if="!referencedScanLoading && !referencedScan">
+                                    <div class="text-[11px] text-white/45">Không tải được chi tiết scan.</div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="pt-4 mt-1 border-t border-white/5 space-y-2">
+                        <div class="text-[10px] text-white/40 font-bold uppercase flex items-center gap-1.5">
+                            <i class="bi bi-people-fill text-cyan-500/40"></i> Người tham gia
+                        </div>
+                        <div class="flex items-center -space-x-1.5">
+                            <template x-for="member in visibleParticipants()" :key="'participant-' + member.username">
+                                <a :href="'/profile/@' + member.username + '/'"
+                                   class="w-7 h-7 rounded-full border border-white/20 bg-white/5 p-[1px] overflow-hidden hover:scale-105 transition"
+                                   :title="(member.name || member.username) + ' · ' + (member.role || 'Người comment')">
+                                    <div class="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
+                                        <template x-if="member.avatar">
+                                            <img :src="member.avatar" class="w-full h-full object-cover rounded-full" />
+                                        </template>
+                                        <template x-if="!member.avatar">
+                                            <span class="w-full h-full rounded-full flex items-center justify-center text-[9px] font-black"
+                                                  :style="avatarFallbackStyle(member.name || member.username)"
+                                                  x-text="getInitial(member.name || member.username)"></span>
+                                        </template>
+                                    </div>
+                                </a>
+                            </template>
+                            <template x-if="remainingParticipantsCount() > 0">
+                                <div class="w-7 h-7 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-[9px] font-black text-white/70"
+                                     :title="remainingParticipantsCount() + ' thành viên khác'">
+                                    <span x-text="'+' + remainingParticipantsCount()"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <!-- Last Reply Info -->
                     <template x-if="post.last_comment_author">
                         <div class="pt-4 mt-1 border-t border-white/5">
@@ -903,5 +1496,82 @@ document.addEventListener('alpine:init', () => {
             </div>
         </div>
     </div>
+
+    <template x-teleport="body">
+    <div x-cloak x-show="scanPickerOpen" x-transition.opacity @keydown.escape.window="closeScanPicker()" class="fixed inset-0 z-[120] flex items-center justify-center p-4" style="display:none;">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeScanPicker()"></div>
+        <div class="relative w-full max-w-4xl max-h-[80vh] overflow-hidden rounded-3xl border border-white/10 bg-[#11152b] shadow-2xl shadow-cyan-500/10 flex flex-col">
+            <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                    <h3 class="text-white font-black text-lg">Scan Picker</h3>
+                    <p class="text-white/45 text-xs">Chọn scan tham chiếu cho bình luận/phản hồi</p>
+                </div>
+                <button @click="closeScanPicker()" class="w-9 h-9 rounded-xl border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="p-5 border-b border-white/10 space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <select x-model="scanPickerFilters.scope" @change="onPickerFilterChange()" class="bg-[#0d0d1f]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/40">
+                        <option value="mine">Scan của tôi</option>
+                        <option value="public">Scan public referable</option>
+                        <option value="all">Tất cả scan có quyền</option>
+                    </select>
+                    <select x-model="scanPickerFilters.type" @change="onPickerFilterChange()" class="bg-[#0d0d1f]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/40">
+                        <option value="">Mọi loại scan</option>
+                        <option value="phone">Phone</option>
+                        <option value="message">Message</option>
+                        <option value="domain">Domain</option>
+                        <option value="account">Account</option>
+                        <option value="qr">QR/Image</option>
+                        <option value="email">Email</option>
+                        <option value="file">File</option>
+                        <option value="audio">Audio</option>
+                    </select>
+                    <select x-model="scanPickerFilters.riskLevel" @change="onPickerFilterChange()" class="bg-[#0d0d1f]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/40">
+                        <option value="">Mọi mức độ</option>
+                        <option value="RED">RED</option>
+                        <option value="YELLOW">YELLOW</option>
+                        <option value="GREEN">GREEN</option>
+                        <option value="SAFE">SAFE</option>
+                    </select>
+                    <div class="flex gap-2">
+                        <input type="text" x-model="scanPickerFilters.q" @input.debounce.350ms="onPickerFilterChange()" placeholder="Từ khóa..." class="bg-[#0d0d1f]/60 border border-white/10 rounded-xl flex-1 px-4 py-2 text-sm font-bold text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-cyan-500/40">
+                        <button @click="fetchScanPicker()" type="button" class="px-4 py-2 rounded-xl bg-cyan-500/20 border border-cyan-400/30 text-cyan-300 hover:bg-cyan-500/30 transition text-sm font-black"><i class="bi bi-funnel"></i></button>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" x-model="scanPickerFilters.manualId" placeholder="Nhập Scan ID thủ công..." class="bg-[#0d0d1f]/60 border border-white/10 rounded-xl flex-1 px-4 py-2 text-sm font-bold text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-cyan-500/40">
+                    <button @click="applyManualScanId()" type="button" class="px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 hover:bg-purple-500/30 transition text-sm font-black">Dùng ID này</button>
+                    <button @click="clearPickedScan()" type="button" class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 transition text-sm font-black">Bỏ chọn</button>
+                </div>
+            </div>
+
+            <div class="p-5 overflow-y-auto overscroll-contain flex-1 min-h-0">
+                <div x-show="scanPickerLoading" class="text-center py-10 text-white/50 text-sm">Đang tải danh sách scan...</div>
+                <div x-show="!scanPickerLoading && !scanPickerResults.length" class="text-center py-10 text-white/40 text-sm">Không có scan phù hợp bộ lọc.</div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3" x-show="!scanPickerLoading && scanPickerResults.length">
+                    <template x-for="scan in scanPickerResults" :key="'picker-' + scan.id">
+                        <button @click="commitPickedScan(scan)" type="button" class="text-left rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-cyan-400/30 transition-all p-4">
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <div class="text-white font-black text-sm" x-text="'#' + scan.id + ' · ' + scanTypeLabel(scan)"></div>
+                                    <div class="text-white/40 text-[11px]" x-text="scan.preview || 'Không có mô tả'"></div>
+                                </div>
+                                <span class="px-2 py-1 rounded-lg border text-[10px] font-black" :class="levelClass(scan.risk_level)" x-text="scan.risk_level || 'N/A'"></span>
+                            </div>
+                            <div class="mt-3 flex items-center flex-wrap gap-2 text-[10px]">
+                                <span class="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-white/60" x-text="'Risk ' + (scan.risk_score || 0) + '/100'"></span>
+                                <span class="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-white/60" x-text="scan.is_owner ? 'Mine' : 'Public'"></span>
+                                <span class="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-white/60" x-text="(scan.status || 'unknown').toUpperCase()"></span>
+                            </div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+        </template>
+
 </div>
 {% endblock %}
