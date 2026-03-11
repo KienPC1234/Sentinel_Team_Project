@@ -10,8 +10,9 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from drf_spectacular.utils import extend_schema
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from django_otp.plugins.otp_email.models import EmailDevice
 from django.contrib.auth import get_user_model, login as auth_login
@@ -57,6 +58,7 @@ def _generate_recovery_codes(user, total: int = 10):
 class MFAStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         user = request.user
         totp_devices = TOTPDevice.objects.filter(user=user, confirmed=True)
@@ -98,6 +100,7 @@ class MFAStatusView(APIView):
 class MFASetupTOTPView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         user = request.user
         device, created = TOTPDevice.objects.get_or_create(user=user, name='default', defaults={'confirmed': False})
@@ -149,6 +152,7 @@ class MFASetupTOTPView(APIView):
             })
         return Response({'error': 'TOTP is already enabled for this account.'}, status=400)
 
+    @extend_schema(request={'application/json': {'type': 'object', 'properties': {'token': {'type': 'string'}}, 'required': ['token']}}, responses={200: serializers.DictField()})
     def post(self, request):
         user = request.user
         token = request.data.get('token')
@@ -171,6 +175,7 @@ class MFASetupTOTPView(APIView):
 class MFASetupEmailView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         if not request.user.is_authenticated:
             user_id = request.session.get('mfa_user_id')
@@ -201,6 +206,7 @@ class MFASetupEmailView(APIView):
         
         return Response({'message': 'Mã OTP đã được gửi đến email của bạn.'})
 
+    @extend_schema(request={'application/json': {'type': 'object', 'properties': {'token': {'type': 'string'}}, 'required': ['token']}}, responses={200: serializers.DictField()})
     def post(self, request):
         user = request.user
         token = request.data.get('token')
@@ -219,6 +225,7 @@ class MFASetupEmailView(APIView):
 class MFAVerifyView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(request={'application/json': {'type': 'object', 'properties': {'token': {'type': 'string'}, 'method': {'type': 'string'}}, 'required': ['token']}}, responses={200: serializers.DictField()})
     def post(self, request):
         user_id = request.session.get('mfa_user_id')
         if not user_id:
@@ -278,6 +285,7 @@ class MFAVerifyView(APIView):
 class MFADeactivateView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request={'application/json': {'type': 'object', 'properties': {'password': {'type': 'string'}, 'token': {'type': 'string'}, 'method': {'type': 'string'}}, 'required': ['password', 'token']}}, responses={200: serializers.DictField()})
     def post(self, request):
         user = request.user
         password = request.data.get('password')
@@ -331,6 +339,7 @@ class MFADeactivateView(APIView):
 class MFARecoveryCodesView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         user = request.user
         total = MFARecoveryCode.objects.filter(user=user).count()
@@ -342,6 +351,7 @@ class MFARecoveryCodesView(APIView):
             'hints': hints,
         })
 
+    @extend_schema(responses={200: serializers.DictField()})
     def post(self, request):
         user = request.user
         has_totp = TOTPDevice.objects.filter(user=user, confirmed=True).exists()

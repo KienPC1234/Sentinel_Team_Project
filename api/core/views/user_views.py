@@ -12,12 +12,13 @@ from datetime import timedelta
 
 from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
-from rest_framework import status, permissions, generics
+from rest_framework import status, permissions, generics, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from drf_spectacular.utils import extend_schema
 
 from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 
@@ -79,6 +80,7 @@ class UserScanPickerView(APIView):
     """GET /api/user/scan-picker — scans available for forum reference with filters."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         scope = (request.query_params.get('scope') or 'mine').strip().lower()
         scan_type = (request.query_params.get('type') or '').strip().lower()
@@ -147,10 +149,12 @@ class UserAlertsView(APIView):
     """GET/POST /api/user/alerts — User saved alerts"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: UserAlertSerializer(many=True)})
     def get(self, request):
         alerts = UserAlert.objects.filter(user=request.user)
         return Response(UserAlertSerializer(alerts, many=True).data)
 
+    @extend_schema(request=UserAlertSerializer, responses={201: UserAlertSerializer})
     def post(self, request):
         serializer = UserAlertSerializer(data=request.data,
                                          context={'request': request})
@@ -158,6 +162,7 @@ class UserAlertsView(APIView):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(request={'application/json': {'type': 'object', 'properties': {'id': {'type': 'integer'}}}}, responses={200: serializers.DictField()})
     def delete(self, request):
         alert_id = request.data.get('id')
         if alert_id:
@@ -169,6 +174,7 @@ class PublicProfileView(APIView):
     """GET /api/user/profile/<username> — Public profile info"""
     permission_classes = [AllowAny]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request, username):
         user = get_object_or_404(User.objects.select_related('profile'), username=username)
         posts = ForumPost.objects.filter(author=user).order_by('-created_at')[:10]

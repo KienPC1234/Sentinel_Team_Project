@@ -1,7 +1,7 @@
 import logging
 
 from django.conf import settings
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, Http404
 from django.shortcuts import render
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,10 @@ class SafeErrorPageMiddleware:
         return self.get_response(request)
 
     def process_exception(self, request, exception):
+        # Ignore Http404 so that handler404 can take over and show the pretty 404 page
+        if isinstance(exception, Http404):
+            return None
+
         logger.exception("Unhandled exception caught by SafeErrorPageMiddleware: %s", exception)
 
         if request.path.startswith('/api/'):

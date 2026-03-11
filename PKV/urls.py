@@ -8,6 +8,7 @@ from django.conf.urls.static import static
 from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from api.ai_chat.views import AssistantPageView
+from api.utils import openapi
 from django.http import HttpResponse
 import os
 from .views.auth_overrides import TurnstilePasswordResetView

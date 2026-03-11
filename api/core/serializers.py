@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.utils.text import slugify
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from api.utils.normalization import normalize_phone_e164
 from .models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
@@ -201,6 +202,7 @@ class ReportListSerializer(serializers.ModelSerializer):
                   'description', 'status', 'reporter_email', 'moderation_note',
                   'ocr_text', 'ai_analysis', 'created_at']
 
+    @extend_schema_field(serializers.CharField())
     def get_reporter_email(self, obj):
         if obj.reporter:
             # Mask reporter email for public list
@@ -218,6 +220,7 @@ class ReportEvidenceSerializer(serializers.ModelSerializer):
         from api.core.models import ReportEvidence
         model = ReportEvidence
         fields = ['id', 'url', 'caption', 'created_at']
+    @extend_schema_field(serializers.URLField(allow_null=True))
     def get_url(self, obj):
         return obj.image.url if obj.image else None
 
@@ -237,6 +240,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
                   'scammer_info',
                   'evidence_file', 'evidence_url', 'evidence_images_data', 'ocr_text', 'ai_analysis', 'moderation_note']
 
+    @extend_schema_field(serializers.CharField())
     def get_reporter_email(self, obj):
         if obj.reporter:
             email = obj.reporter.email
@@ -247,6 +251,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
                 return "User"
         return 'Ẩn danh'
 
+    @extend_schema_field(serializers.DictField())
     def get_scammer_info(self, obj):
         return {
             "name": obj.scammer_name,
@@ -255,6 +260,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
             "bank_name": obj.scammer_bank_name
         }
 
+    @extend_schema_field(serializers.URLField(allow_null=True))
     def get_evidence_url(self, obj):
         if obj.evidence_file:
             return obj.evidence_file.url

@@ -1,0 +1,3233 @@
+openapi: 3.0.3
+info:
+  title: ShieldCall VN API
+  version: 1.0.0
+  description: API for ShieldCall VN Web
+paths:
+  /api/v1/admin/notifications/broadcast/:
+    post:
+      operationId: v1_admin_notifications_broadcast_create
+      description: POST — Admin sends a notification to all users (or specific users).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                message:
+                  type: string
+                notification_type:
+                  type: string
+                url:
+                  type: string
+              required:
+              - title
+              - message
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/rag/:
+    get:
+      operationId: v1_admin_rag_retrieve
+      description: GET /api/admin/rag — Dashboard for RAG management
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/rag/clear-logs/:
+    post:
+      operationId: v1_admin_rag_clear_logs_create
+      description: POST /api/admin/rag/clear-logs — Clear sync history logs
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/rag/rebuild/:
+    post:
+      operationId: v1_admin_rag_rebuild_create
+      description: POST /api/admin/rag/rebuild — Trigger vector index rebuild
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/rag/reset/:
+    post:
+      operationId: v1_admin_rag_reset_create
+      description: Deletes the vector index files and triggers a fresh rebuild.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/reports/:
+    get:
+      operationId: v1_admin_reports_list
+      description: GET /api/admin/reports — Moderation queue
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReportListList'
+          description: ''
+  /api/v1/admin/reports/{report_id}/action/:
+    post:
+      operationId: v1_admin_reports_action_create
+      description: POST /api/admin/reports/{id}/action — Approve or reject a report
+      parameters:
+      - in: path
+        name: report_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportModerate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportModerate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportModerate'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/stats/:
+    get:
+      operationId: v1_admin_stats_retrieve
+      description: GET /api/admin/stats — System overview stats
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/tickets/:
+    get:
+      operationId: v1_admin_tickets_retrieve
+      description: GET — all tickets. PATCH — respond to ticket.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_admin_tickets_partial_update
+      description: GET — all tickets. PATCH — respond to ticket.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/analyze-audio:
+    post:
+      operationId: v1_analyze_audio_create
+      description: Analyze recorded audio for speech-to-text and scam detection.
+      tags:
+      - v1
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AudioAnalysisRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AudioAnalysisRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioAnalysisResponse'
+          description: ''
+  /api/v1/analyze-images:
+    post:
+      operationId: v1_analyze_images_create
+      description: Analyze multiple images for OCR and risk detection.
+      tags:
+      - v1
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImageAnalysisRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImageAnalysisRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageAnalysisResponse'
+          description: ''
+  /api/v1/announcements/:
+    get:
+      operationId: v1_announcements_retrieve
+      description: GET — list, POST — admin creates announcement.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_announcements_create
+      description: GET — list, POST — admin creates announcement.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/announcements/{announcement_id}/reaction/:
+    post:
+      operationId: v1_announcements_reaction_create
+      description: POST — toggle reaction on an announcement.
+      parameters:
+      - in: path
+        name: announcement_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/articles/:
+    get:
+      operationId: v1_articles_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/articles/{slug}/:
+    get:
+      operationId: v1_articles_retrieve_2
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/account/delete/:
+    post:
+      operationId: v1_auth_account_delete_create
+      description: POST /api/v1/auth/account/delete/ — permanently delete user account
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                confirmation_text:
+                  type: string
+              required:
+              - password
+              - confirmation_text
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/email-change/request/:
+    post:
+      operationId: v1_auth_email_change_request_create
+      description: POST /api/v1/auth/email-change/request/ — verify password and send
+        OTP to new email
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                new_email:
+                  type: string
+              required:
+              - password
+              - new_email
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/email-change/verify/:
+    post:
+      operationId: v1_auth_email_change_verify_create
+      description: POST /api/v1/auth/email-change/verify/ — verify OTP sent to new
+        email and update account email
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_email:
+                  type: string
+                otp:
+                  type: string
+              required:
+              - new_email
+              - otp
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      description: POST /api/auth/login
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: POST /api/auth/logout — revoke token
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      description: GET /api/me — current user info
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    patch:
+      operationId: v1_auth_me_partial_update
+      description: Update profile (avatar, bio, etc.)
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfile'
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/mfa/deactivate/:
+    post:
+      operationId: v1_auth_mfa_deactivate_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                token:
+                  type: string
+                method:
+                  type: string
+              required:
+              - password
+              - token
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/mfa/recovery/:
+    get:
+      operationId: v1_auth_mfa_recovery_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    post:
+      operationId: v1_auth_mfa_recovery_create
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/mfa/setup/email/:
+    get:
+      operationId: v1_auth_mfa_setup_email_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    post:
+      operationId: v1_auth_mfa_setup_email_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+              required:
+              - token
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/mfa/setup/totp/:
+    get:
+      operationId: v1_auth_mfa_setup_totp_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    post:
+      operationId: v1_auth_mfa_setup_totp_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+              required:
+              - token
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/mfa/status/:
+    get:
+      operationId: v1_auth_mfa_status_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/mfa/verify/:
+    post:
+      operationId: v1_auth_mfa_verify_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                method:
+                  type: string
+              required:
+              - token
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/password/change/:
+    post:
+      operationId: v1_auth_password_change_create
+      description: POST /api/v1/auth/password/change/ — change password with OTP
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old_password:
+                  type: string
+                new_password:
+                  type: string
+                token:
+                  type: string
+              required:
+              - old_password
+              - new_password
+              - token
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/register/:
+    post:
+      operationId: v1_auth_register_create
+      description: POST /api/auth/register — create account after OTP verification
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                otp:
+                  type: string
+              required:
+              - email
+              - otp
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/auth/register/request-otp/:
+    post:
+      operationId: v1_auth_register_request_otp_create
+      description: POST /api/auth/register/request-otp — validate input then send
+        OTP to email
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/chat/config/:
+    get:
+      operationId: v1_chat_config_retrieve
+      description: |-
+        GET: Get current user's chatbot personalization config.
+        PUT: Update chatbot config.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatbotConfig'
+          description: ''
+    put:
+      operationId: v1_chat_config_update
+      description: |-
+        GET: Get current user's chatbot personalization config.
+        PUT: Update chatbot config.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatbotConfig'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatbotConfig'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatbotConfig'
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatbotConfig'
+          description: ''
+  /api/v1/chat/folders/:
+    get:
+      operationId: v1_chat_folders_list
+      description: |-
+        GET: List all chat folders for the current user.
+        POST: Create a new chat folder.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatFolder'
+          description: ''
+    post:
+      operationId: v1_chat_folders_create
+      description: |-
+        GET: List all chat folders for the current user.
+        POST: Create a new chat folder.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatFolder'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatFolder'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatFolder'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatFolder'
+          description: ''
+  /api/v1/chat/folders/{folder_id}/:
+    patch:
+      operationId: v1_chat_folders_partial_update
+      parameters:
+      - in: path
+        name: folder_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChatFolder'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChatFolder'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChatFolder'
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatFolder'
+          description: ''
+    delete:
+      operationId: v1_chat_folders_destroy
+      parameters:
+      - in: path
+        name: folder_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/chat/messages/{message_id}/delete_after/:
+    delete:
+      operationId: v1_chat_messages_delete_after_destroy
+      description: |-
+        DELETE: Remove all messages in a session AFTER a specific message ID.
+        Used for history branching when editing an old message.
+      parameters:
+      - in: path
+        name: message_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/chat/saved/:
+    get:
+      operationId: v1_chat_saved_list
+      description: |-
+        GET: List saved/bookmarked messages.
+        POST: Bookmark a message.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedMessage'
+          description: ''
+    post:
+      operationId: v1_chat_saved_create
+      description: |-
+        GET: List saved/bookmarked messages.
+        POST: Bookmark a message.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message_id:
+                  type: integer
+                note:
+                  type: string
+              required:
+              - message_id
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedMessage'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/chat/saved/{saved_id}/:
+    delete:
+      operationId: v1_chat_saved_destroy
+      description: 'DELETE: Remove a bookmarked message.'
+      parameters:
+      - in: path
+        name: saved_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/chat/search/:
+    get:
+      operationId: v1_chat_search_retrieve
+      description: 'GET: Search chat sessions and messages by query string.'
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/chat/sessions/:
+    get:
+      operationId: v1_chat_sessions_list
+      description: |-
+        GET: List all chat sessions for the current user.
+        POST: Create a new chat session.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSession'
+          description: ''
+    post:
+      operationId: v1_chat_sessions_create
+      description: |-
+        GET: List all chat sessions for the current user.
+        POST: Create a new chat session.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                folder_id:
+                  type: string
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/chat/sessions/{session_id}/:
+    get:
+      operationId: v1_chat_sessions_retrieve
+      description: |-
+        GET: Retrieve message history for a session.
+        DELETE: Remove a chat session.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    patch:
+      operationId: v1_chat_sessions_partial_update
+      description: |-
+        GET: Retrieve message history for a session.
+        DELETE: Remove a chat session.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_chat_sessions_destroy
+      description: |-
+        GET: Retrieve message history for a session.
+        DELETE: Remove a chat session.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/chat/sessions/clear_all/:
+    delete:
+      operationId: v1_chat_sessions_clear_all_destroy
+      description: 'DELETE: Remove all chat sessions for the current user.'
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/chat/stream/:
+    post:
+      operationId: v1_chat_stream_create
+      description: Streaming chat endpoint using AIAgent with RAG and history.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatAIRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatAIRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatAIRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/check-phone:
+    get:
+      operationId: v1_check_phone_retrieve
+      description: Check the risk level of a phone number.
+      parameters:
+      - in: query
+        name: phone
+        schema:
+          type: string
+        description: Phone number to check
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneCheckResponse'
+          description: ''
+  /api/v1/check-session:
+    get:
+      operationId: v1_check_session_retrieve
+      description: Check if a session is valid and return a new one if expired.
+      parameters:
+      - in: query
+        name: session_id
+        schema:
+          type: string
+        description: UUID of the session to check
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionCheckResponse'
+          description: ''
+  /api/v1/debug/system/:
+    get:
+      operationId: v1_debug_system_retrieve
+      description: Debug view to test system connectivity.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dm/inbox/:
+    get:
+      operationId: v1_dm_inbox_retrieve
+      description: GET — user's conversations. POST — send message.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_dm_inbox_create
+      description: GET — user's conversations. POST — send message.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dm/thread/{username}/:
+    get:
+      operationId: v1_dm_thread_retrieve
+      description: GET — messages with a specific user.
+      parameters:
+      - in: path
+        name: username
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/comments/{comment_id}/like/:
+    post:
+      operationId: v1_forum_comments_like_create
+      description: POST /api/forum/comments/<id>/like/ — toggle like
+      parameters:
+      - in: path
+        name: comment_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/comments/{comment_id}/reaction/:
+    post:
+      operationId: v1_forum_comments_reaction_create
+      description: |-
+        POST /api/forum/comments/<id>/reaction/ — upvote, downvote, helpful
+
+        Mutual exclusivity rules:
+        - Can't upvote AND downvote at the same time
+        - Can't have like/helpful AND downvote at the same time
+      parameters:
+      - in: path
+        name: comment_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/comments/{comment_id}/report/:
+    post:
+      operationId: v1_forum_comments_report_create
+      description: POST /api/forum/comments/<id>/report/
+      parameters:
+      - in: path
+        name: comment_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/posts/:
+    get:
+      operationId: v1_forum_posts_retrieve
+      description: GET /api/forum/posts/ — list, POST — create
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_forum_posts_create
+      description: GET /api/forum/posts/ — list, POST — create
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/posts/{post_id}/:
+    get:
+      operationId: v1_forum_posts_retrieve_2
+      description: |-
+        GET /api/forum/posts/<id>/ — detail with comments
+        PATCH /api/forum/posts/<id>/ — author edits post
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_forum_posts_partial_update
+      description: Author can edit their own post (title, content, category).
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/posts/{post_id}/comment/:
+    post:
+      operationId: v1_forum_posts_comment_create
+      description: POST /api/forum/posts/<id>/comment/
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/posts/{post_id}/like/:
+    post:
+      operationId: v1_forum_posts_like_create
+      description: POST /api/forum/posts/<id>/like/ — toggle like
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/posts/{post_id}/like/mutual/:
+    post:
+      operationId: v1_forum_posts_like_mutual_create
+      description: POST /api/forum/posts/<id>/like/mutual/ — with mutual exclusivity
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/posts/{post_id}/reaction/:
+    post:
+      operationId: v1_forum_posts_reaction_create
+      description: 'POST /api/forum/posts/<id>/reaction/ — reaction_type: helpful,
+        share'
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/posts/{post_id}/reaction/mutual/:
+    post:
+      operationId: v1_forum_posts_reaction_mutual_create
+      description: |-
+        POST /api/forum/posts/<id>/reaction/mutual/ — with mutual exclusivity
+
+        Ensures like/helpful can't coexist with dislike
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/posts/{post_id}/report/:
+    post:
+      operationId: v1_forum_posts_report_create
+      description: POST /api/forum/posts/<id>/report/
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/learn/articles/{slug}/comments/:
+    get:
+      operationId: v1_learn_articles_comments_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_learn_articles_comments_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/learn/articles/{slug}/comments/{comment_id}/reaction/:
+    post:
+      operationId: v1_learn_articles_comments_reaction_create
+      parameters:
+      - in: path
+        name: comment_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/learn/articles/{slug}/reaction/:
+    post:
+      operationId: v1_learn_articles_reaction_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/learn/lessons/{slug}/reaction/:
+    post:
+      operationId: v1_learn_lessons_reaction_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notifications/:
+    get:
+      operationId: v1_notifications_retrieve
+      description: GET — user's notifications with pagination.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/notifications/{notification_id}/read/:
+    post:
+      operationId: v1_notifications_read_create
+      description: POST — mark a single notification as read.
+      parameters:
+      - in: path
+        name: notification_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notifications/read-all/:
+    post:
+      operationId: v1_notifications_read_all_create
+      description: POST — mark all user notifications as read.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notifications/test-push/:
+    post:
+      operationId: v1_notifications_test_push_create
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notifications/unread-count/:
+    get:
+      operationId: v1_notifications_unread_count_retrieve
+      description: GET — unread notification count for the bell badge.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notifications/webpush/subscribe/:
+    post:
+      operationId: v1_notifications_webpush_subscribe_create
+      description: Registers/updates a browser Web Push subscription for current user.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notifications/webpush/unsubscribe/:
+    post:
+      operationId: v1_notifications_webpush_unsubscribe_create
+      description: Marks a browser Web Push subscription inactive.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/push/public-key/:
+    get:
+      operationId: v1_push_public_key_retrieve
+      description: GET public VAPID key for frontend bootstrap.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/push/subscribe/:
+    post:
+      operationId: v1_push_subscribe_create
+      description: Registers/updates a browser Web Push subscription for current user.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/push/unsubscribe/:
+    post:
+      operationId: v1_push_unsubscribe_create
+      description: Marks a browser Web Push subscription inactive.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/report/:
+    post:
+      operationId: v1_report_create
+      description: POST /api/report — Submit a scam report
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportCreate'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/report-crash:
+    post:
+      operationId: v1_report_crash_create
+      description: Submit crash logs from the device.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrashReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrashReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrashReportRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrashReportResponse'
+          description: ''
+  /api/v1/report/{id}/:
+    get:
+      operationId: v1_report_retrieve
+      description: GET /api/report/<pk>/ — Get detail of a report
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportDetail'
+          description: ''
+  /api/v1/scam-iq/history/:
+    get:
+      operationId: v1_scam_iq_history_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scam-iq/start/:
+    post:
+      operationId: v1_scam_iq_start_create
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scam-iq/status/{task_id}/:
+    get:
+      operationId: v1_scam_iq_status_retrieve
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scam-iq/submit/:
+    post:
+      operationId: v1_scam_iq_submit_create
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/{scan_id}/report-admin/:
+    post:
+      operationId: v1_scan_report_admin_create
+      description: POST /api/scan/<id>/report-admin — User requests admin verification
+        for a scan result.
+      parameters:
+      - in: path
+        name: scan_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/account/:
+    post:
+      operationId: v1_scan_account_create
+      description: POST /api/scan/account — Look up bank account risk
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/analyze-sse/:
+    post:
+      operationId: v1_scan_analyze_sse_create
+      description: SSE endpoint for detailed AI analysis of a scan result.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/audio/:
+    post:
+      operationId: v1_scan_audio_create
+      description: |-
+        POST /api/scan/audio — Audio transcription + AI scam analysis.
+        Accepts audio file upload, offloads to Celery for Faster-Whisper + AI.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/banks/:
+    get:
+      operationId: v1_scan_banks_retrieve
+      description: |-
+        GET /api/scan/banks — Fetch list of banks from VietQR API.
+        Cached for 24 hours to ensure local performance.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/domain/:
+    post:
+      operationId: v1_scan_domain_create
+      description: POST /api/scan/domain — Analyze URL/domain for phishing
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/email/:
+    post:
+      operationId: v1_scan_email_create
+      description: POST /api/scan/email — Analyze email sender and content (.eml upload)
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/file/:
+    post:
+      operationId: v1_scan_file_create
+      description: POST /api/scan/file — File upload scan using VirusTotal
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/image/:
+    post:
+      operationId: v1_scan_image_create
+      description: |-
+        POST /api/scan/image — OCR & Scam Analysis (Multi-image)
+        Offloaded to Celery because OCR and AI are heavy.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/lookup/:
+    get:
+      operationId: v1_scan_lookup_retrieve
+      description: |-
+        GET /api/v1/scan/lookup/?q=...&type=all&risk=all&page=1
+        Unified search across ScanEvent + Report for the lookup page.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/message/:
+    post:
+      operationId: v1_scan_message_create
+      description: POST /api/scan/message — Analyze text message for scams (Multi-image
+        support)
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/phone/:
+    post:
+      operationId: v1_scan_phone_create
+      description: POST /api/scan/phone — Scan phone number risk
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/status/{scan_id}/:
+    get:
+      operationId: v1_scan_status_retrieve
+      description: GET /api/scan/status/<id> — Check status of a scan job
+      parameters:
+      - in: path
+        name: scan_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/tickets/:
+    get:
+      operationId: v1_tickets_retrieve
+      description: GET — user's tickets. POST — create ticket.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_tickets_create
+      description: GET — user's tickets. POST — create ticket.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trends/daily/:
+    get:
+      operationId: v1_trends_daily_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trends/hot/:
+    get:
+      operationId: v1_trends_hot_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trends/radar-stats/:
+    get:
+      operationId: v1_trends_radar_stats_retrieve
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/user/alerts/:
+    get:
+      operationId: v1_user_alerts_list
+      description: GET/POST /api/user/alerts — User saved alerts
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserAlert'
+          description: ''
+    post:
+      operationId: v1_user_alerts_create
+      description: GET/POST /api/user/alerts — User saved alerts
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAlert'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserAlert'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserAlert'
+        required: true
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAlert'
+          description: ''
+    delete:
+      operationId: v1_user_alerts_destroy
+      description: GET/POST /api/user/alerts — User saved alerts
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/user/card/{username}/:
+    get:
+      operationId: v1_user_card_retrieve
+      description: GET /api/v1/user/card/<username>/ — Mini user profile card for
+        hover.
+      parameters:
+      - in: path
+        name: username
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/user/profile/{username}/:
+    get:
+      operationId: v1_user_profile_retrieve
+      description: GET /api/user/profile/<username> — Public profile info
+      parameters:
+      - in: path
+        name: username
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/user/reports/:
+    get:
+      operationId: v1_user_reports_list
+      description: GET /api/user/reports — User report history
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReportListList'
+          description: ''
+  /api/v1/user/scan-picker/:
+    get:
+      operationId: v1_user_scan_picker_retrieve
+      description: GET /api/user/scan-picker — scans available for forum reference
+        with filters.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/user/scans/:
+    get:
+      operationId: v1_user_scans_list
+      description: GET /api/user/scans — User scan history
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedScanEventListList'
+          description: ''
+  /api/v1/utils/editor-media/:
+    get:
+      operationId: v1_utils_editor_media_retrieve
+      description: GET/DELETE /api/v1/utils/editor-media/ — list or delete user's
+        uploaded CKEditor images.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    post:
+      operationId: v1_utils_editor_media_create
+      description: Allow POST as fallback for clients that don't send JSON body with
+        DELETE.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_utils_editor_media_destroy
+      description: GET/DELETE /api/v1/utils/editor-media/ — list or delete user's
+        uploaded CKEditor images.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/utils/fetch-url/:
+    get:
+      operationId: v1_utils_fetch_url_retrieve
+      description: GET /api/v1/utils/fetch-url/?url=... — Get metadata for Editor.js
+        Link tool
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/utils/mentions/:
+    get:
+      operationId: v1_utils_mentions_retrieve
+      description: GET /api/v1/utils/mentions/?query=@... — Search users for mentions
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/utils/upload-image/:
+    post:
+      operationId: v1_utils_upload_image_create
+      description: POST /api/v1/utils/upload-image/ — Editor.js image upload
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - CsrfExemptSessionAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+components:
+  schemas:
+    ActionEnum:
+      enum:
+      - approve
+      - reject
+      type: string
+      description: |-
+        * `approve` - approve
+        * `reject` - reject
+    AudioAnalysisRequest:
+      type: object
+      properties:
+        audio:
+          type: string
+          format: uri
+        phone_number:
+          type: string
+        session_id:
+          type: string
+          format: uuid
+      required:
+      - audio
+      - phone_number
+    AudioAnalysisResponse:
+      type: object
+      properties:
+        risk_score:
+          type: integer
+        is_scam:
+          type: boolean
+        transcript:
+          type: string
+        warning_message:
+          type: string
+      required:
+      - is_scam
+      - risk_score
+      - transcript
+      - warning_message
+    ChatAIRequest:
+      type: object
+      properties:
+        user_message:
+          type: string
+        session_id:
+          type: string
+          format: uuid
+        context:
+          type: string
+          default: general
+        images:
+          type: array
+          items:
+            type: string
+          default: []
+      required:
+      - session_id
+      - user_message
+    ChatFolder:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        folder:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - updated_at
+    ChatbotConfig:
+      type: object
+      properties:
+        tone:
+          $ref: '#/components/schemas/ToneEnum'
+        tone_display:
+          type: string
+          readOnly: true
+        language_style:
+          $ref: '#/components/schemas/LanguageStyleEnum'
+        language_style_display:
+          type: string
+          readOnly: true
+        custom_name:
+          type: string
+          description: Custom name for the AI assistant
+          maxLength: 50
+        custom_instructions:
+          type: string
+          description: Additional instructions for the AI
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - language_style_display
+      - tone_display
+      - updated_at
+    CrashReportRequest:
+      type: object
+      properties:
+        device_info:
+          type: string
+        stack_trace:
+          type: string
+        timestamp:
+          type: integer
+        version:
+          type: string
+          default: ''
+        os_version:
+          type: string
+          default: ''
+        severity:
+          type: string
+          default: ERROR
+      required:
+      - device_info
+      - stack_trace
+      - timestamp
+    CrashReportResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        report_id:
+          type: string
+          format: uuid
+      required:
+      - report_id
+      - status
+    ImageAnalysisRequest:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            type: string
+            format: uri
+        session_id:
+          type: string
+          format: uuid
+      required:
+      - images
+    ImageAnalysisResponse:
+      type: object
+      properties:
+        ocr_text:
+          type: string
+        risk_analysis:
+          $ref: '#/components/schemas/ImageRiskAnalysis'
+      required:
+      - ocr_text
+      - risk_analysis
+    ImageRiskAnalysis:
+      type: object
+      properties:
+        is_safe:
+          type: boolean
+        risk_level:
+          type: string
+        details:
+          type: string
+      required:
+      - details
+      - is_safe
+      - risk_level
+    LanguageStyleEnum:
+      enum:
+      - simple
+      - detailed
+      - concise
+      type: string
+      description: |-
+        * `simple` - Đơn giản, dễ hiểu
+        * `detailed` - Chi tiết, chuyên sâu
+        * `concise` - Ngắn gọn, súc tích
+    Login:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - password
+    PaginatedReportListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportList'
+    PaginatedScanEventListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScanEventList'
+    PatchedChatFolder:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedUserProfile:
+      type: object
+      properties:
+        display_name:
+          type: string
+          maxLength: 100
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+        bio:
+          type: string
+          maxLength: 500
+        about:
+          type: string
+          description: Markdown supported bio/about section
+        messenger_link:
+          type: string
+          nullable: true
+        rank_points:
+          type: integer
+          readOnly: true
+        rank_info:
+          type: string
+          readOnly: true
+    PhoneCheckResponse:
+      type: object
+      properties:
+        risk_level:
+          type: string
+        risk_label:
+          type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+      required:
+      - recommendations
+      - risk_label
+      - risk_level
+    Register:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        full_name:
+          type: string
+          default: ''
+          maxLength: 150
+        first_name:
+          type: string
+          default: ''
+          maxLength: 150
+        last_name:
+          type: string
+          default: ''
+          maxLength: 150
+      required:
+      - email
+      - password
+    ReportCreate:
+      type: object
+      properties:
+        target_type:
+          $ref: '#/components/schemas/TargetTypeEnum'
+        target_value:
+          type: string
+          description: 'Normalized: phone number, domain, account info'
+          maxLength: 500
+        scam_type:
+          $ref: '#/components/schemas/ScamTypeEnum'
+        severity:
+          $ref: '#/components/schemas/SeverityEnum'
+        description:
+          type: string
+        evidence_file:
+          type: string
+          format: uri
+          nullable: true
+        scammer_phone:
+          type: string
+          maxLength: 20
+        scammer_bank_account:
+          type: string
+          maxLength: 50
+        scammer_bank_name:
+          type: string
+          maxLength: 100
+        scammer_name:
+          type: string
+          maxLength: 200
+        ocr_text:
+          type: string
+          description: Text extracted from evidence_file via OCR
+        ai_analysis:
+          description: AI analysis of the report and OCR text
+      required:
+      - description
+      - scam_type
+      - target_type
+      - target_value
+    ReportDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        target_type:
+          $ref: '#/components/schemas/TargetTypeEnum'
+        target_value:
+          type: string
+          description: 'Normalized: phone number, domain, account info'
+          maxLength: 500
+        scam_type:
+          $ref: '#/components/schemas/ScamTypeEnum'
+        scam_type_display:
+          type: string
+          readOnly: true
+        severity:
+          $ref: '#/components/schemas/SeverityEnum'
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reporter_email:
+          type: string
+          readOnly: true
+        scammer_name:
+          type: string
+          maxLength: 200
+        scammer_phone:
+          type: string
+          maxLength: 20
+        scammer_bank_account:
+          type: string
+          maxLength: 50
+        scammer_bank_name:
+          type: string
+          maxLength: 100
+        scammer_info:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        evidence_file:
+          type: string
+          format: uri
+          nullable: true
+        evidence_url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        evidence_images_data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportEvidence'
+          readOnly: true
+        ocr_text:
+          type: string
+          description: Text extracted from evidence_file via OCR
+        ai_analysis:
+          description: AI analysis of the report and OCR text
+        moderation_note:
+          type: string
+      required:
+      - created_at
+      - description
+      - evidence_images_data
+      - evidence_url
+      - id
+      - reporter_email
+      - scam_type
+      - scam_type_display
+      - scammer_info
+      - target_type
+      - target_value
+    ReportEvidence:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        caption:
+          type: string
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - url
+    ReportList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        target_type:
+          $ref: '#/components/schemas/TargetTypeEnum'
+        target_value:
+          type: string
+          description: 'Normalized: phone number, domain, account info'
+          maxLength: 500
+        scam_type:
+          $ref: '#/components/schemas/ScamTypeEnum'
+        severity:
+          $ref: '#/components/schemas/SeverityEnum'
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        reporter_email:
+          type: string
+          readOnly: true
+        moderation_note:
+          type: string
+        ocr_text:
+          type: string
+          description: Text extracted from evidence_file via OCR
+        ai_analysis:
+          description: AI analysis of the report and OCR text
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - description
+      - id
+      - reporter_email
+      - scam_type
+      - target_type
+      - target_value
+    ReportModerate:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        note:
+          type: string
+          default: ''
+      required:
+      - action
+    RiskLevelEnum:
+      enum:
+      - SAFE
+      - GREEN
+      - YELLOW
+      - RED
+      type: string
+      description: |-
+        * `SAFE` - An toàn
+        * `GREEN` - Xanh
+        * `YELLOW` - Cảnh báo
+        * `RED` - Nguy hiểm
+    SavedMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        message:
+          type: integer
+        message_text:
+          type: string
+          readOnly: true
+        message_role:
+          type: string
+          readOnly: true
+        session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        session_title:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - message
+      - message_role
+      - message_text
+      - session_id
+      - session_title
+    ScamTypeEnum:
+      enum:
+      - police_impersonation
+      - bank_impersonation
+      - recruitment_scam
+      - investment_scam
+      - delivery_scam
+      - loan_scam
+      - otp_steal
+      - phishing
+      - romance_scam
+      - other
+      type: string
+      description: |-
+        * `police_impersonation` - Giả danh công an
+        * `bank_impersonation` - Giả mạo ngân hàng
+        * `recruitment_scam` - Lừa tuyển dụng
+        * `investment_scam` - Lừa đầu tư
+        * `delivery_scam` - Giả mạo giao hàng
+        * `loan_scam` - Lừa vay tiền
+        * `otp_steal` - Chiêu trò OTP/2FA
+        * `phishing` - Phishing link
+        * `romance_scam` - Lừa tình cảm
+        * `other` - Khác
+    ScanEventList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        scan_type:
+          allOf:
+          - $ref: '#/components/schemas/ScanTypeEnum'
+          readOnly: true
+        normalized_input:
+          type: string
+          readOnly: true
+        risk_score:
+          type: integer
+          readOnly: true
+        risk_level:
+          allOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          readOnly: true
+        result_json:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - normalized_input
+      - result_json
+      - risk_level
+      - risk_score
+      - scan_type
+    ScanTypeEnum:
+      enum:
+      - phone
+      - message
+      - domain
+      - account
+      - qr
+      - email
+      - file
+      - audio
+      type: string
+      description: |-
+        * `phone` - Số điện thoại
+        * `message` - Tin nhắn
+        * `domain` - Website/URL
+        * `account` - Tài khoản ngân hàng
+        * `qr` - QR / Ảnh
+        * `email` - Email
+        * `file` - Tệp tin
+        * `audio` - Âm thanh
+    SessionCheckResponse:
+      type: object
+      properties:
+        is_valid:
+          type: boolean
+        new_session_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - is_valid
+      - new_session_id
+    SeverityEnum:
+      enum:
+      - low
+      - medium
+      - high
+      - critical
+      type: string
+      description: |-
+        * `low` - Thấp
+        * `medium` - Trung bình
+        * `high` - Cao
+        * `critical` - Khẩn cấp
+    StatusEnum:
+      enum:
+      - pending
+      - approved
+      - rejected
+      type: string
+      description: |-
+        * `pending` - Chờ duyệt
+        * `approved` - Đã duyệt
+        * `rejected` - Từ chối
+    TargetTypeEnum:
+      enum:
+      - phone
+      - domain
+      - account
+      - message
+      - qr
+      - email
+      type: string
+      description: |-
+        * `phone` - Số điện thoại
+        * `domain` - Website/URL
+        * `account` - Tài khoản ngân hàng
+        * `message` - Tin nhắn
+        * `qr` - QR Code
+        * `email` - Email
+    ToneEnum:
+      enum:
+      - professional
+      - friendly
+      - casual
+      - formal
+      - humorous
+      type: string
+      description: |-
+        * `professional` - Chuyên nghiệp
+        * `friendly` - Thân thiện
+        * `casual` - Thoải mái
+        * `formal` - Trang trọng
+        * `humorous` - Hài hước
+    UserAlert:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        target_type:
+          $ref: '#/components/schemas/TargetTypeEnum'
+        target_value:
+          type: string
+          maxLength: 500
+        risk_level:
+          $ref: '#/components/schemas/RiskLevelEnum'
+        note:
+          type: string
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - target_type
+      - target_value
+  securitySchemes:
+    CsrfExemptSessionAuthentication:
+      type: apiKey
+      in: cookie
+      name: sessionid
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Token-based authentication with required prefix "Token"

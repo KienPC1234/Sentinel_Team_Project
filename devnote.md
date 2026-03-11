@@ -2,6 +2,10 @@
 
 Tài liệu này dành cho developer khi onboard hoặc phát triển tính năng cho backend ShieldCall VN.
 
+testuser:
+tester@sheldcall.com
+tester1234
+
 ## 1. Tech stack & kiến trúc
 
 - Django 5.2.x (monolith) + Django REST Framework.

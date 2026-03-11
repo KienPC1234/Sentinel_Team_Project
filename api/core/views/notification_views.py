@@ -3,8 +3,9 @@ import json
 from urllib.parse import urlparse
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from drf_spectacular.utils import extend_schema
 from api.utils.push_service import push_service
 import os
 from django.conf import settings
@@ -19,7 +20,8 @@ logger = logging.getLogger(__name__)
 class NotificationListView(APIView):
     """GET — user's notifications with pagination."""
     permission_classes = [IsAuthenticated]
-
+    
+    @extend_schema(responses={200: serializers.DictField()}) # Using DictField as a placeholder for now
     def get(self, request):
         from api.core.models import Notification
         page = int(request.query_params.get('page', 1))
@@ -89,14 +91,20 @@ class NotificationMarkAllReadView(APIView):
 class AdminNotificationBroadcastView(APIView):
     """POST — Admin sends a notification to all users (or specific users)."""
     permission_classes = [IsAuthenticated]
-
-    def _has_admin_access(self, user):
-        return bool(
-            user
-            and user.is_authenticated
-            and (user.is_staff or getattr(getattr(user, 'profile', None), 'is_super_admin', False))
-        )
-
+    
+    @extend_schema(
+        request={'application/json': {
+            'type': 'object',
+            'properties': {
+                'title': {'type': 'string'},
+                'message': {'type': 'string'},
+                'notification_type': {'type': 'string'},
+                'url': {'type': 'string'}
+            },
+            'required': ['title', 'message']
+        }},
+        responses={201: serializers.DictField()}
+    )
     def post(self, request):
         if not self._has_admin_access(request.user):
             return Response({'error': 'Bạn không có quyền gửi broadcast.'}, status=403)
@@ -140,6 +148,7 @@ class TestPushView(APIView):
 class ResetRAGView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def post(self, request):
         """
         Deletes the vector index files and triggers a fresh rebuild.
