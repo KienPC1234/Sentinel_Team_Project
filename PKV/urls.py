@@ -61,21 +61,34 @@ from .views.admin_views import (
     forum_moderator_action,
 )
 
-def service_worker(request):
+def pwa_assets(request):
     filename = request.path.lstrip('/')
-    worker_path = os.path.join(settings.BASE_DIR, filename)
-    if os.path.exists(worker_path) and filename.endswith('.js'):
-        with open(worker_path, 'r') as f:
-            response = HttpResponse(f.read(), content_type="application/javascript")
+    asset_path = os.path.join(settings.BASE_DIR, filename)
+    
+    contentType = "application/javascript"
+    if filename.endswith('.json'):
+        contentType = "application/manifest+json"
+    
+    if os.path.exists(asset_path) and (filename.endswith('.js') or filename.endswith('.json')):
+        with open(asset_path, 'r') as f:
+            response = HttpResponse(f.read(), content_type=contentType)
             response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             response['Pragma'] = 'no-cache'
             response['Expires'] = '0'
             return response
-    return HttpResponse("/* Service Worker Not Found */", status=404)
+    return HttpResponse(f"/* Asset {filename} Not Found */", status=404)
+
+from api.core.views.helps_views import helps_page_view
 
 urlpatterns = [
-    # App service worker
-    path('sw.js', service_worker),
+    # App service worker & manifest
+    path('sw.js', pwa_assets),
+    path('manifest.json', pwa_assets),
+    path('site.webmanifest', pwa_assets),
+
+    # Helps Center
+    path('helps/', helps_page_view, name='helps_root'),
+    path('helps/<slug:slug>/', helps_page_view, name='helps_page'),
 
     # Pages
     path("", home_view, name="root"), 
