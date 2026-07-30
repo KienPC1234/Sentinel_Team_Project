@@ -1,0 +1,7 @@
+django
+pymysql
+cryptography
+django-redis
+celery 
+redis
+python-dotenv
