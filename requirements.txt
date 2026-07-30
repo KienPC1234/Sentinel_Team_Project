@@ -4,4 +4,4 @@ cryptography
 django-redis
 celery 
 redis
-python-dotenv
+django-tailwind
