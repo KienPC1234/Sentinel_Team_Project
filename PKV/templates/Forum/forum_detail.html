@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }}{% endblock %}
+{% block head_extra %}
+{% endblock %}
+
+{% block content %}
+<div class="animate-fadein" x-data="{
+    comments: {{ comments_json|safe }},
+    newComment: '',
+    replyTo: null,
+    loading: false,
+    postContent: `{{ post.content|escapejs }}`,
+    
+    async submitComment(parentId = null) {
+        const content = parentId ? this.$refs['replyContent' + parentId].value : this.newComment;
+        if(!content.trim()) return;
+        const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+        if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
+
+        this.loading = true;
+        try {
+            const resp = await fetch('/api/v1/forum/posts/{{ post.id }}/comment/', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json', 'X-CSRFToken': getCSRFToken()},
+                body: JSON.stringify({content: content, parent: parentId, 'cf-turnstile-response': tsToken})
+            });
+            if(resp.ok) {
+                const comment = await resp.json();
+                if(parentId) {
+                    const findAndAdd = (list) => {
+                        for(let c of list) {
+                            if(c.id === parentId) { 
+                                c.replies = c.replies || [];
+                                c.replies.push(comment);
+                                return true;
+                            }
+                            if(c.replies && findAndAdd(c.replies)) return true;
+                        }
+                        return false;
+                    };
+                    findAndAdd(this.comments);
+                    this.replyTo = null;
+                } else {
+                    this.comments.push(comment);
+                    this.newComment = '';
+                }
+                showToast('Gửi bình luận thành công!', 'success');
+            } else { showToast('Lỗi khi gửi bình luận', 'error'); }
+        } catch(e) { showToast('Lỗi kết nối', 'error'); }
+        this.loading = false;
+    },
+    timeAgo(dt) {
+        const diff = (Date.now() - new Date(dt)) / 1000;
+        if(diff < 60) return 'Vừa xong';
+        if(diff < 3600) return Math.floor(diff/60) + ' phút trước';
+        if(diff < 86400) return Math.floor(diff/3600) + ' giờ trước';
+        return Math.floor(diff/86400) + ' ngày trước';
+    }
+}">
+    <!-- Breadcrumb -->
+    <nav class="mb-6 flex items-center gap-2 overflow-x-auto py-1 text-sm whitespace-nowrap scrollbar-hide">
+        <a href="/forum/" class="text-white/40 hover:text-cyan-400 flex items-center gap-1 transition-colors">
+            <i class="bi bi-chat-left-dots"></i> Diễn đàn
+        </a>
+        <i class="bi bi-chevron-right text-white/20 text-[10px]"></i>
+        <span class="text-white/60 truncate">{{ post.title }}</span>
+    </nav>
+
+    <div class="forum-grid">
+        <!-- Main Post Content -->
+        <div class="space-y-6">
+            <article class="liquid-card overflow-visible">
+                <!-- Post Header -->
+                <div class="p-6 border-b border-white/5 bg-white/[0.02]">
+                    <div class="flex flex-wrap items-center gap-3 mb-4">
+                        <span class="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                            {{ post.get_category_display }}
+                        </span>
+                        <span class="text-white/40 text-[11px] flex items-center gap-1">
+                            <i class="bi bi-clock"></i> {{ post.created_at|date:"d/m/Y H:i" }}
+                        </span>
+                        <div class="flex items-center gap-3 ml-auto text-white/40 text-[11px]">
+                            <span class="flex items-center gap-1"><i class="bi bi-eye"></i> {{ post.views_count }}</span>
+                            <span class="flex items-center gap-1"><i class="bi bi-heart"></i> {{ post.likes_count }}</span>
+                        </div>
+                    </div>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-white leading-tight">{{ post.title }}</h1>
+                </div>
+
+                <!-- Post Body -->
+                <div class="p-6 lg:p-8">
+                    {% if post.image %}
+                    <div class="mb-8 rounded-3xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50">
+                        <img src="{{ post.image.url }}" alt="Post image" class="w-full">
+                    </div>
+                    {% endif %}
+                    
+                     <div class="text-white/80 leading-relaxed space-y-4 forum-content ai-markdown" x-html="renderMd(postContent)">
+                        <!-- Content rendered via renderMd for markdown support -->
+                    </div>
+                </div>
+
+                <!-- Post Footer Actions -->
+                <div class="px-6 py-4 bg-white/[0.03] border-t border-white/5 flex items-center justify-between">
+                    <div class="flex items-center gap-6">
+                        <button class="flex items-center gap-2 text-white/60 hover:text-red-400 transition-colors py-1">
+                            <i class="bi bi-heart text-xl"></i>
+                            <span class="text-xs font-bold uppercase tracking-wider">Hữu ích</span>
+                        </button>
+                        <button class="flex items-center gap-2 text-white/60 hover:text-cyan-400 transition-colors py-1">
+                            <i class="bi bi-share text-xl"></i>
+                            <span class="text-xs font-bold uppercase tracking-wider">Chia sẻ</span>
+                        </button>
+                    </div>
+                    {% if user.is_staff %}
+                    <button class="text-red-400/60 hover:text-red-400 text-xs font-bold transition-colors">
+                        <i class="bi bi-flag"></i> BÁO CÁO
+                    </button>
+                    {% endif %}
+                </div>
+            </article>
+
+            <!-- Comments Section -->
+            <section class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-bold flex items-center gap-3">
+                        <i class="bi bi-chat-dots-fill text-cyan-400"></i>
+                        Thảo luận <span class="bg-white/10 text-white/60 px-2 py-0.5 rounded-lg text-xs" x-text="comments.length"></span>
+                    </h2>
+                </div>
+
+                <!-- New Comment Input -->
+                {% if user.is_authenticated %}
+                <div class="liquid-card p-6 bg-cyan-500/[0.02] border-cyan-500/10">
+                    <div class="flex gap-4">
+                        <div class="avatar-pill shrink-0">{{ user.username.0|upper }}</div>
+                        <div class="flex-1 space-y-4">
+                            <textarea x-model="newComment" placeholder="Tham gia cuộc hội thoại..." 
+                                class="liquid-input w-full min-h-[100px] bg-transparent border-white/10 focus:border-cyan-400/40 text-sm"></textarea>
+                            <!-- Turnstile Widget -->
+                            <div class="mt-4 flex justify-center">
+                                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
+                            </div>
+                            <div class="flex justify-end mt-4">
+                                <button @click="submitComment()" :disabled="loading" class="liquid-btn bg-cyan-500 py-3 px-10 text-black font-black hover:bg-cyan-400">
+                                    <span x-show="!loading">PHÁT BIỂU</span>
+                                    <span x-show="loading" class="spinner w-5 h-5 border-black"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="liquid-glass rounded-2xl p-6 text-center border-white/5">
+                    <p class="text-white/40 text-sm">Vui lòng <a href="/login/" class="text-cyan-400 font-bold hover:underline">đăng nhập</a> để tham gia thảo luận cùng cộng đồng.</p>
+                </div>
+                {% endif %}
+
+                <!-- Comments List -->
+                <div class="space-y-4 pb-12">
+                    <template x-for="comment in comments" :key="comment.id">
+                        <div class="space-y-4">
+                            <!-- Main Comment Card -->
+                            <div class="liquid-card p-5 group transition-all">
+                                <div class="flex gap-4">
+                                    <div class="avatar-pill shrink-0 h-10 w-10 text-xs" x-text="comment.author_name[0].toUpperCase()"></div>
+                                    <div class="flex-1">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span class="font-bold text-white/90 text-[13px]" x-text="comment.author_name"></span>
+                                            <span class="text-[10px] text-white/30" x-text="timeAgo(comment.created_at)"></span>
+                                        </div>
+                                        <div class="text-white/70 text-sm leading-relaxed mb-3" x-text="comment.content"></div>
+                                        <div class="flex items-center gap-4">
+                                            <button @click="replyTo = comment.id" class="text-[11px] font-bold text-cyan-400/60 hover:text-cyan-400 transition-colors uppercase tracking-widest">Phản hồi</button>
+                                            <button class="text-[11px] font-bold text-white/20 hover:text-red-400 transition-colors">THÍCH</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Nested Replies -->
+                            <div class="ml-12 space-y-3" x-show="comment.replies && comment.replies.length > 0">
+                                <template x-for="reply in comment.replies" :key="reply.id">
+                                    <div class="liquid-card p-4 bg-white/5 border-none">
+                                        <div class="flex gap-3">
+                                            <div class="avatar-pill shrink-0 h-8 w-8 text-[10px] bg-purple-500/50" x-text="reply.author_name[0].toUpperCase()"></div>
+                                            <div class="flex-1">
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <span class="font-bold text-white/80 text-[12px]" x-text="reply.author_name"></span>
+                                                    <span class="text-[9px] text-white/20" x-text="timeAgo(reply.created_at)"></span>
+                                                </div>
+                                                <div class="text-white/60 text-xs leading-relaxed" x-text="reply.content"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Reply Input Container -->
+                            <div class="ml-12" x-show="replyTo === comment.id" x-transition>
+                                <div class="liquid-card p-4 border-cyan-500/20 bg-cyan-500/[0.03]">
+                                    <textarea :x-ref="'replyContent' + comment.id" placeholder="Viết câu trả lời..." class="liquid-input w-full min-h-[60px] text-xs bg-transparent border-white/10 mb-3"></textarea>
+                                    <div class="flex justify-end gap-2">
+                                        <button @click="replyTo = null" class="text-[10px] text-white/40 px-3 py-1">HỦY</button>
+                                        <button @click="submitComment(comment.id)" class="liquid-btn py-1.5 px-4 text-[11px] bg-cyan-500/20 text-cyan-400">GỬI PHẢN HỒI</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </section>
+        </div>
+
+        <!-- Sidebar Section -->
+        <aside class="forum-sidebar space-y-6">
+            <!-- Author Card -->
+            <div class="liquid-card p-6 text-center">
+                <div class="avatar-pill h-20 w-20 mx-auto mb-4 text-2xl border-4 border-white/10 shadow-xl" style="background: linear-gradient(45deg, #18ffff, #b388ff);">
+                    {{ post.author.username.0|upper }}
+                </div>
+                <h3 class="font-extrabold text-white text-lg">{{ post.author.first_name|default:post.author.username }}</h3>
+                <p class="text-white/40 text-xs mb-4 uppercase tracking-widest font-bold">Thành viên cộng đồng</p>
+                <div class="grid grid-cols-2 gap-2 text-center pt-4 border-t border-white/5">
+                    <div>
+                        <div class="text-white font-bold text-lg leading-tight">{{ post.author.forum_posts.count }}</div>
+                        <div class="text-white/30 text-[9px] uppercase font-black">Bài đăng</div>
+                    </div>
+                    <div>
+                        <div class="text-white font-bold text-lg leading-tight">{{ post.author.forum_comments.count }}</div>
+                        <div class="text-white/30 text-[9px] uppercase font-black">Phản hồi</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guidelines Card -->
+            <div class="liquid-card p-6 bg-gradient-to-b from-purple-500/10 to-transparent">
+                <h3 class="font-bold text-white/90 mb-4 flex items-center gap-2">
+                    <i class="bi bi-info-circle text-purple-400"></i> Quy định chung
+                </h3>
+                <ul class="text-[11px] text-white/50 space-y-3 leading-relaxed">
+                    <li class="flex gap-2"><i class="bi bi-check2 text-cyan-500"></i> Không chia sẻ thông tin cá nhân của người khác trái phép.</li>
+                    <li class="flex gap-2"><i class="bi bi-check2 text-cyan-500"></i> Nội dung cảnh báo cần trung thực và có minh chứng.</li>
+                    <li class="flex gap-2"><i class="bi bi-check2 text-cyan-500"></i> Giữ thái độ lịch sự, tôn trọng trong thảo luận.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

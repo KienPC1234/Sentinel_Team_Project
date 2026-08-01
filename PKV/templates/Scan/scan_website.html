@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}Kiểm tra Website / URL{% endblock %}
+{% block head_extra %}
+{% endblock %}
+
+{% block content %}
+<div class="animate-fadein max-w-4xl mx-auto space-y-10" x-data="{
+    url: '', 
+    loading: false, 
+    result: null, 
+    error: '', 
+    aiText: '', 
+    aiLoading: false,
+    deepScan: false,
+    progress: [],
+    currentStep: '',
+    ws: null,
+
+    handleScan() {
+        if (!this.url.trim()) { this.error = 'Vui lòng nhập URL'; return; }
+        
+        // Normalize URL
+        let normalizedUrl = this.url.trim();
+        if (!normalizedUrl.includes('://')) {
+            normalizedUrl = 'https://' + normalizedUrl;
+        }
+        
+        this.loading = true;
+        this.error = '';
+        this.result = null;
+        this.aiText = '';
+        this.aiLoading = false;
+        this.progress = [];
+        this.currentStep = 'init';
+
+        const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+        if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
+        
+        fetch('/api/v1/scan/domain/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ url: normalizedUrl, deep_scan: this.deepScan, 'cf-turnstile-response': tsToken })
+        })
+        .then(r => { if (!r.ok) return r.json().then(e => { throw e }); return r.json(); })
+        .then(data => {
+            if (this.deepScan && data.scan_id) {
+                this.connectWebSocket(data.scan_id);
+            } else {
+                this.result = data;
+                this.loading = false;
+                this.startAIAnalysis(data, normalizedUrl);
+            }
+        })
+        .catch(e => { 
+            showToast(e.error || 'Có lỗi xảy ra.', 'error');
+            this.loading = false; 
+        });
+    },
+
+    connectWebSocket(scanId) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/scan/${scanId}/`;
+        
+        this.ws = new WebSocket(wsUrl);
+        this.progress.push({ message: 'Đang kết nối WebSocket...', step: 'init' });
+
+        this.ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            this.progress.push({ message: data.message, step: data.step });
+            this.currentStep = data.step;
+
+            if (data.step === 'completed' && data.data) {
+                this.result = data.data;
+                this.loading = false;
+                this.aiText = data.data.explanation || '';
+                this.ws.close();
+            }
+            if (data.step === 'error') {
+                showToast(data.message, 'error');
+                this.loading = false;
+                this.ws.close();
+            }
+        };
+
+        this.ws.onerror = () => {
+            showToast('Lỗi kết nối thời gian thực.', 'error');
+            this.loading = false;
+        };
+    },
+
+    startAIAnalysis(data, originalUrl) {
+        this.aiLoading = true;
+        fetch('/api/v1/scan/analyze-sse/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ scan_type: 'domain', scan_data: data, raw_input: originalUrl })
+        }).then(r => {
+            const reader = r.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            const pump = () => reader.read().then(({ done, value }) => {
+                if (done) { this.aiLoading = false; return; }
+                buf += decoder.decode(value, { stream: true });
+                const lines = buf.split('\n');
+                buf = lines.pop();
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const d = JSON.parse(line.substring(6));
+                            if (d.chunk) this.aiText += d.chunk;
+                            if (d.done) this.aiLoading = false;
+                        } catch (e) {}
+                    }
+                }
+                pump();
+            });
+            pump();
+        }).catch(() => { 
+            this.aiLoading = false; 
+            showToast('Không thể kết nối AI.', 'warning');
+        });
+    }
+}">
+    <!-- Page Header -->
+    <div class="text-center space-y-4">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-blue-500/10 text-blue-400 mb-2 border border-blue-500/20 shadow-lg shadow-blue-500/10">
+            <i class="bi bi-globe2 text-4xl"></i>
+        </div>
+        <h1 class="text-4xl font-black text-white tracking-tight">
+            Kiểm tra <span class="glow-text">Website / URL</span>
+        </h1>
+        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed">
+            Phân tích mức độ tin cậy, chứng chỉ bảo mật và nội dung website bằng AI.
+        </p>
+    </div>
+
+    <!-- Input Area -->
+    <div class="liquid-card p-6 sm:p-8">
+        <form @submit.prevent="handleScan()">
+            <div class="flex flex-col sm:flex-row gap-4">
+                <input type="text" class="liquid-input flex-1 py-4 px-6 text-lg font-bold" 
+                    placeholder="VD: vietcombank-ebanking.com, bit.ly/..." x-model="url" required>
+                <button @click="handleScan()" class="liquid-btn bg-cyan-500 text-black px-10 py-4 font-black hover:bg-cyan-400" :disabled="loading">
+                    <span x-show="!loading"><i class="bi bi-search mr-2"></i> SCAN</span>
+                    <span x-show="loading" class="spinner w-5 h-5 border-black"></span>
+                </button>
+            </div>
+            <!-- Turnstile Widget -->
+            <div class="mt-4 flex justify-center">
+                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
+            </div>
+            <div class="mt-4 flex items-center gap-3">
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" x-model="deepScan" class="sr-only peer">
+                    <div class="w-11 h-6 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/20 after:border-white/10 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500/50"></div>
+                    <span class="ms-3 text-xs font-black text-white/40 uppercase tracking-widest">Chế độ Quét Sâu (Deep AI Analysis)</span>
+                </label>
+            </div>
+        </form>
+    </div>
+
+    <!-- Progress Console (Show when deep scanning) -->
+    <template x-if="loading && deepScan && progress.length > 0">
+        <div class="liquid-card p-6 border-blue-500/20 bg-blue-500/[0.02]">
+            <h4 class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Tiến trình quét thời gian thực</h4>
+            <div class="space-y-3 font-mono text-[11px]">
+                <template x-for="(item, index) in progress" :key="index">
+                    <div class="flex items-start gap-3 animate-fadein">
+                        <span class="text-blue-500/50">#</span>
+                        <span class="text-white/80" x-text="item.message"></span>
+                        <i x-show="index === progress.length - 1 && item.step !== 'completed'" class="bi bi-three-dots animate-pulse text-blue-400"></i>
+                        <i x-show="item.step === 'completed' || index < progress.length - 1" class="bi bi-check2 text-green-500"></i>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+
+    <!-- Result Display -->
+    <template x-if="result">
+        <div class="space-y-6 animate-fadein">
+            <div class="liquid-card overflow-hidden">
+                <!-- Status Header -->
+                <div class="p-8 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
+                    <div class="absolute inset-0 opacity-10 -z-10 blur-[80px]"
+                        :class="result.risk_level==='RED'?'bg-red-500':result.risk_level==='YELLOW'?'bg-yellow-500':'bg-green-500'"></div>
+                    
+                    <div class="inline-block px-8 py-3 rounded-full text-xs font-black tracking-[0.3em] uppercase mb-6"
+                        :class="result.risk_level==='RED'?'bg-red-500/20 text-red-500 border border-red-500/30':result.risk_level==='YELLOW'?'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30':'bg-green-500/20 text-green-500 border border-green-500/30'"
+                        x-text="result.risk_level"></div>
+                    
+                    <div class="text-5xl font-black text-white mb-2" x-text="result.risk_score + '/100'"></div>
+                    <div class="text-[10px] text-white/30 font-black tracking-widest uppercase mb-8">Điểm rủi ro URL</div>
+                    
+                    <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden max-w-md mx-auto">
+                        <div class="h-full transition-all duration-1000" 
+                            :style="'width:'+result.risk_score+'%;background:'+(result.risk_score>=70?'#ef4444':result.risk_score>=40?'#f59e0b':'#10b981')"></div>
+                    </div>
+                </div>
+
+                <!-- Domain Info -->
+                <div class="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-white/5">
+                    <div class="p-4 rounded-2xl bg-white/[0.03] space-y-1">
+                        <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Tên miền / URL</div>
+                        <div class="text-sm font-bold text-white/80 truncate" x-text="result.domain || result.url"></div>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-white/[0.03] space-y-1">
+                        <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Loại hình</div>
+                        <div class="text-sm font-bold text-white/80" x-text="result.scam_type || 'Kiểm tra kỹ thuật'"></div>
+                    </div>
+                </div>
+
+                <!-- AI Insight -->
+                <div class="p-8 bg-blue-500/[0.02]">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
+                            <i class="bi bi-shield-lock"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-black text-white uppercase tracking-wider">Phân tích An ninh mạng</h4>
+                            <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Deep Web Analysis</p>
+                        </div>
+                        <div x-show="aiLoading" class="ml-auto spinner w-4 h-4 text-blue-400"></div>
+                    </div>
+                    
+                    <div class="ai-markdown text-white/70 text-sm leading-relaxed" 
+                         :class="{'ai-streaming': aiLoading}"
+                         x-html="renderMd(aiText)"></div>
+                    <p x-show="!aiText && !aiLoading" class="text-white/20 text-xs italic">Đang chờ phản hồi từ AI...</p>
+                </div>
+
+                <!-- Actions -->
+                <div class="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
+                    <div class="flex gap-4">
+                        <button class="liquid-btn py-2 px-6 text-xs bg-white/5 text-white/60 border-white/10 hover:text-white"
+                            @click="navigator.clipboard.writeText(result.url || url);showToast('Đã copy URL!','success')">
+                            <i class="bi bi-link-45deg"></i> Copy Link
+                        </button>
+                        <button class="liquid-btn py-2 px-6 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 transition-all font-black"
+                            @click="$dispatch('start-contextual-chat', { context: 'Website: ' + (result.domain || result.url) + '\nAnalysis: ' + result.explanation })">
+                            <i class="bi bi-chat-dots-fill"></i> CHAT VỚI AI
+                        </button>
+                    </div>
+                    <a :href="'/report/?target_type=domain&target_value='+encodeURIComponent(result.url || url)"
+                        class="liquid-btn py-2 px-8 text-xs bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30 transition-all font-black">
+                        <i class="bi bi-megaphone-fill"></i> TỐ CÁO WEBSITE
+                    </a>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+{% endblock %}

@@ -1,9 +1,184 @@
 {% extends "base.html" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Trang chủ{% endblock %}
+{% block meta_description %}ShieldCall VN - Bảo mật tuyệt đối trước mọi hình thức lừa đảo số. Scan số điện thoại, tin nhắn, website với AI thông minh.{% endblock %}
 
 {% block content %}
-<h1 class="text-3xl font-bold text-blue-600">
-    Home page 🎉
-</h1>
+<!-- Hero Section -->
+<section class="relative pt-20 pb-24 text-center overflow-hidden">
+    <!-- Background Ambient Glow -->
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10 opacity-30 pointer-events-none">
+        <div class="absolute top-0 left-1/4 w-[500px] h-[500px] bg-cyan-500/20 blur-[120px] rounded-full"></div>
+        <div class="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-500/20 blur-[120px] rounded-full"></div>
+    </div>
+
+    <div class="relative z-10 space-y-8 max-w-4xl mx-auto px-4">
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full liquid-glass border-cyan-500/20 text-cyan-400 text-xs font-black uppercase tracking-widest animate-fadein">
+            <i class="bi bi-shield-check"></i> Hệ thống bảo mật AI v2.0
+        </div>
+        
+        <h1 class="text-5xl md:text-7xl font-black text-white leading-tight tracking-tighter animate-fadein">
+            <span class="glow-text">Lớp giáp bảo vệ</span><br>
+            <span class="opacity-90 italic">cuộc sống số của bạn</span>
+        </h1>
+        
+        <p class="text-lg md:text-xl text-white/50 leading-relaxed animate-fadein animate-delay-100 max-w-2xl mx-auto font-medium">
+            Phát hiện và cảnh báo tức thì các cuộc gọi, tin nhắn và website lừa đảo bằng trí tuệ nhân tạo hàng đầu.
+        </p>
+
+        <!-- Quick Scan Interface -->
+        <div class="pt-8 animate-fadein animate-delay-200">
+            <div class="liquid-card max-w-2xl mx-auto p-2 sm:p-3 overflow-visible group focus-within:border-cyan-400/50 focus-within:shadow-[0_0_40px_rgba(34,211,238,0.15)] transition-all" 
+                x-data="{phone:'', loading:false, result:null}">
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <div class="flex-1 relative">
+                        <i class="bi bi-telephone absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-lg"></i>
+                        <input type="tel" x-model="phone" placeholder="Nhập số điện thoại nghi vấn..." 
+                            class="w-full bg-white/[0.03] border-none text-white pl-12 pr-4 py-4 rounded-2xl focus:ring-2 focus:ring-cyan-500/40 text-base font-bold placeholder:text-white/20"
+                            @keydown.enter="if(phone.length > 5) { loading=true; result=null; fetch('/api/v1/scan/phone/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()}, body:JSON.stringify({phone:phone.trim()})}).then(r=>r.json()).then(d=>{result=d;loading=false}).catch(()=>{loading=false; showToast('Lỗi kết nối','error')}) }">
+                    </div>
+                    <button @click="if(phone.length > 5) { loading=true; result=null; fetch('/api/v1/scan/phone/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()}, body:JSON.stringify({phone:phone.trim()})}).then(r=>r.json()).then(d=>{result=d;loading=false}).catch(()=>{loading=false; showToast('Lỗi kết nối','error')}) }" 
+                        class="liquid-btn bg-cyan-500 text-black border-none px-10 py-4 font-black hover:bg-cyan-400 hover:text-black">
+                        <span x-show="!loading">SCAN NGAY</span>
+                        <span x-show="loading" class="spinner w-5 h-5 border-white"></span>
+                    </button>
+                </div>
+
+                <!-- Quick Result Popover -->
+                <div x-show="result" x-transition class="absolute top-full left-0 right-0 mt-4 z-50">
+                    <div class="liquid-card p-6 text-left border-l-4" 
+                        :class="result && result.risk_level === 'RED' ? 'border-red-500 bg-red-500/10' : result && result.risk_level === 'YELLOW' ? 'border-yellow-500 bg-yellow-500/10' : 'border-green-500 bg-green-500/10'">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h4 class="text-white font-black text-lg" x-text="result && result.risk_level === 'RED' ? 'CẢNH BÁO NGUY HIỂM' : 'KẾT QUẢ KIỂM TRA'"></h4>
+                                <p class="text-white/60 text-xs font-bold uppercase tracking-wider" x-text="'Độ rủi ro: ' + (result ? result.risk_score : 0) + '/100'"></p>
+                            </div>
+                            <button @click="result = null" class="text-white/20 hover:text-white"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <template x-if="result && result.reasons && result.reasons.length > 0">
+                            <div class="space-y-2 mb-4">
+                                <template x-for="r in result.reasons" :key="r">
+                                    <div class="flex gap-2 text-sm text-white/80">
+                                        <i class="bi bi-dot text-cyan-400"></i>
+                                        <span x-text="r"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <a href="/scan/phone/" class="text-cyan-400 text-[11px] font-black uppercase tracking-widest hover:underline flex items-center gap-2">
+                            Xem chi tiết đầy đủ <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Impact Stats Row -->
+<section class="max-w-6xl mx-auto px-4 mb-24 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fadein animate-delay-300">
+    <div class="liquid-card p-8 text-center bg-white/[0.02] border-white/5">
+        <div class="text-3xl font-black text-white glow-text mb-1">{{ total_scans|default:"1.2M+" }}</div>
+        <div class="text-[10px] text-white/30 font-black uppercase tracking-[0.2em]">Tổng Lượt Scan</div>
+    </div>
+    <div class="liquid-card p-8 text-center bg-white/[0.02] border-white/5">
+        <div class="text-3xl font-black text-red-500 mb-1">{{ scam_detected|default:"45K+" }}</div>
+        <div class="text-[10px] text-white/30 font-black uppercase tracking-[0.2em]">Mối Nguy Hiểm</div>
+    </div>
+    <div class="liquid-card p-8 text-center bg-white/[0.02] border-white/5">
+        <div class="text-3xl font-black text-green-400 mb-1">99.8%</div>
+        <div class="text-[10px] text-white/30 font-black uppercase tracking-[0.2em]">Độ Chính Xác</div>
+    </div>
+    <div class="liquid-card p-8 text-center bg-white/[0.02] border-white/5">
+        <div class="text-3xl font-black text-purple-400 mb-1">24/7</div>
+        <div class="text-[10px] text-white/30 font-black uppercase tracking-[0.2em]">Thời Gian Thực</div>
+    </div>
+</section>
+
+<!-- Tools Grid -->
+<section class="max-w-7xl mx-auto px-4 mb-24 space-y-12">
+    <div class="text-center space-y-4">
+        <h2 class="text-4xl font-black text-white tracking-tight">Hệ sinh thái bảo vệ</h2>
+        <p class="text-white/40 max-w-xl mx-auto">Bộ công cụ toàn diện giúp bạn an tâm tuyệt đối trên không gian số.</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Phone Scan -->
+        <a href="/scan/phone/" class="liquid-card p-8 group hover:border-cyan-500/50 transition-all no-underline">
+            <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-6 group-hover:scale-110 transition-transform">
+                <i class="bi bi-phone-vibrate text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-extrabold text-white mb-3">Tra cứu Số điện thoại</h3>
+            <p class="text-sm text-white/40 leading-relaxed mb-6">Xác thực danh tính người gọi, phát hiện các đầu số rác và lừa đảo chuyên nghiệp.</p>
+            <span class="text-[10px] font-black uppercase tracking-widest text-cyan-400 group-hover:gap-4 flex items-center gap-2 transition-all">KHÁM PHÁ <i class="bi bi-arrow-right"></i></span>
+        </a>
+
+        <!-- Message Analysis -->
+        <a href="/scan/message/" class="liquid-card p-8 group hover:border-purple-500/50 transition-all no-underline">
+            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-6 group-hover:scale-110 transition-transform">
+                <i class="bi bi-chat-square-text text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-extrabold text-white mb-3">Phân tích Tin nhắn</h3>
+            <p class="text-sm text-white/40 leading-relaxed mb-6">Trí tuệ nhân tạo phân tích nội dung, nhận diện bẫy tâm lý và link phishing độc hại.</p>
+            <span class="text-[10px] font-black uppercase tracking-widest text-purple-400 group-hover:gap-4 flex items-center gap-2 transition-all">SỬ DỤNG AI <i class="bi bi-arrow-right"></i></span>
+        </a>
+
+        <!-- Website Check -->
+        <a href="/scan/website/" class="liquid-card p-8 group hover:border-blue-500/50 transition-all no-underline">
+            <div class="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-6 group-hover:scale-110 transition-transform">
+                <i class="bi bi-globe2 text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-extrabold text-white mb-3">Quét Website / Link</h3>
+            <p class="text-sm text-white/40 leading-relaxed mb-6">Kiểm tra độ tin cậy của website trước khi nhập thông tin cá nhân hoặc thanh toán.</p>
+            <span class="text-[10px] font-black uppercase tracking-widest text-blue-400 group-hover:gap-4 flex items-center gap-2 transition-all">TRACKER <i class="bi bi-arrow-right"></i></span>
+        </a>
+
+        <!-- Bank Account -->
+        <a href="/scan/bank/" class="liquid-card p-8 group hover:border-yellow-500/50 transition-all no-underline">
+            <div class="w-14 h-14 rounded-2xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 mb-6 group-hover:scale-110 transition-transform">
+                <i class="bi bi-credit-card-2-front text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-extrabold text-white mb-3">Xác thực Tài khoản</h3>
+            <p class="text-sm text-white/40 leading-relaxed mb-6">Kiểm tra chéo số tài khoản ngân hàng với cơ sở dữ liệu lừa đảo liên ngành.</p>
+            <span class="text-[10px] font-black uppercase tracking-widest text-yellow-400 group-hover:gap-4 flex items-center gap-2 transition-all">AN TOÀN <i class="bi bi-arrow-right"></i></span>
+        </a>
+
+        <!-- QR Scan -->
+        <a href="/scan/qr/" class="liquid-card p-8 group hover:border-green-500/50 transition-all no-underline">
+            <div class="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-400 mb-6 group-hover:scale-110 transition-transform">
+                <i class="bi bi-qr-code-scan text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-extrabold text-white mb-3">Quét QR & Hình ảnh</h3>
+            <p class="text-sm text-white/40 leading-relaxed mb-6">Bóc tách dữ liệu từ mã QR, hóa đơn và ảnh chụp màn hình để tìm kiếm dấu vết gian lận.</p>
+            <span class="text-[10px] font-black uppercase tracking-widest text-green-400 group-hover:gap-4 flex items-center gap-2 transition-all">LENS AI <i class="bi bi-arrow-right"></i></span>
+        </a>
+
+        <!-- COMMUNITY -->
+        <a href="/forum/" class="liquid-card p-8 group hover:border-white/40 transition-all no-underline bg-white/[0.05]">
+            <div class="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform">
+                <i class="bi bi-people text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-extrabold text-white mb-3">Cộng đồng ShieldCall</h3>
+            <p class="text-sm text-white/40 leading-relaxed mb-6">Tham gia cùng hàng triệu người dùng khác để cùng nhau xây dựng mạng lưới an toàn.</p>
+            <span class="text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:gap-4 flex items-center gap-2 transition-all">THAM GIA <i class="bi bi-arrow-right"></i></span>
+        </a>
+    </div>
+</section>
+
+<!-- Emergency Banner -->
+<section class="max-w-6xl mx-auto px-4 mb-24">
+    <div class="liquid-card p-12 text-center bg-gradient-to-br from-red-600/20 to-transparent border-red-500/20 relative overflow-hidden">
+        <div class="absolute -top-24 -right-24 w-64 h-64 bg-red-500/10 blur-[100px] rounded-full"></div>
+        <div class="relative z-10 space-y-6">
+            <i class="bi bi-exclamation-octagon text-5xl text-red-500 animate-pulse"></i>
+            <h2 class="text-3xl md:text-5xl font-black text-white">Bạn đang bị tấn công lừa đảo?</h2>
+            <p class="text-white/60 max-w-xl mx-auto text-base">Đừng hoảng sợ. Hãy thực hiện ngay quy trình khẩn cấp để đóng băng tài khoản và bảo vệ tài sản của bạn.</p>
+            <div class="pt-4">
+                <a href="/emergency/" class="liquid-btn bg-red-600 text-white border-none py-4 px-12 text-lg font-black hover:bg-red-500 shadow-2xl shadow-red-500/30">
+                    HỖ TRỢ KHẨN CẤP NGAY
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
 {% endblock %}
