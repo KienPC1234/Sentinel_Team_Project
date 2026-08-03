@@ -85,22 +85,27 @@ def extract_ocr_text(image_file) -> str:
 
 def extract_ocr_with_boxes(image_file):
     """
-    Extract OCR text WITH bounding box coordinates and generate an annotated image.
+    Extract OCR text AND QR codes WITH bounding box coordinates.
+    Generates an annotated image showing both text regions and QR codes.
     
     Returns:
         dict with keys:
-            - text: full extracted text
-            - regions: list of {bbox, text, confidence}
-            - annotated_image_b64: base64-encoded annotated image with boxes
+            - text: full extracted OCR text
+            - qr_contents: list of decoded QR data strings
+            - regions: list of {bbox, text, confidence, type: 'text'|'qr'}
+            - annotated_image_b64: base64-encoded annotated image
     """
     import base64
     import numpy as np
     from PIL import ImageDraw, ImageFont
+    try:
+        from pyzbar import pyzbar
+        PYZBAR_AVAILABLE = True
+    except ImportError:
+        PYZBAR_AVAILABLE = False
 
     reader = get_easyocr_reader()
-    if not reader:
-        return {"text": "", "regions": [], "annotated_image_b64": ""}
-
+    
     try:
         if hasattr(image_file, 'read'):
             image_data = image_file.read()
@@ -108,32 +113,47 @@ def extract_ocr_with_boxes(image_file):
         else:
             image_data = image_file
 
-        # detail=1 returns [[bbox, text, confidence], ...]
-        results = reader.readtext(image_data, detail=1)
-
-        if not results:
-            return {"text": "", "regions": [], "annotated_image_b64": ""}
-
-        # Build regions list
-        regions = []
-        text_parts = []
-        for item in results:
-            bbox, text, conf = item
-            text_parts.append(text)
-            # bbox is [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
-            regions.append({
-                "bbox": [[int(p[0]), int(p[1])] for p in bbox],
-                "text": text,
-                "confidence": round(float(conf), 3)
-            })
-
-        full_text = '\n'.join(text_parts).strip()
-
-        # Draw bounding boxes on the image
         pil_img = Image.open(io.BytesIO(image_data)).convert("RGB")
         draw = ImageDraw.Draw(pil_img)
         
-        # Try to load a font, fallback to default
+        # Build regions list
+        regions = []
+        text_parts = []
+        qr_contents = []
+
+        # 1. Detect QR Codes first (cyan boxes)
+        if PYZBAR_AVAILABLE:
+            decoded = pyzbar.decode(pil_img)
+            for d in decoded:
+                content = d.data.decode('utf-8', errors='replace')
+                qr_contents.append(content)
+                # pyzbar provides rect (left, top, width, height) and polygon
+                # and polygon is a list of Points
+                poly = d.polygon
+                bbox = [[p.x, p.y] for p in poly]
+                regions.append({
+                    "bbox": bbox,
+                    "text": content,
+                    "confidence": 1.0,
+                    "type": "qr"
+                })
+
+        # 2. Detect OCR Text (green/yellow/red boxes)
+        if reader:
+            ocr_results = reader.readtext(image_data, detail=1)
+            for item in ocr_results:
+                bbox, text, conf = item
+                text_parts.append(text)
+                regions.append({
+                    "bbox": [[int(p[0]), int(p[1])] for p in bbox],
+                    "text": text,
+                    "confidence": round(float(conf), 3),
+                    "type": "text"
+                })
+
+        full_text = '\n'.join(text_parts).strip()
+
+        # 3. Draw Bounding Boxes
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
         except Exception:
@@ -142,24 +162,28 @@ def extract_ocr_with_boxes(image_file):
         for region in regions:
             bbox = region["bbox"]
             conf = region["confidence"]
-            # Draw polygon around text
-            points = [(p[0], p[1]) for p in bbox]
-            # Color based on confidence: green (high) to yellow (low)
-            if conf >= 0.8:
-                color = (0, 230, 118)  # green
-            elif conf >= 0.5:
-                color = (255, 234, 0)  # yellow
-            else:
-                color = (255, 23, 68)  # red
+            rtype = region["type"]
             
+            points = [(p[0], p[1]) for p in bbox]
+            
+            if rtype == "qr":
+                color = (0, 229, 255)  # cyan
+            else: # text
+                if conf >= 0.8:
+                    color = (0, 230, 118)  # green
+                elif conf >= 0.5:
+                    color = (255, 234, 0)  # yellow
+                else:
+                    color = (255, 23, 68)  # red
+            
+            # Draw outline
             draw.polygon(points, outline=color)
-            # Draw slightly thicker outline
             for offset in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                 shifted = [(p[0] + offset[0], p[1] + offset[1]) for p in points]
                 draw.polygon(shifted, outline=color)
             
-            # Draw confidence label
-            label = f"{conf:.0%}"
+            # Label
+            label = "QR" if rtype == "qr" else f"{conf:.0%}"
             label_pos = (min(p[0] for p in points), min(p[1] for p in points) - 16)
             draw.text(label_pos, label, fill=color, font=font)
 
@@ -168,16 +192,16 @@ def extract_ocr_with_boxes(image_file):
         pil_img.save(buf, format="PNG", optimize=True)
         annotated_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-        logger.info(f"EasyOCR with boxes: {len(regions)} regions, {len(full_text)} chars")
         return {
             "text": full_text,
+            "qr_contents": qr_contents,
             "regions": regions,
             "annotated_image_b64": f"data:image/png;base64,{annotated_b64}"
         }
 
     except Exception as e:
-        logger.error(f"EasyOCR with boxes error: {e}")
-        return {"text": "", "regions": [], "annotated_image_b64": ""}
+        logger.error(f"OCR with boxes error: {e}")
+        return {"text": "", "qr_contents": [], "regions": [], "annotated_image_b64": ""}
 
 
 def extract_qr_data(image_file) -> list:

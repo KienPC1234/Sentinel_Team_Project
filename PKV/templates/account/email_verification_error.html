@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Lỗi Xác thực" %}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-[60vh] animate-fadein">
+    <div class="liquid-card p-10 max-w-md w-full text-center space-y-8">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-[2.5rem] bg-red-500/10 text-red-500 border border-red-500/20 shadow-lg shadow-red-500/10">
+            <i class="bi bi-exclamation-triangle text-4xl"></i>
+        </div>
+        
+        <div class="space-y-4">
+            <h1 class="text-3xl font-black text-white tracking-tight">{% trans "Lỗi xác thực" %}</h1>
+            <p class="text-white/40 text-sm font-medium tracking-wide">
+                {% blocktrans %}Đã xảy ra lỗi trong quá trình xác thực email. Có thể liên kết đã hết hạn hoặc đã được sử dụng.{% endblocktrans %}
+            </p>
+        </div>
+
+        <a href="{% url 'account_login' %}" class="liquid-btn w-full py-5 bg-cyan-500 text-black font-black uppercase tracking-[0.2em] text-sm hover:bg-cyan-400 transition-all shadow-lg shadow-cyan-500/20">
+            {% trans "Thử đăng nhập lại" %}
+        </a>
+    </div>
+</div>
+{% endblock %}

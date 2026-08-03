@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)
 # FORUM APIs
 # ═══════════════════════════════════════════════════════════════════════════
 
-from api.core.models import ForumPost, ForumComment, ForumLike
-from api.core.serializers import ForumPostSerializer, ForumCommentSerializer
+from api.core.models import ForumPost, ForumComment, ForumLike, ForumCommentLike, ForumPostReaction, ForumPostReport, ForumCommentReport, ForumReactionType
+from api.core.serializers import ForumPostSerializer, ForumCommentSerializer, ForumPostReportSerializer, ForumCommentReportSerializer
 
 class ForumPostListCreateView(APIView):
     """GET /api/forum/posts/ — list, POST — create"""
@@ -99,6 +99,8 @@ class ForumPostCommentView(APIView):
     def post(self, request, post_id):
         try:
             post = ForumPost.objects.get(id=post_id)
+            if post.is_locked:
+                return Response({'error': 'Bài viết này đã bị khóa, không thể bình luận.'}, status=403)
         except ForumPost.DoesNotExist:
             return Response({'error': 'Bài viết không tồn tại'}, status=404)
 
@@ -115,6 +117,32 @@ class ForumPostCommentView(APIView):
         ForumPost.objects.filter(id=post_id).update(comments_count=F('comments_count') + 1)
 
         return Response(ForumCommentSerializer(comment, context={'request': request}).data, status=201)
+
+class ForumCommentLikeView(APIView):
+    """POST /api/forum/comments/<id>/like/ — toggle like"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, comment_id):
+        try:
+            comment = ForumComment.objects.get(id=comment_id)
+        except ForumComment.DoesNotExist:
+            return Response({'error': 'Bình luận không tồn tại'}, status=404)
+
+        like, created = ForumCommentLike.objects.get_or_create(user=request.user, comment=comment)
+        if not created:
+            like.delete()
+            ForumComment.objects.filter(id=comment_id).update(likes_count=F('likes_count') - 1)
+            action = 'unliked'
+        else:
+            ForumComment.objects.filter(id=comment_id).update(likes_count=F('likes_count') + 1)
+            action = 'liked'
+        
+        comment.refresh_from_db()
+        return Response({
+            'action': action,
+            'likes_count': comment.likes_count,
+            'liked': created
+        })
 
 
 class ForumPostLikeView(APIView):
@@ -142,3 +170,114 @@ class ForumPostLikeView(APIView):
             'likes_count': post.likes_count,
             'liked': created
         })
+
+class ForumPostReactionView(APIView):
+    """POST /api/forum/posts/<id>/reaction/ — reaction_type: helpful, share"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        rtype = request.data.get('reaction_type')
+        if rtype not in [ForumReactionType.HELPFUL, ForumReactionType.SHARE, ForumReactionType.DISLIKE]:
+            return Response({'error': 'Loại tương tác không hợp lệ'}, status=400)
+
+        try:
+            post = ForumPost.objects.get(id=post_id)
+        except ForumPost.DoesNotExist:
+            return Response({'error': 'Bài viết không tồn tại'}, status=404)
+
+        reaction, created = ForumPostReaction.objects.get_or_create(
+            user=request.user, post=post, reaction_type=rtype
+        )
+
+        if not created:
+            reaction.delete()
+            if rtype == ForumReactionType.HELPFUL:
+                ForumPost.objects.filter(id=post_id).update(helpful_count=F('helpful_count') - 1)
+            elif rtype == ForumReactionType.SHARE:
+                ForumPost.objects.filter(id=post_id).update(shares_count=F('shares_count') - 1)
+            else:
+                ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') - 1)
+            action = 'removed'
+        else:
+            if rtype == ForumReactionType.HELPFUL:
+                ForumPost.objects.filter(id=post_id).update(helpful_count=F('helpful_count') + 1)
+            elif rtype == ForumReactionType.SHARE:
+                ForumPost.objects.filter(id=post_id).update(shares_count=F('shares_count') + 1)
+            else:
+                ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') + 1)
+            action = 'added'
+
+        post.refresh_from_db()
+        return Response({
+            'action': action,
+            'helpful_count': post.helpful_count,
+            'shares_count': post.shares_count,
+            'dislikes_count': post.dislikes_count,
+            'reacted': created
+        })
+
+class ForumPostReportView(APIView):
+    """POST /api/forum/posts/<id>/report/"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        reason = request.data.get('reason')
+        if not reason:
+            return Response({'error': 'Vui lòng cung cấp lý do báo cáo'}, status=400)
+
+        try:
+            post = ForumPost.objects.get(id=post_id)
+        except ForumPost.DoesNotExist:
+            return Response({'error': 'Bài viết không tồn tại'}, status=404)
+
+        # Create report
+        report = ForumPostReport.objects.create(
+            reporter=request.user,
+            post=post,
+            reason=reason
+        )
+
+        # Increment report count
+        ForumPost.objects.filter(id=post_id).update(reports_count=F('reports_count') + 1)
+
+        # Trigger AI analysis task (Import here to avoid circulars)
+        try:
+            from api.core.tasks import process_forum_report
+            process_forum_report.delay(report.id)
+        except Exception as e:
+            logger.error(f"Failed to trigger AI report task: {e}")
+
+        return Response({'message': 'Báo cáo của bạn đã được gửi. AI đang tiến hành phân tích nội dung. Cảm ơn bạn!'}, status=201)
+
+class ForumCommentReportView(APIView):
+    """POST /api/forum/comments/<id>/report/"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, comment_id):
+        reason = request.data.get('reason')
+        if not reason:
+            return Response({'error': 'Vui lòng cung cấp lý do báo cáo'}, status=400)
+
+        try:
+            comment = ForumComment.objects.select_related('post').get(id=comment_id)
+        except ForumComment.DoesNotExist:
+            return Response({'error': 'Bình luận không tồn tại'}, status=404)
+
+        if comment.post.is_locked:
+            return Response({'error': 'Không thể báo cáo bình luận trong bài viết đã bị khóa.'}, status=403)
+
+        # Create report
+        report = ForumCommentReport.objects.create(
+            reporter=request.user,
+            comment=comment,
+            reason=reason
+        )
+
+        # Trigger AI analysis task
+        try:
+            from api.core.tasks import process_forum_comment_report
+            process_forum_comment_report.delay(report.id)
+        except Exception as e:
+            logger.error(f"Failed to trigger AI comment report task: {e}")
+
+        return Response({'message': 'Báo cáo bình luận đã được gửi. AI đang phân tích nội dung.'}, status=201)

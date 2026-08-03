@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-8 mt-16">
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'admin-dashboard' %}" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+            <h1 class="text-2xl font-bold text-white">Điều Phối Diễn Đàn</h1>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-4 mb-6">
+        <button class="px-6 py-2 rounded-xl bg-blue-500 text-white font-semibold">Báo cáo bài viết</button>
+        <button class="px-6 py-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white font-semibold">Báo cáo bình luận</button>
+    </div>
+
+    <!-- Post Reports Table -->
+    <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden mb-10">
+        <div class="p-4 bg-slate-900/50 border-b border-slate-700/50">
+            <h3 class="font-bold text-white">Báo cáo bài viết</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-slate-900/30">
+                    <tr>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Thời gian</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Người báo cáo</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Nội dung báo cáo</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">AI Analysis</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Trạng thái</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Hành động</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700/50">
+                    {% for report in post_reports %}
+                    <tr class="hover:bg-slate-700/20">
+                        <td class="px-6 py-4 text-slate-300 text-sm">{{ report.created_at|date:"d/m H:i" }}</td>
+                        <td class="px-6 py-4 text-white">{{ report.reporter.username }}</td>
+                        <td class="px-6 py-4">
+                            <div class="text-xs text-slate-500 mb-1 uppercase">Lý do: {{ report.reason|truncatechars:30 }}</div>
+                            <div class="text-white font-medium">Bản tin: {{ report.post.title|truncatechars:50 }}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if report.ai_analysis.violation %}
+                            <span class="text-red-400 text-xs flex items-center gap-1">
+                                <i class="bi bi-robot"></i> Vi phạm ({{ report.ai_analysis.confidence|floatformat:2 }})
+                            </span>
+                            {% elif report.ai_analysis %}
+                            <span class="text-green-400 text-xs flex items-center gap-1">
+                                <i class="bi bi-robot"></i> An toàn
+                            </span>
+                            {% else %}
+                            <span class="text-slate-500 text-xs">Đang chờ AI...</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="text-xs font-bold uppercase">{{ report.status }}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button class="px-3 py-1 rounded bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500 hover:text-white transition-all">Chi tiết</button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="p-6 text-center text-slate-500 italic">Không có báo cáo bài viết.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Comment Reports Table -->
+    <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden">
+        <div class="p-4 bg-slate-900/50 border-b border-slate-700/50">
+            <h3 class="font-bold text-white">Báo cáo bình luận</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-slate-900/30">
+                    <tr>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Thời gian</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Người báo cáo</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Bình luận</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Trạng thái</th>
+                        <th class="px-6 py-3 text-slate-400 text-sm">Hành động</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700/50">
+                    {% for report in comment_reports %}
+                    <tr class="hover:bg-slate-700/20">
+                        <td class="px-6 py-4 text-slate-300 text-sm">{{ report.created_at|date:"d/m H:i" }}</td>
+                        <td class="px-6 py-4 text-white">{{ report.reporter.username }}</td>
+                        <td class="px-6 py-4 text-slate-300">{{ report.comment.content|truncatechars:80 }}</td>
+                        <td class="px-6 py-4">
+                            <span class="text-xs font-bold uppercase">{{ report.status }}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button class="px-3 py-1 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">Xem</button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="p-6 text-center text-slate-500 italic">Không có báo cáo bình luận.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

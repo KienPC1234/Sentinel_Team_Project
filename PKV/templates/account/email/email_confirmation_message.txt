@@ -1,0 +1,12 @@
+{% load i18n %}
+{% blocktrans with user.email as email %}
+Chào bạn, cảm ơn bạn đã gia nhập cộng đồng ShieldCall VN. 
+
+Vui lòng xác nhận địa chỉ email của bạn bằng cách nhấn vào liên kết dưới đây:
+
+{{ activate_url }}
+
+Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.
+
+© 2026 SHIELDCALL VN — BẢO VỆ CỘNG ĐỒNG SỐ
+{% endblocktrans %}

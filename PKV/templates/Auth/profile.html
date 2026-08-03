@@ -12,19 +12,19 @@
     </div>
 
     <!-- Main Profile Card -->
-    <div class="liquid-card p-8 sm:p-10 space-y-8" x-data="profileManager()">
+    <div class="liquid-card rounded-3xl p-8 sm:p-10 space-y-8 shadow-2xl" x-data="profileManager()">
         <!-- User Identity -->
         <div class="flex flex-col sm:flex-row items-center gap-8 text-center sm:text-left">
             <div class="relative group cursor-pointer" @click="$refs.avatarInput.click()">
                 <template x-if="user.avatar">
-                    <img :src="user.avatar" class="w-24 h-24 rounded-[2.5rem] object-cover shadow-2xl shadow-cyan-500/20 ring-4 ring-white/5 group-hover:scale-105 transition-transform">
+                    <img :src="user.avatar" class="w-24 h-24 rounded-3xl object-cover shadow-2xl shadow-cyan-500/20 ring-4 ring-white/5 group-hover:scale-105 transition-transform">
                 </template>
                 <template x-if="!user.avatar">
-                    <div class="w-24 h-24 rounded-[2.5rem] bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center text-3xl font-black text-white shadow-2xl shadow-cyan-500/20 ring-4 ring-white/5 group-hover:scale-105 transition-transform">
+                    <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center text-3xl font-black text-white shadow-2xl shadow-cyan-500/20 ring-4 ring-white/5 group-hover:scale-105 transition-transform">
                         <span x-text="(user.first_name || user.username)[0].toUpperCase()"></span>
                     </div>
                 </template>
-                <div class="absolute inset-0 bg-black/40 rounded-[2.5rem] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <div class="absolute inset-0 bg-black/40 rounded-3xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                     <i class="bi bi-camera-fill text-white text-xl"></i>
                 </div>
                 <input type="file" x-ref="avatarInput" class="hidden" accept="image/*" @change="uploadAvatar">
@@ -34,11 +34,23 @@
                 </div>
             </div>
             <div class="space-y-1">
-                <h2 class="text-2xl font-black text-white/90" x-text="(user.first_name || user.last_name) ? user.first_name + ' ' + user.last_name : user.username">
-                </h2>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-2xl font-black text-white/90" x-text="user.display_name || user.username"></h2>
+                    <template x-if="user.rank">
+                        <div class="px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5" :class="user.rank.color">
+                            <i class="bi" :class="user.rank.icon"></i>
+                            <span x-text="user.rank.name"></span>
+                        </div>
+                    </template>
+                </div>
                 <p class="text-white/40 font-bold uppercase tracking-[0.2em] text-[10px]" x-text="user.email"></p>
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] text-white/40 font-black uppercase tracking-widest mt-2">
-                    <i class="bi bi-calendar3"></i> Đã tham gia: {{ user.date_joined|date:"d/m/Y" }}
+                <div class="inline-flex flex-wrap items-center gap-2 mt-2">
+                    <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] text-white/40 font-black uppercase tracking-widest">
+                        <i class="bi bi-calendar3"></i> Đã tham gia: {{ user.date_joined|date:"d/m/Y" }}
+                    </div>
+                    <button @click="copyPublicLink()" class="flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-400/10 border border-cyan-400/20 text-[10px] text-cyan-400 font-black uppercase tracking-widest hover:bg-cyan-400/20 transition-all">
+                        <i class="bi bi-share"></i> Chia sẻ hồ sơ công khai
+                    </button>
                 </div>
             </div>
         </div>
@@ -61,6 +73,13 @@
 
         <!-- Detailed Info Form -->
         <div class="space-y-6 pt-4 border-t border-white/5">
+            <div class="space-y-2">
+                <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Tên hiển thị (Nickname)</label>
+                <input type="text" x-model="formData.display_name" class="liquid-input w-full py-4 px-6 text-sm font-bold" 
+                       placeholder="Nhập nickname bạn muốn hiển thị..."
+                       :disabled="!editing" :class="!editing && 'opacity-50 cursor-not-allowed'">
+            </div>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div class="space-y-2">
                     <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Họ</label>
@@ -83,8 +102,42 @@
                 <p class="text-[9px] text-white/20 font-bold uppercase tracking-widest ml-2">Email bảo mật không thể thay đổi</p>
             </div>
 
+            <div class="space-y-2">
+                <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Tiểu sử ngắn / Trạng thái</label>
+                <input type="text" x-model="formData.bio" class="liquid-input w-full py-4 px-6 text-sm font-bold" 
+                       placeholder="Một câu ngắn gọn về bạn..."
+                       :disabled="!editing" :class="!editing && 'opacity-50 cursor-not-allowed'">
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Liên kết nhắn tin (Messenger/Zalo/Telegram)</label>
+                <div class="relative">
+                    <input type="url" x-model="formData.messenger_link" class="liquid-input w-full py-4 px-6 text-sm font-bold" 
+                           placeholder="https://m.me/yourusername..."
+                           :disabled="!editing" :class="!editing && 'opacity-50 cursor-not-allowed'">
+                    <i class="bi bi-chat-dots-fill absolute right-6 top-1/2 -translate-y-1/2 text-white/20"></i>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Giới thiệu chi tiết (Rich Text)</label>
+                
+                <div class="liquid-input w-full overflow-hidden bg-black/20 rounded-2xl border border-white/5 transition-all"
+                     :class="!editing && 'opacity-70 pointer-events-none'">
+                    <!-- Editor Content -->
+                    <div id="profile-editor" class="py-4 px-6 min-h-[300px] text-sm font-medium focus:outline-none"></div>
+                </div>
+                
+                <template x-if="editing">
+                    <p class="text-[9px] text-white/20 font-bold uppercase tracking-widest ml-1 mt-2 flex items-center gap-1.5 leading-none">
+                        <i class="bi bi-magic text-cyan-500"></i>
+                        CKEditor 5: Soạn thảo văn bản phong phú, chèn ảnh và video dễ dàng.
+                    </p>
+                </template>
+            </div>
+
             <div class="flex flex-wrap gap-4 pt-4">
-                <button type="button" class="liquid-btn flex-1 py-4 text-[11px] font-black tracking-widest uppercase bg-white/5 border-white/10 hover:bg-white/10 transition-all" @click="editing=!editing">
+                <button type="button" class="liquid-btn flex-1 py-4 text-[11px] font-black tracking-widest uppercase bg-white/5 border-white/10 hover:bg-white/10 transition-all" @click="toggleEditing()">
                     <span x-show="!editing"><i class="bi bi-pencil-square mr-2"></i> CHỈNH SỬA HỒ SƠ</span>
                     <span x-show="editing" class="text-red-400"><i class="bi bi-x-circle mr-2"></i> HỦY THAY ĐỔI</span>
                 </button>
@@ -280,6 +333,7 @@
     {% endif %}
 
     <script>
+        let profileEditorInstance = null;
         function profileManager() {
             return {
                 user: {
@@ -287,14 +341,55 @@
                     email: '{{ user.email|escapejs }}',
                     first_name: '{{ user.first_name|escapejs }}',
                     last_name: '{{ user.last_name|escapejs }}',
-                    avatar: '{% if user.profile.avatar %}{{ user.profile.avatar.url|escapejs }}{% endif %}'
+                    display_name: '{{ user.profile.display_name|escapejs }}',
+                    about: '{{ user.profile.about|escapejs }}',
+                    messenger_link: '{{ user.profile.messenger_link|escapejs }}',
+                    avatar: '{% if user.profile.avatar %}{{ user.profile.avatar.url|escapejs }}{% endif %}',
+                    rank: {{ user.profile.rank_info|safe|default:"{}" }}
                 },
                 formData: {
                     first_name: '{{ user.first_name|escapejs }}',
-                    last_name: '{{ user.last_name|escapejs }}'
+                    last_name: '{{ user.last_name|escapejs }}',
+                    display_name: '{{ user.profile.display_name|escapejs }}',
+                    bio: '{{ user.profile.bio|escapejs }}',
+                    about: '{{ user.profile.about|escapejs }}',
+                    messenger_link: '{{ user.profile.messenger_link|escapejs }}'
                 },
                 editing: false,
                 loading: false,
+                init() {
+                    this.initEditor();
+                },
+                async initEditor() {
+                    let content = this.formData.about || '';
+                    if (content.trim().startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(content);
+                            content = window.renderEditorJS(parsed);
+                        } catch(e) {}
+                    }
+
+                    try {
+                        profileEditorInstance = await window.createCKEditor('#profile-editor', content, 'Viết gì đó về bản thân bạn...');
+                        if (profileEditorInstance) {
+                            profileEditorInstance.enableReadOnlyMode('profile-lock');
+                            profileEditorInstance.model.document.on('change:data', () => {
+                                this.formData.about = profileEditorInstance.getData();
+                            });
+                        }
+                    } catch (e) {
+                        console.error('CKEditor init failed:', e);
+                    }
+                },
+                toggleEditing() {
+                    this.editing = !this.editing;
+                    if (!profileEditorInstance) return;
+                    if (this.editing) {
+                        profileEditorInstance.disableReadOnlyMode('profile-lock');
+                    } else {
+                        profileEditorInstance.enableReadOnlyMode('profile-lock');
+                    }
+                },
                 async uploadAvatar(e) {
                     const file = e.target.files[0];
                     if (!file) return;
@@ -311,11 +406,25 @@
                         const data = await r.json();
                         if (r.ok) {
                             this.user.avatar = data.user.avatar;
+                            window.dispatchEvent(new CustomEvent('profile-updated', { detail: { user: data.user } }));
                             showToast('Đã cập nhật ảnh đại diện', 'success');
                         } else {
-                            showToast(data.error || 'Lỗi upload ảnh', 'error');
+                            let errorMsg = data.error || 'Lỗi upload ảnh';
+                            if (data.details) {
+                                const details = Object.entries(data.details)
+                                    .map(([key, val]) => `${key}: ${val.join(', ')}`)
+                                    .join('\n');
+                                errorMsg += '\n' + details;
+                            }
+                            showToast(errorMsg, 'error');
                         }
                     } catch(e) { showToast('Lỗi kết nối', 'error'); }
+                },
+                copyPublicLink() {
+                    const url = window.location.origin + '/profile/@' + this.user.username + '/';
+                    navigator.clipboard.writeText(url).then(() => {
+                        showToast('Đã sao chép liên kết hồ sơ công khai!', 'success');
+                    });
                 },
                 async saveProfile() {
                     this.loading = true;
@@ -332,10 +441,23 @@
                         if (r.ok) {
                             this.user.first_name = data.user.first_name;
                             this.user.last_name = data.user.last_name;
+                            this.user.display_name = data.user.display_name;
+                            this.user.about = data.user.about;
+                            window.dispatchEvent(new CustomEvent('profile-updated', { detail: { user: data.user } }));
                             this.editing = false;
+                            if (profileEditorInstance) {
+                                profileEditorInstance.enableReadOnlyMode('profile-lock');
+                            }
                             showToast('Đã lưu thông tin hồ sơ', 'success');
                         } else {
-                            showToast(data.error || 'Lỗi cập nhật', 'error');
+                            let errorMsg = data.error || 'Lỗi cập nhật';
+                            if (data.details) {
+                                const details = Object.entries(data.details)
+                                    .map(([key, val]) => `${key}: ${val.join(', ')}`)
+                                    .join('\n');
+                                errorMsg += '\n' + details;
+                            }
+                            showToast(errorMsg, 'error');
                         }
                     } catch(e) { showToast('Lỗi kết nối', 'error'); }
                     this.loading = false;

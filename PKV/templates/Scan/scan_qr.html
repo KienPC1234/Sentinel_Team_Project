@@ -265,8 +265,60 @@
                     <div class="text-[10px] text-white/30 font-black tracking-widest uppercase mb-8">Tổng quan rủi ro hình ảnh</div>
                 </div>
 
-                <!-- Visual Analysis -->
-                <div class="p-8 space-y-8">
+                <!-- Visual Analysis & Annotated Images -->
+                <div class="p-8 space-y-10">
+                    <!-- Annotated Gallery -->
+                    <template x-if="result.annotated_images && result.annotated_images.length > 0">
+                        <div class="space-y-4">
+                            <h4 class="text-xs font-black text-white/40 uppercase tracking-widest flex items-center gap-2">
+                                <i class="bi bi-image"></i> Hình ảnh đã gán nhãn
+                            </h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <template x-for="(img, idx) in result.annotated_images" :key="idx">
+                                    <div class="liquid-glass p-2 border-white/10 group relative cursor-zoom-in" @click="previewImage = img">
+                                        <div class="relative overflow-hidden rounded-lg">
+                                            <img :src="img" class="w-full h-auto rounded-lg shadow-xl group-hover:scale-105 transition-transform duration-500">
+                                            <div class="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
+                                        </div>
+                                        <div class="mt-2 flex justify-between items-center px-2">
+                                            <span class="text-[10px] font-black text-white/30 uppercase tracking-widest" x-text="'Ảnh ' + (idx + 1)"></span>
+                                            <i class="bi bi-arrows-fullscreen text-white/20 group-hover:text-white/60 transition-colors text-xs"></i>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- QR Contents Found -->
+                    <template x-if="result.qr_contents && result.qr_contents.length > 0">
+                        <div class="space-y-4">
+                            <h4 class="text-xs font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
+                                <i class="bi bi-qr-code"></i> Nội dung mã QR phát hiện
+                            </h4>
+                            <div class="space-y-3">
+                                <template x-for="(qr, idx) in result.qr_contents" :key="idx">
+                                    <div class="p-4 bg-cyan-500/5 border border-cyan-500/10 rounded-2xl flex items-center gap-4 group">
+                                        <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                                            <i class="bi bi-link-45deg text-xl"></i>
+                                        </div>
+                                        <div class="flex-1 overflow-hidden">
+                                            <p class="text-white font-mono text-xs truncate" x-text="qr"></p>
+                                        </div>
+                                        <button @click="navigator.clipboard.writeText(qr); showToast('Đã sao chép!','success')"
+                                                class="liquid-btn p-2 bg-white/5 text-white/40 hover:text-cyan-400 border-white/5 transition-all">
+                                            <i class="bi bi-copy"></i>
+                                        </button>
+                                        <a :href="'/scan/website/?url=' + encodeURIComponent(qr)" 
+                                           class="liquid-btn p-2 bg-cyan-500/10 text-cyan-400 border-cyan-500/10 hover:bg-cyan-500/20">
+                                            <i class="bi bi-search"></i>
+                                        </a>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
                     <!-- Entities Found -->
                     <template x-if="result.entities">
                         <div class="space-y-4">
@@ -308,6 +360,17 @@
                         <div class="ai-markdown text-white/70 text-sm leading-relaxed" 
                              :class="{'ai-streaming': aiLoading}"
                              x-html="renderMd(aiText || result.explanation)"></div>
+                        
+                        <!-- Raw OCR Text Toggle -->
+                        <div class="mt-6 pt-6 border-t border-white/5" x-data="{ showRaw: false }">
+                            <button @click="showRaw = !showRaw" 
+                                    class="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] hover:text-white/40 transition-colors flex items-center gap-2">
+                                <i class="bi" :class="showRaw ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                                <span x-text="showRaw ? 'ẨN VĂN BẢN GỐC' : 'XEM VĂN BẢN GỐC (OCR)'"></span>
+                            </button>
+                            <div x-show="showRaw" x-transition class="mt-4 p-4 bg-black/20 rounded-xl font-mono text-[10px] text-white/40 whitespace-pre-wrap max-h-40 overflow-y-auto"
+                                 x-text="result.ocr_text"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -323,7 +386,7 @@
                             <i class="bi bi-chat-dots-fill"></i> CHAT VỚI AI
                         </button>
                     </div>
-                    <a :href="'/report/?target_type=image'"
+                    <a :href="'/report/?target_type=image&target_value=Extracted Entities&phone='+(result.entities?.phones?.[0]||'')+'&bank_account='+(result.entities?.accounts?.[0]||'')+'&scammer_name='+encodeURIComponent(aiText.substring(0,50))"
                         class="liquid-btn py-2 px-10 text-xs bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30 transition-all font-black">
                         <i class="bi bi-megaphone-fill text-sm"></i> BÁO CÁO LỪA ĐẢO
                     </a>

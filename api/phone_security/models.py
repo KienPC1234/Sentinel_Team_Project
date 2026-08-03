@@ -21,6 +21,14 @@ class PhoneNumber(models.Model):
     risk_label = models.CharField(max_length=500, blank=True)
     recommendations = models.JSONField(default=list, help_text="List of recommendations")
     reports_count = models.IntegerField(default=0, help_text="Number of user reports")
+    
+    # Enhanced Fields for Production-Grade System
+    trust_score = models.FloatField(default=0.0, help_text="Computed confidence/trust score (0.0-100.0)")
+    carrier = models.CharField(max_length=50, blank=True, null=True, help_text="e.g. Viettel, Vinaphone")
+    line_type = models.CharField(max_length=20, blank=True, null=True, help_text="Mobile, VoIP, Landline")
+    country_code = models.CharField(max_length=5, default="VN")
+    is_virtual = models.BooleanField(default=False, help_text="Is this a virtual/disposable number?")
+    
     last_updated = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     

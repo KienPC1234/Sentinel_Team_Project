@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load static %}
+{% load martortags %}
+
+{% block css %}
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.min.css" type="text/css" rel="stylesheet" />
+  <link href="{% static 'martor/css/martor.bootstrap.min.css' %}" type="text/css" media="all" rel="stylesheet" />
+  <style>
+    .martor-field { background-color: #1e293b; border-radius: 1rem; border: 1px solid #334155; overflow: hidden; }
+    .martor-toolbar { background-color: #0f172a !important; border-bottom: 1px solid #334155 !important; }
+    .martor-toolbar button { color: #94a3b8 !important; }
+    .martor-toolbar button:hover { background-color: #1e293b !important; color: #fff !important; }
+    .ace_editor { background-color: #0f172a !important; color: #cbd5e1 !important; }
+    .martor-preview { background-color: #1e293b; color: #e2e8f0; padding: 2rem; min-height: 400px; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 mt-16">
+    <div class="flex items-center gap-4 mb-8">
+        <a href="{% url 'admin-manage-articles' %}" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+        <h1 class="text-2xl font-bold text-white">{{ title }}</h1>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-8">
+        {% csrf_token %}
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl space-y-4">
+                    <div>
+                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Tiêu đề tin tức</label>
+                        {{ form.title }}
+                        {% if form.title.errors %}<p class="text-red-500 text-xs mt-1">{{ form.title.errors }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Slug</label>
+                        {{ form.slug }}
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Nội dung (Markdown)</label>
+                        {{ form.content }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl space-y-6">
+                    <div>
+                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Danh mục</label>
+                        {{ form.category }}
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Ảnh bìa</label>
+                        {{ form.cover_image }}
+                    </div>
+                    <div class="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                        {{ form.is_published }}
+                        <label class="text-white font-bold text-sm">Xuất bản ngay</label>
+                    </div>
+                    
+                    <button type="submit" class="w-full py-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-widest transition-all shadow-lg shadow-cyan-500/20">
+                        <i class="bi bi-save2 me-2"></i> LƯU BÀI VIẾT
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block js %}
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-markdown.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ext-language_tools.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-github.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
+  <script type="text/javascript" src="{% static 'martor/js/martor.bootstrap.min.js' %}"></script>
+  
+  <script>
+    document.querySelectorAll('input[type="text"], input[type="file"], select, textarea').forEach(el => {
+        if (!el.closest('.martor-field')) {
+            el.classList.add('w-full', 'bg-slate-900/50', 'border', 'border-slate-700', 'rounded-xl', 'px-4', 'py-3', 'text-white', 'focus:border-cyan-500', 'focus:outline-none', 'transition-all', 'text-sm');
+        }
+    });
+  </script>
+{% endblock %}

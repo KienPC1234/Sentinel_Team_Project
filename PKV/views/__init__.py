@@ -19,4 +19,7 @@ from .page_views import (
     change_password_view,
     forum_view,
     forum_post_view,
+    forum_create_view,
+    public_profile_view,
+    scan_file_view,
 )

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Tạo chủ đề mới - ShieldCall Community{% endblock %}
+{% block head_extra %}
+<style>
+    .create-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(40px);
+        border: 1px solid var(--glass-border);
+        border-radius: 2.5rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    .input-premium {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 1.25rem;
+        color: white;
+        transition: all 0.3s ease;
+    }
+    .input-premium:focus {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(24, 255, 255, 0.3);
+        box-shadow: 0 0 20px rgba(24, 255, 255, 0.1);
+        outline: none;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('alpine:init', () => {
+    let forumEditorInstance = null;
+    Alpine.data('forumCreate', () => ({
+        title: '',
+        content: '',
+        category: 'discussion',
+        loading: false,
+        async init() {
+            try {
+                forumEditorInstance = await window.createCKEditor('#forum-editor', this.content, 'Mô tả kỹ chi tiết vụ việc, cách thức lừa đảo...');
+                if (forumEditorInstance) {
+                    forumEditorInstance.model.document.on('change:data', () => {
+                        this.content = forumEditorInstance.getData();
+                    });
+                }
+            } catch (e) {
+                console.error('CKEditor init failed:', e);
+            }
+        },
+        async submitPost() {
+            if(!this.title.trim() || !this.content.trim()) {
+                showToast('Vui lòng điền đầy đủ tiêu đề và nội dung', 'warning');
+                return;
+            }
+            
+            const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+            if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
+
+            this.loading = true;
+            const formData = new FormData();
+            formData.append('title', this.title);
+            formData.append('content', this.content);
+            formData.append('category', this.category);
+            formData.append('cf-turnstile-response', tsToken);
+            if (this.$refs.imageInput.files[0]) {
+                formData.append('image', this.$refs.imageInput.files[0]);
+            }
+
+            try {
+                const resp = await fetch('/api/v1/forum/posts/', {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': getCSRFToken()},
+                    body: formData
+                });
+                if(resp.ok) {
+                    const post = await resp.json();
+                    showToast('Đăng bài thành công!', 'success');
+                    setTimeout(() => window.location.href = '/forum/' + post.id + '/', 1500);
+                } else {
+                    const err = await resp.json();
+                    showToast(err.error || 'Lỗi khi đăng bài', 'error');
+                }
+            } catch(e) { showToast('Lỗi kết nối', 'error'); }
+            this.loading = false;
+        }
+    }));
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-12" x-data="forumCreate">
+    <!-- Breadcrumb -->
+    <div class="mb-10 flex items-center gap-3">
+        <a href="/forum/" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all border border-white/5">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <h1 class="text-3xl font-black text-white">Chia sẻ <span class="text-cyan-400">câu chuyện</span></h1>
+    </div>
+
+    <div class="create-card p-8 md:p-12">
+        <div class="space-y-8">
+            <!-- Category Selection -->
+            <div class="space-y-3">
+                <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Chọn danh mục</label>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <template x-for="cat in [
+                        {val: 'discussion', label: 'Thảo luận', icon: 'bi-chat-dots', color: 'hover:border-cyan-500/50'},
+                        {val: 'warning', label: 'Cảnh báo', icon: 'bi-exclamation-octagon', color: 'hover:border-red-500/50'},
+                        {val: 'experience', label: 'Kinh nghiệm', icon: 'bi-gem', color: 'hover:border-purple-500/50'},
+                        {val: 'question', label: 'Hỏi đáp', icon: 'bi-patch-question', color: 'hover:border-yellow-500/50'}
+                    ]">
+                        <button @click="category = cat.val" 
+                            :class="category === cat.val ? 'bg-white/10 border-white/20 text-white' : 'text-white/40 border-white/5 ' + cat.color"
+                            class="flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all">
+                            <i :class="cat.icon" class="text-xl"></i>
+                            <span class="text-[11px] font-black uppercase" x-text="cat.label"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Title -->
+            <div class="space-y-3">
+                <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Tiêu đề bài viết</label>
+                <input type="text" x-model="title" placeholder="Nhập tiêu đề ngắn gọn nhưng đủ thông tin..." 
+                    class="input-premium w-full px-6 py-4 text-lg font-bold">
+            </div>
+
+            <!-- Image Upload -->
+            <div class="space-y-3">
+                <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Hình ảnh đính kèm (Tùy chọn)</label>
+                <div class="input-premium p-6 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-white/[0.05] transition-all" @click="$refs.imageInput.click()">
+                    <i class="bi bi-cloud-arrow-up text-3xl mb-2 text-white/20"></i>
+                    <span class="text-xs text-white/30 font-bold uppercase tracking-widest" x-text="$refs.imageInput.files[0] ? $refs.imageInput.files[0].name : 'Nhấn để chọn ảnh minh chứng'"></span>
+                    <input type="file" x-ref="imageInput" accept="image/*" class="hidden">
+                </div>
+            </div>
+
+            <!-- Content -->
+                <div class="input-premium w-full overflow-hidden bg-black/20">
+                    <div id="forum-editor" class="px-6 py-4 min-h-[350px] leading-relaxed text-white/80 focus:outline-none"></div>
+                </div>
+                <p class="text-[10px] text-white/20 font-medium flex items-center gap-1.5"><i class="bi bi-info-circle"></i> CKEditor 5 hỗ trợ soạn thảo trực quan với thanh công cụ tích hợp.</p>
+            </div>
+
+            <!-- Antispam & Control -->
+            <div class="flex flex-col md:flex-row items-center justify-between gap-8 pt-8 border-t border-white/5">
+                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
+                
+                <div class="flex items-center gap-4 w-full md:w-auto">
+                    <a href="/forum/" class="text-sm font-black text-white/30 hover:text-white transition-colors uppercase tracking-widest">Hủy</a>
+                    <button @click="submitPost()" :disabled="loading" 
+                        class="flex-1 md:flex-none bg-gradient-to-r from-cyan-400 to-blue-600 text-[#0d0d1f] px-10 py-4 rounded-2xl font-black transition-all hover:scale-105 shadow-xl shadow-cyan-400/20">
+                        <span x-show="!loading" class="flex items-center gap-2 justify-center">
+                            <i class="bi bi-send-fill"></i> ĐĂNG BÀI VIẾT
+                        </span>
+                        <span x-show="loading" class="flex items-center justify-center">
+                            <span class="spinner-border spinner-border-sm"></span>
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

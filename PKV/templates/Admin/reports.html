@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-8 mt-16">
+    <div class="flex items-center gap-4 mb-8">
+        <a href="{% url 'admin-dashboard' %}" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+        <h1 class="text-2xl font-bold text-white">Quản Lý Báo Cáo Cộng Đồng</h1>
+    </div>
+
+    <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-900/50 border-b border-slate-700/50">
+                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Thời gian</th>
+                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Người báo cáo</th>
+                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Đối tượng</th>
+                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Loại lừa đảo</th>
+                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Trạng thái</th>
+                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Bằng chứng</th>
+                        <th class="px-6 py-4 text-slate-400 font-semibold text-sm">Hành động</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700/50">
+                    {% for report in reports %}
+                    <tr class="hover:bg-slate-700/20 transition-colors">
+                        <td class="px-6 py-4 text-slate-300 text-sm whitespace-nowrap">{{ report.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="px-6 py-4 text-white font-medium">{{ report.reporter.username }}</td>
+                        <td class="px-6 py-4">
+                            <span class="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300 uppercase me-2">{{ report.target_type }}</span>
+                            <span class="text-slate-200">{{ report.target_value }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-slate-300">{{ report.scam_type }}</td>
+                        <td class="px-6 py-4">
+                            {% if report.status == 'pending' %}
+                            <span class="px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-xs font-bold border border-yellow-500/20">CHỜ DUYỆT</span>
+                            {% elif report.status == 'approved' %}
+                            <span class="px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-bold border border-green-500/20">ĐÃ DUYỆT</span>
+                            {% else %}
+                            <span class="px-3 py-1 rounded-full bg-red-500/10 text-red-500 text-xs font-bold border border-red-500/20">TỪ CHỐI</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if report.evidence_file %}
+                            <a href="{{ report.evidence_file.url }}" target="_blank" class="group relative block w-10 h-10 rounded-lg overflow-hidden border border-slate-700 hover:border-cyan-500/50 transition-all">
+                                <img src="{{ report.evidence_file.url }}" class="w-full h-full object-cover group-hover:scale-110 transition-transform">
+                                <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <i class="bi bi-eye text-white text-xs"></i>
+                                </div>
+                            </a>
+                            {% else %}
+                            <span class="text-slate-600 text-[10px] italic">Không có</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if report.status == 'pending' %}
+                            <div class="flex gap-2">
+                                <a href="{% url 'admin-approve-report' report.id %}" class="px-3 py-1 rounded bg-green-500/20 text-green-500 text-xs font-bold hover:bg-green-500 hover:text-white transition-all">DUYỆT</a>
+                                <a href="{% url 'admin-reject-report' report.id %}" class="px-3 py-1 rounded bg-red-500/20 text-red-500 text-xs font-bold hover:bg-red-500 hover:text-white transition-all">TỪ CHỐI</a>
+                            </div>
+                            {% else %}
+                            <span class="text-slate-500 text-xs italic">Đã xử lý</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-10 text-center text-slate-500 italic">Không có báo cáo nào.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
