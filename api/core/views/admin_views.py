@@ -118,22 +118,45 @@ class AdminRAGManagementView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        # Trigger index loading if not already loaded
-        vector_db.load_index()
+        from api.maintenance.models import RAGIndexLog
+        from api.utils.vector_db import vector_db
+        
+        query = request.query_params.get('query')
+        test_results = []
+        if query:
+            test_results = vector_db.search(query, k=5)
+            
+        logs = RAGIndexLog.objects.all()[:50]
+        
+        # Current stats
         stats = {
-            'document_count': len(vector_db.metadata),
+            'total_items': len(vector_db.metadata),
+            'last_sync': logs[0].completed_at if logs.exists() else None,
+            'is_ready': vector_db.index is not None
         }
-        return render(request, 'Admin/rag_management.html', {'stats': stats})
+        
+        # If it's a JSON request or has json=1 param
+        if 'json' in request.query_params or request.headers.get('Accept') == 'application/json':
+            return Response({
+                'stats': stats,
+                'test_results': test_results
+            })
+
+        return render(request, 'Admin/rag_management.html', {
+            'logs': logs,
+            'stats': stats,
+            'test_results': test_results,
+            'query': query,
+            'title': 'Quản lý RAG / Kiến thức AI'
+        })
 
 class AdminRAGRebuildView(APIView):
     """POST /api/admin/rag/rebuild — Trigger vector index rebuild"""
     permission_classes = [IsAdminUser]
 
     def post(self, request):
-        try:
-            vector_db.rebuild_index()
-            return Response({'message': 'Chỉ mục Vector đã được xây dựng lại thành công.'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        from api.maintenance.tasks import rebuild_vector_index
+        rebuild_vector_index.delay(trigger='MANUAL')
+        return Response({'message': 'Đã lên lịch xây dựng lại chỉ mục Vector.'})
 
 

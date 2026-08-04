@@ -13,7 +13,6 @@ urlpatterns = [
     path('auth/login/', views.LoginView.as_view(), name='login'),
     path('auth/logout/', views.LogoutView.as_view(), name='logout'),
     path('auth/me/', views.MeView.as_view(), name='me'),
-    path('chat/stream/', views.ChatStreamView.as_view(), name='chat-stream'),
 
     # MFA
     path('auth/mfa/status/', views.MFAStatusView.as_view(), name='mfa-status'),

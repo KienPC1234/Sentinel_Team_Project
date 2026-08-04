@@ -1,84 +1,123 @@
 {% extends "base.html" %}
 {% load static %}
-{% load martortags %}
 
-{% block css %}
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.min.css" type="text/css" rel="stylesheet" />
-  <link href="{% static 'martor/css/martor.bootstrap.min.css' %}" type="text/css" media="all" rel="stylesheet" />
-  <style>
-    .martor-field { background-color: #1e293b; border-radius: 1rem; border: 1px solid #334155; overflow: hidden; }
-    .martor-toolbar { background-color: #0f172a !important; border-bottom: 1px solid #334155 !important; }
-    .martor-toolbar button { color: #94a3b8 !important; }
-    .martor-toolbar button:hover { background-color: #1e293b !important; color: #fff !important; }
-    .ace_editor { background-color: #0f172a !important; color: #cbd5e1 !important; border-radius: 0 0 1rem 1rem; }
-    .martor-preview { background-color: #1e293b; color: #e2e8f0; padding: 2rem; min-height: 400px; }
-  </style>
+{% block title %}{{ title }} - ShieldCall VN Admin{% endblock %}
+
+{% block head_extra %}
+<style>
+    .ck-editor__editable {
+        min-height: 500px !important;
+        background: rgba(15, 23, 42, 0.6) !important;
+        backdrop-filter: blur(12px);
+        color: #e2e8f0 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 0 0 1.5rem 1.5rem !important;
+        padding: 2rem !important;
+    }
+    .ck-toolbar {
+        background: rgba(30, 41, 59, 0.8) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 1.5rem 1.5rem 0 0 !important;
+    }
+    .ck-content pre { background: #000 !important; border-radius: 12px; padding: 1rem; }
+    
+    /* Custom form styling */
+    .admin-form-input {
+        width: 100%;
+        background: rgba(15, 23, 42, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 1rem;
+        padding: 0.75rem 1rem;
+        color: white;
+        transition: all 0.3s;
+    }
+    .admin-form-input:focus {
+        border-color: #3b82f6;
+        outline: none;
+        background: rgba(15, 23, 42, 0.6);
+    }
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8 mt-16">
-    <div class="flex items-center gap-4 mb-8">
-        <a href="{% url 'admin-manage-learn' %}" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
-            <i class="bi bi-chevron-left"></i>
-        </a>
-        <h1 class="text-2xl font-bold text-white">{{ title }}</h1>
+    <div class="flex items-center justify-between mb-10">
+        <div class="flex items-center gap-6">
+            <a href="{% url 'admin-manage-learn' %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-blue-400 hover:border-blue-500/30 transition-all">
+                <i class="bi bi-chevron-left text-xl"></i>
+            </a>
+            <div>
+                <h1 class="text-3xl font-black text-white tracking-tight">{{ title }}</h1>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Quản lý bài học & Kiến thức bảo mật</p>
+            </div>
+        </div>
+        
+        <button type="submit" form="lessonForm" class="px-8 py-3.5 rounded-2xl bg-blue-600 text-white font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2">
+            <i class="bi bi-save2 text-lg"></i>
+            Lưu bài học
+        </button>
     </div>
 
-    <form method="post" enctype="multipart/form-data" class="space-y-8">
+    <form id="lessonForm" method="post" enctype="multipart/form-data" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {% csrf_token %}
         
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Left Side: Main Content -->
-            <div class="lg:col-span-2 space-y-6">
-                <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl space-y-4">
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Tiêu đề bài học</label>
-                        {{ form.title }}
-                        {% if form.title.errors %}<p class="text-red-500 text-xs mt-1">{{ form.title.errors }}</p>{% endif %}
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Slug (Đường dẫn)</label>
-                        {{ form.slug }}
-                        <p class="text-slate-500 text-[10px] mt-1 italic">Để trống để tự động tạo từ tiêu đề.</p>
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Nội dung (Markdown)</label>
+        <!-- Main Column -->
+        <div class="lg:col-span-8 space-y-8">
+            <div class="liquid-card p-8 space-y-6 border-white/5 bg-slate-900/40">
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Tiêu đề bài học</label>
+                    {{ form.title }}
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Slug (Đường dẫn)</label>
+                    {{ form.slug }}
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Nội dung bài học</label>
+                    <div class="rounded-3xl overflow-hidden border border-white/10">
                         {{ form.content }}
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Right Side: Settings -->
-            <div class="space-y-6">
-                <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl space-y-6">
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Danh mục</label>
-                        {{ form.category }}
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 text-sm font-bold mb-2 uppercase tracking-wider">Ảnh bìa</label>
+        <!-- Sidebar Column -->
+        <div class="lg:col-span-4 space-y-8">
+            <div class="liquid-card p-6 space-y-6 border-white/5 bg-slate-900/40">
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Danh mục</label>
+                    {{ form.category }}
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Ảnh đại diện (Cover)</label>
+                    <div class="p-4 rounded-2xl bg-black/40 border border-white/5">
                         {{ form.cover_image }}
                         {% if lesson.cover_image %}
-                        <div class="mt-2 rounded-lg overflow-hidden border border-slate-700">
+                        <div class="mt-4 rounded-lg overflow-hidden border border-white/10">
                             <img src="{{ lesson.cover_image.url }}" class="w-full h-auto">
                         </div>
                         {% endif %}
                     </div>
-                    <div class="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
-                        {{ form.is_published }}
-                        <label class="text-white font-bold text-sm">Công khai bài viết</label>
-                    </div>
-                    
-                    <button type="submit" class="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20">
-                        <i class="bi bi-save2 me-2"></i> LƯU BÀI VIẾT
-                    </button>
-                    
-                    {% if lesson %}
-                    <button type="button" class="w-full py-3 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white font-bold text-xs uppercase tracking-widest transition-all border border-red-500/20">
-                        <i class="bi bi-trash3 me-2"></i> Xóa bài học
-                    </button>
-                    {% endif %}
                 </div>
+
+                <div class="flex items-center justify-between p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                            <i class="bi bi-eye-fill"></i>
+                        </div>
+                        <span class="text-xs font-black text-white/80 uppercase tracking-wider">Công khai</span>
+                    </div>
+                    {{ form.is_published }}
+                </div>
+
+                {% if lesson %}
+                <button type="button" class="w-full py-4 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white font-black uppercase tracking-widest transition-all border border-red-500/20">
+                    <i class="bi bi-trash3 me-2 text-lg"></i> Xóa bài học
+                </button>
+                {% endif %}
             </div>
         </div>
     </form>
@@ -86,19 +125,15 @@
 {% endblock %}
 
 {% block js %}
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-markdown.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ext-language_tools.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-github.js"></script>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
-  <script type="text/javascript" src="{% static 'martor/js/martor.bootstrap.min.js' %}"></script>
-  
-  <script>
-    // Style adjustments for modern look
-    document.querySelectorAll('input[type="text"], input[type="file"], select, textarea').forEach(el => {
-        if (!el.closest('.martor-field')) {
-            el.classList.add('w-full', 'bg-slate-900/50', 'border', 'border-slate-700', 'rounded-xl', 'px-4', 'py-3', 'text-white', 'focus:border-blue-500', 'focus:outline-none', 'transition-all', 'text-sm');
-        }
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Initialize CKEditor
+        const editor = await window.createCKEditor('#editor');
+        
+        // Add classes to form elements for consistent styling
+        document.querySelectorAll('input[type="text"], select').forEach(el => {
+            el.classList.add('admin-form-input');
+        });
     });
-  </script>
+</script>
 {% endblock %}

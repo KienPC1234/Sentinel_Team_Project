@@ -28,17 +28,37 @@ Nội dung cần phân tích:
 QUAN TRỌNG: Kết quả PHẢI là một đối tượng JSON hợp lệ duy nhất bằng TIẾNG VIỆT.
 """
 
-SCAN_EMAIL_PROMPT = """Phân tích email sau để tìm dấu hiệu lừa đảo bằng TIẾNG VIỆT:
-Địa chỉ gửi: {email}
-Nội dung:
+SCAN_EMAIL_PROMPT = """Bạn là chuyên gia an ninh mạng của ShieldCall VN. Hãy phân tích email dưới đây và đưa ra đánh giá toàn diện bằng **TIẾNG VIỆT**.
+
+## Thông tin Email
+- **Người gửi:** {email}
+- **Tiêu đề:** {subject}
+- **Số lượng URL:** {url_count}
+- **Tệp đính kèm:** {attachment_count}
+- **Điểm rủi ro sơ bộ:** {preliminary_score}/100
+- **Kết quả kiểm tra DNS/SPF/DMARC:** {security_checks}
+
+## Nội dung Email
 ---
 {content}
 ---
-Hãy kiểm tra và trả lời thật NGẮN GỌN bằng TIẾNG VIỆT:
-1. Địa chỉ email có dấu hiệu giả mạo không?
-2. Nội dung có chứa các kịch bản lừa đảo phổ biến?
-3. Các đường link hoặc yêu cầu đáng ngờ.
-Đưa ra kết luận và lời khuyên bảo mật cụ thể trong vài câu.
+
+## Yêu cầu phân tích
+Hãy viết phân tích **ngắn gọn, súc tích** bằng **TIẾNG VIỆT** theo cấu trúc sau:
+
+**🔍 Đánh giá địa chỉ gửi**
+Nhận xét về tên miền, tính xác thực, dấu hiệu giả mạo thương hiệu hoặc spoofing.
+
+**📧 Phân tích nội dung**
+Các kịch bản lừa đảo phổ biến phát hiện được (giả mạo ngân hàng, cơ quan nhà nước, tạo áp lực khẩn cấp, yêu cầu OTP/mật khẩu...).
+
+**🔗 Đánh giá đường dẫn & đính kèm**
+Các URL hoặc tệp đính kèm đáng ngờ (nếu có).
+
+**⚠️ Kết luận & Khuyến nghị**
+Kết luận rõ ràng: email này CÓ hay KHÔNG phải lừa đảo, và lời khuyên cụ thể cho người dùng.
+
+Lưu ý: Nếu không có nội dung email, hãy đánh giá dựa trên địa chỉ gửi và dữ liệu kỹ thuật.
 """
 
 SCAN_IMAGE_PROMPT = """Bạn là chuyên gia Pháp y AI. Hãy phân tích văn bản từ ảnh (OCR) để tìm dấu hiệu lừa đảo.

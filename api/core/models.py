@@ -7,7 +7,6 @@ import uuid
 import logging
 from django.db import models
 from django.conf import settings
-from martor.models import MartorField
 
 logger = logging.getLogger(__name__)
 from django.utils import timezone
@@ -351,7 +350,7 @@ class ForumPost(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                related_name='forum_posts')
     title = models.CharField(max_length=300)
-    content = MartorField()
+    content = models.TextField()
     category = models.CharField(max_length=20, choices=ForumCategory.choices,
                                 default=ForumCategory.DISCUSSION)
     image = models.ImageField(upload_to='forum_images/', null=True, blank=True)
@@ -383,7 +382,7 @@ class ForumComment(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                related_name='forum_comments')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
-    content = MartorField()
+    content = models.TextField()
     likes_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -480,7 +479,7 @@ class Article(models.Model):
     """Admin articles for educating users (CMS)"""
     title = models.CharField(max_length=300)
     slug = models.SlugField(max_length=350, unique=True, blank=True)
-    content = MartorField()
+    content = models.TextField()
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
     cover_image = models.ImageField(upload_to='articles/covers/', null=True, blank=True)
@@ -506,7 +505,7 @@ class LearnLesson(models.Model):
     """Educational lessons for users"""
     title = models.CharField(max_length=300)
     slug = models.SlugField(max_length=350, unique=True, blank=True)
-    content = MartorField()
+    content = models.TextField()
     category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
     cover_image = models.ImageField(upload_to='learn/covers/', null=True, blank=True)
     is_published = models.BooleanField(default=True)
@@ -520,7 +519,8 @@ class LearnLesson(models.Model):
 
 class LearnQuiz(models.Model):
     """Quizzes attached to lessons"""
-    lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='quizzes')
+    lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='quizzes', null=True, blank=True)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='quizzes', null=True, blank=True)
     question = models.TextField()
     options = models.JSONField(help_text="List of choices")
     correct_answer = models.CharField(max_length=200)
@@ -529,6 +529,7 @@ class LearnQuiz(models.Model):
 class LearnScenario(models.Model):
     """Interactive scam scenarios"""
     title = models.CharField(max_length=300)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='scenarios', null=True, blank=True)
     description = models.TextField()
     content = models.JSONField(help_text="Scenario flow logic")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -587,3 +588,19 @@ def trigger_prestige_update(sender, instance, **kwargs):
     elif hasattr(instance, 'reporter'): # For reports
         update_user_prestige(instance.reporter)
         if instance.post: update_user_prestige(instance.post.author)
+
+
+@receiver([post_save, post_delete], sender=Article)
+@receiver([post_save, post_delete], sender=LearnQuiz)
+@receiver([post_save, post_delete], sender=LearnScenario)
+@receiver([post_save, post_delete], sender=LearnLesson)
+def sync_vector_db(sender, instance, **kwargs):
+    """
+    Automatically re-build the FAISS index when learning content changes via Celery.
+    """
+    from api.maintenance.tasks import rebuild_vector_index
+    try:
+        rebuild_vector_index.delay(trigger='AUTO')
+        logger.info(f"Vector DB sync task queued by {sender.__name__} update.")
+    except Exception as e:
+        logger.error(f"Vector DB auto-sync error: {e}")

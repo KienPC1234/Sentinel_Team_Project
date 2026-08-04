@@ -1,13 +1,17 @@
 """ShieldCall VN – Admin Dashboard Views"""
 import logging
+import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.contrib import messages
 from django.db.models import Count, F
 from django.http import HttpResponseForbidden
-from api.core.models import Report, ForumPostReport, ForumCommentReport, ScanEvent, LearnLesson, ForumPost, Article
-from api.core.forms import LearnLessonForm, ArticleForm
+from api.core.models import (
+    Report, ForumPostReport, ForumCommentReport, ScanEvent, 
+    LearnLesson, ForumPost, Article, LearnQuiz, LearnScenario
+)
+from api.core.forms import LearnLessonForm, ArticleForm, LearnScenarioForm
 # The instruction implies these are from a local file, but the original code doesn't have a .page_views.
 # Assuming the user wants to add these imports, but the functions admin_required and super_admin_required are defined in this file.
 # If they were meant to be imported from .page_views, the local definitions would be redundant or cause issues.
@@ -126,7 +130,7 @@ def reject_report(request, report_id):
 
 @admin_required
 def edit_lesson(request, lesson_id=None):
-    """View to create or edit a Learn Lesson with Martor editor"""
+    """View to create or edit a Learn Lesson"""
     lesson = None
     if lesson_id:
         lesson = get_object_or_404(LearnLesson, id=lesson_id)
@@ -154,7 +158,7 @@ def manage_articles(request):
 
 @admin_required
 def edit_article(request, article_id=None):
-    """View to create or edit an Article with Martor editor"""
+    """View to create or edit an Article"""
     article = None
     if article_id:
         article = get_object_or_404(Article, id=article_id)
@@ -163,13 +167,81 @@ def edit_article(request, article_id=None):
         form = ArticleForm(request.POST, request.FILES, instance=article)
         if form.is_valid():
             article = form.save()
+            
+            # Handle Quizzes (Keep inline for now as requested or until simplified)
+            quizzes_data = request.POST.get('quizzes_json')
+            if quizzes_data:
+                try:
+                    quizzes = json.loads(quizzes_data)
+                    article.quizzes.all().delete()
+                    for q in quizzes:
+                        LearnQuiz.objects.create(
+                            article=article,
+                            question=q.get('question'),
+                            options=q.get('options', []),
+                            correct_answer=q.get('correct_answer'),
+                            explanation=q.get('explanation', '')
+                        )
+                except Exception as e:
+                    logger.error(f"Error saving quizzes: {e}")
+
             messages.success(request, "Bài viết đã được lưu thành công.")
             return redirect('admin-manage-articles')
     else:
         form = ArticleForm(instance=article)
     
+    existing_quizzes = []
+    if article:
+        for q in article.quizzes.all():
+            existing_quizzes.append({
+                'question': q.question,
+                'options': q.options,
+                'correct_answer': q.correct_answer,
+                'explanation': q.explanation
+            })
+
     return render(request, "Admin/edit_article.html", {
         "form": form,
         "article": article,
-        "title": "Chỉnh sửa tin tức" if article else "Thêm tin tức mới"
+        "title": "Chỉnh sửa tin tức" if article else "Thêm tin tức mới",
+        "existing_quizzes_json": json.dumps(existing_quizzes),
     })
+
+@admin_required
+def edit_scenario(request, scenario_id=None, article_id=None):
+    """Dedicated view to edit or add a Scenario"""
+    scenario = None
+    article = None
+    if scenario_id:
+        scenario = get_object_or_404(LearnScenario, id=scenario_id)
+        article = scenario.article
+    elif article_id:
+        article = get_object_or_404(Article, id=article_id)
+
+    if request.method == 'POST':
+        form = LearnScenarioForm(request.POST, instance=scenario)
+        if form.is_valid():
+            scenario = form.save(commit=False)
+            scenario.article = article
+            scenario.save()
+            messages.success(request, "Kịch bản đã được lưu.")
+            return redirect('admin-edit-article', article_id=article.id)
+    else:
+        form = LearnScenarioForm(instance=scenario)
+
+    return render(request, "Admin/edit_scenario.html", {
+        "form": form,
+        "scenario": scenario,
+        "article": article,
+        "title": "Chỉnh sửa kịch bản" if scenario else "Thêm kịch bản mới"
+    })
+
+@admin_required
+def delete_scenario(request, scenario_id):
+    """Delete a scenario"""
+    scenario = get_object_or_404(LearnScenario, id=scenario_id)
+    article_id = scenario.article.id
+    scenario.delete()
+    messages.success(request, "Kịch bản đã được xóa.")
+    return redirect('admin-edit-article', article_id=article_id)
+

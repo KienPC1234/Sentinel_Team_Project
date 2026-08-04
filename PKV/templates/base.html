@@ -6,11 +6,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ShieldCall VN{% endblock %} | ShieldCall VN</title>
-    <meta name="description"
-        content="{% block meta_description %}Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo và các hình thức lừa đảo số{% endblock %}">
+    {% block meta %}
+    <meta name="description" content="{% block meta_description %}Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo và các hình thức lừa đảo số{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{{ title }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo và các hình thức lừa đảo số{% endblock %}">
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{% static 'logo.png' %}{% endblock %}">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    {% endblock %}
 
-    <link rel="icon" type="image/svg+xml"
-        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%2318ffff'/%3E%3Cstop offset='100%25' stop-color='%23b388ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill='url(%23g)' d='M32 2L6 14v18c0 16.6 11.1 31.1 26 35 14.9-3.9 26-18.4 26-35V14L32 2zm0 8l20 9.5V32c0 13-8.7 24.3-20 27.8C19.7 56.3 12 45 12 32V19.5L32 10z'/%3E%3Cpath fill='url(%23g)' d='M28 38l-8-8 3-3 5 5 13-13 3 3z'/%3E%3C/svg%3E">
+    <link rel="icon" type="image/png" href="{% static 'logo.png' %}">
 
     {% tailwind_css %}
 
@@ -156,7 +161,7 @@
     </style>
     <script>
         window.createCKEditor = async function(selector, initialData, placeholder = 'Nhập nội dung...') {
-            if (!window.CKEDITOR) {
+            if (!window.CKEditor5) {
                 console.error('CKEditor not loaded yet');
                 return null;
             }
@@ -169,14 +174,13 @@
                 ImageEditing, Mention, Superscript, Subscript, Strikethrough, Highlight,
                 Heading, Link, AutoLink, BlockQuote, HorizontalLine, CodeBlock, Indent,
                 IndentBlock, Alignment, Style, GeneralHtmlSupport
-            } = window.CKEDITOR;
+            } = window.CKEditor5;
 
             const LICENSE_KEY = '{{ CKEDITOR_LICENSE_KEY|escapejs }}';
             
             const editorConfig = {
                 licenseKey: LICENSE_KEY || 'GPL', // Fallback to GPL if no key
                 placeholder,
-                initialData: initialData || '',
                 plugins: [
                     Alignment, AutoImage, AutoLink, Autosave, BlockQuote, Bold,
                     CloudServices, CodeBlock, Essentials, GeneralHtmlSupport, Heading,
@@ -282,6 +286,10 @@
                     contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells']
                 }
             };
+
+            if (initialData) {
+                editorConfig.initialData = initialData;
+            }
 
             const element = document.querySelector(selector);
             if (!element) {
@@ -1060,6 +1068,56 @@
             content: ""; position: absolute; width: 40%; height: 10px; background: #fff; border-radius: 10px;
         }
         .glass-v2::after { transform: rotate(90deg); }
+
+        /* AI Thinking & Search Results Styles for Floating Chat */
+        .thinking-container {
+            margin-bottom: 0.75rem;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .thinking-container.collapsed .thinking-content {
+            display: none;
+        }
+        .thinking-header {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            user-select: none;
+        }
+        .thinking-header:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .thinking-content {
+            padding: 0.75rem;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            font-style: italic;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            line-height: 1.6;
+        }
+        .search-results-container {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .search-item {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+        }
+        .search-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(6, 182, 212, 0.2);
+        }
     </style>
     
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -1098,8 +1156,8 @@
             <div class="flex justify-between items-center h-16 sm:h-20">
                 <div class="flex items-center gap-8">
                     <a href="/" class="flex items-center gap-3 group">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-110 transition-transform">
-                            <i class="bi bi-shield-lock-fill text-white text-xl"></i>
+                        <div class="w-10 h-10 rounded-xl overflow-hidden bg-gradient-to-br from-cyan-400 to-purple-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-110 transition-transform">
+                            <img src="{% static 'logo.png' %}" class="w-full h-full object-cover">
                         </div>
                         <div class="hidden sm:block">
                             <h2 class="text-lg font-black text-white leading-none tracking-tight">ShieldCall <span class="text-cyan-400">VN</span></h2>
@@ -1168,7 +1226,6 @@
                         <a href="/scam-radar/" class="nav-link px-4 py-2 rounded-xl text-white/60">Radar</a>
                         <a href="/forum/" class="nav-link px-4 py-2 rounded-xl text-white/60">Diễn đàn</a>
                         <a href="/learn/" class="nav-link px-4 py-2 rounded-xl text-white/60">Kiến thức</a>
-                        <a href="/ai-assistant/" class="nav-link px-4 py-2 rounded-xl text-white/60 animate-pulse text-cyan-400 font-bold border border-cyan-500/20 bg-cyan-500/5 hover:bg-cyan-500/10"><i class="bi bi-robot mr-1"></i> Hỏi AI</a>
                     </div>
                 </div>
 
@@ -1231,6 +1288,12 @@
                                     <i class="bi bi-person-gear"></i>
                                 </div>
                                 Cài đặt tài khoản
+                            </a>
+                            <a href="/ai-assistant/" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-cyan-400 hover:bg-cyan-400/10 transition-colors">
+                                <div class="w-7 h-7 rounded-lg bg-cyan-400/10 flex items-center justify-center">
+                                    <i class="bi bi-robot"></i>
+                                </div>
+                                Hỏi đáp AI Assistant
                             </a>
                             {% if user.is_staff or user.profile.is_super_admin %}
                             <a href="{% url 'admin-dashboard' %}" class="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-yellow-400 hover:bg-yellow-400/10 transition-colors">
@@ -1304,6 +1367,7 @@
             <a href="/scam-radar/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-broadcast text-purple-400"></i> Radar</a>
             <a href="/forum/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-chat-dots-fill text-blue-400"></i> Diễn đàn</a>
             <a href="/learn/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-book-half text-yellow-400"></i> Cẩm nang</a>
+            <a href="/ai-assistant/" class="flex items-center gap-3 p-3 rounded-xl text-cyan-400 font-bold" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(6,182,212,0.08)'" onmouseout="this.style.background='transparent'"><i class="bi bi-robot"></i> Hỏi AI Assistant</a>
             <a href="/emergency/" class="flex items-center gap-3 p-3 rounded-xl text-red-400" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,23,68,0.08)'" onmouseout="this.style.background='transparent'"><i class="bi bi-exclamation-triangle-fill"></i> Khẩn cấp</a>
 
             <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:0.5rem;">
@@ -1501,6 +1565,7 @@
                         <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> Trực tuyến
                     </div>
                 </div>
+                <button @click="resetChat()" class="text-white/20 hover:text-cyan-400 transition-colors mr-2" title="Cuộc trò chuyện mới"><i class="bi bi-plus-square"></i></button>
                 <button @click="open=false" class="text-white/20 hover:text-white transition-colors"><i class="bi bi-dash-lg"></i></button>
             </div>
 
@@ -1510,15 +1575,52 @@
                     <div :class="msg.from==='bot' ? 'items-start' : 'items-end'" class="flex flex-col gap-1 w-full">
                         <div :class="msg.from==='bot' ? 'bg-white/5 border-white/10 rounded-2xl rounded-bl-none' : 'bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border-cyan-500/20 rounded-2xl rounded-br-none shadow-sm'"
                             class="max-w-[88%] border p-3.5 text-xs sm:text-[13px] leading-relaxed transition-all">
+                            
+                            <!-- Thinking Block -->
+                            <div x-show="msg.from==='bot' && (msg.isThinking || msg.thinkingContent)" 
+                                 class="thinking-container" :class="{'collapsed': !msg.isThinking && msg.thinkingContent}">
+                                <div class="thinking-header" @click="$el.parentElement.classList.toggle('collapsed')">
+                                    <i class="bi" :class="msg.isThinking ? 'bi-lightning-charge-fill animate-pulse text-cyan-400' : 'bi-chevron-down text-white/20'"></i>
+                                    <span class="text-[9px] font-black uppercase tracking-widest" :class="msg.isThinking ? 'text-cyan-400' : 'text-white/20'">
+                                        <span x-show="msg.isThinking">Đang suy luận...</span>
+                                        <span x-show="!msg.isThinking">Quá trình suy luận</span>
+                                    </span>
+                                </div>
+                                <div class="thinking-content" x-text="msg.thinkingContent"></div>
+                            </div>
+
                             <div class="ai-markdown" x-html="msg.html || msg.text"></div>
+
+                            <!-- Search Results (Web Only) -->
+                            <div x-show="msg.from==='bot' && msg.metadata && msg.metadata.web_search" class="search-results-container">
+                                <template x-if="msg.metadata && msg.metadata.web_search">
+                                    <div>
+                                        <div class="text-[9px] font-black text-white/20 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                            <i class="bi bi-globe"></i> Nguồn tham khảo
+                                        </div>
+                                        <template x-for="res in msg.metadata.web_search" :key="res.url">
+                                            <a :href="res.url" target="_blank" class="search-item">
+                                                <div class="font-bold text-cyan-400 truncate text-[11px]" x-text="res.title"></div>
+                                                <div class="text-[9px] text-white/20 truncate" x-text="res.url"></div>
+                                            </a>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                         <div class="text-[9px] text-white/20 px-1 font-bold tracking-tight uppercase" x-text="msg.time"></div>
                     </div>
                 </template>
-                <div x-show="typing" class="flex gap-1.5 items-center p-2 bg-white/5 rounded-full w-max border border-white/5 ml-2">
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce"></span>
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce [animation-delay:0.2s]"></span>
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce [animation-delay:0.4s]"></span>
+                <div x-show="typing || (messages.length > 0 && messages[messages.length-1].status)" class="flex flex-col gap-2 ml-2">
+                    <div x-show="messages.length > 0 && messages[messages.length-1].status" class="flex items-center gap-2 text-[10px] text-cyan-400 font-bold animate-pulse">
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                        <span x-text="messages[messages.length-1].status"></span>
+                    </div>
+                    <div x-show="typing" class="flex gap-1.5 items-center p-2 bg-white/5 rounded-full w-max border border-white/5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce [animation-delay:0.2s]"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400/50 animate-bounce [animation-delay:0.4s]"></span>
+                    </div>
                 </div>
             </div>
 
@@ -1573,6 +1675,18 @@
                     this.messages[0].html = window.renderMd(this.messages[0].text);
                 },
                 now() { return new Date().toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' }); },
+                resetChat() {
+                    localStorage.removeItem('chat_session_id');
+                    this.messages = [
+                        { from: 'bot', text: 'Xin chào! <i class="bi bi-hand-thumbs-up"></i> Tôi là **ShieldCall AI**. Hãy gửi số điện thoại hoặc tin nhắn lạ để tôi kiểm tra giúp bạn!', time: this.now(), html: '' }
+                    ];
+                    this.messages[0].html = window.renderMd(this.messages[0].text);
+                    this.hasInteracted = false;
+                    this.input = '';
+                    this.imagePreviews = [];
+                    this.imageFiles = [];
+                    showToast('Đã bắt đầu cuộc trò chuyện mới', 'success');
+                },
                 scrollDown() {
                     this.$nextTick(() => {
                         const el = this.$refs.chatMessages;
@@ -1630,8 +1744,8 @@
                     this.typing = true;
 
                     const sessionId = localStorage.getItem('chat_session_id') || crypto.randomUUID();
-                    localStorage.setItem('chat_session_id', sessionId);
-
+                    // Don't set yet, wait for backend to confirm or provide a real UUID if guest
+                    
                     await this._tryStream({
                         user_message: messageToSend,
                         session_id: sessionId,
@@ -1644,7 +1758,16 @@
                 },
 
                 async _tryStream(payload) {
-                    const botMsg = { from: 'bot', text: '', html: '', time: this.now() };
+                    const botMsg = { 
+                        from: 'bot', 
+                        text: '', 
+                        html: '', 
+                        time: this.now(),
+                        status: '',
+                        isThinking: false,
+                        thinkingContent: '',
+                        metadata: null
+                    };
                     this.messages.push(botMsg);
                     this.typing = false;
                     this.scrollDown();
@@ -1674,15 +1797,79 @@
                             buffer = lines.pop();
 
                             for (const line of lines) {
-                                if (line.startsWith('data: ')) {
-                                    try {
-                                        const data = JSON.parse(line.substring(6));
-                                        if (data.chunk) {
-                                            botMsg.text += data.chunk;
-                                            botMsg.html = window.renderMd(botMsg.text);
-                                            this.scrollDown();
+                                let trimmedLine = line.trim();
+                                if (!trimmedLine.startsWith('data: ')) continue;
+                                
+                                try {
+                                    const data = JSON.parse(trimmedLine.substring(6));
+                                    
+                                    if (data.session_id) {
+                                        localStorage.setItem('chat_session_id', data.session_id);
+                                    }
+
+                                    if (data.status) {
+                                        const statusMap = {
+                                            'searching_knowledge': 'Đang tra cứu kiến thức...',
+                                            'searching_web': 'Đang tìm kiếm thông tin...',
+                                            'checking_safety': 'Đang kiểm tra an toàn...',
+                                            'reasoning': 'Đang suy luận...',
+                                            'thinking': 'Đang suy luận...'
+                                        };
+                                        botMsg.status = statusMap[data.status] || data.status;
+                                        if (data.status === 'thinking' || data.status === 'reasoning') {
+                                            botMsg.isThinking = true;
                                         }
-                                    } catch (e) {}
+                                    }
+
+                                    if (data.chunk) {
+                                        const chunk = data.chunk;
+                                        
+                                        if (chunk.startsWith('__STATUS__:')) {
+                                            const statusVal = chunk.substring(11);
+                                            const statusMap = {
+                                                'searching_knowledge': 'Đang tra cứu kiến thức...',
+                                                'searching_web': 'Đang tìm kiếm thông tin...',
+                                                'checking_safety': 'Đang kiểm tra an toàn...',
+                                                'reasoning': 'Đang suy luận...',
+                                                'thinking': 'Đang suy luận...'
+                                            };
+                                            botMsg.status = statusMap[statusVal] || statusVal;
+                                            if (statusVal === 'thinking' || statusVal === 'reasoning') {
+                                                botMsg.isThinking = true;
+                                            }
+                                        } else if (chunk.startsWith('__THINK__:')) {
+                                            const thinkPart = chunk.substring(10);
+                                            botMsg.isThinking = true;
+                                            botMsg.thinkingContent += thinkPart;
+                                        } else if (chunk.startsWith('__SEARCH_RESULTS__:') || chunk.startsWith('__METADATA__:')) {
+                                            const marker = chunk.startsWith('__METADATA__:') ? '__METADATA__:' : '__SEARCH_RESULTS__:';
+                                            const mData = JSON.parse(chunk.substring(marker.length));
+                                            
+                                            // As requested: Only show web_search results in sources
+                                            if (marker === '__SEARCH_RESULTS__:') {
+                                                botMsg.metadata = { web_search: mData };
+                                            } else if (mData.web_search) {
+                                                botMsg.metadata = { web_search: mData.web_search };
+                                            }
+                                        } else {
+                                            // If we get actual content, stop showing "thinking" header as active
+                                            if (botMsg.isThinking && !chunk.startsWith('__')) {
+                                                // We don't necessarily stop "thinking" but we might want to collapse or mark as done if content starts
+                                                // However, usually think and content are separated.
+                                            }
+                                            botMsg.text += chunk;
+                                            botMsg.html = window.renderMd(botMsg.text);
+                                        }
+                                    }
+                                    
+                                    if (data.done) {
+                                        botMsg.status = "";
+                                        botMsg.isThinking = false;
+                                    }
+
+                                    this.scrollDown();
+                                } catch (e) {
+                                    console.warn("Parse error", e, trimmedLine);
                                 }
                             }
                         }

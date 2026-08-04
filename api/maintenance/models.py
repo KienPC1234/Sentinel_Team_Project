@@ -54,3 +54,37 @@ class ErrorLog(models.Model):
             models.Index(fields=['error_type']),
             models.Index(fields=['created_at']),
         ]
+class RAGIndexLog(models.Model):
+    """
+    Tracks RAG (FAISS) vector database re-indexing history
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('RUNNING', 'Running'),
+            ('SUCCESS', 'Success'),
+            ('FAILED', 'Failed'),
+        ],
+        default='RUNNING'
+    )
+    trigger = models.CharField(
+        max_length=20,
+        choices=[
+            ('MANUAL', 'Manual'),
+            ('SCHEDULED', 'Scheduled'),
+            ('AUTO', 'Auto'),
+        ],
+        default='MANUAL'
+    )
+    documents_count = models.IntegerField(default=0)
+    error_message = models.TextField(blank=True, null=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'rag_index_logs'
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"Index {self.id} - {self.status} ({self.started_at})"

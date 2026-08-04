@@ -1,4 +1,15 @@
 from rest_framework import serializers
+from .models import ChatFolder, ChatSession, ChatMessage
+
+class ChatFolderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatFolder
+        fields = ['id', 'name', 'created_at', 'updated_at']
+
+class ChatSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatSession
+        fields = ['id', 'title', 'folder', 'created_at', 'updated_at']
 
 class ChatAIRequestSerializer(serializers.Serializer):
     user_message = serializers.CharField(required=True)

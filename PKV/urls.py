@@ -8,29 +8,12 @@ from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from api.ai_chat.views import AssistantPageView
 from .views import (
-    home_view,
-    scan_phone_view,
-    scan_message_view,
-    scan_website_view,
-    scan_email_view,
-    scan_bank_view,
-    scan_qr_view,
-    report_view,
-    scam_radar_view,
-    learn_hub_view,
-    emergency_view,
-    login_view,
-    register_view,
-    logout_view,
-    dashboard_view,
-    admin_panel_view,
-    profile_view,
-    change_password_view,
-    forum_view,
-    forum_post_view,
-    forum_create_view,
-    public_profile_view,
-    scan_file_view,
+    home_view, scan_phone_view, scan_message_view, scan_website_view,
+    scan_email_view, scan_bank_view, scan_qr_view, report_view,
+    scam_radar_view, learn_hub_view, emergency_view, login_view,
+    register_view, logout_view, dashboard_view, admin_panel_view,
+    profile_view, change_password_view, forum_view, forum_post_view,
+    forum_create_view, public_profile_view, scan_file_view, article_detail_view
 )
 from .views.admin_views import (
     admin_dashboard, 
@@ -42,6 +25,8 @@ from .views.admin_views import (
     edit_lesson,
     manage_articles,
     edit_article,
+    edit_scenario,
+    delete_scenario,
     approve_report,
     reject_report
 )
@@ -65,8 +50,10 @@ urlpatterns = [
     path("report/", report_view, name="report"),
     path("scam-radar/", scam_radar_view, name="scam-radar"),
     path("learn/", learn_hub_view, name="learn-hub"),
+    path("learn/<slug:slug>/", article_detail_view, name="article-detail"),
     path("emergency/", emergency_view, name="emergency"),
     path("ai-assistant/", AssistantPageView.as_view(), name="ai-assistant"),
+    path("ai-assistant/<uuid:session_id>/", AssistantPageView.as_view(), name="ai-assistant-session"),
     
     # Auth pages
     path("login/", login_view, name="login"),
@@ -90,6 +77,9 @@ urlpatterns = [
     path("admin-cp/articles/", manage_articles, name="admin-manage-articles"),
     path("admin-cp/articles/add/", edit_article, name="admin-add-article"),
     path("admin-cp/articles/<int:article_id>/edit/", edit_article, name="admin-edit-article"),
+    path("admin-cp/articles/<int:article_id>/scenarios/add/", edit_scenario, name="admin-add-scenario"),
+    path("admin-cp/scenarios/<int:scenario_id>/edit/", edit_scenario, name="admin-edit-scenario"),
+    path("admin-cp/scenarios/<int:scenario_id>/delete/", delete_scenario, name="admin-delete-scenario"),
     
     path("admin-panel/", admin_panel_view, name="admin-panel"),
     path("profile/", profile_view, name="profile"),
@@ -116,11 +106,8 @@ urlpatterns = [
         path('', include('api.core.urls')),
     ])),
 
-# Allauth (Google OAuth)
+    # Allauth (Google OAuth)
     path('accounts/', include('allauth.urls')),
-    
-    # Martor Markdown Editor
-    path('martor/', include('martor.urls')),
 ]
 
 handler404 = 'PKV.views.page_views.error_404_view'
