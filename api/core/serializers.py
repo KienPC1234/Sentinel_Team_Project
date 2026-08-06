@@ -5,6 +5,7 @@ DRF serializers for all MVP models + auth
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from api.utils.normalization import normalize_phone_e164
 from .models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
     EntityLink, UserAlert, ScamType, Severity, TargetType, ScanType,
@@ -103,6 +104,20 @@ class ReportCreateSerializer(serializers.ModelSerializer):
                   'description', 'evidence_file', 'scammer_phone', 
                   'scammer_bank_account', 'scammer_bank_name', 'scammer_name']
 
+    def validate(self, attrs):
+        target_type = attrs.get('target_type')
+        target_value = attrs.get('target_value')
+
+        if target_type == 'phone':
+            try:
+                attrs['target_value'] = normalize_phone_e164(target_value, strict=True)
+            except ValueError:
+                raise serializers.ValidationError({
+                    'target_value': 'Số điện thoại báo cáo phải có mã quốc gia, ví dụ +84xxxxxxxxx hoặc +1xxxxxxxxxx.'
+                })
+
+        return attrs
+
     def create(self, validated_data):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
@@ -137,6 +152,13 @@ class ScanFileSerializer(serializers.Serializer):
 
 class ScanPhoneSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=20)
+
+    def validate_phone(self, value):
+        try:
+            normalized = normalize_phone_e164(value, strict=True)
+        except ValueError:
+            raise serializers.ValidationError('Số điện thoại phải có mã quốc gia, ví dụ +84xxxxxxxxx hoặc +1xxxxxxxxxx.')
+        return normalized
 
 
 class ScanMessageSerializer(serializers.Serializer):

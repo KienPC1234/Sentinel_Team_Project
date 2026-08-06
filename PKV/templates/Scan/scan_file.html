@@ -52,7 +52,7 @@
 
             <div class="mt-8 flex flex-col items-center gap-6" x-show="file && !loading && !scanning">
                 <!-- Turnstile Widget -->
-                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark" data-size="flexible"></div>
+                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'" data-size="flexible"></div>
                 
                 <button @click="startScan()" class="liquid-button bg-pink-500 hover:bg-pink-400 text-white px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-pink-500/25 flex items-center gap-3">
                     <i class="bi bi-shield-shaded"></i> Bắt đầu phân tích

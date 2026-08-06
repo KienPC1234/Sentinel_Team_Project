@@ -3,6 +3,7 @@ ShieldCall VN – Celery Tasks
 MVP spec Section 9: Async tasks
 """
 import logging
+import re
 from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
@@ -28,7 +29,7 @@ def rebuild_scam_vector_index():
     """
     try:
         from api.utils.vector_db import vector_db
-        vector_db.rebuild_index()
+        vector_db.rebuild_index(force_cpu=True)
         logger.info("Successfully rebuilt scam vector index.")
     except Exception as e:
         logger.error(f"Error rebuilding vector index: {e}")
@@ -513,7 +514,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             import time
             from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 
-            ai_timeout_seconds = 90
+            ai_timeout_seconds = 120
             keepalive_every_seconds = 10
             executor = ThreadPoolExecutor(max_workers=1)
             future = executor.submit(analyze_text_for_scam, ai_input, None, True)
@@ -824,67 +825,94 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
 @shared_task(name='core.perform_email_deep_scan')
 def perform_email_deep_scan(scan_event_id: int, email_data: dict):
     """
-    Async Deep Analysis for Emails using Ollama + URL checks.
+    Async deep analysis for emails using weighted EML signals + AI enrichment.
     """
-    from api.core.models import ScanEvent, RiskLevel
+    from api.core.models import ScanEvent, RiskLevel, ScanStatus
     from api.utils.ollama_client import analyze_text_for_scam
+    from api.utils.email_utils import compute_eml_weighted_risk
     
     logger.info(f"[EmailScan] Event {scan_event_id}: Starting deep scan")
     
     try:
         scan_event = ScanEvent.objects.get(id=scan_event_id)
-        current_score = scan_event.risk_score
+        current_score = int(scan_event.risk_score or 0)
+        analysis_type = (email_data.get('analysis_type') or 'text').lower()
+        is_basic_mode = analysis_type != 'eml'
+
         # Use result_json instead of details
         result_json = scan_event.result_json or {}
-        details = list(result_json.get('security_checks', []))
-        
-        # 1. URL Analysis (Heuristic Mock for now, replace with VT later)
-        urls = email_data.get('urls', [])
-        logger.info(f"[EmailScan] Event {scan_event_id}: Found {len(urls)} URLs")
-        
-        malicious_urls = 0
-        suspicious_keywords = ['login', 'verify', 'update', 'account', 'banking', 'secure', 'wallet']
-        
-        for url in urls:
-            normalized_url = url.lower()
-            if any(k in normalized_url for k in suspicious_keywords):
-                malicious_urls += 1
-                details.append(f"URL đáng ngờ: {url[:50]}...")
-                logger.info(f"[EmailScan] Event {scan_event_id}: Suspicious URL: {url}")
-        
-        if malicious_urls > 0:
-            current_score += (malicious_urls * 15)
-            logger.info(f"[EmailScan] Event {scan_event_id}: Score increased by {malicious_urls * 15} due to URLs")
-            
-        # 2. Content Analysis (LLM)
+        details = [] if is_basic_mode else list(result_json.get('security_checks', []))
+
+        # 1) Scoring engine
+        if is_basic_mode:
+            eml_res = {
+                'risk_score': current_score,
+                'components': {},
+                'auth_results': {},
+                'details': [
+                    'Chế độ phân tích cơ bản: chỉ dùng email và nội dung do người dùng cung cấp (không có header/metadata .eml).'
+                ],
+            }
+            eml_score = current_score
+            logger.info(f"[EmailScan] Event {scan_event_id}: BASIC mode score={eml_score}")
+        else:
+            eml_res = compute_eml_weighted_risk(email_data)
+            eml_score = int(eml_res.get('risk_score', 0) or 0)
+            details.extend(eml_res.get('details', []))
+            logger.info(f"[EmailScan] Event {scan_event_id}: EML weighted score={eml_score}")
+
+        # 2) Content Analysis (LLM)
         body_text = email_data.get('body', '')
         subject = email_data.get('subject', '')
         sender = email_data.get('from', '')
+        analysis = None
+        ai_bonus = 0
 
         if body_text and len(body_text) > 20:
             # Build a Vietnamese-context enriched text block for the AI
-            analysis_input = (
-                f"Địa chỉ gửi: {sender}\n"
-                f"Tiêu đề: {subject}\n"
-                f"Nội dung:\n{body_text[:4000]}"
-            )
+            if is_basic_mode:
+                analysis_input = (
+                    "CHẾ ĐỘ PHÂN TÍCH CƠ BẢN (TEXT-ONLY):\n"
+                    "- Chỉ sử dụng dữ liệu được cung cấp bên dưới.\n"
+                    "- KHÔNG suy diễn hoặc kết luận về SPF/DKIM/DMARC, header email, metadata SMTP, "
+                    "độ uy tín domain qua ScamAdviser/Trustpilot/Sitejabber nếu không có dữ liệu xác thực tương ứng.\n"
+                    "- Không đưa nhận định về WHOIS/Tranco/ESP nếu không có bằng chứng trực tiếp trong input.\n\n"
+                    f"Địa chỉ gửi: {sender}\n"
+                    f"Tiêu đề: {subject}\n"
+                    f"Nội dung:\n{body_text[:4000]}"
+                )
+            else:
+                analysis_input = (
+                    f"Địa chỉ gửi: {sender}\n"
+                    f"Tiêu đề: {subject}\n"
+                    f"Nội dung:\n{body_text[:4000]}"
+                )
             logger.info(f"[EmailScan] Event {scan_event_id}: Analyzing body text ({len(body_text)} chars)")
-            analysis = analyze_text_for_scam(analysis_input, use_web_search=True)
+            analysis = analyze_text_for_scam(analysis_input, use_web_search=(not is_basic_mode))
             logger.info(f"[EmailScan] Event {scan_event_id}: AI Result: {analysis}")
             
-            if analysis.get('is_scam'):
-                current_score += analysis.get('risk_score', 0)
+            if analysis:
+                if analysis.get('is_scam'):
+                    ai_bonus = min(35, int((analysis.get('risk_score', 0) or 0) * 0.45))
+                else:
+                    ai_bonus = -10 if int(analysis.get('risk_score', 0) or 0) <= 20 else 0
                 details.extend(analysis.get('indicators', []))
-                details.append(f"AI nhận định: {analysis.get('explanation', '')}")
-            else:
-                # If AI says safe, maybe reduce score slightly?
-                # current_score = max(0, current_score - 10)
-                pass
+                ai_explain = analysis.get('explanation', '')
+                if ai_explain:
+                    details.append(f"AI nhận định: {ai_explain}")
         else:
             logger.info(f"[EmailScan] Event {scan_event_id}: Body text too short, skipping AI")
 
-        # 3. Finalize
-        final_score = min(100, current_score)
+        # For basic mode, keep result concise and avoid metadata-heavy indicators.
+        if is_basic_mode:
+            details = [
+                item for item in details
+                if not re.search(r'(SPF|DKIM|DMARC|WHOIS|ScamAdviser|Trustpilot|Sitejabber|Tranco)', str(item), re.IGNORECASE)
+            ]
+
+        # 3) Finalize - combine preliminary score, weighted EML score, and AI adjustment
+        combined_base = max(current_score, eml_score)
+        final_score = max(0, min(100, combined_base + ai_bonus))
         logger.info(f"[EmailScan] Event {scan_event_id}: Final Score: {final_score}")
         
         # Determine Risk Level
@@ -896,13 +924,19 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             scan_event.risk_level = RiskLevel.GREEN
             
         scan_event.risk_score = final_score
-        result_json['analysis_result'] = details
+        result_json['analysis_result'] = details[:40]
+        result_json['eml_weighted_score'] = eml_score
+        result_json['eml_score_components'] = eml_res.get('components', {})
+        result_json['email_auth_results'] = eml_res.get('auth_results', {})
+        result_json['analysis_type'] = analysis_type
+        result_json['detected_urls'] = email_data.get('urls', [])
+        result_json['detected_attachments'] = email_data.get('attachments', [])
         # Include grounded intelligence from AI analysis
-        if 'analysis' in locals() and analysis:
+        if analysis:
             result_json['web_sources'] = analysis.get('web_sources', [])
             result_json['web_context'] = analysis.get('web_context', '')
         scan_event.result_json = result_json
-        scan_event.status = 'completed' # Use string matching ReportStatus
+        scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
         
         logger.info(f"[EmailScan] Event {scan_event_id}: Completed Successfully. Level: {scan_event.risk_level}")
@@ -912,7 +946,7 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
     except Exception as e:
         logger.error(f"[EmailScan] perform_email_deep_scan failed: {e}", exc_info=True)
         try:
-             scan_event = ScanEvent.objects.get(id=scan_event_id)
-             scan_event.status = 'failed'
-             scan_event.save()
+                        scan_event = ScanEvent.objects.get(id=scan_event_id)
+                        scan_event.status = ScanStatus.FAILED
+                        scan_event.save()
         except: pass

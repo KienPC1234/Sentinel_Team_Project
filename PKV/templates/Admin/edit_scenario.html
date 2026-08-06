@@ -25,7 +25,7 @@
 <div class="container mx-auto px-4 py-8 mt-16">
     <div class="flex items-center justify-between mb-10">
         <div class="flex items-center gap-6">
-            <a href="{% url 'admin-edit-article' article.id %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-blue-400 hover:border-blue-500/30 transition-all">
+            <a href="{% if article %}{% url 'admin-edit-article' article.id %}{% else %}{% url 'admin-manage-scenarios' %}{% endif %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-blue-400 hover:border-blue-500/30 transition-all">
                 <i class="bi bi-chevron-left text-xl"></i>
             </a>
             <div>
@@ -56,11 +56,59 @@
                     {{ form.description }}
                 </div>
 
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Cấu trúc kịch bản (JSON Content)</label>
-                    <div class="p-4 rounded-3xl bg-black/40 border border-white/10">
-                        {{ form.content }}
-                        <p class="text-[9px] text-white/20 mt-3 font-mono">Format: [ { "step": 1, "text": "Hello", "choices": [...] }, ... ]</p>
+                <div class="space-y-4" x-data="scenarioBuilder()">
+                    <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Cấu trúc kịch bản (Visual Builder)</label>
+                    <textarea name="content" class="hidden" :value="JSON.stringify(steps)"></textarea>
+                    
+                    <div class="space-y-6">
+                        <template x-for="(step, sIdx) in steps" :key="sIdx">
+                            <div class="group/step p-8 rounded-[2rem] bg-black/40 border border-white/10 relative transition-all hover:border-blue-500/30">
+                                <div class="absolute top-6 left-6 w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-[10px] font-black text-blue-400" x-text="step.step || (sIdx + 1)"></div>
+                                
+                                <button type="button" @click="removeStep(sIdx)" class="absolute top-6 right-6 text-white/10 hover:text-red-400 transition-colors">
+                                    <i class="bi bi-trash3-fill"></i>
+                                </button>
+
+                                <div class="pl-10 space-y-6">
+                                    <div class="space-y-2">
+                                        <label class="text-[9px] font-black text-white/20 uppercase">Nội dung thoại (AI Message)</label>
+                                        <textarea x-model="step.text" rows="2" class="w-full bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-sm text-white focus:border-blue-500 outline-none transition-all" placeholder="Nhập nội dung AI sẽ nói..."></textarea>
+                                    </div>
+
+                                    <div class="space-y-4">
+                                        <div class="flex items-center justify-between">
+                                            <h4 class="text-[9px] font-black text-white/30 uppercase tracking-widest">Lựa chọn của người dùng (Choices)</h4>
+                                            <button type="button" @click="addChoice(sIdx)" class="text-[8px] font-black text-blue-400 hover:text-blue-300 uppercase tracking-widest">+ Thêm lựa chọn</button>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <template x-for="(choice, cIdx) in step.choices" :key="cIdx">
+                                                <div class="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3 relative group/choice">
+                                                    <button type="button" @click="removeChoice(sIdx, cIdx)" class="absolute top-2 right-2 text-white/10 hover:text-red-400 transition-colors">
+                                                        <i class="bi bi-x-circle-fill"></i>
+                                                    </button>
+                                                    
+                                                    <div class="space-y-1">
+                                                        <label class="text-[8px] font-black text-white/10 uppercase">Text hiển thị</label>
+                                                        <input type="text" x-model="choice.text" class="w-full bg-transparent border-b border-white/10 p-1 text-xs text-white focus:border-blue-500 outline-none">
+                                                    </div>
+                                                    
+                                                    <div class="space-y-1">
+                                                        <label class="text-[8px] font-black text-white/10 uppercase">Chuyển đến bước (ID)</label>
+                                                        <input type="number" x-model.number="choice.next_step" class="w-full bg-transparent border-b border-white/10 p-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none" placeholder="Nhập ID bước tiếp theo...">
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <button type="button" @click="addStep()" class="w-full py-6 rounded-[2rem] border-2 border-dashed border-white/5 text-white/10 hover:text-blue-400 hover:border-blue-500/20 hover:bg-blue-500/[0.02] transition-all uppercase font-black text-[10px] tracking-widest flex items-center justify-center gap-3">
+                            <i class="bi bi-plus-circle-fill text-lg"></i>
+                            Thêm bước mới cho kịch bản
+                        </button>
                     </div>
                 </div>
             </div>
@@ -69,12 +117,46 @@
 </div>
 {% endblock %}
 
-{% block js %}
+{% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // Simple styling for textareas since we're not using CKEditor for JSON content yet
-        document.querySelectorAll('.admin-form-input').forEach(el => {
-            el.classList.add('w-full', 'bg-black/20', 'border', 'border-white/5', 'rounded-xl', 'p-4', 'text-sm', 'text-white', 'focus:border-blue-500/50', 'outline-none', 'transition-all');
+    function scenarioBuilder() {
+        return {
+            steps: [],
+            init() {
+                try {
+                    const raw = '{{ form.content.value|escapejs }}';
+                    this.steps = JSON.parse(raw || '[]') || [];
+                    if (this.steps.length === 0) this.addStep();
+                } catch (e) {
+                    console.error('Failed to parse scenario content', e);
+                    this.steps = [{ step: 1, text: '', choices: [] }];
+                }
+            },
+            addStep() {
+                const nextId = this.steps.length > 0 ? Math.max(...this.steps.map(s => s.step)) + 1 : 1;
+                this.steps.push({ step: nextId, text: '', choices: [] });
+            },
+            removeStep(index) {
+                if (this.steps.length > 1) this.steps.splice(index, 1);
+            },
+            addChoice(stepIndex) {
+                this.steps[stepIndex].choices.push({ text: '', next_step: null });
+            },
+            removeChoice(stepIndex, choiceIndex) {
+                this.steps[stepIndex].choices.splice(choiceIndex, 1);
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Initialize CKEditor
+        const editor = await window.createCKEditor('#editor');
+
+        // Simple styling for other inputs
+        document.querySelectorAll('input[type="text"], input[type="file"], select, textarea').forEach(el => {
+            if (el.id !== 'editor' && !el.classList.contains('hidden')) {
+                el.classList.add('w-full', 'bg-black/20', 'border', 'border-white/5', 'rounded-xl', 'p-4', 'text-sm', 'text-white', 'focus:border-blue-500/50', 'outline-none', 'transition-all');
+            }
         });
     });
 </script>

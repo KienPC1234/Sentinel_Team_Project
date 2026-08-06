@@ -28,6 +28,9 @@ class UserProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_super_admin = models.BooleanField(default=False)
+    
+    # OneSignal Push Notification
+    onesignal_player_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
 
     @property
     def rank_info(self):
@@ -598,9 +601,35 @@ def sync_vector_db(sender, instance, **kwargs):
     """
     Automatically re-build the FAISS index when learning content changes via Celery.
     """
-    from api.maintenance.tasks import rebuild_vector_index
     try:
         rebuild_vector_index.delay(trigger='AUTO')
         logger.info(f"Vector DB sync task queued by {sender.__name__} update.")
     except Exception as e:
         logger.error(f"Vector DB auto-sync error: {e}")
+
+# ─── Notification Model ───────────────────────────────────────────────────
+
+class Notification(models.Model):
+    """Stores persistent notifications for users"""
+    NOTIFICATION_TYPES = [
+        ('info', 'Thông tin'),
+        ('warning', 'Cảnh báo'),
+        ('success', 'Thành công'),
+        ('error', 'Lỗi'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES, default='info')
+    url = models.URLField(max_length=500, blank=True, null=True)
+    is_read = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Notification'
+        verbose_name_plural = 'Notifications'
+
+    def __str__(self):
+        return f"[{self.notification_type}] {self.title} for {self.user.username}"

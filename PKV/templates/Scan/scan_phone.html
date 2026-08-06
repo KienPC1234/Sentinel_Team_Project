@@ -4,7 +4,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="animate-fadein max-w-4xl mx-auto space-y-10" x-data="{phone:'', loading:false, result:null, error:'', aiText:'', aiLoading:false}">
+<div class="animate-fadein max-w-4xl mx-auto space-y-10" x-data="{phone:'', loading:false, result:null, error:'', aiText:''}">
     <!-- Page Header -->
     <div class="text-center space-y-4">
         <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-cyan-500/10 text-cyan-400 mb-2 border border-cyan-500/20 shadow-lg shadow-cyan-500/10">
@@ -15,6 +15,7 @@
         </h1>
         <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed">
             Hệ thống sẽ tra cứu số điện thoại này trong cơ sở dữ liệu lừa đảo quốc gia và cộng đồng.
+            Vui lòng nhập theo định dạng quốc tế có mã quốc gia (ví dụ: +84..., +1...).
         </p>
     </div>
 
@@ -22,42 +23,27 @@
     <div class="liquid-card p-6 sm:p-8">
         <form @submit.prevent="
             if(!phone.trim()){showToast('Vui lòng nhập số điện thoại', 'warning');return}
+            const phoneNormalized = phone.trim().replace(/[\s().-]/g, '');
+            if(!/^\+\d{8,15}$/.test(phoneNormalized)){showToast('Số điện thoại phải có mã quốc gia, ví dụ +84xxxxxxxxx hoặc +1xxxxxxxxxx', 'warning');return}
             const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
             if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
-            loading=true;result=null;aiText='';aiLoading=false;
+            loading=true;result=null;aiText='';
             fetch('/api/v1/scan/phone/', {
                 method:'POST',
                 headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
-                body:JSON.stringify({phone: phone.trim(), 'cf-turnstile-response': tsToken})
+                body:JSON.stringify({phone: phoneNormalized, 'cf-turnstile-response': tsToken})
             })
             .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
             .then(data=>{
-                result=data;loading=false;
-                aiLoading=true;aiText='';
-                fetch('/api/v1/scan/analyze-sse/', {
-                    method:'POST',
-                    headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
-                    body:JSON.stringify({scan_type:'phone',scan_data:data,raw_input:phone.trim()})
-                }).then(r=>{
-                    const reader=r.body.getReader();const decoder=new TextDecoder();let buf='';
-                    const pump=()=>reader.read().then(({done,value})=>{
-                        if(done){aiLoading=false;return}
-                        buf+=decoder.decode(value,{stream:true});
-                        const lines=buf.split('\n');buf=lines.pop();
-                        for(const line of lines){
-                            if(line.startsWith('data: ')){
-                                try{const d=JSON.parse(line.substring(6));if(d.chunk)aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
-                            }
-                        }
-                        pump();
-                    });pump();
-                }).catch(()=>{aiLoading=false; showToast('Không thể kết nối AI.', 'warning');});
+                result=data;
+                aiText=data.analysis_result || 'Hệ thống đã hoàn tất phân tích số điện thoại này.';
+                loading=false;
             })
             .catch(e=>{showToast(e.error||'Có lỗi xảy ra.', 'error');loading=false;})
         ">
             <div class="flex flex-col sm:flex-row gap-4">
                 <input type="tel" class="liquid-input flex-1 py-4 px-6 text-lg font-bold" 
-                    placeholder="VD: 0379456789..." x-model="phone" required>
+                    placeholder="VD: +84379456789 hoặc +12025550123" x-model="phone" required pattern="^\+\d{8,15}$">
                 <button type="submit" class="liquid-btn bg-cyan-500 text-black px-10 py-4 font-black hover:bg-cyan-400" :disabled="loading">
                     <span x-show="!loading"><i class="bi bi-search mr-2"></i> SCAN</span>
                     <span x-show="loading" class="spinner w-5 h-5 border-black"></span>
@@ -65,7 +51,7 @@
             </div>
             <!-- Turnstile Widget -->
             <div class="mt-4 flex justify-center">
-                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
+                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'"></div>
             </div>
         </form>
     </div>
@@ -75,79 +61,174 @@
         <div class="space-y-6">
             <div class="liquid-card overflow-hidden">
                 <!-- Status Header -->
-                <div class="p-8 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
-                    <!-- Dynamic Glow Background based on risk -->
-                    <div class="absolute inset-0 opacity-10 -z-10 blur-[80px]"
+                <div class="p-10 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
+                    <div class="absolute inset-0 opacity-10 -z-10 blur-[100px]"
                         :class="result.risk_level==='RED'?'bg-red-500':result.risk_level==='YELLOW'?'bg-yellow-500':'bg-green-500'"></div>
                     
-                    <div class="inline-block px-8 py-3 rounded-full text-xs font-black tracking-[0.3em] uppercase mb-6"
+                    <div class="inline-block px-10 py-3 rounded-full text-[10px] font-black tracking-[0.4em] uppercase mb-8"
                         :class="result.risk_level==='RED'?'bg-red-500/20 text-red-500 border border-red-500/30':result.risk_level==='YELLOW'?'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30':'bg-green-500/20 text-green-500 border border-green-500/30'"
-                        x-text="result.risk_level"></div>
+                        x-text="result.risk_level === 'RED' ? 'NGUY HIỂM / LỪA ĐẢO' : result.risk_level === 'YELLOW' ? 'CẦN CẢNH GIÁC' : 'AN TOÀN'"></div>
                     
-                    <div class="text-5xl font-black text-white mb-2" x-text="result.risk_score + '/100'"></div>
-                    <div class="text-[10px] text-white/30 font-black tracking-widest uppercase mb-8">Chỉ số rủi ro hệ thống</div>
+                    <div class="flex items-center justify-center gap-6 mb-10">
+                        <div class="text-7xl font-black text-white" x-text="result.risk_score"></div>
+                        <div class="h-16 w-px bg-white/10"></div>
+                        <div class="text-left">
+                            <div class="text-xs font-black text-white/40 tracking-widest uppercase mb-1">Risk Score</div>
+                            <div class="text-sm font-bold text-white/80" x-text="result.suggested_action"></div>
+                        </div>
+                    </div>
                     
-                    <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden max-w-md mx-auto">
-                        <div class="h-full transition-all duration-1000" 
-                            :style="'width:'+result.risk_score+'%;background:'+(result.risk_score>=70?'#ef4444':result.risk_score>=40?'#f59e0b':'#10b981')"></div>
+                    <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden max-w-xl mx-auto shadow-inner">
+                        <div class="h-full transition-all duration-1000 ease-out" 
+                            :style="'width:'+result.risk_score+'%;background:'+(result.risk_score>=80?'#ef4444':result.risk_score>=50?'#f59e0b':'#10b981')"></div>
                     </div>
                 </div>
 
-                <!-- Stats Grid -->
-                <div class="p-8 grid grid-cols-2 lg:grid-cols-4 gap-6 text-center">
-                    <div class="space-y-1">
-                        <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Số điện thoại</div>
-                        <div class="text-sm font-bold text-white/80" x-text="result.phone"></div>
+                <!-- Core Details Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/5 border-b border-white/5">
+                    <div class="p-8 space-y-4">
+                        <div class="flex items-center gap-3 text-white/40 mb-2">
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span class="text-[10px] font-black uppercase tracking-widest">Metadata</span>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-white/40">Quốc gia</span>
+                                <span class="font-bold text-white flex items-center gap-2">
+                                    <span class="text-[10px] text-cyan-400 font-black px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20" x-text="result.country_code"></span>
+                                    <span x-text="result.country_name"></span>
+                                </span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-white/40">Nhà mạng</span>
+                                <div class="text-right">
+                                    <div class="font-bold text-white" x-text="result.carrier"></div>
+                                    <div class="text-[10px] text-white/30 uppercase tracking-tighter" x-text="result.line_type"></div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center text-sm pt-2">
+                                <span class="text-white/40">Số ảo (VoIP)</span>
+                                <span class="font-black text-[10px] px-2 py-0.5 rounded uppercase" 
+                                    :class="result.is_virtual?'bg-red-500/20 text-red-500 border border-red-500/30':'bg-green-500/20 text-green-500 border border-green-500/30'" 
+                                    x-text="result.is_virtual?'Cảnh báo':'Thông thường'"></span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="space-y-1">
-                        <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Loại lừa đảo</div>
-                        <div class="text-sm font-bold text-white/80" x-text="result.scam_type||'N/A'"></div>
+                    
+                    <div class="p-8 space-y-4">
+                        <div class="flex items-center gap-3 text-white/40 mb-2">
+                            <i class="bi bi-people-fill"></i>
+                            <span class="text-[10px] font-black uppercase tracking-widest">Cộng đồng</span>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-white/40">Tổng báo cáo</span>
+                                <span class="font-bold text-white" x-text="result.report_count"></span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-white/40">Nguồn tin cậy</span>
+                                <span class="font-bold text-white" x-text="result.reports_verified"></span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-white/40">Tần suất 24h</span>
+                                <span class="font-bold text-white" x-text="result.metrics.reports_24h"></span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="space-y-1">
-                        <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Số báo cáo</div>
-                        <div class="text-sm font-bold text-white/80" x-text="result.report_count"></div>
-                    </div>
-                    <div class="space-y-1">
-                        <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Cập nhật cuối</div>
-                        <div class="text-sm font-bold text-white/80" x-text="result.last_seen?new Date(result.last_seen).toLocaleDateString('vi'):'Vừa xong'"></div>
+
+                    <div class="p-8 space-y-4">
+                        <div class="flex items-center gap-3 text-white/40 mb-2">
+                            <i class="bi bi-shield-lock-fill"></i>
+                            <span class="text-[10px] font-black uppercase tracking-widest">Phân bổ điểm</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div>
+                                <div class="flex justify-between text-[10px] mb-1">
+                                    <span class="text-white/40">UY TÍN</span>
+                                    <span class="text-white/60" x-text="result.component_scores.reputation + '/45'"></span>
+                                </div>
+                                <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div class="h-full bg-cyan-400" :style="'width:'+(result.component_scores.reputation/45*100)+'%'"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] mb-1">
+                                    <span class="text-white/40">METADATA</span>
+                                    <span class="text-white/60" x-text="result.component_scores.metadata + '/25'"></span>
+                                </div>
+                                <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div class="h-full bg-purple-400" :style="'width:'+(result.component_scores.metadata/25*100)+'%'"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] mb-1">
+                                    <span class="text-white/40">HÀNH VI</span>
+                                    <span class="text-white/60" x-text="result.component_scores.behavior + '/30'"></span>
+                                </div>
+                                <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div class="h-full bg-pink-400" :style="'width:'+(result.component_scores.behavior/30*100)+'%'"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- AI Insight -->
-                <div class="m-8 p-6 liquid-glass border-white/5 bg-cyan-500/[0.02]">
-                    <div class="flex items-center gap-3 mb-6">
-                        <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
-                            <i class="bi bi-robot"></i>
+                <!-- System Insight (Modern) -->
+                <div class="p-10 space-y-10">
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-10">
+                        <!-- Left: Narrative -->
+                        <div class="lg:col-span-3 space-y-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 border border-cyan-500/20 shadow-lg shadow-cyan-500/5">
+                                    <i class="bi bi-stars"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black text-white uppercase tracking-wider">Tóm tắt phân tích</h4>
+                                    <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest text-glow-cyan">KẾT QUẢ TỪ PKV ENGINE</p>
+                                </div>
+                            </div>
+                            <div class="ai-markdown text-white/70 text-sm leading-relaxed bg-white/[0.02] p-6 rounded-2xl border border-white/5 shadow-inner" 
+                                 x-html="renderMd(aiText)"></div>
                         </div>
-                        <div>
-                            <h4 class="text-sm font-black text-white uppercase tracking-wider">Phân tích chuyên sâu</h4>
-                            <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Bởi ShieldCall AI Engine</p>
+
+                        <!-- Right: Detailed Reasons -->
+                        <div class="lg:col-span-2 space-y-6">
+                            <h4 class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+                                Tại sao có kết quả này?
+                            </h4>
+                            <div class="space-y-4">
+                                <template x-for="reason in result.reasons">
+                                    <div class="flex items-start gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
+                                        <div class="mt-1">
+                                            <i class="bi bi-patch-check-fill text-cyan-500/40 group-hover:text-cyan-400 transition-colors"></i>
+                                        </div>
+                                        <div class="text-sm text-white/70 group-hover:text-white/90 transition-colors" x-text="reason"></div>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
-                        <div x-show="aiLoading" class="ml-auto spinner w-4 h-4 text-cyan-400"></div>
                     </div>
-                    
-                    <div class="ai-markdown text-white/70 text-sm leading-relaxed" 
-                         :class="{'ai-streaming': aiLoading}"
-                         x-html="renderMd(aiText)"></div>
-                    <p x-show="!aiText && !aiLoading" class="text-white/20 text-xs italic">Đang phân tích các mẫu lừa đảo liên quan...</p>
                 </div>
 
                 <!-- Actions -->
-                <div class="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
+                <div class="p-10 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
                     <div class="flex gap-4">
-                        <button class="liquid-btn py-2 px-6 text-xs bg-white/5 text-white/60 border-white/10 hover:text-white"
-                            @click="navigator.clipboard.writeText(window.location.origin+'/scan/phone/?phone='+result.phone);showToast('Đã copy link!','success')">
-                            <i class="bi bi-share"></i> Chia sẻ
-                        </button>
-                        <button class="liquid-btn py-2 px-6 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 transition-all font-black"
-                            @click="$dispatch('start-contextual-chat', { context: 'Phone: ' + result.phone + '\nAnalysis: ' + aiText })">
-                            <i class="bi bi-chat-dots-fill"></i> CHAT VỚI AI
+                        <button class="liquid-btn py-3 px-8 text-xs bg-white/5 text-white/60 border-white/10 hover:border-white/20 hover:text-white transition-all font-black uppercase tracking-widest"
+                            @click="navigator.clipboard.writeText(window.location.host+'/scan/phone/?phone='+result.phone);showToast('Đã copy link!','success')">
+                            <i class="bi bi-share-fill mr-2"></i> Chia sẻ
                         </button>
                     </div>
-                    <a :href="'/report/?target_type=phone&target_value='+encodeURIComponent(result.phone)+'&phone='+encodeURIComponent(result.phone)+'&scammer_name='+encodeURIComponent(result.owner_name||'')"
-                        class="liquid-btn py-2 px-8 text-xs bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30 transition-all font-black">
-                        <i class="bi bi-megaphone-fill"></i> TỐ CÁO NGAY
-                    </a>
+                    <div class="flex gap-4 items-center">
+                        <a :href="'/report/?target_type=phone&target_value='+encodeURIComponent(result.phone)+'&phone='+encodeURIComponent(result.phone)+'&scammer_name='+encodeURIComponent(result.owner_name||'')"
+                            class="liquid-btn py-3 px-10 text-xs bg-red-600/10 text-red-500 border-red-600/20 hover:bg-red-600/20 transition-all font-black uppercase tracking-widest shadow-lg shadow-red-600/5">
+                            <i class="bi bi-megaphone-fill mr-2"></i> TỐ CÁO
+                        </a>
+                        <button class="liquid-btn py-3 px-10 text-xs bg-cyan-500 text-black border-cyan-500/50 hover:bg-cyan-400 transition-all font-black uppercase tracking-widest shadow-lg shadow-cyan-500/20"
+                            @click="$dispatch('start-contextual-chat', { context: 'Phone: ' + result.phone + '\nAnalysis: ' + aiText })">
+                            <i class="bi bi-chat-fill mr-2"></i> CHAT VỚI AI
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

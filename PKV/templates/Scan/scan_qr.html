@@ -13,6 +13,13 @@
     aiLoading: false,
     progress: [],
     ws: null,
+    scanId: null,
+    wsConnected: false,
+    wsState: 'idle',
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 6,
+    reconnectTimer: null,
+    statusPollTimer: null,
     previewImage: null,
     files: [], // Initialize files array
     isDragging: false, // For drag-and-drop visual feedback
@@ -104,6 +111,7 @@
         .then(data => {
             console.log('Image scan initiated:', data);
             if (data.scan_id) {
+                this.scanId = data.scan_id;
                 this.connectWebSocket(data.scan_id);
             } else {
                 showToast('Không nhận được ID scan.', 'error');
@@ -117,45 +125,141 @@
         });
     },
 
-    connectWebSocket(scanId) {
+    stopReconnect() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+    },
+
+    stopStatusPolling() {
+        if (this.statusPollTimer) {
+            clearInterval(this.statusPollTimer);
+            this.statusPollTimer = null;
+        }
+    },
+
+    startStatusPolling() {
+        if (!this.scanId || this.statusPollTimer) return;
+        this.statusPollTimer = setInterval(() => this.fetchScanStatus(), 4000);
+    },
+
+    fetchScanStatus() {
+        if (!this.scanId || !this.loading) return;
+        fetch(`/api/v1/scan/status/${this.scanId}/`, {
+            method: 'GET',
+            headers: { 'X-CSRFToken': getCSRFToken() }
+        })
+        .then(r => { if (!r.ok) return null; return r.json(); })
+        .then(data => {
+            if (!data) return;
+            if (data.status === 'completed' && data.result) {
+                this.result = data.result;
+                this.loading = false;
+                this.wsState = 'completed';
+                this.progress.push({ message: 'Đã khôi phục kết quả từ máy chủ sau khi mất kết nối.', step: 'completed' });
+                this.aiText = data.result.explanation || this.aiText || '';
+                this.stopStatusPolling();
+                this.stopReconnect();
+                if (this.ws) {
+                    this.ws.close();
+                }
+            } else if (data.status === 'failed') {
+                this.loading = false;
+                this.wsState = 'failed';
+                this.progress.push({ message: 'Phiên quét thất bại trên máy chủ.', step: 'error' });
+                this.stopStatusPolling();
+                this.stopReconnect();
+            }
+        })
+        .catch(() => {});
+    },
+
+    scheduleReconnect() {
+        if (!this.scanId || !this.loading) return;
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this.wsState = 'disconnected';
+            this.progress.push({ message: 'Mất kết nối thời gian thực. Đang chuyển sang chế độ đồng bộ trạng thái.', step: 'warning' });
+            this.startStatusPolling();
+            return;
+        }
+
+        this.reconnectAttempts += 1;
+        this.wsState = 'reconnecting';
+        const delay = Math.min(10000, 1000 * Math.pow(2, this.reconnectAttempts - 1));
+        this.progress.push({ message: `Mất kết nối WS. Thử kết nối lại lần ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`, step: 'reconnecting' });
+
+        this.stopReconnect();
+        this.reconnectTimer = setTimeout(() => {
+            this.connectWebSocket(this.scanId, true);
+        }, delay);
+    },
+
+    connectWebSocket(scanId, isReconnect = false) {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/scan/${scanId}/`;
+        this.scanId = scanId;
+        this.wsState = isReconnect ? 'reconnecting' : 'connecting';
         console.log('Connecting to WebSocket:', wsUrl);
+
+        if (!isReconnect) {
+            this.progress.push({ message: 'Đang kết nối hệ thống phân tích...', step: 'init' });
+        }
         
         this.ws = new WebSocket(wsUrl);
-        this.progress.push({ message: 'Đang kết nối hệ thống phân tích...', step: 'init' });
+
+        this.ws.onopen = () => {
+            this.wsConnected = true;
+            this.wsState = 'connected';
+            this.reconnectAttempts = 0;
+            this.stopReconnect();
+            this.stopStatusPolling();
+            if (isReconnect) {
+                this.progress.push({ message: 'Kết nối thời gian thực đã được khôi phục.', step: 'reconnected' });
+            }
+        };
 
         this.ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
             console.log('WebSocket Message:', data);
             // Filter out internal ping messages
-            <!-- if (data.step !== 'ping') { -->
+            if (data.step !== 'ping') {
                 this.progress.push({ message: data.message, step: data.step });
-            <!-- } -->
+            }
 
             if (data.step === 'completed' && data.data) {
                 console.log('Scan completed successfully!');
                 this.result = data.data;
                 this.loading = false;
                 this.aiText = data.data.explanation || '';
+                this.wsState = 'completed';
+                this.stopReconnect();
+                this.stopStatusPolling();
                 this.ws.close();
             }
             if (data.step === 'error') {
                 console.error('Scan task error reported via WS:', data.message);
                 showToast(data.message, 'error');
                 this.loading = false;
+                this.wsState = 'failed';
+                this.stopReconnect();
+                this.stopStatusPolling();
                 this.ws.close();
             }
         };
 
         this.ws.onerror = (err) => {
             console.error('WebSocket Error:', err);
-            showToast('Lỗi kết nối thời gian thực.', 'error');
-            this.loading = false;
+            this.wsConnected = false;
         };
         
         this.ws.onclose = () => {
             console.log('WebSocket connection closed.');
+            this.wsConnected = false;
+            if (this.loading) {
+                this.scheduleReconnect();
+                this.startStatusPolling();
+            }
         };
     }
 }"
@@ -209,7 +313,7 @@
             </div>
             <!-- Turnstile Widget -->
             <div class="mt-4 flex justify-center">
-                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
+                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'"></div>
             </div>
         </form>
 
@@ -237,7 +341,12 @@
     <!-- Progress Console -->
     <template x-if="loading && progress.length > 0">
         <div class="liquid-card p-6 border-green-500/20 bg-green-500/[0.02] animate-fadein">
-            <h4 class="text-[10px] font-black text-green-400 uppercase tracking-widest mb-4">Nhật ký phân tích thời gian thực</h4>
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <h4 class="text-[10px] font-black text-green-400 uppercase tracking-widest">Nhật ký phân tích thời gian thực</h4>
+                <div class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded border"
+                     :class="wsState==='connected' ? 'text-green-400 border-green-500/30 bg-green-500/10' : (wsState==='reconnecting' || wsState==='connecting') ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10'"
+                     x-text="wsState==='connected' ? 'WS Connected' : (wsState==='reconnecting' ? 'Reconnecting' : (wsState==='connecting' ? 'Connecting' : 'Disconnected'))"></div>
+            </div>
             <div class="space-y-3 font-mono text-[11px]">
                 <template x-for="(item, index) in progress" :key="index">
                     <div class="flex items-start gap-3 animate-fadein">

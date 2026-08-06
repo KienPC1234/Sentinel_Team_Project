@@ -24,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 
-from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
+from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response, lookup_tranco
 
 from api.core.models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
@@ -47,131 +47,307 @@ logger = logging.getLogger(__name__)
 # SCAN APIs — Real business logic
 # ═══════════════════════════════════════════════════════════════════════════
 
-from api.utils.normalization import normalize_phone, normalize_domain
+from api.utils.normalization import normalize_phone, normalize_phone_e164, normalize_domain
 from api.utils.vt_client import VTClient
 
 import math
+import phonenumbers
+from phonenumbers import carrier, geocoder, PhoneNumberType
 from api.utils.trust_score import calculate_reporter_trust
 
 def _phone_risk_score(phone_number: str) -> dict:
     """
-    Production-Grade Phone Risk Engine.
-    Hybrid Scoring = (Weighted Reports) + (Network Signals) + (Behavioral Patterns)
+    Production-grade phone risk engine.
+
+    Hybrid scoring (0-100):
+    - Reputation/complaints component (0-45)
+    - Number metadata component (0-25)
+    - Behavioral velocity component (0-30)
     """
     from api.phone_security.models import PhoneNumber
-    # Normalize input for lookup
-    phone_number = normalize_phone(phone_number)
-    
-    # 1. Fetch Reports & Apply Trust/Time Decay
-    reports = Report.objects.filter(target_type='phone', target_value=phone_number).select_related('reporter', 'reporter__profile')
-    
-    report_score = 0.0
-    verified_count = 0
+    # Normalize input for lookup (prefer E.164, fallback for internal legacy callers)
+    try:
+        phone_number = normalize_phone_e164(phone_number, strict=False)
+    except ValueError:
+        phone_number = normalize_phone(phone_number)
+
+    # 1) Fetch reports (exclude rejected) and compute trust/recency-weighted reputation
+    reports = Report.objects.filter(
+        target_type='phone',
+        target_value=phone_number,
+    ).exclude(status='rejected').select_related('reporter', 'reporter__profile')
+
+    reputation_raw = 0.0
+    approved_count = 0
     pending_count = 0
-    
-    # Decay factor lambda: e^(-0.15 * days)
-    # 1 day old = 0.86
-    # 7 days old = 0.35
-    # 30 days old = 0.01
-    DECAY_LAMBDA = 0.15
-    
+
+    # Decay: still meaningful after 7-30 days, but prioritizes recent waves.
+    DECAY_LAMBDA = 0.12
     now = timezone.now()
-    
+
+    severity_weight = {
+        'low': 0.8,
+        'medium': 1.0,
+        'high': 1.25,
+        'critical': 1.5,
+    }
+
     for r in reports:
-        age_days = (now - r.created_at).days
+        age_days = max(0, (now - r.created_at).days)
         time_weight = math.exp(-DECAY_LAMBDA * age_days)
-        
-        # trust score logic
+
         trust = calculate_reporter_trust(r.reporter)
-        
-        # Base weight by status
-        status_weight = 0
+
+        status_weight = 0.0
         if r.status == 'approved':
             status_weight = 1.0
-            verified_count += 1
+            approved_count += 1
         elif r.status == 'pending':
-            status_weight = 0.2
+            status_weight = 0.25
             pending_count += 1
-        elif r.status == 'rejected':
-            continue # Skip rejected reports
-            
-        # Impact: Trust * Time * Status
-        # Max impact per report = 1.0 * 1.0 * 1.0 = 1.0 (High trust reporter, today, approved)
-        impact = trust * time_weight * status_weight * 25 # Scale factor
-        report_score += impact
+        else:
+            continue
 
-    # 2. Network Intelligence (Mock / DB)
-    network_score = 0.0
+        sev = severity_weight.get((r.severity or 'medium').lower(), 1.0)
+        # Max per approved critical recent report is intentionally capped by final component bound.
+        impact = 12.0 * trust * time_weight * status_weight * sev
+        reputation_raw += impact
+
+    reputation_score = min(45.0, reputation_raw)
+
+    # 2) Number metadata / provenance component
+    metadata_score = 0.0
     carrier_info = "Unknown"
     is_virtual = False
+    is_valid = True # Default to True unless explicitly proven invalid by library
+    line_type = "Unknown"
+    # Sensible defaults for country (not strictly defaulting to VN)
+    country_code = "UNKNOWN"
+    country_name = "Không xác định"
     
+    # Analyze prefix/international metadata via phonenumbers library first
     try:
-        phone_obj = PhoneNumber.objects.get(phone_number=phone_number)
-        carrier_info = phone_obj.carrier or "Unknown"
-        is_virtual = phone_obj.is_virtual
+        # Import directly to ensure availability of helper
+        from phonenumbers import region_code_for_country_code, is_valid_number
+        parsed = phonenumbers.parse(phone_number)
         
-        # Risk from database
-        if phone_obj.risk_level == RiskLevel.RED:
-            network_score += 60
-        elif phone_obj.risk_level == RiskLevel.YELLOW:
-            network_score += 30
-            
-        # Virtual number penalty
-        if is_virtual:
-            network_score += 25
-            
-        # Carrier risk (Example)
-        if carrier_info == 'VirtualProvider':
-             network_score += 15
+        # 1. Detect ISO Country Code
+        detected_region = phonenumbers.region_code_for_number(parsed)
+        if not detected_region and parsed.country_code:
+            # Full fallback across all known library country codes
+            detected_region = region_code_for_country_code(parsed.country_code)
+        
+        country_code = detected_region or "VN"
+        
+        # 2. Get Country Name in Vietnamese
+        vi_name = geocoder._region_display_name(detected_region, "vi")
+        
+        country_name = vi_name
+        
+        # Try to get carrier name using the detected region and fallback to 'en'
+        # This will query phonenumbers with the specific country region (e.g. 'CN' for China) 
+        # for better provider identification.
+        carrier_info = (
+            carrier.name_for_number(parsed, country_code) or 
+            carrier.name_for_number(parsed, 'en') or 
+            "Unknown Provider"
+        )
+        
+        # 3. Validation & Line Type
+        is_valid = is_valid_number(parsed)
+        ntype = phonenumbers.number_type(parsed)
+        line_type_map = {
+            PhoneNumberType.MOBILE: "Mobile",
+            PhoneNumberType.FIXED_LINE: "Fixed Line",
+            PhoneNumberType.FIXED_LINE_OR_MOBILE: "Fixed or Mobile",
+            PhoneNumberType.VOIP: "VoIP (Virtual/Net)",
+            PhoneNumberType.PAGER: "Pager",
+            PhoneNumberType.PERSONAL_NUMBER: "Personal",
+            PhoneNumberType.PREMIUM_RATE: "Premium",
+            PhoneNumberType.TOLL_FREE: "Toll-free",
+            PhoneNumberType.UAN: "UAN",
+            PhoneNumberType.SHARED_COST: "Shared Cost",
+            PhoneNumberType.VOICEMAIL: "Voicemail",
+        }
+        line_type = line_type_map.get(ntype, "Unknown")
+        is_virtual = (ntype == PhoneNumberType.VOIP)
 
-    except PhoneNumber.DoesNotExist:
-        # Create empty record for tracking
+        # Baseline risks for invalid/anonymous types
+        if not is_valid:
+            metadata_score += 10 # Potential spoofed or fake number pattern
+        if is_virtual:
+            metadata_score += 15
+        if ntype == PhoneNumberType.PREMIUM_RATE:
+            metadata_score += 10
+
+    except Exception:
         pass
 
-    # 3. Behavioral Features (Velocity)
-    # Check if number of reports in last 24h is high
-    recent_velocity = reports.filter(created_at__gte=now - timedelta(hours=24)).count()
-    velocity_score = 0
-    if recent_velocity > 10:
-        velocity_score = 40
-    elif recent_velocity > 3:
-        velocity_score = 15
+    # Enrich from internal DB (reputation memory) if exists
+    try:
+        phone_obj = PhoneNumber.objects.get(phone_number=phone_number)
+        # Prefer DB carrier/type if explicit, otherwise fallback to analyzed
+        carrier_info = phone_obj.carrier or carrier_info
+        is_virtual = phone_obj.is_virtual or is_virtual
+        line_type = phone_obj.line_type or line_type
+        country_code = phone_obj.country_code or country_code
+
+        # Historical risk memory (heavy penalty if blacklisted)
+        if phone_obj.risk_level == RiskLevel.RED:
+            metadata_score += 20
+        elif phone_obj.risk_level == RiskLevel.YELLOW:
+            metadata_score += 10
+        elif phone_obj.risk_level == RiskLevel.GREEN:
+            metadata_score += 3
+        
+        # Override virtual if explicitly set in DB
+        if phone_obj.is_virtual:
+            metadata_score += 5 # Additional flag for known-bad virtual providers
+
+    except PhoneNumber.DoesNotExist:
+        # If it's a new number, we keep the analyzed metadata but may add subtle risk flags
+        # for suspicious patterns (e.g. unknown carriers in specific regions)
+        if carrier_info == "Unknown" and country_code != "VN":
+            metadata_score += 5
+
+    line_type_l = line_type.lower()
+    if 'voip' in line_type_l:
+        metadata_score += 15
+    elif 'toll' in line_type_l:
+        metadata_score += 8
+
+    carrier_l = carrier_info.lower()
+    if any(k in carrier_l for k in ['virtual', 'cloud', 'internet', 'twilio', 'skype']):
+        metadata_score += 8
+
+    if country_code and country_code.upper() != 'VN':
+        metadata_score += 4
+
+    metadata_score = min(25.0, metadata_score)
+
+    # 3) Behavioral component (velocity / burst / diversity)
+    reports_1h = reports.filter(created_at__gte=now - timedelta(hours=1)).count()
+    reports_24h = reports.filter(created_at__gte=now - timedelta(hours=24)).count()
+    reports_7d = reports.filter(created_at__gte=now - timedelta(days=7)).count()
+
+    unique_reporters_24h = reports.filter(
+        created_at__gte=now - timedelta(hours=24),
+        reporter__isnull=False,
+    ).values('reporter_id').distinct().count()
+
+    velocity_norm = min(1.0, reports_24h / 12.0)
+    burst_norm = min(1.0, reports_1h / 4.0)
+    diversity_norm = min(1.0, unique_reporters_24h / 6.0)
+    recency_ratio = (reports_24h + 1.0) / (reports_7d + 1.0)
+    recency_norm = min(1.0, recency_ratio * 2.0)
+
+    behavior_norm = (
+        0.45 * velocity_norm +
+        0.25 * burst_norm +
+        0.20 * diversity_norm +
+        0.10 * recency_norm
+    )
+    behavior_score = min(30.0, 30.0 * behavior_norm)
 
     # --- FINAL AGGREGATION ---
-    final_score = report_score + network_score + velocity_score
-    final_score = min(100, final_score)
+    final_score = min(100.0, reputation_score + metadata_score + behavior_score)
+    final_score_int = int(round(final_score))
     
-    # Determine Level
+    # Determine level (operational thresholds)
     level = RiskLevel.SAFE
-    if final_score >= 80: level = RiskLevel.RED
-    elif final_score >= 40: level = RiskLevel.YELLOW
-    elif final_score >= 15: level = RiskLevel.GREEN
+    if final_score_int > 80:
+        level = RiskLevel.RED
+    elif final_score_int > 50:
+        level = RiskLevel.YELLOW
+    elif final_score_int > 20:
+        level = RiskLevel.GREEN
 
-    # Reasons
+    # Action map aligned with thresholds
+    suggested_action = 'ALLOW'
+    if final_score_int > 80:
+        suggested_action = 'BLOCK'
+    elif final_score_int > 50:
+        suggested_action = 'VOICEMAIL_OR_WARN'
+    elif final_score_int > 20:
+        suggested_action = 'WARN'
+
+    # Reasons (top explainers)
     reasons = []
-    if verified_count > 0:
-        reasons.append(f'{verified_count} báo cáo uy tín đã xác minh')
+    if approved_count > 0:
+        reasons.append(f'{approved_count} báo cáo đã duyệt (độ tin cậy cao)')
+    if pending_count > 0:
+        reasons.append(f'{pending_count} báo cáo đang chờ duyệt')
     if is_virtual:
         reasons.append('Số điện thoại ảo (Virtual Number)')
-    if velocity_score > 0:
-        reasons.append(f'Tăng đột biến: {recent_velocity} báo cáo trong 24h')
-    if report_score > 20 and not verified_count:
-        reasons.append('Nhiều báo cáo từ cộng đồng (đang chờ duyệt)')
+    if not is_valid:
+        reasons.append('Định dạng số không hợp lệ (Có thể là số giả/spoofed)')
+    if reports_24h > 0:
+        reasons.append(f'Tần suất tăng: {reports_24h} báo cáo trong 24h')
+    if unique_reporters_24h >= 3:
+        reasons.append(f'Nhiều nguồn độc lập: {unique_reporters_24h} người báo cáo trong 24h')
+    if 'voip' in str(line_type).lower():
+        reasons.append('Line type VoIP - nguy cơ spoofing cao hơn')
+    if metadata_score >= 18 and not approved_count:
+        reasons.append('Tín hiệu metadata rủi ro dù chưa có nhiều báo cáo duyệt')
 
-    # Update PhoneNumber DB using update_or_create to avoid race conditions roughly
-    # In async task we do this more carefully
-    
+    if not reasons:
+        reasons.append('Chưa thấy tín hiệu rủi ro mạnh từ dữ liệu hiện có')
+
+    # Synthesize analysis result text for the frontend summary block
+    status_label = "AN TOÀN"
+    if level == RiskLevel.RED: status_label = "NGUY HIỂM / LỪA ĐẢO"
+    elif level == RiskLevel.YELLOW: status_label = "CẢNH GIÁC CAO"
+    elif level == RiskLevel.GREEN: status_label = "CÓ RỦI RO THẤP"
+
+    analysis_result = f"Số điện thoại {phone_number} (`{country_name}`) hiện đang ở mức `{status_label}`. "
+    analysis_result += f"Đây là một thuê bao thuộc nhà mạng **{carrier_info}** ({line_type}). "
+    analysis_result += f"Hệ thống ghi nhận tổng cộng {approved_count + pending_count} báo cáo từ cộng đồng. "
+    if is_virtual:
+        analysis_result += "Đây là một số điện thoại ảo (Virtual/VoIP), thường được dùng để che giấu danh tính. "
+    analysis_result += f"Hành động khuyến nghị: **{suggested_action}**."
+
     return {
         'phone': phone_number,
-        'risk_score': round(final_score),
+        'risk_score': final_score_int,
         'risk_level': level,
-        'scam_type': 'other', # TODO: Detect most common scam type from reports
-        'report_count': verified_count + pending_count,
-        'reports_verified': verified_count,
+        'suggested_action': suggested_action,
+        'scam_type': 'other',
+        'report_count': approved_count + pending_count,
+        'reports_verified': approved_count,
         'carrier': carrier_info,
+        'line_type': line_type,
+        'country_code': country_code,
+        'country_name': country_name,
         'is_virtual': is_virtual,
-        'trust_score': round(report_score, 2),
-        'reasons': reasons[:3],
+        'trust_score': round(reputation_score, 2),
+        'analysis_result': analysis_result,
+        'component_scores': {
+            'reputation': round(reputation_score, 2),
+            'metadata': round(metadata_score, 2),
+            'behavior': round(behavior_score, 2),
+        },
+        'check_descriptions': {
+            'reputation': (
+                f"Uy tín cộng đồng: {approved_count} báo cáo đã duyệt, {pending_count} báo cáo chờ duyệt; "
+                f"điểm thành phần {round(reputation_score, 2)}/45."
+            ),
+            'metadata': (
+                f"Tín hiệu metadata: carrier={carrier_info}, line_type={line_type}, "
+                f"virtual={'có' if is_virtual else 'không'}, country={country_code}; "
+                f"điểm thành phần {round(metadata_score, 2)}/25."
+            ),
+            'behavior': (
+                f"Hành vi gần đây: {reports_1h} báo cáo/1h, {reports_24h} báo cáo/24h, "
+                f"{unique_reporters_24h} nguồn độc lập; điểm thành phần {round(behavior_score, 2)}/30."
+            ),
+        },
+        'metrics': {
+            'reports_1h': reports_1h,
+            'reports_24h': reports_24h,
+            'reports_7d': reports_7d,
+            'unique_reporters_24h': unique_reporters_24h,
+        },
+        'reasons': reasons[:5],
     }
 
 
@@ -183,10 +359,8 @@ class ScanPhoneView(APIView):
         serializer = ScanPhoneSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        phone = normalize_phone(serializer.validated_data['phone'])
-        if not re.match(r'^0\d{9,10}$', phone):
-            return Response({'error': 'Số điện thoại không hợp lệ.'},
-                            status=status.HTTP_400_BAD_REQUEST)
+        # Already validated as E.164 by serializer (requires country flag).
+        phone = serializer.validated_data['phone']
 
         result = _phone_risk_score(phone)
 
@@ -227,6 +401,13 @@ class ScanEmailView(APIView):
             'body': content_text,
             'urls': [],
             'attachments': [],
+            'to': '',
+            'reply_to': '',
+            'delivered_to': '',
+            'received_chain': [],
+            'return_path': '',
+            'authentication_results': '',
+            'content_type': 'text/plain',
             'analysis_type': 'text'
         }
 
@@ -234,8 +415,8 @@ class ScanEmailView(APIView):
         if file_obj:
             try:
                 # Limit size to 10MB
-                if file_obj.size > 10 * 1024 * 1024:
-                    return Response({'error': 'File quá lớn (Max 10MB).'}, status=400)
+                if file_obj.size > 15 * 1024 * 1024:
+                    return Response({'error': 'File quá lớn (Max 15MB).'}, status=400)
 
                 # Use updated util
                 from api.utils.email_utils import parse_eml_content
@@ -247,6 +428,13 @@ class ScanEmailView(APIView):
                 email_data = {
                     'subject': parsed['subject'],
                     'from': parsed['from'],
+                    'to': parsed.get('to', ''),
+                    'reply_to': parsed.get('reply_to', ''),
+                    'delivered_to': parsed.get('delivered_to', ''),
+                    'received_chain': parsed.get('received_chain', []),
+                    'return_path': parsed.get('return_path', ''),
+                    'authentication_results': parsed.get('authentication_results', ''),
+                    'content_type': parsed.get('content_type', ''),
                     'body': parsed['body_text'],
                     'urls': parsed['extracted_urls'],
                     'attachments': parsed['attachments'],
@@ -716,6 +904,29 @@ def _analyze_domain(url: str) -> dict:
                 details.append(f"VirusTotal: {suspicious} engine(s) gắn cờ NGHI NGỜ")
             else:
                 details.append("VirusTotal: Sạch (không phát hiện mã độc)")
+
+    # 3. Tranco Rank (Pro-active Popularity Check)
+    tranco_data = lookup_tranco(domain)
+    if tranco_data and tranco_data.get('content') and "Popularity Rank" in tranco_data['content']:
+        try:
+            rank_part = tranco_data['content'].split('Popularity Rank: ')[1].split('\n')[0]
+            if rank_part.isdigit():
+                rank = int(rank_part)
+                # If rank is high (number is low), it's a very popular site
+                if rank < 10000:
+                    score = max(0, score - 60) # Massive trust boost
+                    details.append(f"Quy mô lớn (Tranco Top {rank}) - Rất uy tín")
+                elif rank < 100000:
+                    score = max(0, score - 30)
+                    details.append(f"Website phổ biến (Tranco Top {rank})")
+                elif rank < 1000000:
+                    score = max(0, score - 10)
+                    details.append(f"Website đã index (Top {rank})")
+            else: 
+                # Rank is N/A or text
+                pass
+        except Exception as e:
+            logger.warning(f"Tranco parse error: {e}")
 
     # Suspicious patterns
     if len(domain) > 30:

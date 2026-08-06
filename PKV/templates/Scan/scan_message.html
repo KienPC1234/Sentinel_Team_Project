@@ -191,7 +191,7 @@
 
                 <!-- Turnstile Widget -->
                 <div class="mt-4 flex justify-center">
-                    <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" data-theme="dark"></div>
+                    <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'"></div>
                 </div>
             </div>
         </form>

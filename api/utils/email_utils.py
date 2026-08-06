@@ -2,6 +2,9 @@
 import logging
 import email
 import re
+import ipaddress
+from typing import Dict, Any, List
+from urllib.parse import urlparse
 from email.policy import default
 from bs4 import BeautifulSoup
 import dns.resolver
@@ -12,6 +15,251 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_sender_domain(sender_text: str) -> str:
+    match = re.search(r'([\w\.-]+@[\w\.-]+)', sender_text or '')
+    if not match:
+        return ''
+    return match.group(1).split('@')[-1].lower().strip()
+
+
+def _parse_authentication_results(auth_text: str) -> Dict[str, str]:
+    auth_raw = (auth_text or '').lower()
+
+    def _pick(pattern: str) -> str:
+        m = re.search(pattern, auth_raw)
+        return m.group(1) if m else 'unknown'
+
+    return {
+        'spf': _pick(r'spf=(pass|fail|softfail|permerror|temperror|neutral|none)'),
+        'dkim': _pick(r'dkim=(pass|fail|permerror|temperror|neutral|none)'),
+        'dmarc': _pick(r'dmarc=(pass|fail|bestguesspass|none|quarantine|reject)'),
+        'arc': 'present' if 'arc-' in auth_raw else 'absent',
+    }
+
+
+def _is_ip_host(host: str) -> bool:
+    try:
+        ipaddress.ip_address((host or '').strip())
+        return True
+    except ValueError:
+        return False
+
+
+def compute_eml_weighted_risk(email_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Compute weighted risk score (0-100) for parsed EML data.
+
+    Components (A..F):
+    - A Authentication & trust (40%)
+    - B Delivery path & envelope (10%)
+    - C Sender reputation & DNS (15%)
+    - D Message content (20%)
+    - E Attachments (10%)
+    - F Technical anomalies / header oddities (5%)
+    """
+    details: List[str] = []
+
+    subject = (email_data.get('subject') or '').strip()
+    sender = (email_data.get('from') or '').strip()
+    body = (email_data.get('body') or '').strip()
+    urls = email_data.get('urls') or []
+    attachments = email_data.get('attachments') or []
+    received_chain = email_data.get('received_chain') or []
+    auth_results = _parse_authentication_results(email_data.get('authentication_results', ''))
+    return_path = (email_data.get('return_path') or '').strip()
+    reply_to = (email_data.get('reply_to') or '').strip()
+    delivered_to = (email_data.get('delivered_to') or '').strip()
+    content_type = (email_data.get('content_type') or '').lower()
+
+    sender_domain = _extract_sender_domain(sender)
+    return_domain = _extract_sender_domain(return_path)
+    reply_domain = _extract_sender_domain(reply_to)
+
+    # A) Authentication & trust
+    A = 0.0
+    spf = auth_results.get('spf', 'unknown')
+    dkim = auth_results.get('dkim', 'unknown')
+    dmarc = auth_results.get('dmarc', 'unknown')
+
+    if spf == 'fail':
+        A += 1.0
+        details.append('SPF fail')
+    elif spf in {'softfail', 'permerror', 'temperror'}:
+        A += 0.7
+        details.append(f'SPF {spf}')
+    elif spf in {'neutral', 'none', 'unknown'}:
+        A += 0.4
+        details.append('SPF không chắc chắn')
+
+    if dkim == 'fail':
+        A += 1.0
+        details.append('DKIM fail')
+    elif dkim in {'permerror', 'temperror'}:
+        A += 0.8
+        details.append(f'DKIM {dkim}')
+    elif dkim in {'none', 'unknown'}:
+        A += 0.5
+        details.append('DKIM thiếu hoặc không rõ')
+
+    if dmarc == 'fail':
+        A += 1.0
+        details.append('DMARC fail')
+    elif dmarc in {'quarantine', 'reject'}:
+        A += 0.7
+        details.append(f'DMARC policy={dmarc}')
+    elif dmarc in {'none', 'unknown'}:
+        A += 0.4
+        details.append('DMARC không rõ')
+
+    A = min(1.0, A)
+
+    # B) Delivery path & envelope
+    B = 0.0
+    hops = len(received_chain)
+    if hops >= 8:
+        B += 0.8
+        details.append(f'Chuỗi Received dài bất thường ({hops} hops)')
+    elif hops >= 5:
+        B += 0.4
+
+    if sender_domain and return_domain and sender_domain != return_domain:
+        B += 0.5
+        details.append('Return-Path khác domain người gửi')
+
+    if not delivered_to:
+        B += 0.2
+
+    B = min(1.0, B)
+
+    # C) Sender reputation & DNS
+    C = 0.0
+    if sender_domain:
+        try:
+            txt_records = dns.resolver.resolve(sender_domain, 'TXT')
+            has_spf = any('v=spf1' in str(r).lower() for r in txt_records)
+            if not has_spf:
+                C += 0.5
+                details.append('Tên miền gửi thiếu SPF record')
+        except Exception:
+            C += 0.5
+            details.append('Không truy vấn được SPF record của domain gửi')
+
+        try:
+            dmarc_records = dns.resolver.resolve(f'_dmarc.{sender_domain}', 'TXT')
+            dmarc_ok = any('v=dmarc1' in str(r).lower() for r in dmarc_records)
+            if not dmarc_ok:
+                C += 0.3
+        except Exception:
+            C += 0.3
+
+    # Reputable ESP indicators reduce this component slightly
+    sender_lower = sender.lower()
+    if any(esp in sender_lower or esp in (email_data.get('authentication_results', '').lower())
+           for esp in ['mailgun', 'sendgrid', 'amazonses', 'sparkpost', 'postmark']):
+        C = max(0.0, C - 0.2)
+
+    C = min(1.0, C)
+
+    # D) Content risk
+    D = 0.0
+    combined_text = f"{subject}\n{body}".lower()
+    phishing_kw = [
+        'verify', 'urgent', 'immediately', 'suspended', 'click', 'confirm', 'password',
+        'otp', 'mã xác thực', 'khẩn cấp', 'xác minh', 'đăng nhập', 'tài khoản'
+    ]
+    hits = sum(1 for kw in phishing_kw if kw in combined_text)
+    if hits >= 4:
+        D += 0.5
+        details.append('Nội dung có nhiều từ khóa phishing/khẩn cấp')
+    elif hits >= 2:
+        D += 0.3
+
+    url_hosts = []
+    for u in urls:
+        parsed = urlparse(u if '://' in u else f'http://{u}')
+        host = (parsed.hostname or '').lower()
+        if host:
+            url_hosts.append(host)
+            if _is_ip_host(host):
+                D += 0.6
+                details.append(f'URL dùng địa chỉ IP: {host}')
+        if any(short in (host or '') for short in ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl']):
+            D += 0.6
+            details.append('Có URL rút gọn trong email')
+
+    # Link-host mismatch versus sender domain (when sender domain known)
+    if sender_domain and url_hosts:
+        mismatch_count = sum(1 for host in url_hosts if sender_domain not in host)
+        if mismatch_count >= max(1, len(url_hosts) // 2):
+            D += 0.4
+            details.append('Domain link không khớp domain người gửi')
+
+    D = min(1.0, D)
+
+    # E) Attachment risk
+    E = 0.0
+    risky_ext = {'.exe', '.scr', '.js', '.vbs', '.bat', '.cmd', '.ps1', '.msi'}
+    risky_office = {'.docm', '.xlsm', '.pptm'}
+    for att in attachments:
+        filename = (att.get('filename') or '').lower()
+        ctype = (att.get('content_type') or '').lower()
+
+        if any(filename.endswith(ext) for ext in risky_ext):
+            E = max(E, 1.0)
+            details.append(f'Tệp đính kèm nguy hiểm: {filename}')
+            continue
+
+        if any(filename.endswith(ext) for ext in risky_office):
+            E = max(E, 1.0)
+            details.append(f'Tệp Office có macro tiềm ẩn: {filename}')
+            continue
+
+        if filename.endswith('.zip') or 'zip' in ctype:
+            E = max(E, 0.9)
+            details.append(f'Tệp nén cần kiểm tra thêm: {filename or "zip"}')
+            continue
+
+        if filename.endswith('.pdf') and ('javascript' in ctype or 'octet-stream' in ctype):
+            E = max(E, 0.6)
+
+    E = min(1.0, E)
+
+    # F) Technical/header anomalies
+    F = 0.0
+    if reply_domain and sender_domain and reply_domain != sender_domain:
+        F += 0.4
+        details.append('Reply-To khác domain người gửi')
+
+    brand_words = ['apple', 'google', 'microsoft', 'paypal', 'amazon', 'facebook', 'bank', 'vietcombank', 'mbbank']
+    if any(word in sender.lower() for word in brand_words) and sender_domain:
+        if not any(word in sender_domain for word in brand_words):
+            F += 0.5
+            details.append('Dấu hiệu mạo danh thương hiệu ở tên hiển thị')
+
+    if 'multipart' in content_type and not body:
+        F += 0.6
+        details.append('Multipart bất thường: thiếu nội dung body đọc được')
+
+    F = min(1.0, F)
+
+    score = round(40 * A + 10 * B + 15 * C + 20 * D + 10 * E + 5 * F)
+    score = max(0, min(100, score))
+
+    return {
+        'risk_score': score,
+        'components': {
+            'auth_trust': round(A, 3),
+            'delivery_path': round(B, 3),
+            'sender_reputation': round(C, 3),
+            'content_risk': round(D, 3),
+            'attachment_risk': round(E, 3),
+            'technical_anomaly': round(F, 3),
+        },
+        'auth_results': auth_results,
+        'details': details[:20],
+    }
 
 def parse_eml_content(file_bytes) -> dict:
     """
@@ -25,6 +273,8 @@ def parse_eml_content(file_bytes) -> dict:
             'subject': msg.get('Subject', ''),
             'from': msg.get('From', ''),
             'to': msg.get('To', ''),
+            'reply_to': msg.get('Reply-To', ''),
+            'delivered_to': msg.get('Delivered-To', ''),
             'received_chain': msg.get_all('Received', []),
             'return_path': msg.get('Return-Path', ''),
             'message_id': msg.get('Message-ID', ''),
@@ -82,6 +332,9 @@ def parse_eml_content(file_bytes) -> dict:
         # URL Regex fallback for plain text
         text_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', extracted_data['body_text'])
         extracted_data['extracted_urls'] = list(set(extracted_data['extracted_urls'] + text_urls))
+
+        # Parse auth summary for downstream scoring
+        extracted_data['auth_parsed'] = _parse_authentication_results(extracted_data['authentication_results'])
         
         return extracted_data
 
