@@ -75,7 +75,7 @@ class AIAgent:
             context_str += f"Nguồn: {res['title']} ({res['url']})\nNội dung: {res['text']}\n\n"
         return context_str, results
 
-    def chat_stream(self, user_message: str, images_data: List[str] = None) -> Generator[str, None, None]:
+    def chat_stream(self, user_message: str, images_data: List[str] = None, debug: bool = False) -> Generator[str, None, None]:
         """
         Main entry point for streaming chat with RAG and History.
         """
@@ -134,6 +134,19 @@ class AIAgent:
         if rag_context:
             messages.append({"role": "system", "content": f"SỬ DỤNG BỐI CẢNH SAU ĐỂ TRẢ LỜI:\n{rag_context}"})
         
+        # Inject scan context from "CHAT VỚI AI" button if available
+        scan_ctx = getattr(self, '_scan_context', '')
+        if scan_ctx:
+            messages.append({"role": "system", "content": (
+                "NGƯỜI DÙNG VỪA GỬI BỐI CẢNH SCAN ĐỂ BẠN PHÂN TÍCH. "
+                "Hãy sử dụng dữ liệu scan sau để trả lời câu hỏi của họ:\n\n"
+                f"{scan_ctx}"
+            )})
+            self._scan_context = ''  # Only use once
+        
+        if debug:
+            yield f"__DEBUG_PROMPT__:{json.dumps(messages, ensure_ascii=False)}"
+        
         messages.extend(history)
         # Ensure the latest message is the user query (it might have been saved already if history was empty)
         if not history or history[-1]['content'] != user_message:
@@ -142,7 +155,7 @@ class AIAgent:
         full_response = ""
         try:
             # 3. Use the improved stream_chat_ai from ollama_client
-            for chunk in stream_chat_ai(messages):
+            for chunk in stream_chat_ai(messages, debug=debug):
                 # Capture search results for metadata persistence
                 if chunk.startswith("__SEARCH_RESULTS__:") or chunk.startswith("__METADATA__:"):
                     try:
@@ -161,22 +174,14 @@ class AIAgent:
                         continue
                     except: pass
 
-                # Handle Tool Markers for Frontend Widgets (Hiding raw metadata from UI)
+                # Forward tool execution info to frontend for display
                 if chunk.startswith("__TOOL_CALLS__:"):
-                    try:
-                        tcs = json.loads(chunk[len("__TOOL_CALLS__:") :])
-                        for tc in tcs:
-                            fn = tc.get("function", {})
-                            name = fn.get("name")
-                            args = fn.get("arguments", {})
-                            if isinstance(args, str):
-                                args = json.loads(args)
+                    yield chunk  # Forward to frontend for tool card rendering
+                    continue
 
-                        # Internal marker yielding removed (user requested to hide [[SCAN_...]])
-                        continue
-                    except Exception as te:
-                        logger.error(f"Tool Call Parse Error: {te}")
-                        continue
+                if chunk.startswith("__TOOL_RESULT__:"):
+                    yield chunk  # Forward tool result to frontend
+                    continue
                 
                 # Normal Yield (content, thinking, status, search_results)
                 if chunk.startswith("__THINK__:"):

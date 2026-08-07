@@ -271,10 +271,10 @@ document.addEventListener('alpine:init', () => {
 {{ post_data|json_script:"forum-post-data" }}
 {{ comments_data|json_script:"forum-comments-data" }}
 
-<div class="max-w-5xl mx-auto px-4 py-8 animate__animated animate__fadeIn" x-data="forumDetail">
+<div class="max-w-5xl mx-auto px-4 py-8" x-data="forumDetail">
     
     <!-- Navigation & Meta -->
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center justify-between mb-8" data-aos="fade-right">
         <a href="/forum/" class="text-white/40 hover:text-cyan-400 flex items-center gap-2 transition-all font-bold text-sm">
             <i class="bi bi-arrow-left"></i> Quay lại diễn đàn
         </a>
@@ -287,7 +287,7 @@ document.addEventListener('alpine:init', () => {
 
     <!-- Main Thread Article -->
     <template x-if="post.id">
-        <article class="thread-card overflow-hidden mb-12 shadow-2xl shadow-black/40">
+        <article class="thread-card overflow-hidden mb-12 shadow-2xl shadow-black/40" data-aos="fade-up" data-aos-delay="100">
             <!-- Author Info & Category Bar -->
             <div class="px-8 py-4 bg-white/[0.03] border-b border-white/5 flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -358,14 +358,14 @@ document.addEventListener('alpine:init', () => {
 
     <!-- Discussion Section -->
     <div class="mb-20">
-        <h3 class="text-2xl font-black text-white mb-10 flex items-center gap-4">
+        <h3 class="text-2xl font-black text-white mb-10 flex items-center gap-4" data-aos="fade-up">
              Bình luận
             <span class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-sm font-bold text-cyan-400 border border-white/5" x-text="post.comments_count || 0"></span>
         </h3>
 
         <!-- New Comment Input Box -->
         {% if user.is_authenticated %}
-        <div class="thread-card p-1 mb-12 bg-gradient-to-br from-cyan-500/10 to-purple-500/10">
+        <div class="thread-card p-1 mb-12 bg-gradient-to-br from-cyan-500/10 to-purple-500/10" data-aos="fade-up" data-aos-delay="200">
             <div class="bg-[#0d0d1f]/80 backdrop-blur-3xl rounded-[1.9rem] p-6">
                 <div class="flex gap-6">
                     <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 flex items-center justify-center text-white font-black text-lg shrink-0 shadow-lg shadow-cyan-500/20">

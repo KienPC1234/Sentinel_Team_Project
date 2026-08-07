@@ -4,7 +4,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="animate-fadein max-w-4xl mx-auto space-y-10" x-data="{bank:'', account:'', loading:false, result:null, error:'', aiText:'', aiLoading:false, banks:[], searchBank:''}" x-init="
+<div class="max-w-7xl mx-auto px-4 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
+<div class="animate-fadein space-y-10" x-data="{bank:'', account:'', loading:false, result:null, error:'', aiText:'', aiLoading:false, aiEnabled:false, banks:[], searchBank:''}" x-init="
     fetch('/api/v1/scan/banks/').then(r=>r.json()).then(d=>{if(Array.isArray(d)) banks=d})
 ">
     <!-- Page Header -->
@@ -35,6 +36,7 @@
             .then(r=>{if(!r.ok)return r.json().then(e=>{throw e});return r.json()})
             .then(data=>{
                 result=data;loading=false;
+                if(aiEnabled){
                 aiLoading=true;aiText='';
                 fetch('/api/v1/scan/analyze-sse/', {
                     method:'POST',
@@ -54,17 +56,43 @@
                         pump();
                     });pump();
                 }).catch(()=>{aiLoading=false; showToast('Không thể kết nối AI.', 'warning');});
+                }
             })
             .catch(e=>{showToast(e.error||'Có lỗi xảy ra.', 'error');loading=false;})
         ">
             <div class="space-y-4">
-                <div class="relative">
-                    <select class="liquid-input w-full py-4 px-6 text-sm font-bold bg-white/5 border-white/10" x-model="bank">
-                        <option value="" class="bg-slate-900">-- Chọn ngân hàng --</option>
-                        <template x-for="b in banks" :key="b.bin">
-                            <option :value="b.shortName" class="bg-slate-900" x-text="b.shortName + ' - ' + b.name"></option>
-                        </template>
-                    </select>
+                <div class="relative dropdown-container" data-aos="fade-up" data-aos-delay="100">
+                    <div x-data="liquidSelect({
+                        value: '',
+                        placeholder: '-- Chọn ngân hàng --',
+                        options: () => banks.map(b => ({ value: b.shortName, label: b.shortName + ' - ' + b.name }))
+                    })" class="liquid-custom-select" @change="bank = $event.detail">
+                        <div class="liquid-select-trigger py-4 px-6 text-sm font-bold bg-white/5 border-white/10" :class="{ 'active': open }" @click="open = !open">
+                            <span x-text="label"></span>
+                            <i class="bi bi-chevron-down liquid-select-arrow" :class="{ 'rotate-180': open }"></i>
+                        </div>
+                        <div x-show="open" 
+                             x-transition:enter="liquid-select-dropdown entering"
+                             x-transition:enter-end="liquid-select-dropdown entered"
+                             x-transition:leave="liquid-select-dropdown entering"
+                             class="liquid-select-dropdown">
+                            <div class="max-h-60 overflow-y-auto custom-scrollbar">
+                                <template x-for="option in options" :key="option.value">
+                                    <div class="liquid-select-option" 
+                                         :class="{ 'selected': value === option.value }"
+                                         @click="select(option)">
+                                        <span x-text="option.label"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <select class="hidden" x-model="bank" name="bank">
+                            <option value="">-- Chọn ngân hàng --</option>
+                            <template x-for="b in banks" :key="b.bin">
+                                <option :value="b.shortName" x-text="b.shortName + ' - ' + b.name"></option>
+                            </template>
+                        </select>
+                    </div>
                     <div class="absolute right-12 top-1/2 -translate-y-1/2 pointer-events-none opacity-20" x-show="bank">
                          <template x-for="b in banks.filter(x=>x.shortName===bank)" :key="b.bin">
                              <img :src="b.logo" class="h-6 w-auto" x-show="b.logo">
@@ -72,7 +100,7 @@
                     </div>
                 </div>
                 
-                <div class="flex flex-col sm:flex-row gap-4">
+                <div class="flex flex-col sm:flex-row gap-4" data-aos="fade-up" data-aos-delay="200">
                     <input type="text" class="liquid-input flex-1 py-4 px-6 text-lg font-bold tracking-widest uppercase" 
                         placeholder="SỐ TÀI KHOẢN..." x-model="account" required>
                     <button type="submit" class="liquid-btn bg-yellow-500 text-black px-12 py-4 font-black hover:bg-yellow-400" :disabled="loading">
@@ -91,7 +119,7 @@
     <!-- Result Display -->
     <template x-if="result">
         <div class="space-y-8 animate-fadein">
-            <div class="liquid-card overflow-hidden">
+            <div class="liquid-card">
                 <!-- Status Header -->
                 <div class="p-8 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
                     <div class="absolute inset-0 opacity-10 -z-10 blur-[80px]"
@@ -117,23 +145,55 @@
                     </div>
                 </div>
 
-                <!-- AI Insight -->
-                <div class="m-8 p-6 liquid-glass border-white/5 bg-yellow-500/[0.02]">
-                    <div class="flex items-center gap-3 mb-6">
-                        <div class="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center text-yellow-400">
+                <!-- AI Toggle + Insight -->
+                <div class="m-8 p-6 liquid-glass border-white/5" :class="aiEnabled ? 'bg-yellow-500/[0.02]' : 'bg-white/[0.01]'">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center" :class="aiEnabled ? 'bg-yellow-500/20 text-yellow-400' : 'bg-white/10 text-white/30'">
                             <i class="bi bi-robot"></i>
                         </div>
-                        <div>
+                        <div class="flex-1">
                             <h4 class="text-sm font-black text-white uppercase tracking-wider">AI Financial Auditor</h4>
                             <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Anti-Money Laundering Check</p>
                         </div>
-                        <div x-show="aiLoading" class="ml-auto spinner w-4 h-4 text-yellow-400"></div>
+                        <label class="relative inline-flex items-center cursor-pointer ml-auto">
+                            <input type="checkbox" x-model="aiEnabled" class="sr-only peer"
+                                @change="if(aiEnabled && result && !aiText && !aiLoading){ 
+                                    aiLoading=true;aiText='';
+                                    fetch('/api/v1/scan/analyze-sse/', {
+                                        method:'POST',
+                                        headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()},
+                                        body:JSON.stringify({scan_type:'account',scan_data:result,raw_input:bank+' - '+account})
+                                    }).then(r=>{
+                                        const reader=r.body.getReader();const decoder=new TextDecoder();let buf='';
+                                        const pump=()=>reader.read().then(({done,value})=>{
+                                            if(done){aiLoading=false;return}
+                                            buf+=decoder.decode(value,{stream:true});
+                                            const lines=buf.split('\n');buf=lines.pop();
+                                            for(const line of lines){
+                                                if(line.startsWith('data: ')){
+                                                    try{const d=JSON.parse(line.substring(6));if(d.chunk)aiText+=d.chunk;if(d.done)aiLoading=false;}catch(e){}
+                                                }
+                                            }
+                                            pump();
+                                        });pump();
+                                    }).catch(()=>{aiLoading=false; showToast('Không thể kết nối AI.', 'warning');});
+                                }">
+                            <div class="w-11 h-6 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/20 after:border-white/10 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500/50"></div>
+                        </label>
+                        <div x-show="aiLoading" class="spinner w-4 h-4 text-yellow-400"></div>
                     </div>
                     
-                    <div class="ai-markdown text-white/70 text-sm leading-relaxed" 
-                         :class="{'ai-streaming': aiLoading}"
-                         x-html="renderMd(aiText)"></div>
-                    <p x-show="!aiText && !aiLoading" class="text-white/20 text-xs italic">Đang phân tích các giao dịch liên quan...</p>
+                    <template x-if="!aiEnabled && !aiText">
+                        <p class="text-white/20 text-xs italic">Bật toggle để AI phân tích chuyên sâu tài khoản này.</p>
+                    </template>
+                    <template x-if="aiEnabled || aiText">
+                        <div>
+                            <div class="ai-markdown text-white/70 text-sm leading-relaxed" 
+                                 :class="{'ai-streaming': aiLoading}"
+                                 x-html="renderMd(aiText)"></div>
+                            <p x-show="!aiText && !aiLoading && aiEnabled" class="text-white/20 text-xs italic">Đang phân tích các giao dịch liên quan...</p>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- Footer Actions -->
@@ -156,5 +216,7 @@
             </div>
         </div>
     </template>
+</div>
+{% include 'Scan/_scan_guide.html' with scan_type='bank' %}
 </div>
 {% endblock %}

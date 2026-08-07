@@ -4,18 +4,23 @@
 {% block title %}Scan File - ShieldCall VN{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 py-12" x-data="fileScanHandler()">
+<div class="max-w-7xl mx-auto px-4 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
+<div class="max-w-4xl mx-auto" x-data="fileScanHandler()">
     <!-- Header -->
-    <div class="text-center mb-12 animate__animated animate__fadeIn">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-pink-500/10 text-pink-500 mb-6 border border-pink-500/20">
+    <div class="text-center mb-12" data-aos="fade-up">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-pink-500/10 text-pink-500 mb-6 border border-pink-500/20 shadow-lg shadow-pink-500/10" data-aos="zoom-in" data-aos-delay="100">
             <i class="bi bi-file-earmark-medical text-3xl"></i>
         </div>
-        <h1 class="text-4xl font-black text-white mb-4 tracking-tight">Scan <span class="text-pink-500">File</span> Nghi Vấn</h1>
-        <p class="text-white/50 text-lg max-w-2xl mx-auto">Phát hiện mã độc, phần mềm gián điệp và các tệp tin độc hại bằng công nghệ VirusTotal & AI.</p>
+        <h1 class="text-4xl font-black text-white mb-4 tracking-tight leading-none" data-aos="fade-up" data-aos-delay="200">
+            Scan <span class="glow-text text-pink-500">File</span> Nghi Vấn
+        </h1>
+        <p class="text-white/40 text-lg max-w-2xl mx-auto leading-relaxed" data-aos="fade-up" data-aos-delay="300">
+            Phát hiện mã độc, phần mềm gián điệp và các tệp tin độc hại bằng công nghệ VirusTotal & AI.
+        </p>
     </div>
 
     <!-- Upload Card -->
-    <div class="glass-v2-card p-8 sm:p-12 mb-8 relative overflow-hidden group">
+    <div x-show="!result" class="liquid-card p-8 sm:p-12 mb-8 relative group" data-aos="fade-up" data-aos-delay="400">
         <div class="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
         
         <div class="relative z-10">
@@ -131,6 +136,8 @@
         </div>
     </template>
 </div>
+{% include 'Scan/_scan_guide.html' with scan_type='file' %}
+</div>
 
 <script>
 function fileScanHandler() {
@@ -215,7 +222,7 @@ function fileScanHandler() {
                     
                     if (data.status === 'completed') {
                         this.progress = 100;
-                        this.result = data.result_json;
+                        this.result = data.result;
                         this.scanning = false;
                         clearInterval(this.statusInterval);
                     } else if (data.status === 'failed') {

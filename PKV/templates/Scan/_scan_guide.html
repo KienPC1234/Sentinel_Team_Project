@@ -1,0 +1,260 @@
+{# Reusable Guide Panel for Scan Pages #}
+{# Usage: include 'Scan/_scan_guide.html' with scan_type='phone' #}
+
+<aside class="lg:sticky lg:top-24 h-fit" x-data="{ guideOpen: window.innerWidth >= 1024 }">
+    <!-- Mobile Toggle Button -->
+    <button @click="guideOpen = !guideOpen" 
+            class="lg:hidden w-full flex items-center justify-between liquid-card p-4 mb-4 text-left group">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                <i class="bi bi-question-circle text-xl"></i>
+            </div>
+            <span class="text-white font-bold">Hướng dẫn sử dụng</span>
+        </div>
+        <i class="bi text-white/40 transition-transform" :class="guideOpen ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+    </button>
+
+    <!-- Guide Content -->
+    <div x-show="guideOpen" x-transition.opacity.duration.200ms
+         class="liquid-card p-6 space-y-5 border border-cyan-500/10">
+        
+        <!-- Header -->
+        <div class="flex items-center gap-3 pb-4 border-b border-white/5">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
+                <i class="bi bi-book text-lg"></i>
+            </div>
+            <div>
+                <h3 class="text-white font-bold text-sm">Hướng dẫn sử dụng</h3>
+                <p class="text-white/30 text-xs">Dành cho mọi người</p>
+            </div>
+        </div>
+
+        <!-- Steps -->
+        <div class="space-y-3">
+            {% if scan_type == 'phone' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhập <strong class="text-white">số điện thoại</strong> cần kiểm tra. Nhớ thêm mã quốc gia phía trước (ví dụ: <strong class="text-cyan-400">+84</strong> cho Việt Nam).</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Hoàn thành <strong class="text-white">xác minh bảo mật</strong> (ô vuông phía dưới).</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn nút <strong class="text-cyan-400">SCAN</strong> và chờ kết quả.</p>
+            </div>
+
+            {% elif scan_type == 'bank' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn vào ô <strong class="text-white">chọn ngân hàng</strong> và tìm tên ngân hàng bạn cần kiểm tra.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhập <strong class="text-white">số tài khoản</strong> cần kiểm tra vào ô bên dưới.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn <strong class="text-yellow-400">KIỂM TRA</strong> và chờ hệ thống tra cứu.</p>
+            </div>
+
+            {% elif scan_type == 'email' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed">Chọn chế độ: <strong class="text-white">Nhập tay</strong> (gõ email + nội dung) hoặc <strong class="text-white">Tải file .eml</strong> (chính xác hơn).</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhập <strong class="text-white">địa chỉ email</strong> người gửi và nội dung email đáng ngờ (hoặc tải file .eml).</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn <strong class="text-blue-400">PHÂN TÍCH</strong> và chờ kết quả.</p>
+            </div>
+
+            <!-- How to export .eml -->
+            <div class="mt-3 p-3.5 rounded-xl bg-blue-500/5 border border-blue-500/10 space-y-2">
+                <h5 class="text-blue-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <i class="bi bi-download"></i> Cách tải file .eml
+                </h5>
+                <div class="space-y-1.5 text-white/50 text-xs leading-relaxed">
+                    <p><strong class="text-white/70">Gmail:</strong> Mở email → nhấn <strong class="text-white/70">⋮</strong> (góc phải) → chọn <strong class="text-blue-400">Tải thư xuống</strong>.</p>
+                    <p><strong class="text-white/70">Outlook:</strong> Mở email → <strong class="text-white/70">File</strong> → <strong class="text-blue-400">Save As</strong> → lưu định dạng .eml.</p>
+                    <p><strong class="text-white/70">Apple Mail:</strong> Mở email → kéo thả email ra Desktop hoặc <strong class="text-blue-400">File → Save As</strong>.</p>
+                </div>
+                <p class="text-blue-400/60 text-[10px] mt-1"><i class="bi bi-info-circle"></i> File .eml chứa đầy đủ header gốc, giúp phân tích chính xác hơn nhiều so với nhập tay.</p>
+            </div>
+
+            {% elif scan_type == 'file' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed"><strong class="text-white">Kéo thả</strong> file cần kiểm tra vào ô phía trên hoặc <strong class="text-white">nhấn vào ô</strong> để chọn file.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Kiểm tra tên file và kích thước. Tối đa <strong class="text-pink-400">32MB</strong>.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn <strong class="text-pink-400">QUÉT FILE</strong> và chờ VirusTotal phân tích.</p>
+            </div>
+
+            {% elif scan_type == 'message' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhập hoặc dán <strong class="text-white">nội dung tin nhắn</strong> đáng ngờ vào ô bên trái.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Bạn cũng có thể <strong class="text-white">tải ảnh chụp màn hình</strong> tin nhắn để hệ thống đọc chữ tự động (OCR).</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn <strong class="text-purple-400">PHÂN TÍCH</strong> và chờ AI đánh giá.</p>
+            </div>
+
+            {% elif scan_type == 'website' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhập <strong class="text-white">đường link website</strong> cần kiểm tra (ví dụ: example.com hoặc https://...).</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Bật <strong class="text-emerald-400">Deep Scan</strong> nếu bạn muốn phân tích sâu hơn (mất thêm thời gian).</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn <strong class="text-emerald-400">SCAN</strong> và chờ kết quả.</p>
+            </div>
+
+            {% elif scan_type == 'qr' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed"><strong class="text-white">Chụp ảnh</strong> mã QR hoặc ảnh chứa nội dung đáng ngờ, rồi tải lên.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Bạn có thể tải <strong class="text-white">nhiều ảnh cùng lúc</strong>. Hỗ trợ JPG, PNG, GIF, WebP.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn <strong class="text-cyan-400">PHÂN TÍCH</strong> và chờ AI nhận diện.</p>
+            </div>
+
+            {% elif scan_type == 'report' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed">Chọn <strong class="text-white">loại đối tượng</strong>: Số điện thoại, website, email, tài khoản ngân hàng, tin nhắn hoặc QR.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Điền <strong class="text-white">thông tin chi tiết</strong>: Họ tên đối tượng, số tài khoản, ngân hàng (nếu có).</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Mô tả <strong class="text-white">chi tiết vụ việc</strong> và tải ảnh bằng chứng lên. Dùng AI quét chữ để tự động trích xuất.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-black shrink-0">4</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nhấn <strong class="text-red-400">GỬI BÁO CÁO</strong> — đội ngũ kiểm duyệt sẽ xử lý trong 24h.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Divider -->
+        <div class="border-t border-white/5"></div>
+
+        <!-- Understanding Results -->
+        <div>
+            <h4 class="text-white font-bold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
+                <i class="bi bi-palette text-white/40"></i>
+                Hiểu kết quả
+            </h4>
+            <div class="space-y-2">
+                <div class="flex items-center gap-3 p-2.5 rounded-lg bg-red-500/5 border border-red-500/10">
+                    <div class="w-3 h-3 rounded-full bg-red-500 shrink-0"></div>
+                    <div>
+                        <span class="text-red-400 text-xs font-bold">ĐỎ — Nguy hiểm</span>
+                        <p class="text-white/40 text-[11px]">Có dấu hiệu lừa đảo rõ ràng</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-2.5 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
+                    <div class="w-3 h-3 rounded-full bg-yellow-500 shrink-0"></div>
+                    <div>
+                        <span class="text-yellow-400 text-xs font-bold">VÀNG — Cẩn thận</span>
+                        <p class="text-white/40 text-[11px]">Có dấu hiệu đáng ngờ, cần cảnh giác</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-2.5 rounded-lg bg-green-500/5 border border-green-500/10">
+                    <div class="w-3 h-3 rounded-full bg-green-500 shrink-0"></div>
+                    <div>
+                        <span class="text-green-400 text-xs font-bold">XANH — An toàn</span>
+                        <p class="text-white/40 text-[11px]">Không phát hiện dấu hiệu lừa đảo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="border-t border-white/5"></div>
+
+        <!-- Tips -->
+        <div>
+            <h4 class="text-white font-bold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
+                <i class="bi bi-lightbulb text-white/40"></i>
+                Mẹo hay
+            </h4>
+            <ul class="space-y-2 text-white/50 text-xs leading-relaxed">
+                {% if scan_type == 'phone' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>Nếu nhận cuộc gọi lạ, kiểm tra số ở đây trước khi gọi lại.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>Số bắt đầu bằng +84 là số Việt Nam.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>Kết quả "An toàn" không có nghĩa 100% không lừa đảo — hãy luôn cẩn thận.</li>
+                {% elif scan_type == 'bank' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-yellow-500/60 shrink-0 mt-0.5"></i>Luôn kiểm tra số tài khoản trước khi chuyển tiền cho người lạ.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-yellow-500/60 shrink-0 mt-0.5"></i>Nếu bị lừa, hãy báo ngay cho ngân hàng và gọi 113.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-yellow-500/60 shrink-0 mt-0.5"></i>Không chuyển tiền khi bị giục gấp — đó có thể là chiêu trò.</li>
+                {% elif scan_type == 'email' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-blue-500/60 shrink-0 mt-0.5"></i>Email lừa đảo thường giả mạo ngân hàng, cơ quan nhà nước.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-blue-500/60 shrink-0 mt-0.5"></i>Không nhấp vào link trong email nghi ngờ.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-blue-500/60 shrink-0 mt-0.5"></i>Xuất file .eml để quét chính xác nhất.</li>
+                {% elif scan_type == 'file' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-pink-500/60 shrink-0 mt-0.5"></i>Không mở file .exe, .apk từ người lạ gửi.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-pink-500/60 shrink-0 mt-0.5"></i>File PDF, Word cũng có thể chứa mã độc.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-pink-500/60 shrink-0 mt-0.5"></i>Quét file ở đây trước khi mở sẽ giúp bạn an toàn hơn.</li>
+                {% elif scan_type == 'message' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-purple-500/60 shrink-0 mt-0.5"></i>Tin nhắn trúng thưởng, nhận quà — hầu hết là lừa đảo.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-purple-500/60 shrink-0 mt-0.5"></i>Hãy chụp ảnh màn hình tin nhắn đáng ngờ để quét.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-purple-500/60 shrink-0 mt-0.5"></i>Không nhấn vào đường link trong tin nhắn lạ.</li>
+                {% elif scan_type == 'website' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-emerald-500/60 shrink-0 mt-0.5"></i>Trang web lừa đảo thường giả mạo giao diện giống thật.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-emerald-500/60 shrink-0 mt-0.5"></i>Kiểm tra tên miền có chính xác không (ví dụ: vietcombank.com.vn).</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-emerald-500/60 shrink-0 mt-0.5"></i>Dùng Deep Scan để kiểm tra nội dung website chi tiết hơn.</li>
+                {% elif scan_type == 'qr' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>QR Code giả có thể dẫn đến web lừa đảo hoặc cài mã độc.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>Không quét QR từ nguồn không rõ ràng.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>Chụp ảnh QR và tải lên đây để kiểm tra trước khi quét bằng điện thoại.</li>
+                {% elif scan_type == 'report' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-red-500/60 shrink-0 mt-0.5"></i>Thông tin càng chi tiết và có bằng chứng càng giúp cộng đồng nhiều.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-red-500/60 shrink-0 mt-0.5"></i>Tải ảnh bằng chứng (tin nhắn, chuyển khoản) và dùng AI quét chữ tự động.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-red-500/60 shrink-0 mt-0.5"></i>Nếu bị lừa tiền, hãy gọi 113 và báo ngân hàng đóng băng tài khoản ngay.</li>
+                {% endif %}
+            </ul>
+        </div>
+
+        <!-- Help Footer -->
+        <div class="pt-3 border-t border-white/5">
+            {% if scan_type == 'report' %}
+            <a href="/scan/" class="flex items-center gap-2 text-xs text-cyan-400/70 hover:text-cyan-400 transition-colors">
+                <i class="bi bi-shield-check"></i>
+                <span>Muốn kiểm tra trước? <strong>Quét ngay tại đây</strong></span>
+            </a>
+            {% else %}
+            <a href="/report/" class="flex items-center gap-2 text-xs text-cyan-400/70 hover:text-cyan-400 transition-colors">
+                <i class="bi bi-flag"></i>
+                <span>Phát hiện lừa đảo? <strong>Tố cáo ngay</strong></span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</aside>

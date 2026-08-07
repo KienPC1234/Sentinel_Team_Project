@@ -8,14 +8,14 @@ from django.contrib import messages
 
 User = get_user_model()
 from django.db.models import Count, Q, Sum, F
-from django.db.models.functions import TruncDate
+from django.db.models.functions import TruncDate, TruncHour, TruncMonth
 from django.utils import timezone
 from datetime import timedelta
 
 from api.core.models import (
     ScanEvent, Report, Domain, TrendDaily,
     UserAlert, ForumPost, ForumComment, ScamType, RiskLevel,
-    Article, ArticleCategory,
+    Article, ArticleCategory, ReportStatus,
 )
 from api.core.serializers import ForumPostSerializer, ForumCommentSerializer
 from api.phone_security.models import PhoneNumber
@@ -127,6 +127,21 @@ def scan_qr_view(request):
     })
 
 
+def scan_status_view(request, scan_id):
+    """Display scan result page for /scan/status/<id>/."""
+    scan = get_object_or_404(ScanEvent, id=scan_id)
+    scan_json = json.dumps({
+        'result': scan.result_json or {},
+        'risk_score': scan.risk_score,
+        'risk_level': scan.risk_level,
+    }, ensure_ascii=False)
+    return render(request, "Scan/scan_status.html", {
+        "title": f"Kết quả quét #{scan.id}",
+        "scan": scan,
+        "scan_json": scan_json,
+    })
+
+
 def report_view(request):
     return render(request, "Report/report.html", {
         "title": "Báo cáo lừa đảo",
@@ -137,23 +152,56 @@ def report_view(request):
 def scam_radar_view(request):
     """Scam Radar page with real stats and chart data."""
     try:
-        week_ago = timezone.now() - timedelta(days=7)
-        prev_week = week_ago - timedelta(days=7)
+        range_key = request.GET.get('range', '7d')
+        now = timezone.now()
+        
+        # 1. Calculate time range
+        if range_key == '24h':
+            delta = timedelta(hours=24)
+            start_date = now - delta
+            prev_start = now - timedelta(hours=48)
+            trunc_func = TruncHour
+            date_fmt = '%H:%M'
+            chart_range_steps = 24
+        elif range_key == '30d':
+            delta = timedelta(days=30)
+            start_date = now - delta
+            prev_start = now - timedelta(days=60)
+            trunc_func = TruncDate
+            date_fmt = '%d/%m'
+            chart_range_steps = 30
+        elif range_key == '1y':
+            delta = timedelta(days=365)
+            start_date = now - delta
+            prev_start = now - timedelta(days=730)
+            trunc_func = TruncMonth
+            date_fmt = '%m/%Y'
+            chart_range_steps = 12
+        else: # default 7d
+            range_key = '7d'
+            delta = timedelta(days=7)
+            start_date = now - delta
+            prev_start = now - timedelta(days=14)
+            trunc_func = TruncDate
+            date_fmt = '%d/%m'
+            chart_range_steps = 7
 
-        reports_this_week = Report.objects.filter(created_at__gte=week_ago).count()
-        reports_prev_week = Report.objects.filter(
-            created_at__gte=prev_week, created_at__lt=week_ago
+        # 2. Key Metrics
+        reports_this_period = Report.objects.filter(created_at__gte=start_date).count()
+        reports_prev_period = Report.objects.filter(
+            created_at__gte=prev_start, created_at__lt=start_date
         ).count()
+        
         pct_change = 0
-        if reports_prev_week > 0:
-            pct_change = int(((reports_this_week - reports_prev_week) / reports_prev_week) * 100)
+        if reports_prev_period > 0:
+            pct_change = int(((reports_this_period - reports_prev_period) / reports_prev_period) * 100)
 
-        new_phones = PhoneNumber.objects.filter(created_at__gte=week_ago).count() if hasattr(PhoneNumber, 'created_at') else 0
-        phishing_domains = Domain.objects.filter(created_at__gte=week_ago).count()
+        new_phones = PhoneNumber.objects.filter(created_at__gte=start_date).count() if hasattr(PhoneNumber, 'created_at') else 0
+        phishing_domains = Domain.objects.filter(created_at__gte=start_date).count()
 
-        # Hot phone numbers
+        # 3. Hot phone numbers
         hot_phones = (
-            Report.objects.filter(created_at__gte=week_ago, target_type='phone')
+            Report.objects.filter(created_at__gte=start_date, target_type='phone')
             .values('target_value', 'scam_type')
             .annotate(count=Count('id'))
             .order_by('-count')[:5]
@@ -165,16 +213,16 @@ def scam_radar_view(request):
             v = hp['target_value']
             hp['masked'] = v[:4] + '****' + v[-2:] if len(v) > 6 else v
 
-        # Recent reports
+        # 4. Recent reports
         recent_reports = Report.objects.select_related('reporter').order_by('-created_at')[:5]
 
-        # Trend chart data (7 days)
-        trend_data = _build_trend_data(week_ago)
-        type_data = _build_type_distribution(week_ago)
+        # 5. Trend chart data
+        trend_data = _build_dynamic_trend_data(start_date, range_key, trunc_func, date_fmt, chart_range_steps)
+        type_data = _build_type_distribution(start_date)
 
     except Exception as e:
         logger.error(f"Error loading scam radar: {e}")
-        reports_this_week = 0
+        reports_this_period = 0
         pct_change = 0
         new_phones = 0
         phishing_domains = 0
@@ -182,11 +230,14 @@ def scam_radar_view(request):
         recent_reports = []
         trend_data = {'labels': [], 'datasets': []}
         type_data = {'labels': [], 'data': []}
+        range_key = '7d'
 
     return render(request, "ScamRadar/scam_radar.html", {
-        "title": "Scam Radar",
-        "reports_this_week": _format_number(reports_this_week),
+        "title": "Radar Lừa Đảo",
+        "current_range": range_key,
+        "reports_count": _format_number(reports_this_period),
         "pct_change": f"+{pct_change}%" if pct_change >= 0 else f"{pct_change}%",
+        "pct_color": "text-green-400" if pct_change >= 0 else "text-red-400",
         "new_phones": _format_number(new_phones),
         "phishing_domains": phishing_domains,
         "hot_phones": hot_phones,
@@ -196,10 +247,37 @@ def scam_radar_view(request):
     })
 
 
-def _build_trend_data(since):
-    """Build 7-day trend chart data grouped by scam type."""
-    days = [(since + timedelta(days=i)).date() for i in range(7)]
-    day_labels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+def _build_dynamic_trend_data(since, range_key, trunc_func, date_fmt, steps):
+    """Build dynamic trend chart data."""
+    now = timezone.now()
+    expected_keys = []
+    
+    if range_key == '24h':
+        # Last 24 hours
+        expected_keys = [(now - timedelta(hours=i)).strftime(date_fmt) for i in range(steps)][::-1]
+    elif range_key == '30d':
+        # Last 30 days
+        expected_keys = [(now - timedelta(days=i)).strftime(date_fmt) for i in range(steps)][::-1]
+    elif range_key == '1y':
+        # Last 12 months (approx)
+        expected_keys = []
+        # Go back 12 months.
+        # We start from current month and go back.
+        curr_m = now.month
+        curr_y = now.year
+        for i in range(steps):
+             # Calculate month/year
+             m = curr_m - i
+             y = curr_y
+             while m <= 0:
+                 m += 12
+                 y -= 1
+             # Create date object for 1st of that month
+             d = now.replace(year=y, month=m, day=1)
+             expected_keys.append(d.strftime(date_fmt))
+        expected_keys = expected_keys[::-1] 
+    else: # 7d
+        expected_keys = [(now - timedelta(days=i)).strftime(date_fmt) for i in range(steps)][::-1]
 
     # Get top 3 scam types
     top_types = (
@@ -212,25 +290,97 @@ def _build_trend_data(since):
     scam_labels = dict(ScamType.choices)
 
     datasets = []
+    
+    # Helper to format db result key
+    def fmt_key(dt_obj):
+        if not dt_obj: return ""
+        return dt_obj.strftime(date_fmt)
+
     for i, tt in enumerate(top_types):
         st = tt['scam_type']
-        daily = (
+        
+        # Query
+        qs = (
             Report.objects.filter(created_at__gte=since, scam_type=st)
-            .annotate(day=TruncDate('created_at'))
-            .values('day')
+            .annotate(period=trunc_func('created_at'))
+            .values('period')
             .annotate(c=Count('id'))
+            .order_by('period')
         )
-        day_map = {d['day']: d['c'] for d in daily}
+        
+        data_map = {fmt_key(item['period']): item['c'] for item in qs}
+        
+        # Fill zero for missing points
+        data_points = [data_map.get(k, 0) for k in expected_keys]
+        
         datasets.append({
             'label': scam_labels.get(st, st),
-            'data': [day_map.get(d, 0) for d in days],
+            'data': data_points,
             'borderColor': colors[i],
             'backgroundColor': colors[i].replace('#', 'rgba(') + ',0.1)' if i == 0 else f'rgba({int(colors[i][1:3],16)},{int(colors[i][3:5],16)},{int(colors[i][5:7],16)},0.1)',
             'fill': True,
             'tension': 0.4,
         })
 
-    return {'labels': day_labels[:len(days)], 'datasets': datasets}
+    return {'labels': expected_keys, 'datasets': datasets}
+
+    # But database returns Truncated object.
+    
+    # Helper to format db result key
+    def fmt_key(dt_obj):
+        if not dt_obj: return ""
+        return dt_obj.strftime(date_fmt)
+
+    # Note: '1y' range requires special handling for keys if we iterate 365 days vs 12 months
+    if range_key == '1y':
+         # Generate last 12 months keys
+         expected_keys = []
+         for i in range(12):
+             # 1st of month
+             d = (now.replace(day=1) - timedelta(days=30 * (11-i))).replace(day=1)
+             expected_keys.append(d.strftime(date_fmt))
+    
+    # If 24h, we want 24 points
+    if range_key == '24h':
+        expected_keys = [(now - timedelta(hours=i)).strftime(date_fmt) for i in range(24)][::-1]
+
+    # If 30d, we want 30 points
+    if range_key == '30d':
+        expected_keys = [(now - timedelta(days=i)).strftime(date_fmt) for i in range(30)][::-1]
+        
+    # If 7d
+    if range_key == '7d':
+        expected_keys = [(now - timedelta(days=i)).strftime(date_fmt) for i in range(7)][::-1]
+
+    if not labels: labels = expected_keys
+
+    for i, tt in enumerate(top_types):
+        st = tt['scam_type']
+        
+        # Query
+        qs = (
+            Report.objects.filter(created_at__gte=since, scam_type=st)
+            .annotate(period=trunc_func('created_at'))
+            .values('period')
+            .annotate(c=Count('id'))
+            .order_by('period')
+        )
+        
+        data_map = {fmt_key(item['period']): item['c'] for item in qs}
+        
+        # Fill zero
+        data_points = [data_map.get(k, 0) for k in expected_keys]
+        
+        datasets.append({
+            'label': scam_labels.get(st, st),
+            'data': data_points,
+            'borderColor': colors[i],
+            'backgroundColor': colors[i].replace('#', 'rgba(') + ',0.1)' if i == 0 else f'rgba({int(colors[i][1:3],16)},{int(colors[i][3:5],16)},{int(colors[i][5:7],16)},0.1)',
+            'fill': True,
+            'tension': 0.4,
+        })
+
+    return {'labels': expected_keys, 'datasets': datasets}
 
 
 def _build_type_distribution(since):
@@ -503,4 +653,40 @@ def scan_file_view(request):
         "title": "Scan File",
         "active_page": "scan_file",
         "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
+
+
+def scan_audio_view(request):
+    """Audio scan page — upload or record audio for AI scam analysis."""
+    return render(request, "Scan/scan_audio.html", {
+        "title": "Quét Âm Thanh",
+        "active_page": "scan_audio",
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
+
+
+def scam_radar_list_view(request, list_type):
+    """View detailed list of scams (phones, accounts, domains, emails)"""
+    mapping = {
+        'phones': ('phone', 'Danh sách SĐT lừa đảo'),
+        'accounts': ('account', 'Danh sách TK ngân hàng lừa đảo'),
+        'domains': ('domain', 'Danh sách Website/Link lừa đảo'),
+        'emails': ('email', 'Danh sách Email lừa đảo'),
+    }
+
+    if list_type not in mapping:
+        return redirect('scam-radar')
+
+    mapped_type, title = mapping[list_type]
+
+    # Get approved reports only
+    reports = Report.objects.filter(
+        target_type=mapped_type,
+        status=ReportStatus.APPROVED
+    ).select_related('reporter').order_by('-created_at')[:200]
+
+    return render(request, "ScamRadar/list.html", {
+        "title": title,
+        "list_type": list_type,
+        "reports": reports,
     })

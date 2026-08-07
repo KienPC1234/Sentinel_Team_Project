@@ -17,66 +17,36 @@
             <i class="bi bi-shield-check"></i> Hệ thống bảo mật AI v2.0
         </div>
         
-        <h1 class="text-5xl md:text-7xl font-black text-white leading-tight tracking-tighter animate-fadein">
+        <h1 class="text-5xl md:text-7xl font-black text-white leading-tight tracking-tighter" data-aos="fade-up" data-aos-delay="100">
             <span class="glow-text">Lớp giáp bảo vệ</span><br>
             <span class="opacity-90 italic text-white md:text-inherit">cuộc sống số của bạn</span>
         </h1>
         
-        <p class="text-lg md:text-xl text-white/50 leading-relaxed animate-fadein animate-delay-100 max-w-2xl mx-auto font-medium">
+        <p class="text-lg md:text-xl text-white/50 leading-relaxed max-w-2xl mx-auto font-medium" data-aos="fade-up" data-aos-delay="200">
             Phát hiện và cảnh báo tức thì các cuộc gọi, tin nhắn và website lừa đảo bằng trí tuệ nhân tạo hàng đầu.
         </p>
 
         <!-- Quick Scan Interface -->
-        <div class="pt-8 animate-fadein animate-delay-200">
-            <div class="liquid-card max-w-2xl mx-auto p-2 sm:p-3 overflow-visible group focus-within:border-cyan-400/50 focus-within:shadow-[0_0_40px_rgba(34,211,238,0.15)] transition-all" 
-                x-data="{phone:'', loading:false, result:null}">
-                <div class="flex flex-col sm:flex-row gap-2">
+        <div class="pt-8" data-aos="fade-up" data-aos-delay="300">
+            <div class="liquid-card max-w-2xl mx-auto p-2 sm:p-3 overflow-visible group focus-within:border-cyan-400/50 focus-within:shadow-[0_0_40px_rgba(34,211,238,0.15)] transition-all">
+                <form action="/scan/phone/" method="GET" class="flex flex-col sm:flex-row gap-2">
                     <div class="flex-1 relative">
                         <i class="bi bi-telephone absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-lg"></i>
-                        <input type="tel" x-model="phone" placeholder="Nhập số điện thoại nghi vấn..." 
-                            class="w-full bg-white/[0.03] border-none text-white pl-12 pr-4 py-4 rounded-2xl focus:ring-2 focus:ring-cyan-500/40 text-base font-bold placeholder:text-white/20"
-                            @keydown.enter="if(phone.length > 5) { loading=true; result=null; fetch('/api/v1/scan/phone/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()}, body:JSON.stringify({phone:phone.trim()})}).then(r=>r.json()).then(d=>{result=d;loading=false}).catch(()=>{loading=false; showToast('Lỗi kết nối','error')}) }">
+                        <input type="tel" name="phone" placeholder="Nhập số điện thoại (VD: 091...)" 
+                            class="w-full bg-white/[0.03] border-none text-white pl-12 pr-4 py-4 rounded-2xl focus:ring-2 focus:ring-cyan-500/40 text-base font-bold placeholder:text-white/20">
                     </div>
-                    <button @click="if(phone.length > 5) { loading=true; result=null; fetch('/api/v1/scan/phone/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRFToken()}, body:JSON.stringify({phone:phone.trim()})}).then(r=>r.json()).then(d=>{result=d;loading=false}).catch(()=>{loading=false; showToast('Lỗi kết nối','error')}) }" 
+                    <button type="submit"
                         class="liquid-btn bg-cyan-500 text-black border-none px-10 py-4 font-black hover:bg-cyan-400 hover:text-black">
-                        <span x-show="!loading">SCAN NGAY</span>
-                        <span x-show="loading" class="spinner w-5 h-5 border-white"></span>
+                        SCAN NGAY
                     </button>
-                </div>
-
-                <!-- Quick Result Popover -->
-                <div x-show="result" x-transition class="absolute top-full left-0 right-0 mt-4 z-50">
-                    <div class="liquid-card p-6 text-left border-l-4" 
-                        :class="result && result.risk_level === 'RED' ? 'border-red-500 bg-red-500/10' : result && result.risk_level === 'YELLOW' ? 'border-yellow-500 bg-yellow-500/10' : 'border-green-500 bg-green-500/10'">
-                        <div class="flex justify-between items-start mb-4">
-                            <div>
-                                <h4 class="text-white font-black text-lg" x-text="result && result.risk_level === 'RED' ? 'CẢNH BÁO NGUY HIỂM' : 'KẾT QUẢ KIỂM TRA'"></h4>
-                                <p class="text-white/60 text-xs font-bold uppercase tracking-wider" x-text="'Độ rủi ro: ' + (result ? result.risk_score : 0) + '/100'"></p>
-                            </div>
-                            <button @click="result = null" class="text-white/20 hover:text-white"><i class="bi bi-x-lg"></i></button>
-                        </div>
-                        <template x-if="result && result.reasons && result.reasons.length > 0">
-                            <div class="space-y-2 mb-4">
-                                <template x-for="r in result.reasons" :key="r">
-                                    <div class="flex gap-2 text-sm text-white/80">
-                                        <i class="bi bi-dot text-cyan-400"></i>
-                                        <span x-text="r"></span>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-                        <a href="/scan/phone/" class="text-cyan-400 text-[11px] font-black uppercase tracking-widest hover:underline flex items-center gap-2">
-                            Xem chi tiết đầy đủ <i class="bi bi-arrow-right"></i>
-                        </a>
-                    </div>
-                </div>
+                </form>
             </div>
         </div>
     </div>
 </section>
 
 <!-- Impact Stats Row -->
-<section class="max-w-6xl mx-auto px-4 mb-24 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fadein animate-delay-300">
+<section class="max-w-6xl mx-auto px-4 mb-24 grid grid-cols-2 md:grid-cols-4 gap-4" data-aos="fade-up" data-aos-delay="400">
     <div class="liquid-card p-8 text-center bg-white/[0.02] border-white/5">
         <div class="text-3xl font-black text-white glow-text mb-1">{{ total_scans|default:"1.2M+" }}</div>
         <div class="text-[10px] text-white/30 font-black uppercase tracking-[0.2em]">Tổng Lượt Scan</div>
@@ -104,69 +74,105 @@
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- Phone Scan -->
-        <a href="/scan/phone/" class="liquid-card p-8 group hover:border-cyan-500/50 transition-all no-underline">
-            <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-6 group-hover:scale-110 transition-transform">
+        <a href="/scan/phone/" class="liquid-card p-10 group hover:border-cyan-500/50 transition-all no-underline overflow-hidden" data-aos="fade-up" data-aos-delay="100">
+            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                <i class="bi bi-phone text-7xl"></i>
+            </div>
+            <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-6 group-hover:scale-110 group-hover:bg-cyan-500/20 transition-all duration-500">
                 <i class="bi bi-phone-vibrate text-2xl"></i>
             </div>
-            <h3 class="text-xl font-extrabold text-white mb-3">Tra cứu Số điện thoại</h3>
-            <p class="text-sm text-white/40 leading-relaxed mb-6">Xác thực danh tính người gọi, phát hiện các đầu số rác và lừa đảo chuyên nghiệp.</p>
-            <span class="text-[10px] font-black uppercase tracking-widest text-cyan-400 group-hover:gap-4 flex items-center gap-2 transition-all">KHÁM PHÁ <i class="bi bi-arrow-right"></i></span>
+            <h3 class="text-xl font-black text-white mb-3">Tra cứu Số điện thoại</h3>
+            <p class="text-xs text-white/40 leading-relaxed mb-8 flex-1">Xác thực danh tính người gọi, phát hiện các đầu số rác và lừa đảo chuyên nghiệp từ database PKV.</p>
+            <div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                <span class="text-[10px] font-black uppercase tracking-widest text-cyan-400">KHÁM PHÁ NGAY</span>
+                <i class="bi bi-arrow-right text-cyan-400 group-hover:translate-x-2 transition-transform"></i>
+            </div>
         </a>
 
         <!-- Message Analysis -->
-        <a href="/scan/message/" class="liquid-card p-8 group hover:border-purple-500/50 transition-all no-underline">
-            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-6 group-hover:scale-110 transition-transform">
+        <a href="/scan/message/" class="liquid-card p-10 group hover:border-purple-500/50 transition-all no-underline overflow-hidden" data-aos="fade-up" data-aos-delay="200">
+            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                <i class="bi bi-chat-dots text-7xl"></i>
+            </div>
+            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-6 group-hover:scale-110 group-hover:bg-purple-500/20 transition-all duration-500">
                 <i class="bi bi-chat-square-text text-2xl"></i>
             </div>
-            <h3 class="text-xl font-extrabold text-white mb-3">Phân tích Tin nhắn</h3>
-            <p class="text-sm text-white/40 leading-relaxed mb-6">Trí tuệ nhân tạo phân tích nội dung, nhận diện bẫy tâm lý và link phishing độc hại.</p>
-            <span class="text-[10px] font-black uppercase tracking-widest text-purple-400 group-hover:gap-4 flex items-center gap-2 transition-all">SỬ DỤNG AI <i class="bi bi-arrow-right"></i></span>
+            <h3 class="text-xl font-black text-white mb-3">Phân tích Tin nhắn</h3>
+            <p class="text-xs text-white/40 leading-relaxed mb-8 flex-1">Trí tuệ nhân tạo bóc tách bẫy tâm lý, link phishing và các dấu hiệu gian lận trực tuyến.</p>
+            <div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                <span class="text-[10px] font-black uppercase tracking-widest text-purple-400">SỬ DỤNG AI</span>
+                <i class="bi bi-arrow-right text-purple-400 group-hover:translate-x-2 transition-transform"></i>
+            </div>
         </a>
 
         <!-- Website Check -->
-        <a href="/scan/website/" class="liquid-card p-8 group hover:border-blue-500/50 transition-all no-underline">
-            <div class="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-6 group-hover:scale-110 transition-transform">
+        <a href="/scan/website/" class="liquid-card p-10 group hover:border-blue-500/50 transition-all no-underline overflow-hidden" data-aos="fade-up" data-aos-delay="300">
+            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                <i class="bi bi-globe text-7xl"></i>
+            </div>
+            <div class="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-6 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all duration-500">
                 <i class="bi bi-globe2 text-2xl"></i>
             </div>
-            <h3 class="text-xl font-extrabold text-white mb-3">Quét Website / Link</h3>
-            <p class="text-sm text-white/40 leading-relaxed mb-6">Kiểm tra độ tin cậy của website trước khi nhập thông tin cá nhân hoặc thanh toán.</p>
-            <span class="text-[10px] font-black uppercase tracking-widest text-blue-400 group-hover:gap-4 flex items-center gap-2 transition-all">TRACKER <i class="bi bi-arrow-right"></i></span>
+            <h3 class="text-xl font-black text-white mb-3">Quét Website / Link</h3>
+            <p class="text-xs text-white/40 leading-relaxed mb-8 flex-1">Kiểm tra độ tin cậy của website trước khi nhập thông tin cá nhân hoặc thanh toán online.</p>
+            <div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                <span class="text-[10px] font-black uppercase tracking-widest text-blue-400">TRACKER SCAN</span>
+                <i class="bi bi-arrow-right text-blue-400 group-hover:translate-x-2 transition-transform"></i>
+            </div>
         </a>
 
         <!-- Bank Account -->
-        <a href="/scan/bank/" class="liquid-card p-8 group hover:border-yellow-500/50 transition-all no-underline">
-            <div class="w-14 h-14 rounded-2xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 mb-6 group-hover:scale-110 transition-transform">
+        <a href="/scan/bank/" class="liquid-card p-10 group hover:border-yellow-500/50 transition-all no-underline overflow-hidden" data-aos="fade-up" data-aos-delay="100">
+            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                <i class="bi bi-credit-card text-7xl"></i>
+            </div>
+            <div class="w-14 h-14 rounded-2xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 mb-6 group-hover:scale-110 group-hover:bg-yellow-500/20 transition-all duration-500">
                 <i class="bi bi-credit-card-2-front text-2xl"></i>
             </div>
-            <h3 class="text-xl font-extrabold text-white mb-3">Xác thực Tài khoản</h3>
-            <p class="text-sm text-white/40 leading-relaxed mb-6">Kiểm tra chéo số tài khoản ngân hàng với cơ sở dữ liệu lừa đảo liên ngành.</p>
-            <span class="text-[10px] font-black uppercase tracking-widest text-yellow-400 group-hover:gap-4 flex items-center gap-2 transition-all">AN TOÀN <i class="bi bi-arrow-right"></i></span>
+            <h3 class="text-xl font-black text-white mb-3">Xác thực Tài khoản</h3>
+            <p class="text-xs text-white/40 leading-relaxed mb-8 flex-1">Kiểm tra chéo số tài khoản ngân hàng với cơ sở dữ liệu gian lận liên ngành quốc gia.</p>
+            <div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                <span class="text-[10px] font-black uppercase tracking-widest text-yellow-400">AN TOÀN GIAO DỊCH</span>
+                <i class="bi bi-arrow-right text-yellow-400 group-hover:translate-x-2 transition-transform"></i>
+            </div>
         </a>
 
         <!-- QR Scan -->
-        <a href="/scan/qr/" class="liquid-card p-8 group hover:border-green-500/50 transition-all no-underline">
-            <div class="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-400 mb-6 group-hover:scale-110 transition-transform">
+        <a href="/scan/qr/" class="liquid-card p-10 group hover:border-green-500/50 transition-all no-underline overflow-hidden" data-aos="fade-up" data-aos-delay="200">
+            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                <i class="bi bi-qr-code text-7xl"></i>
+            </div>
+            <div class="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-400 mb-6 group-hover:scale-110 group-hover:bg-green-500/20 transition-all duration-500">
                 <i class="bi bi-qr-code-scan text-2xl"></i>
             </div>
-            <h3 class="text-xl font-extrabold text-white mb-3">Quét QR & Hình ảnh</h3>
-            <p class="text-sm text-white/40 leading-relaxed mb-6">Bóc tách dữ liệu từ mã QR, hóa đơn và ảnh chụp màn hình để tìm kiếm dấu vết gian lận.</p>
-            <span class="text-[10px] font-black uppercase tracking-widest text-green-400 group-hover:gap-4 flex items-center gap-2 transition-all">LENS AI <i class="bi bi-arrow-right"></i></span>
+            <h2 class="text-xl font-black text-white mb-3">Quét QR & Hình ảnh</h2>
+            <p class="text-xs text-white/40 leading-relaxed mb-8 flex-1">Bóc tách dữ liệu từ mã QR, hóa đơn và ảnh chụp màn hình bằng công nghệ Computer Vision.</p>
+            <div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                <span class="text-[10px] font-black uppercase tracking-widest text-green-400">LENS AI SCANNER</span>
+                <i class="bi bi-arrow-right text-green-400 group-hover:translate-x-2 transition-transform"></i>
+            </div>
         </a>
 
         <!-- COMMUNITY -->
-        <a href="/forum/" class="liquid-card p-8 group hover:border-white/40 transition-all no-underline bg-white/[0.05]">
-            <div class="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform">
+        <a href="/forum/" class="liquid-card p-10 group hover:border-white/40 transition-all no-underline bg-white/[0.05] overflow-hidden" data-aos="fade-up" data-aos-delay="300">
+            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                <i class="bi bi-people text-7xl"></i>
+            </div>
+            <div class="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-all duration-500">
                 <i class="bi bi-people text-2xl"></i>
             </div>
-            <h3 class="text-xl font-extrabold text-white mb-3">Cộng đồng ShieldCall</h3>
-            <p class="text-sm text-white/40 leading-relaxed mb-6">Tham gia cùng hàng triệu người dùng khác để cùng nhau xây dựng mạng lưới an toàn.</p>
-            <span class="text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:gap-4 flex items-center gap-2 transition-all">THAM GIA <i class="bi bi-arrow-right"></i></span>
+            <h3 class="text-xl font-black text-white mb-3">Cộng đồng ShieldCall</h3>
+            <p class="text-xs text-white/40 leading-relaxed mb-8 flex-1">Tham gia cùng cộng đồng để cùng nhau xây dựng mạng lưới an toàn và hỗ trợ người bị lừa.</p>
+            <div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                <span class="text-[10px] font-black uppercase tracking-widest text-white/60">THAM GIA NGAY</span>
+                <i class="bi bi-arrow-right text-white/60 group-hover:translate-x-2 transition-transform"></i>
+            </div>
         </a>
     </div>
 </section>
 
 <!-- Emergency Banner -->
-<section class="max-w-6xl mx-auto px-4 mb-24">
+<section class="max-w-6xl mx-auto px-4 mb-24" data-aos="zoom-in" data-aos-offset="200">
     <div class="liquid-card p-12 text-center bg-gradient-to-br from-red-600/20 to-transparent border-red-500/20 relative overflow-hidden">
         <div class="absolute -top-24 -right-24 w-64 h-64 bg-red-500/10 blur-[100px] rounded-full"></div>
         <div class="relative z-10 space-y-6">

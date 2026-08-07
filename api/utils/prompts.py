@@ -12,20 +12,26 @@ Dữ liệu hệ thống: {scan_data}.
 Hãy đưa ra nhận định chuyên sâu về số điện thoại này bằng TIẾNG VIỆT thật NGẮN GỌN (tối đa 3-4 câu). Nếu có dấu hiệu lừa đảo, hãy cảnh báo mạnh mẽ và đưa ra lời khuyên cụ thể.
 """
 
-SCAN_MESSAGE_PROMPT = """Bạn là chuyên gia An ninh mạng. Hãy phân tích tin nhắn sau để tìm dấu hiệu lừa đảo/scam.
-Trả về phản hồi dưới dạng PURE JSON (KHÔNG có khối markdown, KHÔNG có văn bản thừa).
-{{
-  "risk_score": <số từ 0-100>,
-  "risk_level": "RED|YELLOW|GREEN|SAFE",
-  "explanation": "<phân tích CỰC KỲ NGẮN GỌN, đi thẳng vào trọng tâm bằng TIẾNG VIỆT>",
-  "scam_type": "<loại lừa đảo>"
-}}
+SCAN_MESSAGE_PROMPT = """Bạn là chuyên gia An ninh mạng của ShieldCall VN. Hãy phân tích tin nhắn sau để tìm dấu hiệu lừa đảo/scam.
 
-Nội dung cần phân tích:
+## Nội dung tin nhắn
 ---
 {message}
 ---
-QUAN TRỌNG: Kết quả PHẢI là một đối tượng JSON hợp lệ duy nhất bằng TIẾNG VIỆT.
+
+## Yêu cầu phân tích
+Hãy viết phân tích **ngắn gọn, súc tích** bằng **TIẾNG VIỆT** theo cấu trúc sau:
+
+**🔍 Nhận diện:**
+Xác định loại tin nhắn và ý đồ giao tiếp. Đây là tin nhắn gì (quảng cáo, thông báo ngân hàng, yêu cầu OTP, đe dọa...)?
+
+**⚠️ Dấu hiệu đáng ngờ:**
+Liệt kê các dấu hiệu lừa đảo cụ thể (nếu có): tạo áp lực thời gian, yêu cầu chuyển tiền, link đáng ngờ, mạo danh cơ quan chức năng, ngữ pháp bất thường, v.v.
+
+**🛡️ Kết luận & Khuyến nghị:**
+Kết luận rõ ràng: tin nhắn này CÓ hay KHÔNG phải lừa đảo, mức độ nghiêm trọng, và lời khuyên cụ thể cho người dùng.
+
+Lưu ý: Viết ngắn gọn, dễ hiểu cho người dùng không chuyên kỹ thuật. KHÔNG trả về JSON.
 """
 
 SCAN_EMAIL_PROMPT = """Bạn là chuyên gia an ninh mạng của ShieldCall VN. Hãy phân tích email dưới đây và đưa ra đánh giá toàn diện bằng **TIẾNG VIỆT**.

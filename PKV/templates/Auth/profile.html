@@ -4,15 +4,15 @@
 {% block content %}
 <div class="animate-fadein max-w-2xl mx-auto space-y-10" x-data="{editing:false}">
     <!-- Page Header -->
-    <div class="space-y-2">
+    <div class="space-y-2" data-aos="fade-up">
         <h1 class="text-4xl font-black text-white tracking-tight leading-none">
             <span class="glow-text">Hồ sơ cá nhân</span>
         </h1>
-        <p class="text-white/40 text-sm font-medium tracking-wide prose-sm">Quản lý và bảo mật thông tin định danh của bạn.</p>
+        <p class="text-white/40 text-sm font-medium tracking-wide prose-sm" data-aos="fade-up" data-aos-delay="100">Quản lý và bảo mật thông tin định danh của bạn.</p>
     </div>
 
     <!-- Main Profile Card -->
-    <div class="liquid-card rounded-3xl p-8 sm:p-10 space-y-8 shadow-2xl" x-data="profileManager()">
+    <div class="liquid-card rounded-3xl p-8 sm:p-10 space-y-8 shadow-2xl" x-data="profileManager()" data-aos="fade-up" data-aos-delay="200">
         <!-- User Identity -->
         <div class="flex flex-col sm:flex-row items-center gap-8 text-center sm:text-left">
             <div class="relative group cursor-pointer" @click="$refs.avatarInput.click()">
@@ -150,7 +150,7 @@
     </div>
 
     <!-- Privacy & Settings Area -->
-    <div class="liquid-card overflow-hidden">
+    <div class="liquid-card overflow-hidden" data-aos="fade-up" data-aos-delay="300">
         <div class="p-6 bg-white/[0.02] border-b border-white/5">
             <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
                 <i class="bi bi-shield-lock text-cyan-400"></i>

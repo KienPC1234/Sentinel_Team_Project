@@ -417,11 +417,11 @@ def send_html_otp_email(to_email, token):
             settings.DEFAULT_FROM_EMAIL,
             [to_email],
             html_message=html_message,
-            fail_silently=True
+            fail_silently=False
         )
         logger.info(f"OTP email sent to {to_email}")
     except Exception as e:
-        logger.error(f"Failed to send OTP email: {e}")
+        logger.exception(f"Failed to send OTP email to {to_email}: {e}")
 
 def send_report_outcome_email(user, report_type, target, status, reason=None):
     """
@@ -460,11 +460,11 @@ def send_report_outcome_email(user, report_type, target, status, reason=None):
             settings.DEFAULT_FROM_EMAIL,
             [user.email],
             html_message=html_message,
-            fail_silently=True
+            fail_silently=False
         )
         logger.info(f"Report outcome email sent to {user.email}")
     except Exception as e:
-        logger.error(f"Failed to send report outcome email: {e}")
+        logger.exception(f"Failed to send report outcome email to {user.email}: {e}")
 
 def send_new_lesson_email(user_emails, lesson_title, lesson_url):
     """
@@ -480,8 +480,8 @@ def send_new_lesson_email(user_emails, lesson_title, lesson_url):
             plain_message,
             settings.DEFAULT_FROM_EMAIL,
             user_emails,
-            fail_silently=True
+            fail_silently=False
         )
         logger.info(f"New lesson email sent to {len(user_emails)} users")
     except Exception as e:
-        logger.error(f"Failed to send bulk lesson email: {e}")
+        logger.exception(f"Failed to send bulk lesson email to {user_emails}: {e}")

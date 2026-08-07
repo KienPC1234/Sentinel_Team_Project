@@ -4,7 +4,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="animate-fadein max-w-4xl mx-auto space-y-10" x-data="{
+<div class="max-w-7xl mx-auto px-4 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
+<div class="max-w-4xl mx-auto space-y-10" x-data="{
     url: '', 
     loading: false, 
     result: null, 
@@ -41,18 +42,20 @@
         this.currentStep = 'init';
 
         const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
-        if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
+        if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');this.loading=false;return}
+        if(window.turnstile){try{window.turnstile.reset()}catch(e){}}
         
         fetch('/api/v1/scan/domain/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
             body: JSON.stringify({ url: normalizedUrl, deep_scan: this.deepScan, 'cf-turnstile-response': tsToken })
         })
-        .then(r => { if (!r.ok) return r.json().then(e => { throw e }); return r.json(); })
+        .then(r => { if (!r.ok) return r.json().then(e => { throw e }).catch(() => { throw {error: 'Lỗi server (' + r.status + '). Vui lòng thử lại.'}; }); return r.json(); })
         .then(data => {
             if (this.deepScan && data.scan_id) {
                 this.scanId = data.scan_id;
                 this.connectWebSocket(data.scan_id);
+                this.startStatusPolling();
             } else {
                 this.result = data;
                 this.loading = false;
@@ -153,10 +156,11 @@
             this.wsState = 'connected';
             this.reconnectAttempts = 0;
             this.stopReconnect();
-            this.stopStatusPolling();
             if (isReconnect) {
                 this.progress.push({ message: 'Kết nối thời gian thực đã được khôi phục.', step: 'reconnected' });
             }
+            // Ask server for current status to catch results missed during disconnection
+            this.ws.send(JSON.stringify({ type: 'get_status' }));
         };
 
         this.ws.onmessage = (e) => {
@@ -164,6 +168,12 @@
             // Filter out internal ping messages
             if (data.step !== 'ping') {
                 this.progress.push({ message: data.message, step: data.step });
+                // Auto-scroll progress log
+                this.$nextTick(() => {
+                    if (this.$refs.progressLog) {
+                        this.$refs.progressLog.scrollTop = this.$refs.progressLog.scrollHeight;
+                    }
+                });
             }
             this.currentStep = data.step;
 
@@ -233,20 +243,20 @@
     }
 }">
     <!-- Page Header -->
-    <div class="text-center space-y-4">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-blue-500/10 text-blue-400 mb-2 border border-blue-500/20 shadow-lg shadow-blue-500/10">
+    <div class="text-center space-y-4" data-aos="fade-up">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-blue-500/10 text-blue-400 mb-2 border border-blue-500/20 shadow-lg shadow-blue-500/10" data-aos="zoom-in" data-aos-delay="100">
             <i class="bi bi-globe2 text-4xl"></i>
         </div>
-        <h1 class="text-4xl font-black text-white tracking-tight">
+        <h1 class="text-4xl font-black text-white tracking-tight" data-aos="fade-up" data-aos-delay="200">
             Kiểm tra <span class="glow-text">Website / URL</span>
         </h1>
-        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed">
+        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed" data-aos="fade-up" data-aos-delay="300">
             Phân tích mức độ tin cậy, chứng chỉ bảo mật và nội dung website bằng AI.
         </p>
     </div>
 
     <!-- Input Area -->
-    <div class="liquid-card p-6 sm:p-8">
+    <div class="liquid-card p-6 sm:p-8" data-aos="fade-up" data-aos-delay="400">
         <form @submit.prevent="handleScan()">
             <div class="flex flex-col sm:flex-row gap-4">
                 <input type="text" class="liquid-input flex-1 py-4 px-6 text-lg font-bold" 
@@ -262,7 +272,7 @@
             </div>
             <div class="mt-4 flex items-center gap-3">
                 <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" x-model="deepScan" class="sr-only peer">
+                    <input type="checkbox" x-model="deepScan" class="sr-only peer" @change="if(window.turnstile){try{window.turnstile.reset()}catch(e){}}">
                     <div class="w-11 h-6 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/20 after:border-white/10 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500/50"></div>
                     <span class="ms-3 text-xs font-black text-white/40 uppercase tracking-widest">Chế độ Quét Sâu (Deep AI Analysis)</span>
                 </label>
@@ -275,17 +285,36 @@
         <div class="liquid-card p-6 border-blue-500/20 bg-blue-500/[0.02]">
             <div class="mb-4 flex items-center justify-between gap-3">
                 <h4 class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Tiến trình quét thời gian thực</h4>
-                <div class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded border"
-                     :class="wsState==='connected' ? 'text-green-400 border-green-500/30 bg-green-500/10' : (wsState==='reconnecting' || wsState==='connecting') ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10'"
-                     x-text="wsState==='connected' ? 'WS Connected' : (wsState==='reconnecting' ? 'Reconnecting' : (wsState==='connecting' ? 'Connecting' : 'Disconnected'))"></div>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] text-white/30 font-mono" x-text="progress.length + ' bước'"></span>
+                    <div class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded border"
+                         :class="wsState==='connected' ? 'text-green-400 border-green-500/30 bg-green-500/10' : (wsState==='reconnecting' || wsState==='connecting') ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10'"
+                         x-text="wsState==='connected' ? 'WS Connected' : (wsState==='reconnecting' ? 'Reconnecting' : (wsState==='connecting' ? 'Connecting' : 'Disconnected'))"></div>
+                </div>
             </div>
-            <div class="space-y-3 font-mono text-[11px]">
+            <!-- Progress bar estimation -->
+            <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden mb-4">
+                <div class="h-full bg-blue-500/50 transition-all duration-500 rounded-full"
+                     :style="'width:' + Math.min(95, progress.length * 12) + '%'"></div>
+            </div>
+            <div class="space-y-2.5 font-mono text-[11px] max-h-[300px] overflow-y-auto custom-scrollbar" x-ref="progressLog">
                 <template x-for="(item, index) in progress" :key="index">
                     <div class="flex items-start gap-3 animate-fadein">
-                        <span class="text-blue-500/50">#</span>
-                        <span class="text-white/80" x-text="item.message"></span>
-                        <i x-show="index === progress.length - 1 && item.step !== 'completed'" class="bi bi-three-dots animate-pulse text-blue-400"></i>
-                        <i x-show="item.step === 'completed' || index < progress.length - 1" class="bi bi-check2 text-green-500"></i>
+                        <!-- Step icon based on type -->
+                        <span class="flex-shrink-0 mt-0.5" 
+                              :class="item.step === 'completed' ? 'text-green-500' : 
+                                      item.step?.includes('warning') ? 'text-yellow-500' : 
+                                      item.step === 'error' ? 'text-red-500' : 
+                                      item.step?.includes('ok') ? 'text-green-400' :
+                                      'text-blue-500/50'">
+                            <i :class="item.step === 'completed' ? 'bi bi-check-circle-fill' : 
+                                       item.step?.includes('warning') ? 'bi bi-exclamation-triangle-fill' : 
+                                       item.step === 'error' ? 'bi bi-x-circle-fill' : 
+                                       item.step?.includes('ok') ? 'bi bi-check2' :
+                                       (index === progress.length - 1 ? 'bi bi-arrow-right' : 'bi bi-dot')"></i>
+                        </span>
+                        <span class="text-white/80 flex-1" x-text="item.message"></span>
+                        <i x-show="index === progress.length - 1 && item.step !== 'completed' && !item.step?.includes('ok')" class="bi bi-three-dots animate-pulse text-blue-400 flex-shrink-0"></i>
                     </div>
                 </template>
             </div>
@@ -324,7 +353,33 @@
                         <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Loại hình</div>
                         <div class="text-sm font-bold text-white/80" x-text="result.scam_type || 'Kiểm tra kỹ thuật'"></div>
                     </div>
+                    <template x-if="result.page_title">
+                        <div class="p-4 rounded-2xl bg-white/[0.03] space-y-1">
+                            <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Tiêu đề trang</div>
+                            <div class="text-sm font-bold text-white/80 truncate" x-text="result.page_title"></div>
+                        </div>
+                    </template>
+                    <div class="p-4 rounded-2xl bg-white/[0.03] space-y-1">
+                        <div class="text-[10px] font-black text-white/20 uppercase tracking-widest">Nội dung</div>
+                        <div class="text-sm font-bold" :class="result.fetch_success ? 'text-green-400' : 'text-red-400'" 
+                             x-text="result.fetch_success ? (result.content_length + ' ký tự') : 'Không truy cập được'"></div>
+                    </div>
                 </div>
+
+                <!-- Network Details (Deep Scan) -->
+                <template x-if="result.network_details && result.network_details.length > 0">
+                    <div class="mx-8 mt-6 p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                        <h4 class="text-[10px] font-black text-white/30 uppercase tracking-widest mb-3">Phát hiện từ mạng lưới</h4>
+                        <ul class="space-y-2">
+                            <template x-for="detail in result.network_details" :key="detail">
+                                <li class="flex items-start gap-2 text-xs text-white/60">
+                                    <i class="bi bi-hdd-network text-blue-400 mt-0.5 flex-shrink-0"></i>
+                                    <span x-text="detail"></span>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </template>
 
                 <!-- AI Insight -->
                 <div class="p-8 bg-blue-500/[0.02]">
@@ -346,100 +401,7 @@
                 </div>
 
                 <!-- Grounded Intelligence / Proofs -->
-                <template x-if="result.web_context || (result.web_sources && result.web_sources.length > 0)">
-                    <div class="p-8 border-t border-white/5 bg-white/[0.01]">
-                        <div class="flex items-center gap-3 mb-6">
-                            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
-                                <i class="bi bi-search"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-sm font-black text-white uppercase tracking-wider">Thông tin tình báo (OSINT)</h4>
-                                <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Grounded Proofs & Sources</p>
-                            </div>
-                        </div>
-
-                        <!-- NEW: Structured Intelligence -->
-                        <div class="grid grid-cols-1 gap-6" x-data="{
-                            sources: [],
-                            parseContext() {
-                                if (!result || !result.web_context) { 
-                                    this.sources = []; 
-                                    return; 
-                                }
-                                const raw = result.web_context;
-                                
-                                // Clean up any 'thinking' artifacts if present
-                                const cleanRaw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-                                // Robust splitting logic to handle ### [Source] or ### Source
-                                // We use a regex to capture the delimiter and content
-                                // Matches: ### [Title] or ### Title followed by newline or end of string
-                                const parts = cleanRaw.split(/###\s+(?:\[)?(.*?)(?:\])?(?:\n|$)/);
-                                
-                                if (parts.length >= 3) {
-                                    // split results in [preamble, title1, content1, title2, content2...]
-                                    let newSources = [];
-                                    for (let i = 1; i < parts.length; i += 2) {
-                                        const title = (parts[i] || '').trim();
-                                        const content = (parts[i+1] || '').trim();
-                                        if (title && content) {
-                                            newSources.push({
-                                                title: title,
-                                                html: (window.marked && window.marked.parse) ? window.marked.parse(content) : content
-                                            });
-                                        }
-                                    }
-                                    this.sources = newSources;
-                                } else {
-                                    // Fallback for unstructured text
-                                    this.sources = [{ 
-                                        title: 'TỔNG HỢP TÌNH BÁO', 
-                                        html: (window.marked && window.marked.parse) ? window.marked.parse(cleanRaw) : cleanRaw 
-                                    }];
-                                }
-                            }
-                        }" x-effect="parseContext()">
-                            
-                            <!-- Sources Badges (Still useful for quick glance) -->
-                            <div class="flex flex-wrap gap-2 mb-2" x-show="result.web_sources && result.web_sources.length">
-                                <template x-for="source in result.web_sources" :key="source">
-                                    <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20 uppercase" x-text="source"></span>
-                                </template>
-                            </div>
-
-                            <!-- Structured Proof Cards -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <template x-for="item in sources">
-                                    <div class="p-5 rounded-xl bg-black/40 border border-white/10 hover:border-cyan-500/30 transition-all group relative overflow-hidden">
-                                        <!-- Header -->
-                                        <div class="flex items-center gap-3 mb-3 border-b border-white/5 pb-3">
-                                            <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400">
-                                                <i class="bi bi-shield-check text-xs"></i>
-                                            </div>
-                                            <h4 class="text-xs font-black text-cyan-100 uppercase tracking-wider" x-text="item.title"></h4>
-                                        </div>
-                                        
-                                        <!-- Content -->
-                                        <div class="prose prose-invert prose-sm text-xs text-gray-400 leading-relaxed font-mono [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>strong]:text-cyan-300" 
-                                             x-html="item.html"></div>
-                                             
-                                        <!-- Deco -->
-                                        <div class="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-10 transition-opacity">
-                                            <i class="bi bi-crosshair text-4xl text-cyan-500"></i>
-                                        </div>
-                                    </div>
-                                </template>
-                                
-                                <!-- Empty State -->
-                                <template x-if="sources.length === 0 && !result.web_context">
-                                    <div class="col-span-full p-6 text-center border dashed border-white/10 rounded-xl">
-                                        <p class="text-white/30 text-xs italic">Đang chờ dữ liệu tình báo...</p>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                </template>
+                {% include 'Scan/_osint_section.html' %}
 
                 <!-- Actions -->
                 <div class="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
@@ -461,5 +423,7 @@
             </div>
         </div>
     </template>
+</div>
+{% include 'Scan/_scan_guide.html' with scan_type='website' %}
 </div>
 {% endblock %}

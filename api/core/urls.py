@@ -4,6 +4,7 @@ MVP spec Section 8: All API endpoints
 """
 from django.urls import path
 from . import views
+from .views.debug_views import DebugSystemView
 
 app_name = 'core'
 
@@ -33,9 +34,11 @@ urlpatterns = [
     path('scan/email/', views.ScanEmailView.as_view(), name='api-scan-email'),
     path('scan/banks/', views.ScanBanksView.as_view(), name='api-scan-banks'),
     path('scan/file/', views.ScanFileView.as_view(), name='api-scan-file'),
+    path('scan/audio/', views.ScanAudioView.as_view(), name='api-scan-audio'),
 
     # Report
     path('report/', views.ReportCreateView.as_view(), name='report'),
+    path('report/<int:pk>/', views.ReportDetailView.as_view(), name='report-detail'),
 
     # Trends
     path('trends/daily/', views.TrendDailyView.as_view(), name='trends-daily'),
@@ -75,4 +78,7 @@ urlpatterns = [
     path('notifications/test-push/', views.TestPushView.as_view(), name='test-push'),
     path('notifications/onesignal-register/', views.OneSignalRegistrationView.as_view(), name='onesignal-register'),
     path('admin/rag/reset/', views.ResetRAGView.as_view(), name='rag-reset'),
+    
+    # Debug
+    path('debug/system/', DebugSystemView.as_view(), name='debug-system'),
 ]

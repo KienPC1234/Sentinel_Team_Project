@@ -4,27 +4,36 @@
 {% endblock %}
 
 {% block content %}
-<div class="animate-fadein max-w-4xl mx-auto space-y-10" x-data="{phone:'', loading:false, result:null, error:'', aiText:''}">
+<div class="max-w-7xl mx-auto px-4 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
+<div class="animate-fadein space-y-10" x-data="{
+    phone: new URLSearchParams(window.location.search).get('phone') || '', 
+    loading:false, 
+    result:null, 
+    error:'', 
+    aiText:''
+}" x-init="if(phone) $nextTick(() => { document.querySelector('form').dispatchEvent(new Event('submit')) })">
     <!-- Page Header -->
-    <div class="text-center space-y-4">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-cyan-500/10 text-cyan-400 mb-2 border border-cyan-500/20 shadow-lg shadow-cyan-500/10">
+    <div class="text-center space-y-4" data-aos="fade-up">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-cyan-500/10 text-cyan-400 mb-2 border border-cyan-500/20 shadow-lg shadow-cyan-500/10" data-aos="zoom-in" data-aos-delay="100">
             <i class="bi bi-phone-vibrate text-4xl"></i>
         </div>
-        <h1 class="text-4xl font-black text-white tracking-tight">
+        <h1 class="text-4xl font-black text-white tracking-tight" data-aos="fade-up" data-aos-delay="200">
             Kiểm tra <span class="glow-text">Số điện thoại</span>
         </h1>
-        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed">
+        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed" data-aos="fade-up" data-aos-delay="300">
             Hệ thống sẽ tra cứu số điện thoại này trong cơ sở dữ liệu lừa đảo quốc gia và cộng đồng.
-            Vui lòng nhập theo định dạng quốc tế có mã quốc gia (ví dụ: +84..., +1...).
+            Hỗ trợ cả số Việt Nam (VD: 0978589220) và định dạng quốc tế (+84..., +1...).
         </p>
     </div>
 
     <!-- Input Area -->
-    <div class="liquid-card p-6 sm:p-8">
+    <div class="liquid-card p-6 sm:p-8" data-aos="fade-up" data-aos-delay="400">
         <form @submit.prevent="
             if(!phone.trim()){showToast('Vui lòng nhập số điện thoại', 'warning');return}
-            const phoneNormalized = phone.trim().replace(/[\s().-]/g, '');
-            if(!/^\+\d{8,15}$/.test(phoneNormalized)){showToast('Số điện thoại phải có mã quốc gia, ví dụ +84xxxxxxxxx hoặc +1xxxxxxxxxx', 'warning');return}
+            let phoneNormalized = phone.trim().replace(/[\s().-]/g, '');
+            /* Auto-convert VN local format: 0xxxxxxxxx → +84xxxxxxxxx */
+            if(/^0\d{9}$/.test(phoneNormalized)){phoneNormalized = '+84' + phoneNormalized.substring(1);}
+            if(!/^(\+\d{8,15}|0\d{9})$/.test(phoneNormalized)){showToast('Số điện thoại không hợp lệ. VD: 0978589220 hoặc +84978589220', 'warning');return}
             const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
             if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
             loading=true;result=null;aiText='';
@@ -43,7 +52,7 @@
         ">
             <div class="flex flex-col sm:flex-row gap-4">
                 <input type="tel" class="liquid-input flex-1 py-4 px-6 text-lg font-bold" 
-                    placeholder="VD: +84379456789 hoặc +12025550123" x-model="phone" required pattern="^\+\d{8,15}$">
+                    placeholder="VD: 0978589220 hoặc +84379456789" x-model="phone" required>
                 <button type="submit" class="liquid-btn bg-cyan-500 text-black px-10 py-4 font-black hover:bg-cyan-400" :disabled="loading">
                     <span x-show="!loading"><i class="bi bi-search mr-2"></i> SCAN</span>
                     <span x-show="loading" class="spinner w-5 h-5 border-black"></span>
@@ -233,5 +242,7 @@
             </div>
         </div>
     </template>
+</div>
+{% include 'Scan/_scan_guide.html' with scan_type='phone' %}
 </div>
 {% endblock %}

@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ title }} - ShieldCall VN{% endblock %}
+
+{% block content %}
+<div class="animate-fadein max-w-6xl mx-auto space-y-8">
+    <!-- Breadcrumb -->
+    <div class="text-white/40 text-sm flex items-center gap-2" data-aos="fade-right">
+        <a href="{% url 'home' %}" class="hover:text-white transition-colors">Trang chủ</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <a href="{% url 'scam-radar' %}" class="hover:text-white transition-colors">Radar</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <span class="text-white">{{ title }}</span>
+    </div>
+
+    <div class="flex items-center justify-between" data-aos="fade-up" data-aos-delay="100">
+        <h1 class="text-3xl font-black text-white glow-text">{{ title }}</h1>
+        <div class="text-white/50 text-sm">
+            Top 200 báo cáo được hệ thống ghi nhận
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="liquid-card overflow-hidden" data-aos="fade-up" data-aos-delay="200">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-xs uppercase tracking-wider text-white/40 border-b border-white/5 bg-white/[0.02]">
+                        <th class="p-4 font-bold">#</th>
+                        <th class="p-4 font-bold">Đối tượng</th>
+                        <th class="p-4 font-bold">Loại lừa đảo</th>
+                        <th class="p-4 font-bold">Mức độ</th>
+                        <th class="p-4 font-bold">Người báo cáo</th>
+                        <th class="p-4 font-bold">Thời gian</th>
+                        <th class="p-4 font-bold text-center">Chi tiết</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm divide-y divide-white/5">
+                    {% for report in reports %}
+                    <tr class="hover:bg-white/5 transition-colors group">
+                        <td class="p-4 text-white/30 font-mono">{{ forloop.counter }}</td>
+                        <td class="p-4">
+                            <div class="font-bold text-white font-mono tracking-tight">
+                                {% if list_type == 'phones' %}
+                                    {{ report.target_value|slice:":4" }}****{{ report.target_value|slice:"-3:" }}
+                                {% elif list_type == 'accounts' %}
+                                    {{ report.target_value|slice:":3" }}*****{{ report.target_value|slice:"-3:" }} ({{ report.scammer_bank_name|default:'N/A' }})
+                                {% else %}
+                                    {{ report.target_value }}
+                                {% endif %}
+                            </div>
+                            {% if report.scammer_name %}
+                            <div class="text-xs text-white/40 mt-1 uppercase">{{ report.scammer_name }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="p-4">
+                            <span class="px-2 py-1 rounded-lg bg-white/5 text-xs font-semibold text-white/70 border border-white/10">
+                                {{ report.get_scam_type_display }}
+                            </span>
+                        </td>
+                        <td class="p-4">
+                            {% if report.severity == 'high' or report.severity == 'critical' %}
+                                <span class="text-red-400 font-bold"><i class="bi bi-shield-x-fill"></i> Cao</span>
+                            {% elif report.severity == 'medium' %}
+                                <span class="text-yellow-400 font-bold"><i class="bi bi-shield-exclamation"></i> Trung bình</span>
+                            {% else %}
+                                <span class="text-blue-400 font-bold"><i class="bi bi-shield-minus"></i> Thấp</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-4 text-white/60">
+                            {% if report.reporter %}
+                            <div class="flex items-center gap-2">
+                                <i class="bi bi-person-circle"></i>
+                                {{ report.reporter.username }}
+                            </div>
+                            {% else %}
+                            <span class="italic text-white/30">Ẩn danh</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-4 text-white/40 whitespace-nowrap" title="{{ report.created_at }}">
+                            {{ report.created_at|timesince }} trước
+                        </td>
+                        <td class="p-4 text-center">
+                            <button onclick="showReportDetail({{ report.id }})" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-white/60 hover:text-white">
+                                <i class="bi bi-eye-fill"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="p-12 text-center text-white/30">
+                            <i class="bi bi-inbox text-4xl mb-3 block opacity-50"></i>
+                            Chưa có dữ liệu báo cáo nào
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- SweetAlert2 handled via JS -->
+
+<script>
+    function showReportDetail(id) {
+        // Show loading state
+        Swal.fire({
+            title: 'Đang tải thông tin...',
+            html: '<div class="flex flex-col items-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div><span class="text-white/60 text-sm">Vui lòng chờ...</span></div>',
+            background: '#0f172a', // zinc-900 / slate-900
+            color: '#fff',
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            customClass: {
+                popup: 'liquid-card border border-white/10 !bg-[#0f172a] !rounded-2xl',
+                title: 'text-xl font-bold text-white',
+            }
+        });
+
+        // Fetch report details
+        fetch(`/api/v1/report/${id}/`)
+            .then(response => {
+                if (!response.ok) throw new Error('Không thể tải chi tiết báo cáo');
+                return response.json();
+            })
+            .then(data => {
+                // Determine severity badge
+                let severityBadge = '';
+                if (data.severity === 'high' || data.severity === 'critical') {
+                    severityBadge = '<span class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-xs border border-red-500/30">Cao</span>';
+                } else if (data.severity === 'medium') {
+                    severityBadge = '<span class="px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 text-xs border border-yellow-500/30">Trung bình</span>';
+                } else {
+                    severityBadge = '<span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs border border-blue-500/30">Thấp</span>';
+                }
+
+                // AI Analysis block
+                let aiAnalysisBlock = '';
+                if (data.ai_analysis) {
+                    // Simple formatting for AI text
+                    const safeAnalysis = data.ai_analysis.replace(/\n/g, '<br>');
+                    aiAnalysisBlock = `
+                        <div class="mt-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
+                            <div class="flex items-center gap-2 mb-2">
+                                <i class="bi bi-robot text-indigo-400"></i>
+                                <span class="text-xs font-bold text-indigo-300 uppercase">Phân tích AI</span>
+                            </div>
+                            <div class="text-sm text-indigo-100/80 leading-relaxed max-h-32 overflow-y-auto custom-scrollbar">
+                                ${safeAnalysis}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Evidence Image
+                let evidenceBlock = '';
+                if (data.evidence_url) {
+                    evidenceBlock = `
+                        <div class="mt-4">
+                            <h4 class="text-xs uppercase text-white/40 font-bold mb-2">Bằng chứng</h4>
+                            <div class="rounded-lg overflow-hidden border border-white/10 group cursor-pointer" onclick="window.open('${data.evidence_url}', '_blank')">
+                                <img src="${data.evidence_url}" class="w-full h-32 object-cover transition-transform group-hover:scale-105" alt="Evidence">
+                                <div class="bg-black/50 p-1 text-center text-xs text-white/60">Nhấn để xem ảnh gốc</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Scammer Details
+                const scammer = data.scammer_info || {};
+                const bankInfo = scammer.bank_account ? `${scammer.bank_account} (${scammer.bank_name || 'N/A'})` : 'Không có';
+                const scammerPhone = scammer.phone || 'Không có';
+                const scammerName = scammer.name || 'Không rõ';
+
+                // Render Modal Content
+                const htmlContent = `
+                    <div class="text-left mt-2">
+                        <!-- Header Info -->
+                        <div class="flex justify-between items-start mb-4 pb-4 border-b border-white/10">
+                            <div>
+                                <div class="text-xs text-white/50 uppercase mb-1">Loại lừa đảo</div>
+                                <div class="font-bold text-white flex items-center gap-2">
+                                    ${data.scam_type_display || data.scam_type || 'Khác'}
+                                    ${severityBadge}
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-white/50 uppercase mb-1">Ngày báo cáo</div>
+                                <div class="text-white font-mono text-sm">${new Date(data.created_at).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+
+                        <!-- Main Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Left: Scammer Info -->
+                            <div class="space-y-3">
+                                <div class="bg-white/5 p-3 rounded-lg border border-white/10">
+                                    <h4 class="text-xs uppercase text-white/40 font-bold mb-2 border-b border-white/5 pb-1">Thông tin đối tượng</h4>
+                                    <ul class="space-y-2 text-sm">
+                                        <li class="flex justify-between">
+                                            <span class="text-white/50">Tên:</span>
+                                            <span class="text-white font-medium text-right">${scammerName}</span>
+                                        </li>
+                                        <li class="flex justify-between">
+                                            <span class="text-white/50">SĐT:</span>
+                                            <span class="text-white font-mono text-right">${scammerPhone}</span>
+                                        </li>
+                                        <li class="flex justify-between">
+                                            <span class="text-white/50">Ngân hàng:</span>
+                                            <span class="text-white font-mono text-right truncate ml-2" title="${bankInfo}">${bankInfo}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Right: Description -->
+                            <div class="space-y-3">
+                                <div class="bg-white/5 p-3 rounded-lg border border-white/10 h-full">
+                                    <h4 class="text-xs uppercase text-white/40 font-bold mb-2 border-b border-white/5 pb-1">Mô tả sự việc</h4>
+                                    <p class="text-sm text-white/80 leading-relaxed max-h-[120px] overflow-y-auto custom-scrollbar">
+                                        ${data.description || 'Không có mô tả chi tiết.'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        ${aiAnalysisBlock}
+                        ${evidenceBlock}
+                    </div>
+                `;
+
+                Swal.fire({
+                    title: 'Chi Tiết Báo Cáo',
+                    html: htmlContent,
+                    width: '600px',
+                    showConfirmButton: true,
+                    confirmButtonText: 'Đóng',
+                    confirmButtonColor: '#3b82f6',
+                    background: '#1e293b',
+                    color: '#fff',
+                    customClass: {
+                        popup: 'liquid-card border border-white/10 shadow-2xl !bg-[#0f172a]',
+                        title: 'text-left text-xl font-bold text-white border-b border-white/10 pb-3',
+                        htmlContainer: '!mx-1 !text-left',
+                        confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-lg shadow-blue-500/30'
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi',
+                    text: 'Không thể tải thông tin báo cáo.',
+                    background: '#1e293b',
+                    color: '#fff',
+                    confirmButtonColor: '#ef4444'
+                });
+            });
+    }
+</script>
+
+{% endblock %}

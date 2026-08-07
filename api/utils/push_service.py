@@ -80,7 +80,11 @@ class PushNotificationService:
             Notification.objects.bulk_create(notifications)
             
             # 2. OneSignal Broadcast to Admin segments (if configured) or specific IDs
-            admin_ids = list(admins.exclude(profile__onesignal_player_id__isnull=True).values_list('profile__onesignal_player_id', flat=True))
+            admin_ids = list(
+                admins.exclude(profile__onesignal_player_id__isnull=True)
+                      .exclude(profile__onesignal_player_id='')
+                      .values_list('profile__onesignal_player_id', flat=True)
+            )
             if admin_ids:
                 PushNotificationService._send_onesignal_notification(admin_ids, title, message, url)
 
@@ -101,9 +105,11 @@ class PushNotificationService:
             return False
 
     @staticmethod
-    def _send_onesignal_notification(player_ids, title, message, url=None):
+    def _send_onesignal_notification(subscription_ids, title, message, url=None):
         """
         Internal helper to call OneSignal REST API.
+        Uses include_subscription_ids (v16 SDK) with target_channel=push.
+        Docs: https://documentation.onesignal.com/reference/create-notification
         """
         app_id = getattr(settings, 'ONESIGNAL_APP_ID', None)
         api_key = getattr(settings, 'ONESIGNAL_REST_API_KEY', None)
@@ -112,22 +118,62 @@ class PushNotificationService:
             logger.warning("OneSignal not configured properly. Skipping REST API call.")
             return
 
+        # Filter out empty/None IDs
+        valid_ids = [sid for sid in subscription_ids if sid]
+        if not valid_ids:
+            logger.warning("OneSignal: No valid subscription IDs to send to.")
+            return
+
         header = {
             "Content-Type": "application/json; charset=utf-8",
-            "Authorization": f"Basic {api_key}"
+            "Authorization": f"Key {api_key}"
         }
 
         payload = {
             "app_id": app_id,
-            "include_player_ids": player_ids,
+            "include_subscription_ids": valid_ids,
+            "target_channel": "push",
             "headings": {"en": title},
             "contents": {"en": message},
         }
         if url:
-            payload["url"] = url
+            # OneSignal requires absolute URLs
+            if url.startswith('/'):
+                site_url = getattr(settings, 'SITE_URL', '').rstrip('/')
+                if not site_url:
+                    # Derive from CSRF_TRUSTED_ORIGINS if SITE_URL not set
+                    origins = getattr(settings, 'CSRF_TRUSTED_ORIGINS', [])
+                    site_url = origins[0].rstrip('/') if origins else 'https://cs.fptoj.com'
+                url = site_url + url
+            payload["web_url"] = url
 
-        req = requests.post("https://onesignal.com/api/v1/notifications", headers=header, data=json.dumps(payload))
-        logger.info(f"OneSignal API response: {req.status_code} - {req.text}")
+        try:
+            resp = requests.post(
+                "https://api.onesignal.com/notifications?c=push",
+                headers=header,
+                data=json.dumps(payload),
+                timeout=10
+            )
+            resp_data = resp.json() if resp.status_code < 500 else resp.text
+            
+            if resp.status_code == 200:
+                logger.info(f"OneSignal push sent OK: {resp_data}")
+            else:
+                logger.error(f"OneSignal API error {resp.status_code}: {resp_data}")
+                
+            # Log any invalid IDs returned by OneSignal for cleanup
+            if isinstance(resp_data, dict):
+                errors = resp_data.get('errors', {})
+                if isinstance(errors, dict):
+                    invalid_ids = errors.get('invalid_player_ids', []) or errors.get('invalid_aliases', {})
+                    if invalid_ids:
+                        logger.warning(f"OneSignal invalid IDs detected: {invalid_ids}")
+                elif isinstance(errors, list) and errors:
+                    logger.warning(f"OneSignal errors: {errors}")
+        except requests.exceptions.Timeout:
+            logger.error("OneSignal API request timed out")
+        except Exception as e:
+            logger.error(f"OneSignal API request failed: {e}")
 
     @staticmethod
     def send_rag_status_update(status, message, count=None, error=None):

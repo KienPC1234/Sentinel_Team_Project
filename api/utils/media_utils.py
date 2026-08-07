@@ -30,19 +30,56 @@ def get_easyocr_reader():
     """
     Singleton EasyOCR reader instance for English and Vietnamese.
     Loads the model into memory only once.
+    Handles CUDA fork errors in Celery prefork workers by falling back to CPU.
     """
     global _EASYOCR_READER
     if not EASYOCR_AVAILABLE:
         return None
         
     if _EASYOCR_READER is None:
+        import os
+        import multiprocessing
         from django.conf import settings
+
         gpu = getattr(settings, 'EASYOCR_GPU', False)
+
+        # Detect forked subprocess (Celery prefork) — CUDA cannot reinitialize after fork
+        is_forked = multiprocessing.current_process().daemon or multiprocessing.parent_process() is not None
+        if is_forked and gpu:
+            logger.info("Forked subprocess detected — forcing EasyOCR to CPU mode.")
+            gpu = False
+            # Prevent PyTorch from touching CUDA at all in forked process
+            os.environ['CUDA_VISIBLE_DEVICES'] = ''
+            try:
+                import torch
+                if hasattr(torch.cuda, 'is_available'):
+                    # Disable CUDA in torch before EasyOCR loads models
+                    torch.cuda.is_available = lambda: False
+            except ImportError:
+                pass
+
         logger.info(f"Initializing EasyOCR reader (GPU={gpu})...")
         try:
-            # English is compatible with Vietnamese.
             _EASYOCR_READER = easyocr.Reader(['vi', 'en'], gpu=gpu)
             logger.info("EasyOCR reader initialized successfully.")
+        except RuntimeError as e:
+            if 'CUDA' in str(e) or 'forked' in str(e):
+                logger.warning(f"CUDA error detected, retrying with gpu=False: {e}")
+                os.environ['CUDA_VISIBLE_DEVICES'] = ''
+                try:
+                    import torch
+                    torch.cuda.is_available = lambda: False
+                except ImportError:
+                    pass
+                try:
+                    _EASYOCR_READER = easyocr.Reader(['vi', 'en'], gpu=False)
+                    logger.info("EasyOCR reader initialized successfully (CPU fallback).")
+                except Exception as e2:
+                    logger.error(f"Failed to initialize EasyOCR reader (CPU fallback): {e2}")
+                    return None
+            else:
+                logger.error(f"Failed to initialize EasyOCR reader: {e}")
+                return None
         except Exception as e:
             logger.error(f"Failed to initialize EasyOCR reader: {e}")
             return None
@@ -78,6 +115,30 @@ def extract_ocr_text(image_file) -> str:
         logger.info(f"EasyOCR extracted {len(text)} characters from image")
         return text
 
+    except RuntimeError as e:
+        if 'CUDA' in str(e):
+            logger.warning(f"CUDA error during readtext, resetting reader to CPU: {e}")
+            global _EASYOCR_READER
+            _EASYOCR_READER = None
+            import os
+            os.environ['CUDA_VISIBLE_DEVICES'] = ''
+            try:
+                import torch
+                torch.cuda.is_available = lambda: False
+            except ImportError:
+                pass
+            reader = get_easyocr_reader()
+            if reader:
+                try:
+                    if hasattr(image_file, 'seek'):
+                        image_file.seek(0)
+                    results = reader.readtext(image_data, detail=0)
+                    return '\n'.join(results).strip()
+                except Exception as e2:
+                    logger.error(f"EasyOCR retry failed: {e2}")
+        else:
+            logger.error(f"EasyOCR extraction error: {e}")
+        return ""
     except Exception as e:
         logger.error(f"EasyOCR extraction error: {e}")
         return ""
@@ -107,6 +168,7 @@ def extract_ocr_with_boxes(image_file):
     reader = get_easyocr_reader()
     
     try:
+        global _EASYOCR_READER
         if hasattr(image_file, 'read'):
             image_data = image_file.read()
             image_file.seek(0)
@@ -140,7 +202,23 @@ def extract_ocr_with_boxes(image_file):
 
         # 2. Detect OCR Text (green/yellow/red boxes)
         if reader:
-            ocr_results = reader.readtext(image_data, detail=1)
+            try:
+                ocr_results = reader.readtext(image_data, detail=1)
+            except RuntimeError as cuda_err:
+                if 'CUDA' in str(cuda_err):
+                    logger.warning(f"CUDA error during readtext in extract_ocr_with_boxes, resetting reader: {cuda_err}")
+                    _EASYOCR_READER = None
+                    import os as _os
+                    _os.environ['CUDA_VISIBLE_DEVICES'] = ''
+                    try:
+                        import torch
+                        torch.cuda.is_available = lambda: False
+                    except ImportError:
+                        pass
+                    reader = get_easyocr_reader()
+                    ocr_results = reader.readtext(image_data, detail=1) if reader else []
+                else:
+                    raise
             for item in ocr_results:
                 bbox, text, conf = item
                 text_parts.append(text)
@@ -310,33 +388,153 @@ def analyze_image_risk(ocr_text, image_file=None):
         }
 
 
-def transcribe_audio(audio_file):
-    """
-    Transcribe audio to text using speech-to-text service.
+# ─── Faster-Whisper Configuration ─────────────────────────────────────
+try:
+    from faster_whisper import WhisperModel
+    FASTER_WHISPER_AVAILABLE = True
+except ImportError:
+    FASTER_WHISPER_AVAILABLE = False
+    logger.warning("faster-whisper not installed. Audio transcription will be disabled.")
 
-    Production implementation: Use Google Cloud Speech-to-Text or OpenAI Whisper
+_WHISPER_MODEL = None
+
+def get_whisper_model():
     """
+    Singleton Faster-Whisper model.  Loads once into memory.
+    Uses ``small`` by default (good accuracy / speed balance for Vietnamese).
+    Falls back to CPU in forked Celery workers just like the OCR reader.
+    """
+    global _WHISPER_MODEL
+    if not FASTER_WHISPER_AVAILABLE:
+        return None
+
+    if _WHISPER_MODEL is None:
+        import multiprocessing
+        from django.conf import settings
+
+        model_size = getattr(settings, 'WHISPER_MODEL_SIZE', 'small')
+        device = getattr(settings, 'WHISPER_DEVICE', 'auto')
+
+        is_forked = (
+            multiprocessing.current_process().daemon
+            or multiprocessing.parent_process() is not None
+        )
+        if is_forked and device != 'cpu':
+            logger.info("Forked subprocess detected — forcing Whisper to CPU mode.")
+            device = 'cpu'
+
+        compute_type = 'int8' if device == 'cpu' else 'float16'
+        logger.info(
+            f"Loading Faster-Whisper model '{model_size}' on device='{device}', "
+            f"compute_type='{compute_type}' …"
+        )
+        try:
+            _WHISPER_MODEL = WhisperModel(
+                model_size, device=device, compute_type=compute_type
+            )
+            logger.info("Faster-Whisper model loaded successfully.")
+        except Exception as exc:
+            logger.error(f"Failed to load Faster-Whisper on {device}: {exc}")
+            if device != 'cpu':
+                logger.info("Retrying Faster-Whisper on CPU …")
+                _WHISPER_MODEL = WhisperModel(
+                    model_size, device='cpu', compute_type='int8'
+                )
+                logger.info("Faster-Whisper model loaded on CPU fallback.")
+    return _WHISPER_MODEL
+
+
+def transcribe_audio(audio_file, language=None):
+    """
+    Transcribe an audio file to text using Faster-Whisper.
+
+    Args:
+        audio_file: A file-like object (Django ``UploadedFile``) or a path string.
+        language: ISO-639-1 code (e.g. ``'vi'``).  ``None`` = auto-detect.
+
+    Returns:
+        A ``dict`` with keys ``transcript`` (str), ``language`` (str),
+        ``duration`` (float, seconds) and ``segments`` (list of dicts with
+        ``start``, ``end``, ``text``).
+    """
+    empty_result = {'transcript': '', 'language': '', 'duration': 0.0, 'segments': []}
+
+    model = get_whisper_model()
+    if model is None:
+        logger.warning("Whisper model unavailable — returning empty transcript.")
+        return empty_result
+
+    import tempfile, os, shutil
+
+    tmp_path = None
     try:
-        # PRODUCTION NOTE: This requires a speech-to-text engine like OpenAI Whisper or Google Speech-to-Text.
-        # For the local prototype, we return an empty string or a note if the engine is not configured.
-        logger.warning("Audio transcription engine not configured. Audio analysis will be limited.")
-        return "" 
+        # Persist the uploaded file to a temp path that faster-whisper can read
+        if hasattr(audio_file, 'read'):
+            suffix = ''
+            name = getattr(audio_file, 'name', '') or ''
+            if '.' in name:
+                suffix = '.' + name.rsplit('.', 1)[-1]
+            fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+            with os.fdopen(fd, 'wb') as tmp:
+                if hasattr(audio_file, 'seek'):
+                    audio_file.seek(0)
+                shutil.copyfileobj(audio_file, tmp)
+            file_for_model = tmp_path
+        else:
+            file_for_model = str(audio_file)
+
+        transcribe_kwargs = {'beam_size': 5, 'vad_filter': True}
+        if language:
+            transcribe_kwargs['language'] = language
+
+        segments_iter, info = model.transcribe(file_for_model, **transcribe_kwargs)
+
+        segments = []
+        full_text_parts = []
+        for seg in segments_iter:
+            segments.append({
+                'start': round(seg.start, 2),
+                'end':   round(seg.end, 2),
+                'text':  seg.text.strip(),
+            })
+            full_text_parts.append(seg.text.strip())
+
+        transcript = ' '.join(full_text_parts)
+        detected_lang = getattr(info, 'language', language or '')
+        duration = getattr(info, 'duration', 0.0)
+
+        logger.info(
+            f"Transcription complete: lang={detected_lang}, "
+            f"duration={duration:.1f}s, chars={len(transcript)}"
+        )
+        return {
+            'transcript': transcript,
+            'language': detected_lang,
+            'duration': round(duration, 2),
+            'segments': segments,
+        }
+
     except Exception as e:
-        logger.error(f"Audio transcription error: {e}")
-        return ""
+        logger.error(f"Audio transcription error: {e}", exc_info=True)
+        return empty_result
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
-def analyze_audio_risk(transcript, phone_number):
+def analyze_audio_risk(transcript, phone_number=''):
     """
     Analyze audio transcript for scam patterns using Ollama.
 
+    Args:
+        transcript: Plain text string (the speech-to-text output).
+        phone_number: Optional associated phone number for context.
+
     Returns:
-    {
-        "risk_score": 0-100,
-        "is_scam": bool,
-        "warning_message": "...",
-        "duration": seconds
-    }
+        dict with ``risk_score``, ``is_scam``, ``warning_message``, ``duration``.
     """
     if not transcript:
         return {

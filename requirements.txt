@@ -32,3 +32,6 @@ dnspython
 ipwhois
 phonenumbers
 einops
+markdown
+faster-whisper
+soundfile

@@ -1,64 +1,133 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container mx-auto px-4 py-8 mt-16">
-    <div class="flex items-center justify-between mb-8">
+<div x-data="learnManager()">
+    <div class="container mx-auto px-4 py-8 mt-16">
+    <div class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
         <div class="flex items-center gap-4">
-            <a href="{% url 'admin-dashboard' %}" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+            <a href="{% url 'admin-dashboard' %}" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white transition-all">
                 <i class="bi bi-chevron-left"></i>
             </a>
             <h1 class="text-2xl font-bold text-white">Quản Lý Trung Tâm Học Tập</h1>
         </div>
-        <a href="{% url 'admin-add-lesson' %}" class="px-6 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold transition-all">
-            <i class="bi bi-plus-lg me-2"></i> Bài học mới
-        </a>
+        <div class="flex gap-3 w-full sm:w-auto">
+            <a href="{% url 'admin-magic-create' %}" class="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20">
+                <i class="bi bi-magic"></i> Magic Create
+            </a>
+            <a href="{% url 'admin-add-lesson' %}" class="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all flex items-center justify-center gap-2 border border-white/10">
+                <i class="bi bi-plus-lg"></i> Bài học mới
+            </a>
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-6">
+    <div class="grid grid-cols-1 gap-4">
         {% for lesson in lessons %}
-        <div class="bg-slate-800/50 backdrop-blur-md border border-slate-700/50 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6">
-            <div class="flex items-start gap-6">
-                <div class="w-16 h-16 rounded-xl bg-slate-700 overflow-hidden shrink-0">
+        <div class="bg-white/[0.03] backdrop-blur-md border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-white/[0.05] transition-all group">
+            <div class="flex items-start gap-6 w-full">
+                <div class="w-16 h-16 rounded-xl bg-white/5 overflow-hidden shrink-0 border border-white/10 group-hover:border-cyan-500/30 transition-all">
                     {% if lesson.cover_image %}
                     <img src="{{ lesson.cover_image.url }}" class="w-full h-full object-cover">
                     {% else %}
-                    <div class="w-full h-full flex items-center justify-center text-slate-500">
-                        <i class="bi bi-image text-2xl"></i>
+                    <div class="w-full h-full flex items-center justify-center text-white/20">
+                        <i class="bi bi-journal-text text-2xl"></i>
                     </div>
                     {% endif %}
                 </div>
-                <div>
-                    <h3 class="text-xl font-bold text-white">{{ lesson.title }}</h3>
-                    <p class="text-slate-400 text-sm mt-1">Danh mục: <span class="text-blue-400">{{ lesson.category }}</span> • Tạo ngày: {{ lesson.created_at|date:"d/m/Y" }}</p>
-                    <div class="flex gap-2 mt-3">
+                <div class="space-y-1">
+                    <h3 class="text-lg font-bold text-white group-hover:text-cyan-400 transition-colors">{{ lesson.title }}</h3>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] uppercase tracking-widest font-black text-white/40">
+                        <span class="flex items-center gap-1.5"><i class="bi bi-tag-fill text-blue-500"></i> {{ lesson.get_category_display }}</span>
+                        <span class="flex items-center gap-1.5"><i class="bi bi-clock-history"></i> {{ lesson.created_at|date:"d/m/Y" }}</span>
                         {% if lesson.is_published %}
-                        <span class="px-2 py-0.5 rounded bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-wider border border-green-500/20">Đã đăng</span>
+                        <span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">Đã đăng</span>
                         {% else %}
-                        <span class="px-2 py-0.5 rounded bg-slate-700 text-slate-400 text-[10px] font-bold uppercase tracking-wider">Bản nháp</span>
+                        <span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">Bản nháp</span>
                         {% endif %}
                     </div>
                 </div>
             </div>
             <div class="flex gap-2 shrink-0">
-                <a href="{% url 'admin-edit-lesson' lesson.id %}" class="w-10 h-10 rounded-lg bg-slate-700 text-white hover:bg-blue-600 transition-colors flex items-center justify-center" title="Sửa bài viết">
+                <a href="{% url 'admin-edit-lesson' lesson.id %}" class="w-10 h-10 rounded-xl bg-white/5 text-white/50 hover:bg-blue-500 hover:text-white transition-all flex items-center justify-center border border-white/5" title="Sửa bài viết">
                     <i class="bi bi-pencil-square"></i>
                 </a>
-                <button class="w-10 h-10 rounded-lg bg-slate-700 text-white hover:bg-purple-600 transition-colors" title="Quản lý câu hỏi">
-                    <i class="bi bi-list-check"></i>
+                <button @click="notifyLesson({{ lesson.id }}, '{{ lesson.title|escapejs }}')" class="w-10 h-10 rounded-xl bg-white/5 text-white/50 hover:bg-yellow-500 hover:text-white transition-all flex items-center justify-center border border-white/5" title="Gửi thông báo email">
+                    <i class="bi bi-envelope-at-fill"></i>
                 </button>
-                <button class="w-10 h-10 rounded-lg bg-slate-700 text-white hover:bg-yellow-600 transition-colors" title="Gửi thông báo email">
-                    <i class="bi bi-envelope-at"></i>
-                </button>
-                <button class="w-10 h-10 rounded-lg bg-slate-700 text-white hover:bg-red-600 transition-colors" title="Xóa">
-                    <i class="bi bi-trash3"></i>
+                <button @click="deleteLesson({{ lesson.id }}, '{{ lesson.title|escapejs }}')" class="w-10 h-10 rounded-xl bg-white/5 text-white/50 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center border border-white/5" title="Xóa">
+                    <i class="bi bi-trash3-fill"></i>
                 </button>
             </div>
         </div>
         {% empty %}
-        <div class="bg-slate-800/30 border border-dashed border-slate-700 p-12 rounded-3xl text-center">
-            <i class="bi bi-book text-5xl text-slate-700 mb-4 block"></i>
-            <p class="text-slate-500">Chưa có bài học nào được tạo.</p>
+        <div class="bg-white/[0.02] border border-dashed border-white/10 p-16 rounded-[2.5rem] text-center">
+            <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="bi bi-journal-x text-4xl text-white/10"></i>
+            </div>
+            <p class="text-white/30 font-bold uppercase tracking-widest">Chưa có bài học nào được tạo</p>
         </div>
         {% endfor %}
     </div>
+
+    </div>
+
+    <!-- Magic Create is now a dedicated page -->
 </div>
+
+<script>
+    function learnManager() {
+        return {
+            deleteLesson(id, title) {
+                Swal.fire({
+                    title: 'Xóa bài học?',
+                    text: `Bạn có chắc chắn muốn xóa bài học "${title}"? Thao tác này không thể hoàn tác.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Xóa ngay',
+                    cancelButtonText: 'Hủy',
+                    background: '#0d0d1f',
+                    color: '#fff',
+                    customClass: {
+                        popup: 'rounded-[2rem] border border-white/10',
+                        confirmButton: 'liquid-btn bg-red-500 text-white px-6 py-2 rounded-xl',
+                        cancelButton: 'liquid-btn bg-white/5 text-white/50 px-6 py-2 rounded-xl'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = `/admin-cp/learn/${id}/delete/`;
+                    }
+                });
+            },
+
+            notifyLesson(id, title) {
+                Swal.fire({
+                    title: 'Gửi thông báo?',
+                    html: `Hệ thống sẽ gửi <strong>email</strong> và <strong>push notification</strong> về bài học "${title}" tới tất cả người dùng.`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="bi bi-send-fill mr-1"></i> Gửi thông báo',
+                    cancelButtonText: 'Hủy',
+                    background: '#0d0d1f',
+                    color: '#fff',
+                    customClass: {
+                        popup: 'rounded-[2rem] border border-white/10',
+                        confirmButton: 'liquid-btn bg-yellow-500 text-black px-6 py-2 rounded-xl',
+                        cancelButton: 'liquid-btn bg-white/5 text-white/50 px-6 py-2 rounded-xl'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire({
+                            title: 'Đang gửi thông báo...',
+                            html: '<div class="spinner w-8 h-8 border-4 border-yellow-500 mx-auto my-4"></div><p class="text-white/40 text-xs">Email + Push notification đang được gửi tới người dùng</p>',
+                            background: '#0d0d1f',
+                            color: '#fff',
+                            showConfirmButton: false,
+                            allowOutsideClick: false,
+                            customClass: { popup: 'rounded-[2rem] border border-white/10' }
+                        });
+                        window.location.href = `/admin-cp/learn/${id}/notify/`;
+                    }
+                });
+            }
+        };
+    }
+</script>
 {% endblock %}
