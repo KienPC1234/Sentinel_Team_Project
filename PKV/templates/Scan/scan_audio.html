@@ -9,38 +9,41 @@
 
     <!-- Page Header -->
     <div class="text-center space-y-4" data-aos="fade-up">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-[2rem] bg-violet-500/10 text-violet-400 border border-violet-500/20 shadow-lg shadow-violet-500/10 mb-2" data-aos="zoom-in" data-aos-delay="100">
-            <i class="bi bi-mic text-4xl"></i>
+        <div class="relative inline-block" data-aos="zoom-in" data-aos-delay="100">
+            <div class="absolute inset-0 bg-violet-500 blur-3xl opacity-20 rounded-full scale-150"></div>
+            <div class="relative inline-flex items-center justify-center w-20 h-20 rounded-[2rem] bg-violet-500/10 text-violet-400 border border-violet-500/20 shadow-lg shadow-violet-500/10">
+                <i class="bi bi-soundwave text-4xl"></i>
+            </div>
         </div>
         <h1 class="text-4xl font-black text-white tracking-tight leading-none" data-aos="fade-up" data-aos-delay="200">
             Quét <span class="glow-text text-violet-400">Âm Thanh</span>
         </h1>
-        <p class="text-white/40 max-w-md mx-auto text-sm leading-relaxed" data-aos="fade-up" data-aos-delay="300">
-            Tải lên file ghi âm hoặc ghi âm trực tiếp để AI nhận diện giọng nói và phân tích nội dung lừa đảo.
+        <p class="text-white/40 max-w-lg mx-auto text-sm leading-relaxed" data-aos="fade-up" data-aos-delay="300">
+            Tải lên cuộc gọi ghi âm hoặc ghi âm trực tiếp — AI sẽ chuyển đổi giọng nói thành văn bản và phân tích dấu hiệu lừa đảo trong hội thoại.
         </p>
     </div>
 
-    <!-- Upload / Record Card -->
-    <div x-show="!result" class="liquid-card p-6 sm:p-10 relative group" data-aos="fade-up" data-aos-delay="400">
-        <div class="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl"></div>
+    <!-- ═══ UPLOAD / RECORD CARD ═══ -->
+    <div x-show="!result" class="liquid-card p-0 relative group overflow-hidden" data-aos="fade-up" data-aos-delay="400">
+        <div class="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
-        <div class="relative z-10">
-            <!-- Tab selector -->
-            <div class="flex justify-center gap-2 mb-8">
-                <button @click="mode = 'upload'" class="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                        :class="mode === 'upload' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/25' : 'bg-white/5 text-white/40 hover:text-white'">
-                    <i class="bi bi-cloud-upload mr-2"></i> Tải File
-                </button>
-                <button @click="mode = 'record'" class="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                        :class="mode === 'record' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/25' : 'bg-white/5 text-white/40 hover:text-white'">
-                    <i class="bi bi-mic mr-2"></i> Ghi Âm
-                </button>
-            </div>
+        <!-- Tab Selector -->
+        <div class="relative z-10 flex border-b border-white/5">
+            <button @click="mode = 'upload'" class="flex-1 py-5 text-center text-[11px] font-black uppercase tracking-[0.2em] transition-all border-b-2 relative"
+                    :class="mode === 'upload' ? 'text-violet-400 border-violet-500 bg-violet-500/5' : 'text-white/30 border-transparent hover:text-white/50'">
+                <i class="bi bi-cloud-arrow-up-fill mr-2 text-lg align-middle"></i>Tải File
+            </button>
+            <button @click="mode = 'record'" class="flex-1 py-5 text-center text-[11px] font-black uppercase tracking-[0.2em] transition-all border-b-2 relative"
+                    :class="mode === 'record' ? 'text-violet-400 border-violet-500 bg-violet-500/5' : 'text-white/30 border-transparent hover:text-white/50'">
+                <i class="bi bi-mic-fill mr-2 text-lg align-middle"></i>Ghi Âm
+            </button>
+        </div>
 
-            <!-- Upload Mode -->
+        <div class="relative z-10 p-6 sm:p-10">
+            <!-- ─── UPLOAD MODE ─── -->
             <div x-show="mode === 'upload'" x-transition>
                 <template x-if="!audioFile">
-                    <div class="flex flex-col items-center justify-center py-14 border-2 border-dashed border-white/10 rounded-2xl hover:border-violet-500/30 transition-all cursor-pointer"
+                    <div class="flex flex-col items-center justify-center py-16 border-2 border-dashed border-white/10 rounded-3xl hover:border-violet-500/30 transition-all cursor-pointer group/drop"
                          @click="$refs.audioInput.click()"
                          @dragover.prevent="dragging = true"
                          @dragleave.prevent="dragging = false"
@@ -48,101 +51,167 @@
                          :class="dragging ? 'bg-violet-500/10 border-violet-500/50 scale-[0.99]' : ''">
                         <input type="file" x-ref="audioInput" accept=".mp3,.m4a,.wav,.ogg,.webm,.flac,.aac,audio/*" class="hidden"
                                @change="handleFileSelect($event)">
-                        <i class="bi bi-soundwave text-5xl text-white/20 mb-4 group-hover:text-violet-500/50 transition-colors"></i>
-                        <p class="text-white font-bold text-lg mb-2">Click hoặc kéo thả file âm thanh</p>
-                        <p class="text-white/40 text-sm">Hỗ trợ MP3, WAV, M4A, OGG, WebM, FLAC, AAC (Tối đa 50MB)</p>
+                        <div class="relative mb-6">
+                            <div class="absolute inset-0 bg-violet-500/20 blur-2xl rounded-full scale-150 opacity-0 group-hover/drop:opacity-100 transition-opacity"></div>
+                            <div class="relative w-20 h-20 rounded-[1.5rem] bg-white/[0.03] border border-white/10 flex items-center justify-center group-hover/drop:border-violet-500/30 group-hover/drop:scale-110 transition-all duration-300">
+                                <i class="bi bi-file-earmark-music text-4xl text-white/15 group-hover/drop:text-violet-400/60 transition-colors"></i>
+                            </div>
+                        </div>
+                        <p class="text-white font-black text-lg mb-2">Click hoặc kéo thả file âm thanh</p>
+                        <p class="text-white/30 text-xs font-bold">MP3 · WAV · M4A · OGG · WebM · FLAC · AAC <span class="text-white/15 ml-1">Tối đa 50MB</span></p>
                     </div>
                 </template>
 
                 <template x-if="audioFile">
-                    <div class="space-y-4">
-                        <div class="bg-black/20 rounded-2xl p-6 border border-white/10 flex items-center gap-4">
-                            <div class="w-14 h-14 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 text-2xl">
-                                <i class="bi bi-file-earmark-music"></i>
+                    <div class="space-y-5">
+                        <div class="bg-white/[0.02] rounded-2xl p-5 border border-white/10 flex items-center gap-5">
+                            <div class="relative">
+                                <div class="absolute inset-0 bg-violet-500 blur-xl opacity-20"></div>
+                                <div class="relative w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-400 text-2xl border border-violet-500/20">
+                                    <i class="bi bi-file-earmark-music-fill"></i>
+                                </div>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <h4 class="text-white font-bold truncate" x-text="audioFile.name"></h4>
-                                <p class="text-white/40 text-xs" x-text="formatBytes(audioFile.size)"></p>
+                                <h4 class="text-white font-black truncate text-sm" x-text="audioFile.name"></h4>
+                                <p class="text-white/30 text-[11px] font-bold mt-0.5" x-text="formatBytes(audioFile.size)"></p>
                             </div>
-                            <button @click="removeFile()" x-show="!loading" class="text-white/30 hover:text-white transition-colors">
-                                <i class="bi bi-x-circle text-xl"></i>
+                            <button @click="removeFile()" x-show="!loading" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-red-500/10 text-white/20 hover:text-red-400 flex items-center justify-center transition-all">
+                                <i class="bi bi-trash3 text-sm"></i>
                             </button>
                         </div>
-                        <!-- Audio preview -->
-                        <audio x-ref="audioPreview" controls class="w-full rounded-xl opacity-60 hover:opacity-100 transition-opacity"></audio>
+                        <audio x-ref="audioPreview" controls class="w-full rounded-xl [&::-webkit-media-controls-panel]{background:rgba(255,255,255,0.03)}"></audio>
                     </div>
                 </template>
             </div>
 
-            <!-- Record Mode -->
-            <div x-show="mode === 'record'" x-transition class="flex flex-col items-center">
-                <!-- Recording visualization -->
-                <div class="mb-8 flex flex-col items-center">
-                    <div class="relative w-32 h-32 flex items-center justify-center mb-4">
-                        <!-- Pulse ring when recording -->
-                        <div x-show="isRecording" class="absolute inset-0 rounded-full bg-red-500/20 animate-ping"></div>
-                        <div x-show="isRecording" class="absolute inset-2 rounded-full bg-red-500/10 animate-pulse"></div>
+            <!-- ─── RECORD MODE ─── -->
+            <div x-show="mode === 'record'" x-transition class="space-y-6">
+
+                <!-- Microphone Selector -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3" x-show="!isRecording">
+                    <div class="flex-1 relative">
+                        <div class="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <i class="bi bi-mic"></i>
+                        </div>
+                        <select x-model="selectedDeviceId" @change="testSelectedMic()"
+                                class="w-full bg-white/[0.03] border border-white/10 text-white/80 text-sm font-bold rounded-xl pl-10 pr-4 py-3 appearance-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-all cursor-pointer">
+                            <option value="" class="bg-slate-900">Micro mặc định</option>
+                            <template x-for="d in audioDevices" :key="d.deviceId">
+                                <option :value="d.deviceId" x-text="d.label || ('Microphone ' + (audioDevices.indexOf(d)+1))" class="bg-slate-900"></option>
+                            </template>
+                        </select>
+                        <div class="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <i class="bi bi-chevron-down text-xs"></i>
+                        </div>
+                    </div>
+                    <button @click="refreshDevices()" class="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-violet-400 hover:border-violet-500/30 transition-all text-xs font-black uppercase tracking-widest"
+                            title="Làm mới danh sách micro">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+
+                <!-- Mic Level Indicator (before recording) -->
+                <div x-show="micTesting && !isRecording" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/5">
+                    <span class="text-[10px] font-black text-white/30 uppercase tracking-widest shrink-0">Mức thu</span>
+                    <div class="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-100"
+                             :style="'width:' + micLevel + '%'"
+                             :class="micLevel > 60 ? 'bg-green-500' : micLevel > 20 ? 'bg-yellow-400' : 'bg-white/20'"></div>
+                    </div>
+                    <span class="text-[10px] font-mono text-white/20" x-text="Math.round(micLevel) + '%'"></span>
+                </div>
+
+                <!-- Recording Area -->
+                <div class="flex flex-col items-center py-8">
+                    <!-- Big Record Button -->
+                    <div class="relative mb-6">
+                        <!-- Rotating ring when recording -->
+                        <div x-show="isRecording" class="absolute -inset-4">
+                            <svg class="w-full h-full animate-spin-slow" viewBox="0 0 160 160">
+                                <circle cx="80" cy="80" r="76" fill="none" stroke="rgba(239,68,68,0.15)" stroke-width="2" stroke-dasharray="8 12"/>
+                            </svg>
+                        </div>
+                        <!-- Pulse rings -->
+                        <div x-show="isRecording" class="absolute -inset-6 rounded-full bg-red-500/10 animate-ping"></div>
+                        <div x-show="isRecording" class="absolute -inset-3 rounded-full bg-red-500/5 animate-pulse"></div>
 
                         <button @click="isRecording ? stopRecording() : startRecording()"
-                                class="relative w-24 h-24 rounded-full flex items-center justify-center text-3xl transition-all duration-300 z-10"
-                                :class="isRecording ? 'bg-red-500 text-white shadow-xl shadow-red-500/40 scale-110' : 'bg-white/5 text-white/40 border-2 border-white/10 hover:border-violet-500/50 hover:text-violet-400'">
-                            <i :class="isRecording ? 'bi bi-stop-fill' : 'bi bi-mic-fill'"></i>
+                                class="relative w-28 h-28 rounded-full flex items-center justify-center text-4xl transition-all duration-500 z-10 shadow-2xl"
+                                :class="isRecording
+                                    ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-red-500/40 scale-110 hover:from-red-400 hover:to-red-500'
+                                    : 'bg-white/[0.03] text-white/30 border-2 border-white/10 hover:border-violet-500/50 hover:text-violet-400 hover:shadow-violet-500/20 hover:scale-105'">
+                            <i :class="isRecording ? 'bi bi-stop-fill' : 'bi bi-mic-fill'" class="transition-all"></i>
                         </button>
                     </div>
 
-                    <p class="text-white/60 text-sm font-bold" x-show="!isRecording && !recordedBlob" >Nhấn để bắt đầu ghi âm</p>
-                    <p class="text-red-400 text-sm font-bold animate-pulse" x-show="isRecording">
-                        <i class="bi bi-record-circle mr-1"></i> Đang ghi âm — <span x-text="formatTime(recordingDuration)"></span>
-                    </p>
-
-                    <!-- Waveform visualization -->
-                    <canvas x-ref="waveCanvas" x-show="isRecording" width="300" height="60" class="mt-4 rounded-xl opacity-80"></canvas>
+                    <!-- Status Text -->
+                    <div class="text-center space-y-2">
+                        <p x-show="!isRecording && !recordedBlob" class="text-white/40 text-sm font-bold">Nhấn để bắt đầu ghi âm</p>
+                        <div x-show="isRecording" class="space-y-3">
+                            <p class="text-red-400 text-sm font-black animate-pulse flex items-center justify-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/50"></span>
+                                Đang ghi âm — <span x-text="formatTime(recordingDuration)"></span>
+                                <span class="text-white/15 text-xs" x-text="'/ ' + formatTime(maxRecordingDuration)"></span>
+                            </p>
+                            <!-- Live Waveform -->
+                            <canvas x-ref="waveCanvas" width="320" height="64" class="rounded-2xl mx-auto opacity-90"></canvas>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Recorded file preview -->
+                <!-- Recorded File Preview -->
                 <template x-if="recordedBlob && !isRecording">
-                    <div class="w-full space-y-4">
-                        <div class="bg-black/20 rounded-2xl p-6 border border-white/10 flex items-center gap-4">
-                            <div class="w-14 h-14 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 text-2xl">
-                                <i class="bi bi-mic-fill"></i>
+                    <div class="space-y-4 animate-fadein">
+                        <div class="bg-white/[0.02] rounded-2xl p-5 border border-green-500/10 flex items-center gap-5">
+                            <div class="relative">
+                                <div class="absolute inset-0 bg-green-500 blur-xl opacity-20"></div>
+                                <div class="relative w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-400 text-2xl border border-green-500/20">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                </div>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <h4 class="text-white font-bold">Bản ghi âm</h4>
-                                <p class="text-white/40 text-xs" x-text="formatTime(recordingDuration) + ' • ' + formatBytes(recordedBlob.size)"></p>
+                                <h4 class="text-white font-black text-sm">Bản ghi âm hoàn tất</h4>
+                                <p class="text-white/30 text-[11px] font-bold mt-0.5" x-text="formatTime(recordingDuration) + ' • ' + formatBytes(recordedBlob.size)"></p>
                             </div>
-                            <button @click="discardRecording()" x-show="!loading" class="text-white/30 hover:text-white transition-colors">
-                                <i class="bi bi-x-circle text-xl"></i>
+                            <button @click="discardRecording()" x-show="!loading" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-red-500/10 text-white/20 hover:text-red-400 flex items-center justify-center transition-all">
+                                <i class="bi bi-trash3 text-sm"></i>
                             </button>
                         </div>
-                        <audio x-ref="recordedPreview" controls class="w-full rounded-xl opacity-60 hover:opacity-100 transition-opacity"></audio>
+                        <audio x-ref="recordedPreview" controls class="w-full rounded-xl"></audio>
                     </div>
                 </template>
             </div>
 
-            <!-- Action buttons -->
+            <!-- ─── SCAN BUTTON ─── -->
             <div class="mt-8 flex flex-col items-center gap-6" x-show="hasAudio && !loading && !scanning">
                 <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'" data-size="flexible"></div>
-                <button @click="startScan()" class="liquid-button bg-violet-500 hover:bg-violet-400 text-white px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-violet-500/25 flex items-center gap-3">
-                    <i class="bi bi-shield-shaded"></i> Phân tích âm thanh
+                <button @click="startScan()" class="relative group/scan overflow-hidden rounded-2xl w-full sm:w-auto">
+                    <div class="absolute inset-0 bg-gradient-to-r from-violet-600 to-fuchsia-600 opacity-0 group-hover/scan:opacity-100 transition-opacity"></div>
+                    <div class="relative bg-violet-500 hover:bg-violet-400 text-white px-14 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] shadow-xl shadow-violet-500/25 flex items-center justify-center gap-3 transition-all group-hover/scan:scale-[1.02]">
+                        <i class="bi bi-shield-shaded text-lg"></i> Phân tích âm thanh
+                    </div>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Progress Console -->
+    <!-- ═══ PROGRESS CONSOLE ═══ -->
     <template x-if="(loading || scanning) && progress.length > 0">
-        <div class="liquid-card p-6 border-violet-500/20 bg-violet-500/[0.02] animate-fadein">
+        <div class="liquid-card p-6 border-violet-500/20 bg-violet-500/[0.02] animate-fadein overflow-hidden">
             <div class="mb-4 flex items-center justify-between gap-3">
-                <h4 class="text-[10px] font-black text-violet-400 uppercase tracking-widest">Nhật ký phân tích thời gian thực</h4>
+                <h4 class="text-[10px] font-black text-violet-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>
+                    Nhật ký phân tích
+                </h4>
                 <div class="flex items-center gap-3">
-                    <span class="text-[10px] text-white/30 font-mono" x-text="progress.length + ' bước'"></span>
-                    <div class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded border"
-                         :class="wsState==='connected' ? 'text-green-400 border-green-500/30 bg-green-500/10' : (wsState==='reconnecting' || wsState==='connecting') ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10'"
-                         x-text="wsState==='connected' ? 'WS Connected' : (wsState==='reconnecting' ? 'Reconnecting' : (wsState==='connecting' ? 'Connecting' : 'Disconnected'))"></div>
+                    <span class="text-[10px] text-white/20 font-mono" x-text="progress.length + ' bước'"></span>
+                    <div class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border"
+                         :class="wsState==='connected' ? 'text-green-400 border-green-500/20 bg-green-500/5' : (wsState==='reconnecting' || wsState==='connecting') ? 'text-yellow-400 border-yellow-500/20 bg-yellow-500/5' : 'text-red-400 border-red-500/20 bg-red-500/5'"
+                         x-text="wsState==='connected' ? 'LIVE' : (wsState==='reconnecting' ? 'RETRY' : (wsState==='connecting' ? '...' : 'OFFLINE'))"></div>
                 </div>
             </div>
-            <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden mb-4">
-                <div class="h-full bg-violet-500/50 transition-all duration-500 rounded-full"
+            <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden mb-5">
+                <div class="h-full bg-gradient-to-r from-violet-500/50 to-fuchsia-500/50 transition-all duration-700 rounded-full"
                      :style="'width:' + Math.min(95, progress.length * 20) + '%'"></div>
             </div>
             <div class="space-y-3 font-mono text-[11px] max-h-[300px] overflow-y-auto custom-scrollbar">
@@ -164,67 +233,76 @@
                         </span>
                         <span class="text-white/80 flex-1" x-text="item.message"></span>
                         <i x-show="index === progress.length - 1 && item.step !== 'completed'" class="bi bi-three-dots animate-pulse text-violet-400 flex-shrink-0"></i>
-                        <i x-show="item.step === 'completed' || index < progress.length - 1" class="bi bi-check2 text-violet-400 flex-shrink-0"></i>
                     </div>
                 </template>
             </div>
 
             <!-- Live transcript preview -->
             <template x-if="liveTranscript">
-                <div class="mt-4 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
-                    <div class="text-[9px] font-black text-white/20 uppercase tracking-widest mb-2">Bản ghi nhận dạng</div>
+                <div class="mt-5 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+                    <div class="text-[9px] font-black text-white/20 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                        <i class="bi bi-chat-left-text text-violet-400/40"></i> Bản ghi nhận dạng
+                    </div>
                     <p class="text-white/60 text-sm leading-relaxed italic" x-text="liveTranscript"></p>
                 </div>
             </template>
         </div>
     </template>
 
-    <!-- Result Display -->
+    <!-- ═══ RESULT DISPLAY ═══ -->
     <template x-if="result">
         <div class="space-y-8 animate-fadein">
-            <div class="liquid-card overflow-hidden">
+            <div class="liquid-card overflow-hidden p-0">
                 <!-- Status Header -->
-                <div class="p-8 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
-                    <div class="absolute inset-0 opacity-10 -z-10 blur-[80px]"
+                <div class="p-10 text-center relative overflow-hidden">
+                    <div class="absolute inset-0 opacity-10 -z-10 blur-[100px]"
                          :class="result.risk_level==='RED' ? 'bg-red-500' : result.risk_level==='YELLOW' ? 'bg-yellow-500' : 'bg-green-500'"></div>
+                    <div class="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
 
-                    <div class="inline-block px-8 py-3 rounded-full text-xs font-black tracking-[0.3em] uppercase mb-6"
-                         :class="result.risk_level==='RED' ? 'bg-red-500/20 text-red-500 border border-red-500/30' : result.risk_level==='YELLOW' ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' : 'bg-green-500/20 text-green-500 border border-green-500/30'"
-                         x-text="result.risk_level === 'RED' ? 'NGUY HIỂM' : result.risk_level === 'YELLOW' ? 'NGHI VẤN' : 'AN TOÀN'"></div>
+                    <!-- Risk Badge -->
+                    <div class="inline-flex items-center gap-2.5 mb-6 px-4 py-2 rounded-full border"
+                         :class="result.risk_level==='RED' ? 'bg-red-500/10 border-red-500/20 text-red-400' : result.risk_level==='YELLOW' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400' : 'bg-green-500/10 border-green-500/20 text-green-400'">
+                        <span class="w-2 h-2 rounded-full animate-pulse"
+                              :class="result.risk_level==='RED' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : result.risk_level==='YELLOW' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]'"></span>
+                        <span class="text-xs font-black uppercase tracking-[0.2em]"
+                              x-text="result.risk_level === 'RED' ? 'Nguy hiểm cao' : result.risk_level === 'YELLOW' ? 'Cần cảnh giác' : 'An toàn'"></span>
+                    </div>
 
-                    <div class="relative inline-block mb-4">
-                        <svg class="w-36 h-36 transform -rotate-90">
-                            <circle cx="72" cy="72" r="64" stroke="currentColor" stroke-width="8" fill="transparent" class="text-white/5" />
-                            <circle cx="72" cy="72" r="64" stroke="currentColor" stroke-width="8" fill="transparent"
-                                    :stroke-dasharray="402" :stroke-dashoffset="402 * (1 - (result.risk_score || 0)/100)"
+                    <!-- Score Ring -->
+                    <div class="relative inline-block mb-5">
+                        <svg class="w-40 h-40 transform -rotate-90" viewBox="0 0 160 160">
+                            <circle cx="80" cy="80" r="70" stroke="currentColor" stroke-width="6" fill="transparent" class="text-white/5" />
+                            <circle cx="80" cy="80" r="70" stroke="currentColor" stroke-width="6" fill="transparent"
+                                    stroke-linecap="round"
+                                    :stroke-dasharray="440" :stroke-dashoffset="440 * (1 - (result.risk_score || 0)/100)"
                                     :class="result.risk_level==='RED' ? 'text-red-500' : result.risk_level==='YELLOW' ? 'text-yellow-400' : 'text-green-400'"
                                     class="transition-all duration-1000 ease-out" />
                         </svg>
                         <div class="absolute inset-0 flex flex-col items-center justify-center">
-                            <span class="text-4xl font-black text-white" x-text="result.risk_score || 0"></span>
-                            <span class="text-[8px] uppercase font-black text-white/30">Rủi ro</span>
+                            <span class="text-5xl font-black text-white" x-text="result.risk_score || 0"></span>
+                            <span class="text-[9px] uppercase font-black text-white/20 tracking-[0.2em] mt-1">Điểm rủi ro</span>
                         </div>
                     </div>
 
-                    <!-- Audio meta info -->
-                    <div class="flex justify-center gap-6 text-xs text-white/40">
-                        <span x-show="result.language"><i class="bi bi-translate mr-1"></i> <span x-text="result.language"></span></span>
-                        <span x-show="result.duration"><i class="bi bi-clock mr-1"></i> <span x-text="result.duration ? result.duration.toFixed(1) + 's' : ''"></span></span>
-                        <span x-show="result.segments"><i class="bi bi-list-ol mr-1"></i> <span x-text="(result.segments?.length || 0) + ' đoạn'"></span></span>
+                    <!-- Audio Meta -->
+                    <div class="flex justify-center gap-6 text-[11px] text-white/30 font-bold">
+                        <span x-show="result.language"><i class="bi bi-translate mr-1.5"></i><span x-text="result.language"></span></span>
+                        <span x-show="result.duration"><i class="bi bi-clock mr-1.5"></i><span x-text="result.duration ? result.duration.toFixed(1) + 's' : ''"></span></span>
+                        <span x-show="result.segments"><i class="bi bi-list-ol mr-1.5"></i><span x-text="(result.segments?.length || 0) + ' đoạn'"></span></span>
                     </div>
                 </div>
 
                 <div class="p-8 space-y-10">
-                    <!-- Transcript -->
+                    <!-- Transcript (Segments) -->
                     <div class="space-y-4">
-                        <h4 class="text-xs font-black text-violet-400 uppercase tracking-widest flex items-center gap-2">
+                        <h4 class="text-[10px] font-black text-violet-400 uppercase tracking-[0.2em] flex items-center gap-2">
                             <i class="bi bi-chat-left-text"></i> Nội dung nhận diện
                         </h4>
                         <template x-if="result.segments && result.segments.length > 0">
                             <div class="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
                                 <template x-for="(seg, idx) in result.segments" :key="idx">
-                                    <div class="flex gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
-                                        <span class="text-[10px] font-mono text-white/20 whitespace-nowrap pt-0.5"
+                                    <div class="flex gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors group/seg">
+                                        <span class="text-[10px] font-mono text-violet-400/40 whitespace-nowrap pt-0.5 group-hover/seg:text-violet-400/70 transition-colors"
                                               x-text="formatTimestamp(seg.start) + ' →'"></span>
                                         <span class="text-white/70 text-sm leading-relaxed" x-text="seg.text"></span>
                                     </div>
@@ -232,50 +310,51 @@
                             </div>
                         </template>
                         <template x-if="!result.segments || result.segments.length === 0">
-                            <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+                            <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
                                 <p class="text-white/60 text-sm leading-relaxed" x-text="result.transcript || 'Không nhận diện được nội dung.'"></p>
                             </div>
                         </template>
                     </div>
 
-                    <!-- Full transcript (copyable) -->
+                    <!-- Full Transcript -->
                     <template x-if="result.transcript">
                         <div class="space-y-4">
                             <div class="flex items-center justify-between">
-                                <h4 class="text-xs font-black text-white/40 uppercase tracking-widest flex items-center gap-2">
+                                <h4 class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] flex items-center gap-2">
                                     <i class="bi bi-file-text"></i> Văn bản đầy đủ
                                 </h4>
                                 <button @click="navigator.clipboard.writeText(result.transcript); showToast('Đã sao chép!','success')"
-                                        class="liquid-btn p-2 px-3 bg-white/5 text-white/40 hover:text-violet-400 border-white/5 text-[10px] font-bold">
+                                        class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-violet-500/10 text-white/30 hover:text-violet-400 border border-white/5 hover:border-violet-500/20 text-[10px] font-black uppercase tracking-widest transition-all">
                                     <i class="bi bi-copy mr-1"></i> Sao chép
                                 </button>
                             </div>
-                            <div class="p-5 rounded-2xl bg-black/20 border border-white/5 max-h-[200px] overflow-y-auto custom-scrollbar">
-                                <p class="text-white/50 text-sm leading-relaxed font-mono whitespace-pre-wrap" x-text="result.transcript"></p>
+                            <div class="p-5 rounded-2xl bg-black/30 border border-white/5 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                <p class="text-white/40 text-sm leading-relaxed font-mono whitespace-pre-wrap" x-text="result.transcript"></p>
                             </div>
                         </div>
                     </template>
 
-                    <!-- AI Reasoning -->
+                    <!-- AI Analysis -->
                     <div class="space-y-4">
-                        <h4 class="text-xs font-black text-violet-400 uppercase tracking-widest flex items-center gap-2">
-                            <i class="bi bi-robot"></i> Nhận định của trí tuệ nhân tạo
+                        <h4 class="text-[10px] font-black text-violet-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <i class="bi bi-shield-exclamation"></i> Phân tích AI
                         </h4>
-                        <div class="p-6 rounded-[2.5rem] bg-violet-500/[0.03] border border-violet-500/10 shadow-inner">
-                            <div class="prose prose-invert prose-violet max-w-none text-white/70 text-sm leading-relaxed"
+                        <div class="p-6 rounded-3xl bg-violet-500/[0.03] border border-violet-500/10 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 blur-3xl rounded-full -mr-16 -mt-16"></div>
+                            <div class="relative prose prose-invert prose-violet max-w-none text-white/70 text-sm leading-relaxed"
                                  x-html="renderRichText(result.explanation || '')"></div>
                         </div>
                     </div>
 
-                    <!-- Web sources -->
+                    <!-- Web Sources -->
                     <template x-if="result.web_sources && result.web_sources.length > 0">
                         <div class="space-y-4">
-                            <h4 class="text-xs font-black text-white/40 uppercase tracking-widest flex items-center gap-2">
+                            <h4 class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] flex items-center gap-2">
                                 <i class="bi bi-globe2"></i> Nguồn tham khảo
                             </h4>
                             <div class="flex flex-wrap gap-2">
                                 <template x-for="(src, idx) in result.web_sources" :key="idx">
-                                    <a :href="src" target="_blank" rel="noopener" class="px-3 py-1 rounded bg-white/5 text-white/40 text-[10px] font-bold border border-white/10 hover:bg-white/10 transition-all truncate max-w-[250px]" x-text="src"></a>
+                                    <a :href="src" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg bg-white/5 text-white/40 text-[10px] font-bold border border-white/5 hover:bg-white/10 hover:text-white/60 transition-all truncate max-w-[280px]" x-text="src"></a>
                                 </template>
                             </div>
                         </div>
@@ -285,10 +364,10 @@
 
             <!-- Actions -->
             <div class="flex flex-wrap gap-4">
-                <button @click="resetAll()" class="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-3 rounded-xl text-white font-bold transition-all">
+                <button @click="resetAll()" class="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-3.5 rounded-2xl text-white font-black text-xs uppercase tracking-widest transition-all hover:scale-[1.02]">
                     <i class="bi bi-arrow-repeat mr-2"></i> Quét khác
                 </button>
-                <a href="/report/" class="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 px-8 py-3 rounded-xl text-red-500 font-bold transition-all flex items-center gap-2">
+                <a href="/report/" class="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-8 py-3.5 rounded-2xl text-red-400 font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2 hover:scale-[1.02]">
                     <i class="bi bi-exclamation-triangle"></i> Báo cáo lừa đảo
                 </a>
             </div>
@@ -298,9 +377,14 @@
 {% include 'Scan/_scan_guide.html' with scan_type='audio' %}
 </div>
 
+<style>
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.animate-spin-slow { animation: spin-slow 8s linear infinite; }
+</style>
+
 <script>
-function audioScanHandler() {
-    return {
+document.addEventListener('alpine:init', () => {
+    Alpine.data('audioScanHandler', () => ({
         mode: 'upload',
         audioFile: null,
         dragging: false,
@@ -330,9 +414,89 @@ function audioScanHandler() {
         audioContext: null,
         analyser: null,
         animFrameId: null,
+        maxRecordingDuration: 1800,
+        minRecordingDuration: 2,
+
+        /* Mic selection */
+        audioDevices: [],
+        selectedDeviceId: '',
+        micTesting: false,
+        micLevel: 0,
+        micTestStream: null,
+        micTestAnalyser: null,
+        micTestAnimFrame: null,
 
         get hasAudio() {
             return (this.mode === 'upload' && this.audioFile) || (this.mode === 'record' && this.recordedBlob);
+        },
+
+        async init() {
+            await this.refreshDevices();
+        },
+
+        /* ── Device enumeration ── */
+        async refreshDevices() {
+            try {
+                // Request permission first (needed to get labels)
+                const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                tempStream.getTracks().forEach(t => t.stop());
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                this.audioDevices = devices.filter(d => d.kind === 'audioinput');
+
+                // If selected device no longer exists, reset
+                if (this.selectedDeviceId && !this.audioDevices.find(d => d.deviceId === this.selectedDeviceId)) {
+                    this.selectedDeviceId = '';
+                }
+            } catch (err) {
+                console.warn('Cannot enumerate devices:', err);
+                this.audioDevices = [];
+            }
+        },
+
+        async testSelectedMic() {
+            this.stopMicTest();
+            if (!this.selectedDeviceId && this.audioDevices.length === 0) return;
+
+            try {
+                const constraints = { audio: this.selectedDeviceId ? { deviceId: { exact: this.selectedDeviceId } } : true };
+                this.micTestStream = await navigator.mediaDevices.getUserMedia(constraints);
+                this.micTesting = true;
+
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (ctx.state === 'suspended') await ctx.resume();
+                const source = ctx.createMediaStreamSource(this.micTestStream);
+                this.micTestAnalyser = ctx.createAnalyser();
+                this.micTestAnalyser.fftSize = 256;
+                source.connect(this.micTestAnalyser);
+
+                const dataArray = new Uint8Array(this.micTestAnalyser.frequencyBinCount);
+                const updateLevel = () => {
+                    if (!this.micTesting) return;
+                    this.micTestAnalyser.getByteFrequencyData(dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+                    this.micLevel = Math.min(100, (sum / dataArray.length) * 1.5);
+                    this.micTestAnimFrame = requestAnimationFrame(updateLevel);
+                };
+                updateLevel();
+
+                // Auto-stop test after 5s
+                setTimeout(() => this.stopMicTest(), 5000);
+            } catch (err) {
+                showToast('Không thể truy cập micro đã chọn: ' + err.message, 'error');
+                this.micTesting = false;
+            }
+        },
+
+        stopMicTest() {
+            this.micTesting = false;
+            this.micLevel = 0;
+            if (this.micTestAnimFrame) cancelAnimationFrame(this.micTestAnimFrame);
+            if (this.micTestStream) {
+                this.micTestStream.getTracks().forEach(t => t.stop());
+                this.micTestStream = null;
+            }
         },
 
         /* ── File upload handlers ── */
@@ -369,51 +533,136 @@ function audioScanHandler() {
 
         /* ── Recording handlers ── */
         async startRecording() {
+            this.stopMicTest();
+
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const audioConstraints = {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 44100,
+                    channelCount: 1,
+                };
+                // Use selected mic if specified
+                if (this.selectedDeviceId) {
+                    audioConstraints.deviceId = { exact: this.selectedDeviceId };
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+                // Verify the stream has active audio tracks
+                const audioTrack = stream.getAudioTracks()[0];
+                if (!audioTrack || audioTrack.readyState !== 'live') {
+                    showToast('Microphone không hoạt động. Vui lòng kiểm tra thiết bị.', 'error');
+                    stream.getTracks().forEach(t => t.stop());
+                    return;
+                }
+
                 this.audioChunks = [];
                 this.recordingDuration = 0;
                 this.recordedBlob = null;
 
-                // Set up MediaRecorder
-                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-                this.mediaRecorder = new MediaRecorder(stream, { mimeType });
+                // Choose best available format
+                const mimeTypes = [
+                    'audio/webm;codecs=opus',
+                    'audio/ogg;codecs=opus',
+                    'audio/webm',
+                    'audio/mp4',
+                    ''  // browser default
+                ];
+                let mimeType = '';
+                for (const mt of mimeTypes) {
+                    if (!mt || MediaRecorder.isTypeSupported(mt)) { mimeType = mt; break; }
+                }
+
+                const recorderOptions = { audioBitsPerSecond: 128000 };
+                if (mimeType) recorderOptions.mimeType = mimeType;
+
+                this.mediaRecorder = new MediaRecorder(stream, recorderOptions);
+
                 this.mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) this.audioChunks.push(e.data);
+                    if (e.data && e.data.size > 0) this.audioChunks.push(e.data);
                 };
+
                 this.mediaRecorder.onstop = () => {
-                    this.recordedBlob = new Blob(this.audioChunks, { type: mimeType });
+                    const blobType = mimeType || 'audio/webm';
+                    this.recordedBlob = new Blob(this.audioChunks, { type: blobType });
                     stream.getTracks().forEach(t => t.stop());
                     this.stopWaveform();
+
+                    if (this.recordingDuration < this.minRecordingDuration) {
+                        showToast('Ghi âm quá ngắn (tối thiểu 2 giây). Vui lòng thử lại.', 'warning');
+                        this.discardRecording();
+                        return;
+                    }
+
+                    // Verify non-empty blob
+                    if (this.recordedBlob.size < 100) {
+                        showToast('Ghi âm rỗng. Microphone có thể không hoạt động đúng.', 'error');
+                        this.discardRecording();
+                        return;
+                    }
+
                     this.$nextTick(() => {
                         if (this.$refs.recordedPreview) {
                             this.$refs.recordedPreview.src = URL.createObjectURL(this.recordedBlob);
                         }
                     });
                 };
-                this.mediaRecorder.start(250);
+
+                this.mediaRecorder.onerror = (e) => {
+                    console.error('MediaRecorder error:', e);
+                    showToast('Lỗi ghi âm: ' + (e.error?.message || 'Không xác định'), 'error');
+                    this.stopRecording();
+                };
+
+                // Use smaller timeslice (100ms) for more reliable data capture
+                this.mediaRecorder.start(100);
                 this.isRecording = true;
 
                 // Duration timer
-                this.recordingTimer = setInterval(() => { this.recordingDuration++; }, 1000);
+                this.recordingTimer = setInterval(() => {
+                    this.recordingDuration++;
+                    if (this.recordingDuration >= this.maxRecordingDuration) {
+                        showToast('Đã đạt thời gian tối đa (30 phút). Tự động dừng.', 'info');
+                        this.stopRecording();
+                    }
+                }, 1000);
 
                 // Waveform visualization
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.audioContext.state === 'suspended') await this.audioContext.resume();
                 const source = this.audioContext.createMediaStreamSource(stream);
                 this.analyser = this.audioContext.createAnalyser();
                 this.analyser.fftSize = 256;
                 source.connect(this.analyser);
                 this.drawWaveform();
             } catch (err) {
-                showToast('Không thể truy cập microphone. Vui lòng cấp quyền.', 'error');
+                if (err.name === 'NotAllowedError') {
+                    showToast('Bạn đã từ chối quyền truy cập microphone. Vui lòng cấp quyền trong cài đặt trình duyệt.', 'error');
+                } else if (err.name === 'NotFoundError') {
+                    showToast('Không tìm thấy microphone. Vui lòng kiểm tra thiết bị.', 'error');
+                } else if (err.name === 'NotReadableError' || err.name === 'AbortError') {
+                    showToast('Microphone đang bận hoặc không thể đọc. Thử chọn thiết bị khác.', 'error');
+                } else if (err.name === 'OverconstrainedError') {
+                    // Fallback: try without specific device
+                    showToast('Micro đã chọn không khả dụng. Đang thử micro mặc định...', 'warning');
+                    this.selectedDeviceId = '';
+                    this.$nextTick(() => this.startRecording());
+                    return;
+                } else {
+                    showToast('Không thể truy cập microphone: ' + err.message, 'error');
+                }
             }
         },
 
         stopRecording() {
             if (this.mediaRecorder && this.isRecording) {
-                this.mediaRecorder.stop();
                 this.isRecording = false;
                 clearInterval(this.recordingTimer);
+                if (this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                }
             }
         },
 
@@ -436,14 +685,23 @@ function audioScanHandler() {
                 this.analyser.getByteFrequencyData(dataArray);
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                const barWidth = (canvas.width / bufferLength) * 2.5;
-                let x = 0;
-                for (let i = 0; i < bufferLength; i++) {
-                    const barHeight = (dataArray[i] / 255) * canvas.height;
-                    const hue = 270 + (i / bufferLength) * 30;
-                    ctx.fillStyle = `hsla(${hue}, 80%, 65%, 0.8)`;
-                    ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-                    x += barWidth + 1;
+                const barCount = 64;
+                const barWidth = canvas.width / barCount - 1;
+                const step = Math.floor(bufferLength / barCount);
+
+                for (let i = 0; i < barCount; i++) {
+                    const val = dataArray[i * step] / 255;
+                    const barHeight = Math.max(2, val * canvas.height * 0.9);
+                    const x = i * (barWidth + 1);
+                    const y = (canvas.height - barHeight) / 2;
+
+                    const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
+                    gradient.addColorStop(0, `rgba(139, 92, 246, ${0.3 + val * 0.7})`);
+                    gradient.addColorStop(1, `rgba(217, 70, 239, ${0.2 + val * 0.6})`);
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.roundRect(x, y, barWidth, barHeight, 2);
+                    ctx.fill();
                 }
             };
             draw();
@@ -461,6 +719,11 @@ function audioScanHandler() {
         async startScan() {
             if (!this.hasAudio) return;
 
+            if (this.mode === 'record' && this.recordedBlob && this.recordingDuration < this.minRecordingDuration) {
+                showToast('Ghi âm quá ngắn. Vui lòng ghi âm ít nhất 2 giây.', 'warning');
+                return;
+            }
+
             const turnstileResponse = document.querySelector('[name="cf-turnstile-response"]')?.value;
             if (!turnstileResponse) {
                 showToast('Vui lòng hoàn thành xác minh anti-spam.', 'warning');
@@ -477,7 +740,8 @@ function audioScanHandler() {
             if (this.mode === 'upload' && this.audioFile) {
                 formData.append('audio', this.audioFile);
             } else if (this.mode === 'record' && this.recordedBlob) {
-                formData.append('audio', this.recordedBlob, 'recording.webm');
+                const ext = this.recordedBlob.type.includes('ogg') ? 'ogg' : 'webm';
+                formData.append('audio', this.recordedBlob, `recording.${ext}`);
             }
             formData.append('cf-turnstile-response', turnstileResponse);
 
@@ -526,9 +790,8 @@ function audioScanHandler() {
                 this.reconnectAttempts = 0;
                 this.stopReconnect();
                 if (isReconnect) {
-                    this.progress.push({ message: 'Kết nối thời gian thực đã được khôi phục.', step: 'reconnected' });
+                    this.progress.push({ message: 'Kết nối đã được khôi phục.', step: 'reconnected' });
                 }
-                // Ask server for current status to catch results missed during disconnection
                 this.ws.send(JSON.stringify({ type: 'get_status' }));
             };
 
@@ -538,7 +801,6 @@ function audioScanHandler() {
                     this.progress.push({ message: data.message, step: data.step });
                 }
 
-                // Capture live transcript from the transcribed step
                 if (data.step === 'transcribed' && data.data && data.data.transcript) {
                     this.liveTranscript = data.data.transcript;
                 }
@@ -576,7 +838,7 @@ function audioScanHandler() {
             if (!this.scanId || (!this.loading && !this.scanning)) return;
             if (this.reconnectAttempts >= this.maxReconnectAttempts) {
                 this.wsState = 'disconnected';
-                this.progress.push({ message: 'Mất kết nối. Đang chuyển sang đồng bộ trạng thái.', step: 'warning' });
+                this.progress.push({ message: 'Mất kết nối. Đang đồng bộ trạng thái...', step: 'warning' });
                 this.startStatusPolling();
                 return;
             }
@@ -647,6 +909,7 @@ function audioScanHandler() {
             this.scanId = null;
             this.stopReconnect();
             this.stopStatusPolling();
+            this.stopMicTest();
             if (this.ws) this.ws.close();
             if (this.$refs.audioInput) this.$refs.audioInput.value = '';
         },
@@ -672,8 +935,8 @@ function audioScanHandler() {
             const s = Math.floor(seconds % 60).toString().padStart(2, '0');
             return `${m}:${s}`;
         },
-    };
-}
+    }));
+});
 
 function getCSRFToken() {
     return document.cookie.split('; ')

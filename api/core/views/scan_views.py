@@ -55,6 +55,111 @@ import phonenumbers
 from phonenumbers import carrier, geocoder, PhoneNumberType
 from api.utils.trust_score import calculate_reporter_trust
 
+
+def _lookup_phone_online_free_services(phone_number: str) -> dict:
+    """
+    Lightweight web lookup to detect if number appears on free/temporary SMS websites.
+    Returns a safe best-effort payload; never raises.
+    """
+    cache_key = f"phone_lookup_free:{phone_number}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    query = f'"{phone_number}" "free sms" OR "temporary number" OR "online number" OR "receive sms"'
+    search_url = "https://duckduckgo.com/html/"
+    suspicious_keywords = [
+        'free sms', 'temporary', 'temp number', 'online number', 'receive sms',
+        'sms-online', 'sms online', 'virtual number', 'disposable',
+    ]
+    high_risk_domains = [
+        'sms-activate', 'receive-sms', 'sms24', 'quackr', '7sim', 'sms-man',
+        'onlinesim', 'temp-number', 'freesms', 'smsreceivefree',
+    ]
+
+    result = {
+        'found': False,
+        'suspected_disposable': False,
+        'risk_boost': 0,
+        'confidence': 'low',
+        'matches': [],
+        'note': 'Không phát hiện tín hiệu số miễn phí online từ tra cứu web.',
+    }
+
+    try:
+        resp = requests.get(
+            search_url,
+            params={'q': query},
+            headers={
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+                              '(KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+            },
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            cache.set(cache_key, result, 60 * 10)
+            return result
+
+        html = resp.text
+        link_pattern = re.compile(
+            r'<a[^>]*class="result__a"[^>]*href="(?P<href>[^"]+)"[^>]*>(?P<title>.*?)</a>',
+            re.IGNORECASE | re.DOTALL,
+        )
+        snippet_pattern = re.compile(
+            r'<a[^>]*class="result__snippet"[^>]*>(?P<snippet>.*?)</a>|'
+            r'<div[^>]*class="result__snippet"[^>]*>(?P<snippet2>.*?)</div>',
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        links = list(link_pattern.finditer(html))[:8]
+        snippets = list(snippet_pattern.finditer(html))[:8]
+
+        suspicious_hits = 0
+        high_risk_hits = 0
+
+        for idx, m in enumerate(links):
+            href = re.sub(r'\s+', ' ', m.group('href')).strip()
+            title_raw = re.sub(r'<.*?>', '', m.group('title') or '')
+            title = re.sub(r'\s+', ' ', title_raw).strip()
+            snippet = ''
+            if idx < len(snippets):
+                snippet_raw = snippets[idx].group('snippet') or snippets[idx].group('snippet2') or ''
+                snippet = re.sub(r'\s+', ' ', re.sub(r'<.*?>', '', snippet_raw)).strip()
+
+            combined = f"{title} {snippet} {href}".lower()
+            kw_count = sum(1 for kw in suspicious_keywords if kw in combined)
+            domain_hit = any(d in combined for d in high_risk_domains)
+
+            if kw_count >= 2:
+                suspicious_hits += 1
+            if domain_hit:
+                high_risk_hits += 1
+
+            if kw_count >= 1 or domain_hit:
+                result['matches'].append({
+                    'title': title[:180],
+                    'url': href[:300],
+                    'snippet': snippet[:220],
+                })
+
+        result['found'] = len(result['matches']) > 0
+        if high_risk_hits >= 1 or suspicious_hits >= 2:
+            result['suspected_disposable'] = True
+            result['risk_boost'] = 12 if high_risk_hits >= 2 else 8
+            result['confidence'] = 'high' if high_risk_hits >= 2 or suspicious_hits >= 3 else 'medium'
+            result['note'] = 'Số này xuất hiện trên các nguồn số miễn phí/temporary online.'
+        elif suspicious_hits == 1:
+            result['suspected_disposable'] = True
+            result['risk_boost'] = 5
+            result['confidence'] = 'medium'
+            result['note'] = 'Có tín hiệu số này từng xuất hiện trên nguồn số online công khai.'
+
+    except Exception as ex:
+        logger.warning(f"Phone web lookup skipped for {phone_number}: {ex}")
+
+    cache.set(cache_key, result, 60 * 10)
+    return result
+
 def _phone_risk_score(phone_number: str) -> dict:
     """
     Production-grade phone risk engine.
@@ -223,6 +328,10 @@ def _phone_risk_score(phone_number: str) -> dict:
     if country_code and country_code.upper() != 'VN':
         metadata_score += 4
 
+    online_lookup = _lookup_phone_online_free_services(phone_number)
+    if online_lookup.get('suspected_disposable'):
+        metadata_score += float(online_lookup.get('risk_boost', 0) or 0)
+
     metadata_score = min(25.0, metadata_score)
 
     # 3) Behavioral component (velocity / burst / diversity)
@@ -289,6 +398,8 @@ def _phone_risk_score(phone_number: str) -> dict:
         reasons.append('Line type VoIP - nguy cơ spoofing cao hơn')
     if metadata_score >= 18 and not approved_count:
         reasons.append('Tín hiệu metadata rủi ro dù chưa có nhiều báo cáo duyệt')
+    if online_lookup.get('suspected_disposable'):
+        reasons.append('Số có dấu hiệu thuộc dịch vụ nhận SMS miễn phí/temporary online')
 
     if not reasons:
         reasons.append('Chưa thấy tín hiệu rủi ro mạnh từ dữ liệu hiện có')
@@ -319,6 +430,7 @@ def _phone_risk_score(phone_number: str) -> dict:
         'country_code': country_code,
         'country_name': country_name,
         'is_virtual': is_virtual,
+        'online_lookup': online_lookup,
         'trust_score': round(reputation_score, 2),
         'analysis_result': analysis_result,
         'component_scores': {
@@ -334,7 +446,8 @@ def _phone_risk_score(phone_number: str) -> dict:
             'metadata': (
                 f"Tín hiệu metadata: carrier={carrier_info}, line_type={line_type}, "
                 f"virtual={'có' if is_virtual else 'không'}, country={country_code}; "
-                f"điểm thành phần {round(metadata_score, 2)}/25."
+                f"điểm thành phần {round(metadata_score, 2)}/25. "
+                f"Online lookup: {online_lookup.get('note', 'N/A')}"
             ),
             'behavior': (
                 f"Hành vi gần đây: {reports_1h} báo cáo/1h, {reports_24h} báo cáo/24h, "

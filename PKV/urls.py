@@ -17,7 +17,8 @@ from .views import (
     register_view, logout_view, dashboard_view, admin_panel_view,
     profile_view, change_password_view, forum_view, forum_post_view,
     forum_create_view, public_profile_view, scan_file_view, scan_audio_view,
-    article_detail_view, scam_radar_list_view
+    article_detail_view, scam_radar_list_view, demo_video_view,
+    lesson_detail_view,
 )
 from .views.admin_views import (
     admin_dashboard, 
@@ -63,6 +64,7 @@ urlpatterns = [
     path("", home_view, name="root"), 
     path('admin/', admin.site.urls),
     path("home/", home_view, name="home"),
+    path("demo_video/", demo_video_view, name="demo-video"),
     
     # Scan pages
     path("scan/phone/", scan_phone_view, name="scan-phone"),
@@ -80,6 +82,7 @@ urlpatterns = [
     path("scam-radar/", scam_radar_view, name="scam-radar"),
     path("scam-radar/list/<str:list_type>/", scam_radar_list_view, name="scam-radar-list"),
     path("learn/", learn_hub_view, name="learn-hub"),
+    path("learn/lesson/<slug:slug>/", lesson_detail_view, name="lesson-detail"),
     path("learn/<slug:slug>/", article_detail_view, name="article-detail"),
     path("emergency/", emergency_view, name="emergency"),
     path("ai-assistant/", AssistantPageView.as_view(), name="ai-assistant"),

@@ -287,14 +287,19 @@ class ForumCommentSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
     author_username = serializers.CharField(source='author.username', read_only=True)
     author_avatar = serializers.ImageField(source='author.profile.avatar', read_only=True)
+    author_is_staff = serializers.BooleanField(source='author.is_staff', read_only=True)
     parent_author_name = serializers.SerializerMethodField()
     user_liked = serializers.SerializerMethodField()
+    user_disliked = serializers.SerializerMethodField()
+    user_helpful = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
 
     class Meta:
         model = ForumComment
-        fields = ['id', 'author_name', 'author_username', 'author_avatar', 'content', 'parent', 'parent_author_name', 'replies', 'likes_count', 'user_liked', 'created_at']
-        read_only_fields = ['id', 'author_name', 'author_username', 'author_avatar', 'created_at', 'parent_author_name', 'likes_count']
+        fields = ['id', 'author_name', 'author_username', 'author_avatar', 'author_is_staff', 'content', 'parent', 'parent_author_name', 
+                  'replies', 'likes_count', 'dislikes_count', 'helpful_count', 'user_liked', 'user_disliked', 'user_helpful', 'created_at']
+        read_only_fields = ['id', 'author_name', 'author_username', 'author_avatar', 'author_is_staff', 'created_at', 
+                            'parent_author_name', 'likes_count', 'dislikes_count', 'helpful_count']
 
     def get_author_name(self, obj):
         return obj.author.profile.display_name or obj.author.username
@@ -315,6 +320,24 @@ class ForumCommentSerializer(serializers.ModelSerializer):
             return False
         return obj.likes.filter(user=request.user).exists()
 
+    def get_user_disliked(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        from api.core.models import ForumCommentReaction
+        return ForumCommentReaction.objects.filter(
+            comment=obj, user=request.user, reaction_type='downvote'
+        ).exists()
+
+    def get_user_helpful(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        from api.core.models import ForumCommentReaction
+        return ForumCommentReaction.objects.filter(
+            comment=obj, user=request.user, reaction_type='helpful'
+        ).exists()
+
 class ForumPostSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
     author_username = serializers.CharField(source='author.username', read_only=True)
@@ -325,15 +348,16 @@ class ForumPostSerializer(serializers.ModelSerializer):
     user_helpful = serializers.SerializerMethodField()
     user_shared = serializers.SerializerMethodField()
     user_disliked = serializers.SerializerMethodField()
+    unique_views_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ForumPost
         fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar', 'title', 'content', 'category', 'image', 
-                  'views_count', 'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
+                  'views_count', 'unique_views_count', 'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
                   'comments_count', 'is_pinned', 'is_locked', 'user_liked', 'user_helpful', 'user_shared', 'user_disliked',
                   'comments', 'created_at']
-        read_only_fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar', 'views_count', 'likes_count', 
-                            'helpful_count', 'shares_count', 'dislikes_count', 'reports_count', 'comments_count', 'created_at']
+        read_only_fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar', 'views_count', 'unique_views_count',
+                            'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count', 'comments_count', 'created_at']
 
     def get_comments(self, obj):
         # Only return top-level comments
@@ -342,6 +366,10 @@ class ForumPostSerializer(serializers.ModelSerializer):
 
     def get_author_name(self, obj):
         return obj.author.profile.display_name or obj.author.username
+
+    def get_unique_views_count(self, obj):
+        from api.core.models import ForumPostView
+        return ForumPostView.objects.filter(post=obj).count()
 
     def get_user_liked(self, obj):
         request = self.context.get('request')

@@ -460,7 +460,7 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
 
         # ── Step 2: AI Scam Analysis on transcript ──
         if transcript:
-            send_progress("Đang phân tích nội dung bằng AI...", step="analyzing")
+            send_progress("Đang phân tích dấu hiệu lừa đảo trong đoạn hội thoại bằng AI...", step="analyzing")
 
             ai_res = None
             for attempt in range(3):
@@ -482,7 +482,7 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             if ai_notice:
                 send_progress(ai_notice, step="ai_retry_notice")
 
-            send_progress("AI đã hoàn tất phân tích.", step="analyzed")
+            send_progress("AI đã hoàn tất phân tích dấu hiệu lừa đảo.", step="analyzed")
         else:
             ai_res = {
                 'risk_score': 0,
@@ -1727,8 +1727,9 @@ def magic_create_lesson_task(self, task_id, raw_text):
     Sends PARTIAL progress updates via WebSocket at each stage.
     """
     import re as _re
+    import time as _time_mod
     import markdown as md
-    from api.utils.ollama_client import generate_response
+    from api.utils.ollama_client import generate_response, stream_response
 
     def _md_to_html(text):
         """Convert markdown to clean HTML for CKEditor."""
@@ -1757,60 +1758,104 @@ def magic_create_lesson_task(self, task_id, raw_text):
     # ──── STAGE 1: Analyze ────
     _send_task_progress(task_id, 'processing', 'Đang phân tích văn bản nguồn...', step=1)
 
-    # ──── STAGE 2: Generate lesson content ────
-    _send_task_progress(task_id, 'processing', 'AI đang tạo nội dung bài học...', step=2)
+    # ──── STAGE 2: Generate lesson content (streamed) ────
+    _send_task_progress(task_id, 'processing', 'AI đang phân tích và tạo nội dung...', step=2)
 
-    content_prompt = f"""Văn bản nguồn:
+    TITLE_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "category": {"type": "string", "enum": ["news", "guide", "alert", "story"]}
+        },
+        "required": ["title", "category"]
+    }
+
+    try:
+        # ── Step 2a: Extract title + category via structured JSON (fast) ──
+        title_prompt = f"""Phân tích văn bản sau và đặt tiêu đề bài học giáo dục an ninh mạng.
+---
+{raw_text[:1500]}
+---
+Trả về JSON: {{"title": "Tiêu đề hấp dẫn, giáo dục", "category": "news|guide|alert|story"}}"""
+
+        logger.info(f"[MagicCreate] Task {task_id}: Calling generate_response for title (text_len={len(raw_text)})")
+        title_resp = generate_response(
+            prompt=title_prompt,
+            system_prompt="Trả về JSON thuần, không markdown code block.",
+            format_schema=TITLE_SCHEMA,
+            max_tokens=6000,  # Extra room for thinking tokens
+        )
+        title_data = _parse_json_safe(title_resp)
+        if not title_data or not title_data.get('title'):
+            # Fallback: use first 80 chars of raw text as title
+            title_data = {'title': raw_text[:80].strip().split('\n')[0], 'category': 'guide'}
+            logger.warning(f"[MagicCreate] Task {task_id}: Title extraction failed, using fallback")
+
+        logger.info(f"[MagicCreate] Task {task_id}: Title: {title_data['title']}")
+
+        # Send title immediately
+        _send_task_progress(task_id, 'processing', 'AI đang viết nội dung bài học...', step=2, data={
+            'title': title_data['title'],
+            'category': title_data.get('category', 'guide'),
+        })
+
+        # ── Step 2b: Generate lesson content (non-streaming for reliability) ──
+        content_prompt = f"""Văn bản nguồn:
 ---
 {raw_text}
 ---
 
-Hãy tạo bài học giáo dục về an ninh mạng từ văn bản trên. Trả về JSON thuần với cấu trúc:
-{{
-  "title": "Tiêu đề hấp dẫn, mang tính giáo dục",
-  "content": "Nội dung bài học chi tiết, ít nhất 500 từ",
-  "category": "news|guide|alert|story"
-}}
+Viết bài học giáo dục về an ninh mạng bằng Markdown từ văn bản trên.
 
-YÊU CẦU CONTENT:
-- Viết content bằng Markdown (## heading, ### sub, **bold**, - bullet, > blockquote).
-- Phải bao gồm các phần: Tổng quan, Thủ đoạn lừa đảo, Dấu hiệu nhận biết, Cách phòng tránh, Kết luận.
-- Mỗi phần phải có ít nhất 3 bullet points hoặc 2 đoạn văn.
-- Dùng ví dụ thực tế minh họa, ngôn ngữ dễ hiểu cho mọi lứa tuổi.
-- Tổng ít nhất 500 từ trở lên."""
+YÊU CẦU:
+- Bao gồm các phần: ## Tổng quan, ## Thủ đoạn lừa đảo, ## Dấu hiệu nhận biết, ## Cách phòng tránh, ## Kết luận
+- Mỗi phần phải có ít nhất 3 bullet points hoặc 2 đoạn văn
+- Dùng ví dụ thực tế minh họa, ngôn ngữ dễ hiểu cho mọi lứa tuổi
+- Tổng ít nhất 500 từ trở lên
+- Viết Markdown thuần (## heading, ### sub, **bold**, - bullet, > blockquote)
+- KHÔNG bọc trong code block, KHÔNG trả về JSON"""
 
-    CONTENT_SCHEMA = {
-        "type": "object",
-        "properties": {
-            "title": {"type": "string"},
-            "content": {"type": "string"},
-            "category": {"type": "string", "enum": ["news", "guide", "alert", "story"]}
-        },
-        "required": ["title", "content", "category"]
-    }
+        logger.info(f"[MagicCreate] Task {task_id}: Generating content (non-streaming), prompt_len={len(content_prompt)}")
+        _send_task_progress(task_id, 'processing', 'AI đang viết nội dung bài học...', step=2)
 
-    try:
-        content_resp = generate_response(
-            prompt=content_prompt,
-            system_prompt="Bạn là chuyên gia an ninh mạng Việt Nam. Trả về JSON thuần, không markdown code block.",
-            format_schema=CONTENT_SCHEMA,
-        )
+        _accumulated_md = ''
+        try:
+            _accumulated_md = generate_response(
+                prompt=content_prompt,
+                system_prompt="Bạn là chuyên gia an ninh mạng Việt Nam. Viết bài học Markdown chi tiết, dễ hiểu. Chỉ viết nội dung Markdown, không JSON, không code block.",
+                max_tokens=12000,   # High limit: ~3k thinking + ~9k content tokens for 500+ word lesson
+                tools=[],           # Disable tools — model should write content, not search
+                skip_filter=True,   # Don't strip CJK from content
+            ) or ''
+            logger.info(f"[MagicCreate] Task {task_id}: generate_response returned {len(_accumulated_md)} chars")
+            if _accumulated_md:
+                logger.info(f"[MagicCreate] Task {task_id}: Content preview (first 300): {_accumulated_md[:300]!r}")
+                logger.info(f"[MagicCreate] Task {task_id}: Content preview (last 200): {_accumulated_md[-200:]!r}")
+        except Exception as gen_err:
+            logger.error(f"[MagicCreate] Task {task_id}: Content generation error: {gen_err}", exc_info=True)
 
-        content_data = _parse_json_safe(content_resp)
-        if not content_data or not content_data.get('title'):
+        # Final content
+        _content_html = _md_to_html(_accumulated_md) if _accumulated_md.strip() else ''
+        logger.info(f"[MagicCreate] Task {task_id}: md_len={len(_accumulated_md)}, html_len={len(_content_html)}")
+        if not _content_html:
+            logger.error(f"[MagicCreate] Task {task_id}: Content generation produced empty result")
             _send_task_progress(task_id, 'error', 'AI không tạo được nội dung bài học. Thử lại.')
             return
 
-        # Convert markdown content → HTML for CKEditor
-        content_data['content'] = _md_to_html(content_data.get('content', ''))
+        content_data = {
+            'title': title_data['title'],
+            'category': title_data.get('category', 'guide'),
+            'content': _content_html,
+        }
 
-        # Send partial: title + content
+        # Send complete content at once
         _send_task_progress(task_id, 'processing', 'Nội dung bài học đã tạo xong!', step=2, data={
             'title': content_data['title'],
             'category': content_data.get('category', 'guide'),
             'content': content_data['content']
         })
-        logger.info(f"[MagicCreate] Task {task_id}: Content generated - {content_data['title']}")
+        logger.info(f"[MagicCreate] Task {task_id}: Content generated - {content_data['title']} "
+                    f"({len(_accumulated_md)} chars md, {len(_content_html)} chars html)")
 
     except Exception as e:
         logger.error(f"[MagicCreate] Task {task_id} content failed: {e}", exc_info=True)
@@ -1825,20 +1870,36 @@ YÊU CẦU CONTENT:
 {raw_text[:2000]}
 ---
 
-Hãy tạo CHÍNH XÁC 5 câu hỏi trắc nghiệm kiểm tra kiến thức. Mỗi câu hỏi PHẢI CÓ:
-- question: Câu hỏi rõ ràng, kiểm tra khả năng nhận biết lừa đảo
-- options: ĐÚNG 4 đáp án (rõ ràng, phân biệt được)
-- correct_answer: Phải CHÍNH XÁC trùng khớp một trong 4 options
-- explanation: Giải thích chi tiết (>50 từ) tại sao đáp án đó đúng và các đáp án khác sai
+Hãy tạo CHÍNH XÁC 5 câu hỏi trắc nghiệm kiểm tra kiến thức AN NINH MẠNG.
 
-5 câu hỏi phải đa dạng:
-1. Câu nhận biết dấu hiệu
-2. Câu xử lý tình huống 
-3. Câu kiến thức cơ bản
-4. Câu đánh giá rủi ro
-5. Câu phòng tránh thực tế
+QUY TẮC BẮT BUỘC:
+1. Mỗi câu hỏi PHẢI liên quan TRỰC TIẾP đến nội dung bài học ở trên
+2. TUYỆT ĐỐI KHÔNG được tạo câu hỏi chung chung kiểu "Câu hỏi bổ sung #1"
+3. TUYỆT ĐỐI KHÔNG dùng "Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D" làm nội dung đáp án
+4. Mỗi đáp án phải là một CÂU TRẢ LỜI CỤ THỂ, có nghĩa, phân biệt rõ ràng
+5. Mỗi câu có question_type: "single_choice" | "multiple_choice" | "true_false"
+6. correct_answer PHẢI trùng CHÍNH XÁC với 1 option (để tương thích hệ thống cũ)
+7. correct_answers là MẢNG chứa tất cả đáp án đúng (với single thì mảng có 1 phần tử)
+8. explanation phải giải thích CHI TIẾT (ít nhất 30 từ) tại sao đáp án đó đúng
 
-Trả về JSON: {{"quizzes": [...]}}"""
+5 câu hỏi phải ĐA DẠNG về chủ đề:
+1. Nhận biết dấu hiệu lừa đảo cụ thể trong bài
+2. Cách xử lý đúng khi gặp tình huống tương tự
+3. Kiến thức an ninh mạng liên quan đến bài học
+4. Đánh giá mức độ rủi ro của hành vi cụ thể
+5. Biện pháp phòng tránh thực tế người dùng có thể áp dụng
+
+VÍ DỤ FORMAT ĐÚNG:
+{{{{
+  "question": "Khi nhận được cuộc gọi tự xưng là công an yêu cầu chuyển tiền, bạn nên làm gì?",
+    "question_type": "single_choice",
+  "options": ["Chuyển tiền ngay theo yêu cầu", "Gác máy và gọi trực tiếp đến công an địa phương để xác minh", "Cung cấp thông tin tài khoản để kiểm tra", "Tải ứng dụng theo link được gửi"],
+  "correct_answer": "Gác máy và gọi trực tiếp đến công an địa phương để xác minh",
+    "correct_answers": ["Gác máy và gọi trực tiếp đến công an địa phương để xác minh"],
+  "explanation": "Công an thật sẽ không bao giờ yêu cầu chuyển tiền qua điện thoại. Cách an toàn nhất là gác máy và tự mình liên hệ trực tiếp cơ quan công an qua số điện thoại chính thức."
+}}}}
+
+Trả về JSON: {{"quizzes": [5 câu hỏi theo format trên]}}"""
 
     QUIZ_SCHEMA = {
         "type": "object",
@@ -1849,11 +1910,13 @@ Trả về JSON: {{"quizzes": [...]}}"""
                     "type": "object",
                     "properties": {
                         "question": {"type": "string"},
+                        "question_type": {"type": "string", "enum": ["single_choice", "multiple_choice", "true_false"]},
                         "options": {"type": "array", "items": {"type": "string"}, "minItems": 4, "maxItems": 4},
                         "correct_answer": {"type": "string"},
+                        "correct_answers": {"type": "array", "items": {"type": "string"}, "minItems": 1},
                         "explanation": {"type": "string"}
                     },
-                    "required": ["question", "options", "correct_answer", "explanation"]
+                    "required": ["question", "question_type", "options", "correct_answer", "correct_answers", "explanation"]
                 },
                 "minItems": 5
             }
@@ -1861,50 +1924,93 @@ Trả về JSON: {{"quizzes": [...]}}"""
         "required": ["quizzes"]
     }
 
-    try:
-        quiz_resp = generate_response(
-            prompt=quiz_prompt,
-            system_prompt="Bạn tạo quiz giáo dục. Trả về JSON thuần.",
-            format_schema=QUIZ_SCHEMA,
-        )
-        quiz_data = _parse_json_safe(quiz_resp)
-        quizzes = quiz_data.get('quizzes', []) if quiz_data else []
+    max_quiz_retries = 3
+    quizzes = []
+    for _quiz_attempt in range(max_quiz_retries):
+        try:
+            logger.info(f"[MagicCreate] Task {task_id}: Quiz attempt {_quiz_attempt+1}/{max_quiz_retries}")
+            quiz_resp = generate_response(
+                prompt=quiz_prompt,
+                system_prompt="Bạn là chuyên gia tạo quiz giáo dục an ninh mạng. Trả về JSON thuần, không markdown code block. Mỗi câu hỏi phải cụ thể, mỗi đáp án phải có nội dung thực tế, KHÔNG dùng Đáp án A/B/C/D.",
+                format_schema=QUIZ_SCHEMA,
+                max_tokens=8000,  # Extra room: ~3k thinking + ~5k for 5 questions JSON
+            )
+            _preview = repr(quiz_resp[:300]) if quiz_resp else 'None'
+            logger.info(f"[MagicCreate] Task {task_id}: quiz_resp type={type(quiz_resp).__name__}, "
+                        f"len={len(quiz_resp) if quiz_resp else 0}, preview={_preview}")
+            quiz_data = _parse_json_safe(quiz_resp)
+            logger.info(f"[MagicCreate] Task {task_id}: parsed quiz_data keys={list(quiz_data.keys()) if quiz_data else 'None'}")
+            raw_quizzes = quiz_data.get('quizzes', []) if quiz_data else []
 
-        # Validate each quiz
-        valid_quizzes = []
-        for q in quizzes:
-            if q.get('question') and q.get('options') and len(q['options']) >= 4:
-                # Ensure correct_answer matches an option
-                if q.get('correct_answer') not in q['options']:
-                    q['correct_answer'] = q['options'][0]
+            # Validate each quiz — reject placeholders
+            valid_quizzes = []
+            for q in raw_quizzes:
+                if not (q.get('question') and q.get('options') and len(q['options']) >= 4):
+                    continue
+                # Reject placeholder quizzes
+                q_lower = q['question'].lower()
+                if 'bổ sung' in q_lower or 'câu hỏi #' in q_lower:
+                    logger.warning(f"[MagicCreate] Rejected placeholder quiz: {q['question'][:80]}")
+                    continue
+                # Reject generic options
+                opts_lower = [o.lower().strip() for o in q['options']]
+                if opts_lower == ['đáp án a', 'đáp án b', 'đáp án c', 'đáp án d']:
+                    logger.warning(f"[MagicCreate] Rejected generic-options quiz: {q['question'][:80]}")
+                    continue
+                question_type = q.get('question_type') or 'single_choice'
+                if question_type not in ['single_choice', 'multiple_choice', 'true_false']:
+                    question_type = 'single_choice'
+                q['question_type'] = question_type
+
+                if question_type == 'true_false':
+                    q['options'] = ['Đúng', 'Sai', '', '']
+
+                # Ensure correct answers are valid and compatible
+                correct_answers = q.get('correct_answers') or []
+                if not isinstance(correct_answers, list):
+                    correct_answers = []
+                valid_answers = [ans for ans in correct_answers if ans in q['options']]
+
+                if q.get('correct_answer') in q['options']:
+                    if q.get('correct_answer') not in valid_answers:
+                        valid_answers.append(q.get('correct_answer'))
+
+                if not valid_answers:
+                    valid_answers = [q['options'][0]]
+
+                if question_type != 'multiple_choice':
+                    valid_answers = [valid_answers[0]]
+
+                q['correct_answers'] = valid_answers
+                q['correct_answer'] = valid_answers[0]
                 if not q.get('explanation'):
-                    q['explanation'] = ''
+                    q['explanation'] = 'Xem lại nội dung bài học để hiểu rõ hơn.'
                 valid_quizzes.append(q)
 
-        # Pad if fewer than 5
-        while len(valid_quizzes) < 5:
-            valid_quizzes.append({
-                'question': f'Câu hỏi bổ sung #{len(valid_quizzes)+1} về: {content_data["title"]}',
-                'options': ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'],
-                'correct_answer': 'Đáp án A',
-                'explanation': 'Vui lòng chỉnh sửa câu hỏi này.'
-            })
+            if len(valid_quizzes) >= 3:
+                quizzes = valid_quizzes[:5]
+                logger.info(f"[MagicCreate] Task {task_id}: Quiz attempt {_quiz_attempt+1} OK — {len(quizzes)} valid quizzes")
+                break
+            else:
+                logger.warning(f"[MagicCreate] Task {task_id}: Quiz attempt {_quiz_attempt+1} only {len(valid_quizzes)} valid, retrying...")
+                if _quiz_attempt < max_quiz_retries - 1:
+                    _send_task_progress(task_id, 'processing', f'Quiz chưa đủ chất lượng ({len(valid_quizzes)}), thử lại...', step=3)
+        except Exception as e:
+            logger.error(f"[MagicCreate] Task {task_id}: Quiz attempt {_quiz_attempt+1} failed: {e}", exc_info=True)
+            if _quiz_attempt < max_quiz_retries - 1:
+                _send_task_progress(task_id, 'processing', 'Quiz gặp lỗi, thử lại...', step=3)
 
-        quizzes = valid_quizzes[:5]
-
-        # Send partial: quizzes
+    if not quizzes:
+        logger.error(f"[MagicCreate] Task {task_id}: All quiz attempts failed, continuing without quiz")
+        _send_task_progress(task_id, 'processing', 'Không tạo được quiz chất lượng, tiếp tục...', step=3, data={'quizzes': []})
+    else:
+        # Send quizzes progressively one by one
+        for _qi, _q in enumerate(quizzes):
+            _time_mod.sleep(0.3)
+            _send_task_progress(task_id, 'processing', f'Quiz {_qi+1}/{len(quizzes)}', step=3, data={'quiz_item': _q, 'quiz_index': _qi})
+        # Send all quizzes as final summary
         _send_task_progress(task_id, 'processing', f'Đã tạo {len(quizzes)} câu quiz!', step=3, data={'quizzes': quizzes})
         logger.info(f"[MagicCreate] Task {task_id}: {len(quizzes)} quizzes generated")
-
-    except Exception as e:
-        logger.error(f"[MagicCreate] Task {task_id} quiz failed: {e}", exc_info=True)
-        quizzes = [{
-            'question': f'Câu hỏi về: {content_data["title"]}',
-            'options': ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'],
-            'correct_answer': 'Đáp án A',
-            'explanation': 'AI không tạo được quiz, vui lòng chỉnh sửa.'
-        }]
-        _send_task_progress(task_id, 'processing', 'Quiz gặp lỗi, đã tạo mẫu thay thế.', step=3, data={'quizzes': quizzes})
 
     # ──── STAGE 4: Generate rich scenario ────
     _send_task_progress(task_id, 'processing', 'AI đang tạo kịch bản hội thoại chi tiết...', step=4)
@@ -1945,7 +2051,9 @@ Trả về JSON:
       ]
     }}
   }}
-}}"""
+}}
+
+QUAN TRỌNG: Bắt buộc phải tạo CHÍNH XÁC từ 10 đến 14 step trong mảng steps. Không được ít hơn 10 bước. Mỗi step phải có nội dung text dài ít nhất 2 câu. Nếu tạo ít hơn 10, kết quả sẽ bị từ chối và phải làm lại."""
 
     SCENARIO_SCHEMA = {
         "type": "object",
@@ -1982,37 +2090,67 @@ Trả về JSON:
     }
 
     try:
-        scenario_resp = generate_response(
-            prompt=scenario_prompt,
-            system_prompt="Bạn là nhà biên kịch an ninh mạng. Tạo kịch bản sống động, giáo dục, có phân tích chi tiết. Trả về JSON thuần.",
-            format_schema=SCENARIO_SCHEMA,
-        )
-        scenario_data = _parse_json_safe(scenario_resp)
-        scenario = scenario_data.get('scenario') if scenario_data else None
+        scenario = None
+        max_scenario_retries = 3
+        for attempt in range(max_scenario_retries):
+            logger.info(f"[MagicCreate] Task {task_id}: Calling generate_response for scenario (attempt {attempt+1}/{max_scenario_retries})")
+            scenario_resp = generate_response(
+                prompt=scenario_prompt,
+                system_prompt="Bạn là nhà biên kịch an ninh mạng. Tạo kịch bản sống động, giáo dục, có phân tích chi tiết. Trả về JSON thuần. BẮT BUỘC tạo TỐI THIỂU 10 bước (steps). Nếu dưới 10 bước thì KHÔNG HỢP LỆ.",
+                format_schema=SCENARIO_SCHEMA,
+                max_tokens=8000,  # Extra room: ~3k thinking + ~5k for 10-step scenario JSON
+            )
+            _preview = repr(scenario_resp[:300]) if scenario_resp else 'None'
+            logger.info(f"[MagicCreate] Task {task_id}: scenario_resp (attempt {attempt+1}) type={type(scenario_resp).__name__}, "
+                        f"len={len(scenario_resp) if scenario_resp else 0}, preview={_preview}")
+            scenario_data = _parse_json_safe(scenario_resp)
+            logger.info(f"[MagicCreate] Task {task_id}: parsed scenario_data keys={list(scenario_data.keys()) if scenario_data else 'None'}")
+            scenario = scenario_data.get('scenario') if scenario_data else None
 
-        if scenario:
-            steps = scenario.get('content_json', {}).get('steps', [])
-            # Validate: every step must have non-empty text
-            valid_steps = [s for s in steps if s.get('text') and s['text'].strip()]
-            if len(valid_steps) < len(steps):
-                logger.warning(f"[MagicCreate] {len(steps) - len(valid_steps)} empty steps removed")
-            if valid_steps:
-                scenario['content_json']['steps'] = valid_steps
+            if scenario:
+                steps = scenario.get('content_json', {}).get('steps', [])
+                valid_steps = [s for s in steps if s.get('text') and s['text'].strip()]
+                if len(valid_steps) < len(steps):
+                    logger.warning(f"[MagicCreate] {len(steps) - len(valid_steps)} empty steps removed")
+                if valid_steps:
+                    scenario['content_json']['steps'] = valid_steps
+                else:
+                    scenario['content_json']['steps'] = []
+
+                if len(scenario['content_json']['steps']) >= 8:
+                    logger.info(f"[MagicCreate] Task {task_id}: Scenario attempt {attempt+1} OK with {len(scenario['content_json']['steps'])} steps")
+                    break
+                else:
+                    logger.warning(f"[MagicCreate] Task {task_id}: Scenario attempt {attempt+1} only {len(scenario['content_json']['steps'])} steps, retrying...")
+                    _send_task_progress(task_id, 'processing', f'Kịch bản chưa đủ bước ({len(scenario["content_json"]["steps"])}), đang thử lại lần {attempt+2}...', step=4)
             else:
-                logger.error(f"[MagicCreate] All scenario steps empty!")
-                scenario['content_json']['steps'] = [
-                    {'speaker': 'narrator', 'text': 'Kịch bản cần được chỉnh sửa - AI tạo không đủ nội dung.', 'note': 'Placeholder'}
-                ]
-        else:
+                logger.warning(f"[MagicCreate] Task {task_id}: Scenario attempt {attempt+1} returned None, retrying...")
+
+        # Final fallback if all retries failed or too few steps
+        if not scenario or not scenario.get('content_json', {}).get('steps'):
             scenario = {
                 'title': f'Kịch bản: {content_data["title"]}',
                 'description': 'Kịch bản cần chỉnh sửa',
                 'content_json': {'steps': [
-                    {'speaker': 'narrator', 'text': 'AI không tạo được kịch bản. Vui lòng chỉnh sửa.', 'note': 'Fallback'}
+                    {'speaker': 'narrator', 'text': 'AI không tạo được kịch bản đầy đủ. Vui lòng chỉnh sửa.', 'note': 'Fallback'}
                 ]}
             }
 
-        # Send partial: scenario
+        # Send scenario steps progressively
+        _scenario_steps = scenario.get('content_json', {}).get('steps', [])
+        if _scenario_steps:
+            _send_task_progress(task_id, 'processing', 'Đang hiển thị kịch bản...', step=4, data={
+                'scenario_header': {'title': scenario.get('title', ''), 'description': scenario.get('description', '')},
+            })
+            _time_mod.sleep(0.15)
+            for _si, _step in enumerate(_scenario_steps):
+                _send_task_progress(task_id, 'processing', f'Bước {_si+1}/{len(_scenario_steps)}', step=4, data={
+                    'scenario_step': _step,
+                    'step_index': _si,
+                })
+                _time_mod.sleep(0.2)
+
+        # Send full scenario
         _send_task_progress(task_id, 'processing', f'Kịch bản {len(scenario["content_json"]["steps"])} bước đã tạo!', step=4, data={'scenario': scenario})
         logger.info(f"[MagicCreate] Task {task_id}: Scenario generated with {len(scenario['content_json']['steps'])} steps")
 
@@ -2052,16 +2190,50 @@ Trả về JSON:
 
 
 def _parse_json_safe(text):
-    """Safely parse JSON from AI response, with repair attempts."""
+    """Safely parse JSON from AI response, with multiple repair attempts."""
     if not text:
         return None
+
+    # 1. Try direct parse
     try:
         return json.loads(text)
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.debug(f"[_parse_json_safe] direct parse failed: {e}")
+
+    # 2. Strip markdown code fences
+    stripped = re.sub(r'^```(?:json)?\s*', '', text.strip())
+    stripped = re.sub(r'\s*```$', '', stripped.strip())
+    try:
+        return json.loads(stripped)
     except (json.JSONDecodeError, TypeError):
-        match = re.search(r'\{[\s\S]*\}', text)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
+        pass
+
+    # 3. Extract outermost { ... }
+    match = re.search(r'\{[\s\S]*\}', text)
+    if match:
+        candidate = match.group()
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+        # 4. Fix trailing commas
+        fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            pass
+        # 5. Remove CJK chars that may have been injected by the model
+        cleaned = re.sub(r'[\u4e00-\u9fff]+', '', candidate)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+        # 6. Strip control characters
+        ctrl_clean = re.sub(r'[\x00-\x1f\x7f]', ' ', candidate)
+        try:
+            return json.loads(ctrl_clean)
+        except json.JSONDecodeError as e:
+            logger.warning(f"[_parse_json_safe] all parse attempts failed, last error: {e}, "
+                           f"text[:300]={text[:300]!r}")
+
     return None

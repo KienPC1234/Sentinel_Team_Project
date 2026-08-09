@@ -16,7 +16,9 @@ from .trend_views import TrendDailyView, TrendHotView, ScamRadarStatsView
 from .user_views import UserScansView, UserReportsView, UserAlertsView, PublicProfileView
 from .scan_views import ScanFileView, ScanAudioView as _ScanAudioView  # noqa: already imported above
 from .admin_views import AdminReportsView, AdminReportActionView, AdminStatsView, AdminRAGManagementView, AdminRAGRebuildView
-from .forum_views import ForumPostListCreateView, ForumPostCommentView, ForumPostLikeView, ForumPostReactionView, ForumPostReportView, ForumPostDetailView, ForumCommentLikeView
+from .forum_views import (ForumPostListCreateView, ForumPostCommentView, ForumPostLikeView, ForumPostReactionView, 
+                          ForumPostReportView, ForumPostDetailView, ForumCommentLikeView, ForumCommentReportView,
+                          ForumCommentReactionView, ForumPostReactionMutualView, ForumPostLikeMutualView)
 from .utils_views import EditorImageUploadView, EditorFetchUrlView, MentionUserListView
 from .notification_views import TestPushView, ResetRAGView, OneSignalRegistrationView
 
@@ -35,6 +37,7 @@ __all__ = [
     'AdminRAGManagementView', 'AdminRAGRebuildView',
     'ForumPostListCreateView', 'ForumPostCommentView', 'ForumPostLikeView',
     'ForumPostReactionView', 'ForumPostReportView', 'ForumPostDetailView', 'ForumCommentLikeView',
+    'ForumCommentReportView', 'ForumCommentReactionView', 'ForumPostReactionMutualView', 'ForumPostLikeMutualView',
     'ArticleListView', 'ArticleDetailView',
     'EditorImageUploadView', 'EditorFetchUrlView', 'MentionUserListView',
     'TestPushView', 'ResetRAGView', 'OneSignalRegistrationView',

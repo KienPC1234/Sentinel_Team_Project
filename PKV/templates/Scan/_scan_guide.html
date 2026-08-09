@@ -142,6 +142,36 @@
                 <p class="text-white/70 text-sm leading-relaxed">Nhấn <strong class="text-cyan-400">PHÂN TÍCH</strong> và chờ AI nhận diện.</p>
             </div>
 
+            {% elif scan_type == 'audio' %}
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
+                <p class="text-white/70 text-sm leading-relaxed">Chọn chế độ: <strong class="text-white">Tải File</strong> (MP3, WAV, M4A, OGG, WebM, FLAC, AAC — tối đa 50MB) hoặc <strong class="text-white">Ghi Âm</strong> trực tiếp qua microphone.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs font-black shrink-0">2</div>
+                <p class="text-white/70 text-sm leading-relaxed">Nếu chọn <strong class="text-white">Ghi Âm</strong>: nhấn nút micro để bắt đầu, nhấn lại để dừng. Ghi âm tối thiểu <strong class="text-violet-400">2 giây</strong>, tối đa <strong class="text-violet-400">5 phút</strong>.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs font-black shrink-0">3</div>
+                <p class="text-white/70 text-sm leading-relaxed">Hoàn thành <strong class="text-white">xác minh bảo mật</strong> rồi nhấn <strong class="text-violet-400">PHÂN TÍCH ÂM THANH</strong>.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs font-black shrink-0">4</div>
+                <p class="text-white/70 text-sm leading-relaxed">Hệ thống sẽ: <strong class="text-white">nhận diện giọng nói → chuyển thành văn bản → AI phân tích nội dung lừa đảo</strong>. Kết quả hiển thị theo thời gian thực.</p>
+            </div>
+
+            <!-- Recording tips -->
+            <div class="mt-3 p-3.5 rounded-xl bg-violet-500/5 border border-violet-500/10 space-y-2">
+                <h5 class="text-violet-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <i class="bi bi-mic"></i> Mẹo ghi âm tốt
+                </h5>
+                <div class="space-y-1.5 text-white/50 text-xs leading-relaxed">
+                    <p><strong class="text-white/70">Môi trường yên tĩnh:</strong> Tránh nơi ồn ào để AI nhận diện chính xác hơn.</p>
+                    <p><strong class="text-white/70">Bật loa ngoài:</strong> Nếu muốn ghi lại cuộc gọi, bật loa ngoài và đặt gần micro máy tính.</p>
+                    <p><strong class="text-white/70">File ghi âm sẵn:</strong> Nếu đã có file ghi âm cuộc gọi, chọn chế độ <strong class="text-violet-400">Tải File</strong> cho kết quả tốt nhất.</p>
+                </div>
+            </div>
+
             {% elif scan_type == 'report' %}
             <div class="flex gap-3">
                 <div class="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-black shrink-0">1</div>
@@ -234,6 +264,11 @@
                 <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>QR Code giả có thể dẫn đến web lừa đảo hoặc cài mã độc.</li>
                 <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>Không quét QR từ nguồn không rõ ràng.</li>
                 <li class="flex gap-2"><i class="bi bi-check-circle text-cyan-500/60 shrink-0 mt-0.5"></i>Chụp ảnh QR và tải lên đây để kiểm tra trước khi quét bằng điện thoại.</li>
+                {% elif scan_type == 'audio' %}
+                <li class="flex gap-2"><i class="bi bi-check-circle text-violet-500/60 shrink-0 mt-0.5"></i>Cuộc gọi từ "công an", "ngân hàng" yêu cầu chuyển tiền — hầu hết là lừa đảo.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-violet-500/60 shrink-0 mt-0.5"></i>Nếu bị đe dọa qua điện thoại, hãy ghi âm lại và quét ở đây.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-violet-500/60 shrink-0 mt-0.5"></i>AI hỗ trợ nhận diện tiếng Việt và nhiều ngôn ngữ khác.</li>
+                <li class="flex gap-2"><i class="bi bi-check-circle text-violet-500/60 shrink-0 mt-0.5"></i>Cấp quyền microphone trong trình duyệt để sử dụng chức năng ghi âm.</li>
                 {% elif scan_type == 'report' %}
                 <li class="flex gap-2"><i class="bi bi-check-circle text-red-500/60 shrink-0 mt-0.5"></i>Thông tin càng chi tiết và có bằng chứng càng giúp cộng đồng nhiều.</li>
                 <li class="flex gap-2"><i class="bi bi-check-circle text-red-500/60 shrink-0 mt-0.5"></i>Tải ảnh bằng chứng (tin nhắn, chuyển khoản) và dùng AI quét chữ tự động.</li>

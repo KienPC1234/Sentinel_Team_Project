@@ -156,7 +156,7 @@
                 </div>
                 
                 <div class="prose prose-invert max-w-none prose-p:text-white/70 prose-headings:text-white prose-strong:text-cyan-400"
-                     x-html="window.renderRichText(document.getElementById('profile-about-data').textContent || '*Người dùng chưa cập nhật thông tin giới thiệu.*')">
+                     x-html="window.renderRichText(about || '*Người dùng chưa cập nhật thông tin giới thiệu.*')">
                 </div>
             </div>
 
@@ -206,6 +206,7 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('profileApp', () => ({
         posts: [],
+        about: '',
         user: {
             username: '{{ profile_user.username|escapejs }}',
             display_name: '{{ profile_user.profile.display_name|escapejs }}',
@@ -218,8 +219,11 @@ document.addEventListener('alpine:init', () => {
 
         init() {
             try {
-                const dataEl = document.getElementById('profile-posts-data');
-                if (dataEl) this.posts = JSON.parse(dataEl.textContent);
+                const postsEl = document.getElementById('profile-posts-data');
+                if (postsEl) this.posts = JSON.parse(postsEl.textContent);
+
+                const aboutEl = document.getElementById('profile-about-data');
+                if (aboutEl) this.about = JSON.parse(aboutEl.textContent);
             } catch (e) {
                 console.error('Profile Data Error:', e);
             }

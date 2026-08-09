@@ -63,9 +63,13 @@ urlpatterns = [
     path('forum/posts/<int:post_id>/', views.ForumPostDetailView.as_view(), name='forum-detail'),
     path('forum/posts/<int:post_id>/comment/', views.ForumPostCommentView.as_view(), name='forum-comment'),
     path('forum/posts/<int:post_id>/like/', views.ForumPostLikeView.as_view(), name='forum-like'),
+    path('forum/posts/<int:post_id>/like/mutual/', views.ForumPostLikeMutualView.as_view(), name='forum-like-mutual'),
     path('forum/posts/<int:post_id>/reaction/', views.ForumPostReactionView.as_view(), name='forum-reaction'),
+    path('forum/posts/<int:post_id>/reaction/mutual/', views.ForumPostReactionMutualView.as_view(), name='forum-reaction-mutual'),
     path('forum/posts/<int:post_id>/report/', views.ForumPostReportView.as_view(), name='forum-report'),
     path('forum/comments/<int:comment_id>/like/', views.ForumCommentLikeView.as_view(), name='forum-comment-like'),
+    path('forum/comments/<int:comment_id>/reaction/', views.ForumCommentReactionView.as_view(), name='forum-comment-reaction'),
+    path('forum/comments/<int:comment_id>/report/', views.ForumCommentReportView.as_view(), name='forum-comment-report'),
     
     # Articles
     path('articles/', views.ArticleListView.as_view(), name='article-list'),

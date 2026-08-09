@@ -132,55 +132,90 @@ document.addEventListener('alpine:init', () => {
         async toggleLike() {
             if (!this.post.id) return;
             try {
-                const resp = await fetch(`/api/v1/forum/posts/${this.post.id}/like/`, {
+                const resp = await fetch(`/api/v1/forum/posts/${this.post.id}/like/mutual/`, {
                     method: 'POST',
                     headers: {'X-CSRFToken': getCSRFToken()}
                 });
                 if(resp.ok) {
                     const data = await resp.json();
                     this.post.likes_count = data.likes_count;
+                    this.post.dislikes_count = data.dislikes_count;
                     this.post.user_liked = data.liked;
+                    this.post.user_disliked = data.user_disliked;
                 }
             } catch(e) {}
         },
         async toggleReaction(type) {
             if (!this.post.id) return;
             try {
-                const resp = await fetch(`/api/v1/forum/posts/${this.post.id}/reaction/`, {
+                const resp = await fetch(`/api/v1/forum/posts/${this.post.id}/reaction/mutual/`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
                     body: JSON.stringify({ reaction_type: type })
                 });
                 if(resp.ok) {
                     const data = await resp.json();
-                    if(type === 'helpful') {
-                        this.post.helpful_count = data.helpful_count;
-                        this.post.user_helpful = data.reacted;
-                    } else if(type === 'share') {
-                        this.post.shares_count = data.shares_count;
-                        this.post.user_shared = data.reacted;
-                    } else if(type === 'dislike') {
-                        this.post.dislikes_count = data.dislikes_count;
-                        this.post.user_disliked = data.reacted;
-                    }
+                    this.post.helpful_count = data.helpful_count;
+                    this.post.shares_count = data.shares_count;
+                    this.post.dislikes_count = data.dislikes_count;
+                    this.post.likes_count = data.likes_count;
+                    this.post.user_helpful = data.user_helpful;
+                    this.post.user_disliked = data.user_disliked;
+                    this.post.user_liked = data.user_liked;
                 }
             } catch(e) {}
         },
-        async toggleCommentLike(comment) {
-            if (!this.post.id) return;
+        async toggleCommentReaction(comment, reactionType) {
             try {
-                const resp = await fetch(`/api/v1/forum/comments/${comment.id}/like/`, {
+                const resp = await fetch(`/api/v1/forum/comments/${comment.id}/reaction/`, {
                     method: 'POST',
-                    headers: {'X-CSRFToken': getCSRFToken()}
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
+                    body: JSON.stringify({ reaction_type: reactionType })
                 });
                 if(resp.ok) {
                     const data = await resp.json();
                     comment.likes_count = data.likes_count;
-                    comment.user_liked = data.liked;
+                    comment.dislikes_count = data.dislikes_count;
+                    comment.helpful_count = data.helpful_count;
+                    comment.user_liked = data.user_liked;
+                    comment.user_disliked = data.user_disliked;
+                    comment.user_helpful = data.user_helpful;
                 } else if(resp.status === 403) {
-                    showToast('Vui lòng đăng nhập để thích bình luận', 'info');
+                    showToast('Vui lòng đăng nhập để tương tác', 'info');
                 }
             } catch(e) {}
+        },
+        async toggleCommentLike(comment) {
+            await this.toggleCommentReaction(comment, 'upvote');
+        },
+        async reportComment(comment) {
+            const { value: reason } = await Swal.fire({
+                title: 'Báo cáo bình luận vi phạm',
+                input: 'textarea',
+                inputPlaceholder: 'Lý do báo cáo...',
+                showCancelButton: true,
+                confirmButtonColor: '#ff1744',
+                background: '#161235',
+                color: '#fff'
+            });
+            if (reason) {
+                try {
+                    const resp = await fetch(`/api/v1/forum/comments/${comment.id}/report/`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
+                        body: JSON.stringify({ reason: reason })
+                    });
+                    if(resp.ok) {
+                        showToast('Báo cáo bình luận đã được gửi!', 'success');
+                    }
+                } catch(e) {}
+            }
+        },
+        shareComment(comment) {
+            const url = `${window.location.origin}/forum/${this.post.id}/#comment-${comment.id}`;
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('Đã sao chép liên kết bình luận!', 'success');
+            });
         },
         async reportThread() {
             if (!this.post.id) return;
@@ -206,52 +241,36 @@ document.addEventListener('alpine:init', () => {
                 } catch(e) {}
             }
         },
-        async shareThread() {
-            if (!this.post.id) return;
+        shareThread() {
             const url = window.location.href;
-            try {
-                const resp = await fetch(`/api/v1/forum/posts/${this.post.id}/reaction/`, {
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('Đã sao chép liên kết bài viết!', 'success');
+                // Track share count
+                fetch(`/api/v1/forum/posts/${this.post.id}/reaction/`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
                     body: JSON.stringify({ reaction_type: 'share' })
-                });
-                if(resp.ok) {
-                    const data = await resp.json();
+                }).then(r => r.json()).then(data => {
                     this.post.shares_count = data.shares_count;
-                    this.post.user_shared = true;
-                }
-            } catch(e) {}
-
-            Swal.fire({
-                title: 'Chia sẻ chủ đề',
-                html: `
-                    <div class="mt-4">
-                        <p class="text-white/60 text-sm mb-4">Sao chép liên kết bên dưới để chia sẻ chủ đề này:</p>
-                        <div class="flex gap-2">
-                            <input id="share-link" type="text" value="${url}" readonly 
-                                class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none">
-                            <button onclick="copyShareLink()" class="bg-cyan-400 text-black px-4 py-2 rounded-xl font-bold text-sm hover:bg-white transition-all">
-                                COPY
-                            </button>
+                });
+            }).catch(() => {
+                // Fallback for browsers without clipboard API
+                Swal.fire({
+                    title: 'Chia sẻ chủ đề',
+                    html: `
+                        <div class="mt-4">
+                            <p class="text-white/60 text-sm mb-4">Sao chép liên kết:</p>
+                            <input type="text" value="${url}" readonly 
+                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none"
+                                onclick="this.select()">
                         </div>
-                    </div>
-                `,
-                showConfirmButton: false,
-                background: '#161235',
-                color: '#fff',
-                showCloseButton: true
+                    `,
+                    showConfirmButton: false,
+                    background: '#161235',
+                    color: '#fff',
+                    showCloseButton: true
+                });
             });
-
-            window.copyShareLink = () => {
-                const copyText = document.getElementById("share-link");
-                if (copyText) {
-                    copyText.select();
-                    copyText.setSelectionRange(0, 99999);
-                    navigator.clipboard.writeText(copyText.value);
-                    showToast('Đã sao chép liên kết!', 'success');
-                    Swal.close();
-                }
-            };
         },
         timeAgo(dt) {
             if (!dt) return '';
@@ -345,8 +364,8 @@ document.addEventListener('alpine:init', () => {
                 </div>
                 
                 <div class="flex items-center gap-4">
-                    <div class="text-[10px] font-bold text-white/20 uppercase tracking-widest flex items-center gap-2">
-                        <i class="bi bi-eye"></i> <span x-text="post.views_count"></span> lượt xem
+                    <div class="text-[10px] font-bold text-white/20 uppercase tracking-widest flex items-center gap-2" title="Người xem riêng biệt">
+                        <i class="bi bi-person-check"></i> <span x-text="post.unique_views_count || 0"></span> người đã xem
                     </div>
                     <button @click="reportThread()" class="text-xs font-black text-white/20 hover:text-red-500 transition-all uppercase tracking-widest flex items-center gap-2">
                         <i class="bi bi-flag"></i> Báo cáo
@@ -428,17 +447,40 @@ document.addEventListener('alpine:init', () => {
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-2">
                                         <a :href="'/profile/@' + comment.author_username + '/'" class="text-sm font-black text-white hover:text-cyan-400 transition-colors" x-text="comment.author_name"></a>
+                                        <i x-show="comment.author_is_staff" class="bi bi-patch-check-fill verified-badge text-xs"></i>
                                         <span class="text-[10px] text-white/20 font-bold uppercase tracking-widest">•</span>
                                         <span class="text-[10px] text-white/30 font-bold uppercase" x-text="timeAgo(comment.created_at) + (timeAgo(comment.created_at) ? ' trước' : '')"></span>
                                     </div>
-                                    <div class="flex items-center gap-4">
-                                        <button @click="toggleCommentLike(comment)" class="text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5"
-                                                :class="comment.user_liked ? 'text-red-500' : 'text-white/20 hover:text-white'">
-                                            <i class="bi" :class="comment.user_liked ? 'bi-heart-fill' : 'bi-heart'"></i>
+                                    <div class="flex items-center gap-2 md:gap-3">
+                                        <!-- Upvote -->
+                                        <button @click="toggleCommentReaction(comment, 'upvote')" class="text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1"
+                                                :class="comment.user_liked ? 'text-green-400' : 'text-white/20 hover:text-green-400'">
+                                            <i class="bi" :class="comment.user_liked ? 'bi-caret-up-fill' : 'bi-caret-up'"></i>
                                             <span x-text="comment.likes_count || 0"></span>
                                         </button>
-                                        <button @click="replyTo = (replyTo === comment.id ? null : comment.id)" class="text-[10px] font-black text-cyan-400/60 hover:text-cyan-400 uppercase tracking-widest transition-all">
-                                            <i class="bi bi-reply-all-fill"></i> Phản hồi
+                                        <!-- Downvote -->
+                                        <button @click="toggleCommentReaction(comment, 'downvote')" class="text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1"
+                                                :class="comment.user_disliked ? 'text-red-400' : 'text-white/20 hover:text-red-400'">
+                                            <i class="bi" :class="comment.user_disliked ? 'bi-caret-down-fill' : 'bi-caret-down'"></i>
+                                            <span x-text="comment.dislikes_count || 0"></span>
+                                        </button>
+                                        <!-- Helpful -->
+                                        <button @click="toggleCommentReaction(comment, 'helpful')" class="text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1"
+                                                :class="comment.user_helpful ? 'text-cyan-400' : 'text-white/20 hover:text-cyan-400'">
+                                            <i class="bi" :class="comment.user_helpful ? 'bi-patch-check-fill' : 'bi-patch-check'"></i>
+                                            <span x-text="comment.helpful_count || 0"></span>
+                                        </button>
+                                        <!-- Reply -->
+                                        <button @click="replyTo = (replyTo === comment.id ? null : comment.id)" class="text-[10px] font-black text-white/20 hover:text-cyan-400 uppercase tracking-widest transition-all">
+                                            <i class="bi bi-reply-fill"></i>
+                                        </button>
+                                        <!-- Share -->
+                                        <button @click="shareComment(comment)" class="text-[10px] font-black text-white/20 hover:text-white uppercase tracking-widest transition-all">
+                                            <i class="bi bi-share"></i>
+                                        </button>
+                                        <!-- Report -->
+                                        <button @click="reportComment(comment)" class="text-[10px] font-black text-white/20 hover:text-red-400 uppercase tracking-widest transition-all">
+                                            <i class="bi bi-flag"></i>
                                         </button>
                                     </div>
                                 </div>

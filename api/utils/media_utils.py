@@ -467,6 +467,7 @@ def transcribe_audio(audio_file, language=None):
     import tempfile, os, shutil
 
     tmp_path = None
+    wav_converted_path = None
     try:
         # Persist the uploaded file to a temp path that faster-whisper can read
         if hasattr(audio_file, 'read'):
@@ -482,6 +483,29 @@ def transcribe_audio(audio_file, language=None):
             file_for_model = tmp_path
         else:
             file_for_model = str(audio_file)
+
+        # Convert webm/ogg to wav for better whisper compatibility
+        ext_lower = os.path.splitext(file_for_model)[1].lower()
+        if ext_lower in ('.webm', '.ogg'):
+            try:
+                import subprocess
+                fd_wav, wav_converted_path = tempfile.mkstemp(suffix='.wav')
+                os.close(fd_wav)
+                result = subprocess.run(
+                    ['ffmpeg', '-y', '-i', file_for_model, '-ar', '16000', '-ac', '1', '-f', 'wav', wav_converted_path],
+                    capture_output=True, timeout=60
+                )
+                if result.returncode == 0 and os.path.getsize(wav_converted_path) > 0:
+                    logger.info(f"Converted {ext_lower} to wav for transcription")
+                    file_for_model = wav_converted_path
+                else:
+                    logger.warning(f"ffmpeg conversion failed (rc={result.returncode}), using original file")
+                    if wav_converted_path and os.path.exists(wav_converted_path):
+                        os.remove(wav_converted_path)
+                    wav_converted_path = None
+            except (FileNotFoundError, subprocess.TimeoutExpired) as conv_err:
+                logger.warning(f"ffmpeg not available or timed out ({conv_err}), using original file")
+                wav_converted_path = None
 
         transcribe_kwargs = {'beam_size': 5, 'vad_filter': True}
         if language:
@@ -521,6 +545,11 @@ def transcribe_audio(audio_file, language=None):
         if tmp_path and os.path.exists(tmp_path):
             try:
                 os.remove(tmp_path)
+            except OSError:
+                pass
+        if wav_converted_path and os.path.exists(wav_converted_path):
+            try:
+                os.remove(wav_converted_path)
             except OSError:
                 pass
 
