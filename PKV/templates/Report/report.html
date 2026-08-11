@@ -8,6 +8,7 @@
             target_type: new URLSearchParams(window.location.search).get('target_type') || '',
             target_value: new URLSearchParams(window.location.search).get('target_value') || '',
             scam_type:'', severity:'medium', description:'', evidence:null,
+            evidenceFiles: [],
             scammer_phone: new URLSearchParams(window.location.search).get('phone') || '',
             scammer_bank_account: new URLSearchParams(window.location.search).get('bank_account') || '',
             scammer_bank_name: new URLSearchParams(window.location.search).get('bank_name') || '',
@@ -38,16 +39,15 @@
                         this.annotatedImages = res.annotated_images || [];
                         const extracted = res.ocr_text.trim();
                         if (extracted) {
+                            // Convert markdown from AI response to clean HTML for CKEditor
+                            let htmlContent = extracted;
+                            if (window.renderMarkdown) {
+                                htmlContent = window.renderMarkdown(extracted);
+                            } else if (window.marked && window.marked.parse) {
+                                htmlContent = window.marked.parse(extracted, { breaks: true, gfm: true });
+                            }
                             const currentData = reportEditorInstance.getData();
-                            const newData = currentData + (currentData ? '<br><br>' : '') + 
-                                            '<div class="ai-ocr-summary p-6 rounded-[2rem] bg-cyan-500/[0.03] border border-cyan-500/10 shadow-inner">' +
-                                            '<div class="flex items-center gap-2 mb-3 text-cyan-400 font-black text-[10px] uppercase tracking-[0.2em]">' +
-                                            '<i class="bi bi-robot"></i> AI TRÍCH XUẤT & TÓM TẮT THÔNG TIN' +
-                                            '</div>' +
-                                            '<div class="text-sm text-white/80 leading-relaxed font-medium">' +
-                                            extracted.replace(/\n/g, '<br>') +
-                                            '</div>' +
-                                            '</div>';
+                            const newData = currentData + (currentData ? '<br><br>' : '') + htmlContent;
                             reportEditorInstance.setData(newData);
                             this.description = newData;
                             this.ocrSuggested = false;
@@ -167,6 +167,10 @@
                 if (this.scammer_bank_name) fd.append('scammer_bank_name', this.scammer_bank_name);
                 if (this.scammer_name) fd.append('scammer_name', this.scammer_name);
                 if (this.evidence) fd.append('evidence_file', this.evidence);
+                // Append additional evidence images
+                for (const file of this.evidenceFiles) {
+                    fd.append('evidence_images', file);
+                }
 
                 try {
                     const resp = await fetch('/api/v1/report/', {
@@ -411,38 +415,71 @@
             </div>
 
                 <!-- Evidence & AI OCR -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="border-2 border-dashed border-white/10 rounded-[2rem] p-8 text-center bg-white/[0.01] hover:bg-white/[0.03] hover:border-red-500/30 transition-all cursor-pointer group relative overflow-hidden"
-                        @click="$refs.evidenceInput.click()">
-                        <input type="file" accept="image/*" x-ref="evidenceInput" class="hidden" @change="evidence=$event.target.files[0]; annotatedImages=[]">
-                        
-                        <div x-show="!evidence" class="space-y-4">
-                            <div class="w-16 h-16 bg-white/5 rounded-2xl inline-flex items-center justify-center group-hover:scale-110 group-hover:bg-red-500/10 transition-all duration-500">
-                                <i class="bi bi-cloud-arrow-up text-2xl text-white/30 group-hover:text-red-500"></i>
+                <div class="space-y-6">
+                    <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
+                        <i class="bi bi-images text-red-500/40"></i> Ảnh bằng chứng (tối đa 5 ảnh)
+                    </label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Main evidence (for OCR) -->
+                        <div class="border-2 border-dashed border-white/10 rounded-[2rem] p-8 text-center bg-white/[0.01] hover:bg-white/[0.03] hover:border-red-500/30 transition-all cursor-pointer group relative overflow-hidden"
+                            @click="$refs.evidenceInput.click()">
+                            <input type="file" accept="image/*" x-ref="evidenceInput" class="hidden" @change="evidence=$event.target.files[0]; annotatedImages=[]">
+                            
+                            <div x-show="!evidence" class="space-y-4">
+                                <div class="w-16 h-16 bg-white/5 rounded-2xl inline-flex items-center justify-center group-hover:scale-110 group-hover:bg-red-500/10 transition-all duration-500">
+                                    <i class="bi bi-cloud-arrow-up text-2xl text-white/30 group-hover:text-red-500"></i>
+                                </div>
+                                <p class="text-[9px] font-black text-white/40 tracking-[0.2em] uppercase">Ảnh chính (dùng cho AI quét)</p>
                             </div>
-                            <p class="text-[9px] font-black text-white/40 tracking-[0.2em] uppercase">Bấm để tải ảnh bằng chứng</p>
+
+                            <div x-show="evidence" class="relative">
+                                <img :src="evidence ? URL.createObjectURL(evidence) : ''" class="w-full h-32 object-cover rounded-2xl border border-white/10">
+                                <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity rounded-2xl">
+                                    <i class="bi bi-arrow-repeat text-white text-xl"></i>
+                                </div>
+                            </div>
                         </div>
 
-                        <div x-show="evidence" class="relative">
-                            <img :src="evidence ? URL.createObjectURL(evidence) : ''" class="w-full h-32 object-cover rounded-2xl border border-white/10">
-                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity rounded-2xl">
-                                <i class="bi bi-arrow-repeat text-white text-xl"></i>
-                            </div>
+                        <div class="flex flex-col justify-center gap-4">
+                            <button type="button" 
+                                @click="runOCR()"
+                                :disabled="!evidence || ocrLoading"
+                                class="liquid-btn py-5 px-6 bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-black tracking-widest uppercase flex items-center justify-center gap-3"
+                                :class="evidence && !annotatedImages.length ? 'animate-pulse ring-2 ring-cyan-500/30' : ''">
+                                <i class="bi bi-eye-fill" :class="ocrLoading ? 'animate-spin' : ''"></i>
+                                <span x-text="ocrLoading ? 'ĐANG QUÉT MẮT THẦN...' : (annotatedImages.length ? 'ĐÃ QUÉT THÀNH CÔNG' : 'QUÉT CHỮ & QR BẰNG AI')"></span>
+                            </button>
+                            <p class="text-[8px] text-white/20 font-bold uppercase tracking-widest text-center italic leading-relaxed">
+                                Mắt thần AI sẽ trích xuất thông tin & giải mã mã QR trong ảnh.
+                            </p>
                         </div>
                     </div>
 
-                    <div class="flex flex-col justify-center gap-4">
-                        <button type="button" 
-                            @click="runOCR()"
-                            :disabled="!evidence || ocrLoading"
-                            class="liquid-btn py-5 px-6 bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-black tracking-widest uppercase flex items-center justify-center gap-3"
-                            :class="evidence && !annotatedImages.length ? 'animate-pulse ring-2 ring-cyan-500/30' : ''">
-                            <i class="bi bi-eye-fill" :class="ocrLoading ? 'animate-spin' : ''"></i>
-                            <span x-text="ocrLoading ? 'ĐANG QUÉT MẮT THẦN...' : (annotatedImages.length ? 'ĐÃ QUÉT THÀNH CÔNG' : 'QUÉT CHỮ & QR BẰNG AI')"></span>
-                        </button>
-                        <p class="text-[8px] text-white/20 font-bold uppercase tracking-widest text-center italic leading-relaxed">
-                            Mắt thần AI sẽ trích xuất thông tin & giải mã mã QR trong ảnh.
-                        </p>
+                    <!-- Additional evidence images -->
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <p class="text-[9px] font-black text-white/30 uppercase tracking-widest ml-2">Ảnh bổ sung</p>
+                            <span class="text-[9px] font-bold text-white/20" x-text="evidenceFiles.length + '/4 ảnh'"></span>
+                        </div>
+                        <div class="flex flex-wrap gap-3">
+                            <template x-for="(file, idx) in evidenceFiles" :key="idx">
+                                <div class="relative w-24 h-24 rounded-2xl overflow-hidden border border-white/10 group">
+                                    <img :src="URL.createObjectURL(file)" class="w-full h-full object-cover">
+                                    <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                                        <button type="button" @click="evidenceFiles.splice(idx, 1)" class="text-red-400 hover:text-red-300">
+                                            <i class="bi bi-trash text-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="evidenceFiles.length < 4"
+                                 class="w-24 h-24 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center cursor-pointer hover:border-cyan-500/30 hover:bg-white/[0.02] transition-all"
+                                 @click="$refs.extraEvidenceInput.click()">
+                                <i class="bi bi-plus-lg text-white/20 text-xl"></i>
+                            </div>
+                            <input type="file" accept="image/*" multiple x-ref="extraEvidenceInput" class="hidden"
+                                @change="[...($event.target.files)].slice(0, 4 - evidenceFiles.length).forEach(f => evidenceFiles.push(f)); $event.target.value=''">
+                        </div>
                     </div>
                 </div>
 

@@ -22,8 +22,22 @@
         </button>
     </div>
 
+    <!-- Running Status Banner -->
+    <div x-data="ragStats()" x-show="is_running" x-transition
+         class="mb-8 p-6 rounded-[2rem] bg-cyan-500/5 border border-cyan-500/20 animate-pulse">
+        <div class="flex items-center gap-4">
+            <i class="bi bi-arrow-repeat text-2xl text-cyan-400 animate-spin"></i>
+            <div>
+                <div class="text-sm font-black text-cyan-400">Đang đồng bộ kiến thức...</div>
+                <div class="text-[10px] text-white/30 font-bold mt-1" x-show="running_since">
+                    Bắt đầu lúc: <span x-text="formatDate(running_since)"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Stats Banner -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12" x-data="ragStats()">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12" x-data="ragStats()">
         <div class="group p-8 rounded-[2.5rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl relative overflow-hidden">
             <div class="absolute top-0 right-0 p-6 opacity-10 text-cyan-400">
                 <i class="bi bi-files text-4xl"></i>
@@ -54,6 +68,17 @@
             </div>
             <div class="mt-4 text-[9px] font-bold text-white/20 uppercase tracking-widest truncate" x-text="'Model: ' + model_name">Model: {{ stats.model_name|default:"Unknown" }}</div>
         </div>
+        
+        <div class="group p-8 rounded-[2.5rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-6 opacity-10 text-amber-400">
+                <i class="bi bi-hourglass-split text-4xl"></i>
+            </div>
+            <div class="text-[10px] font-black text-amber-500/50 uppercase tracking-widest mb-2">Job kế tiếp</div>
+            <div class="text-2xl font-black text-white tabular-nums" x-text="countdown">—</div>
+            <div class="mt-4 text-[10px] font-bold text-white/20 uppercase tracking-widest">
+                Mỗi <span x-text="Math.round(beat_interval / 60)">60</span> phút
+            </div>
+        </div>
     </div>
 
     <script>
@@ -63,26 +88,73 @@
                 last_sync: '{{ stats.last_sync|date:"Y-m-d H:i:s"|default:"" }}',
                 is_ready: {{ stats.is_ready|yesno:"true,false" }},
                 model_name: '{{ stats.model_name|default:"Unknown" }}',
+                is_running: {{ stats.is_running|yesno:"true,false" }},
+                running_since: '{{ stats.running_since|date:"Y-m-d H:i:s"|default:"" }}',
+                beat_interval: {{ stats.beat_interval|default:3600 }},
+                countdown: '',
+                logs: [],
+                pollInterval: null,
+                fastPoll: false,
                 displayed_count: 0,
                 init() {
                     this.displayed_count = this.total_items;
-                    // Start polling
-                    setInterval(() => this.poll(), 5000);
+                    this.updateCountdown();
+                    // Normal poll every 5s, fast poll every 1.5s when running
+                    this.startPolling();
+                    setInterval(() => this.updateCountdown(), 1000);
+                },
+                startPolling() {
+                    if (this.pollInterval) clearInterval(this.pollInterval);
+                    const interval = this.fastPoll ? 1500 : 5000;
+                    this.pollInterval = setInterval(() => this.poll(), interval);
+                    this.poll(); // immediate first poll
                 },
                 async poll() {
                     try {
                         const resp = await fetch(window.location.pathname + '?json=1');
                         const data = await resp.json();
                         if (data.stats) {
+                            const wasRunning = this.is_running;
                             this.total_items = data.stats.total_items;
                             this.last_sync = data.stats.last_sync;
                             this.is_ready = data.stats.is_ready;
                             this.model_name = data.stats.model_name;
+                            this.is_running = data.stats.is_running;
+                            this.running_since = data.stats.running_since || '';
+                            
+                            // Switch to fast polling when running, back to normal when done
+                            if (this.is_running && !this.fastPoll) {
+                                this.fastPoll = true;
+                                this.startPolling();
+                            } else if (!this.is_running && this.fastPoll) {
+                                this.fastPoll = false;
+                                this.startPolling();
+                                if (wasRunning) {
+                                    showToast('Đồng bộ RAG hoàn tất!', 'success');
+                                }
+                            }
+                        }
+                        if (data.logs) {
+                            this.logs = data.logs;
                         }
                     } catch (e) { console.error('Polling failed', e); }
                 },
+                updateCountdown() {
+                    if (!this.last_sync) { this.countdown = 'N/A'; return; }
+                    try {
+                        const lastSync = new Date(this.last_sync);
+                        const nextRun = new Date(lastSync.getTime() + this.beat_interval * 1000);
+                        const now = new Date();
+                        const diff = Math.max(0, Math.floor((nextRun - now) / 1000));
+                        if (diff <= 0) { this.countdown = 'Sắp chạy...'; return; }
+                        const h = Math.floor(diff / 3600);
+                        const m = Math.floor((diff % 3600) / 60);
+                        const s = diff % 60;
+                        this.countdown = (h > 0 ? h + 'h ' : '') + m.toString().padStart(2, '0') + 'm ' + s.toString().padStart(2, '0') + 's';
+                    } catch(e) { this.countdown = '—'; }
+                },
                 countUp(val) {
-                    return val; // Simplified for now, or could implement animation
+                    return val;
                 },
                 formatDate(dateStr) {
                     if (!dateStr) return 'Chưa có';
@@ -93,6 +165,35 @@
                                d.getHours().toString().padStart(2, '0') + ':' + 
                                d.getMinutes().toString().padStart(2, '0');
                     } catch(e) { return dateStr; }
+                },
+                async clearLogs() {
+                    const result = await Swal.fire({
+                        title: 'Dọn lịch sử đồng bộ?',
+                        text: 'Tất cả lịch sử đồng bộ (trừ job đang chạy) sẽ bị xóa.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        background: '#0d0d1f', color: '#fff',
+                        confirmButtonColor: '#ff1744',
+                        cancelButtonColor: 'rgba(255,255,255,0.05)',
+                        confirmButtonText: 'Xóa',
+                        cancelButtonText: 'Hủy',
+                        customClass: { popup: 'rounded-[2rem] border border-white/10' }
+                    });
+                    if (!result.isConfirmed) return;
+                    try {
+                        const res = await fetch("{% url 'core:admin-rag-clear-logs' %}", {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': getCSRFToken(), 'Content-Type': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            showToast(data.message, 'success');
+                            this.logs = [];
+                            this.poll();
+                        } else {
+                            showToast(data.message || 'Lỗi xóa lịch sử', 'error');
+                        }
+                    } catch(e) { showToast('Lỗi kết nối', 'error'); }
                 }
             }
         }
@@ -152,8 +253,13 @@
     </div>
 
     <!-- Sync History -->
-    <div class="p-10 rounded-[3rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden">
-        <h2 class="text-2xl font-black text-white tracking-tight mb-8">Lịch sử đồng bộ</h2>
+    <div class="p-10 rounded-[3rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl overflow-hidden" x-data="ragStats()">
+        <div class="flex items-center justify-between mb-8">
+            <h2 class="text-2xl font-black text-white tracking-tight">Lịch sử đồng bộ</h2>
+            <button @click="clearLogs()" class="px-5 py-2.5 rounded-2xl bg-red-500/10 text-red-400 text-[10px] font-black uppercase tracking-widest border border-red-500/20 hover:bg-red-500/20 transition-all flex items-center gap-2">
+                <i class="bi bi-trash3"></i> Dọn lịch sử
+            </button>
+        </div>
         
         <div class="overflow-x-auto">
             <table class="w-full text-left">
@@ -167,8 +273,35 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-white/[0.02]">
+                    <!-- Live-updated rows from polling -->
+                    <template x-if="logs.length > 0">
+                        <template x-for="log in logs" :key="log.id">
+                            <tr class="group hover:bg-white/[0.02] transition-colors">
+                                <td class="px-4 py-5 text-[11px] font-bold text-white/60" x-text="log.started_at"></td>
+                                <td class="px-4 py-5">
+                                    <div class="flex justify-center">
+                                        <span x-show="log.status === 'SUCCESS'" class="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[9px] font-black uppercase border border-emerald-500/20">Success</span>
+                                        <span x-show="log.status === 'RUNNING'" class="px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-400 text-[9px] font-black uppercase border border-cyan-500/20 animate-pulse">Syncing...</span>
+                                        <span x-show="log.status === 'FAILED'" class="px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 text-[9px] font-black uppercase border border-red-500/20">Failed</span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-5 text-[10px] font-black text-white/20 uppercase tracking-widest" x-text="log.trigger"></td>
+                                <td class="px-4 py-5 text-sm font-black text-white text-center tabular-nums" x-text="log.documents_count"></td>
+                                <td class="px-4 py-5 text-[11px] text-white/30 italic font-medium">
+                                    <span x-text="log.error_message"></span>
+                                    <span x-show="log.duration" class="text-white/10 ml-2" x-text="'(' + log.duration + ')'"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </template>
+                    <!-- Fallback: server-rendered rows (shown before first poll) -->
+                    <template x-if="logs.length === 0">
+                        <template x-for="(_, i) in Array(0)">
+                            <tr></tr>
+                        </template>
+                    </template>
                     {% for log in logs %}
-                    <tr class="group hover:bg-white/[0.02] transition-colors">
+                    <tr class="group hover:bg-white/[0.02] transition-colors" x-show="logs.length === 0">
                         <td class="px-4 py-5 text-[11px] font-bold text-white/60">{{ log.started_at|date:"d/m/y H:i:s" }}</td>
                         <td class="px-4 py-5">
                             <div class="flex justify-center">
@@ -191,7 +324,7 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr>
+                    <tr x-show="logs.length === 0">
                         <td colspan="5" class="py-20 text-center text-white/10 font-black uppercase tracking-widest text-xs italic">No sync logs available</td>
                     </tr>
                     {% endfor %}
@@ -253,8 +386,21 @@
             
             if (res.ok) {
                 showToast(data.message, 'success');
-                // The polling will pick up the 'RUNNING' status from logs if they were added, 
-                // but re-indexing is partially async via Celery.
+                // Trigger fast polling to show RUNNING status immediately
+                document.querySelectorAll('[x-data]').forEach(el => {
+                    if (el.__x && el.__x.$data.fastPoll !== undefined) {
+                        el.__x.$data.fastPoll = true;
+                        el.__x.$data.is_running = true;
+                        el.__x.$data.startPolling();
+                    } else if (el._x_dataStack) {
+                        const d = Alpine.$data(el);
+                        if (d && d.fastPoll !== undefined) {
+                            d.fastPoll = true;
+                            d.is_running = true;
+                            d.startPolling();
+                        }
+                    }
+                });
             } else {
                 throw new Error(data.error || 'Lỗi không xác định');
             }

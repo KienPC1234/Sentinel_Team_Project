@@ -205,6 +205,35 @@
         vertical-align: middle;
     }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* Fix table overflow in markdown */
+    .ai-markdown {
+        width: 100%;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.1) transparent;
+    }
+    .ai-markdown::-webkit-scrollbar {
+        height: 4px;
+    }
+    .ai-markdown::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .ai-markdown::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.1);
+        border-radius: 10px;
+    }
+    .ai-markdown table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+        margin: 0.5rem 0;
+    }
+    .ai-markdown td, .ai-markdown th {
+        min-width: 100px;
+        word-break: normal;
+    }
 </style>
 
 <script>

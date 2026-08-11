@@ -75,8 +75,13 @@ class ForumPostListCreateView(APIView):
 
 
 class ForumPostDetailView(APIView):
-    """GET /api/forum/posts/<id>/ — detail with comments"""
-    permission_classes = [AllowAny]
+    """GET /api/forum/posts/<id>/ — detail with comments
+       PATCH /api/forum/posts/<id>/ — author edits post"""
+
+    def get_permissions(self):
+        if self.request.method == 'PATCH':
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
     def _get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -91,6 +96,10 @@ class ForumPostDetailView(APIView):
             post = ForumPost.objects.select_related('author').get(id=post_id)
         except ForumPost.DoesNotExist:
             return Response({'error': 'Bài viết không tồn tại'}, status=404)
+
+        # Block locked posts for non-staff users
+        if post.is_locked and not (request.user.is_authenticated and request.user.is_staff):
+            return Response({'error': 'Bài viết này đã bị khóa bởi quản trị viên.'}, status=403)
 
         # Track unique views
         user = request.user if request.user.is_authenticated else None
@@ -118,6 +127,39 @@ class ForumPostDetailView(APIView):
         ForumPost.objects.filter(id=post_id).update(views_count=F('views_count') + 1)
         post.refresh_from_db()
 
+        serializer = ForumPostSerializer(post, context={'request': request})
+        return Response(serializer.data)
+
+    def patch(self, request, post_id):
+        """Author can edit their own post (title, content, category)."""
+        try:
+            post = ForumPost.objects.select_related('author').get(id=post_id)
+        except ForumPost.DoesNotExist:
+            return Response({'error': 'Bài viết không tồn tại'}, status=404)
+
+        if post.author != request.user:
+            return Response({'error': 'Bạn không có quyền chỉnh sửa bài viết này.'}, status=403)
+
+        if post.is_locked:
+            return Response({'error': 'Bài viết đã bị khóa, không thể chỉnh sửa.'}, status=403)
+
+        # Update allowed fields
+        title = request.data.get('title')
+        content = request.data.get('content')
+        category = request.data.get('category')
+        
+        if title and title.strip():
+            post.title = title.strip()
+        if content and content.strip():
+            post.content = content.strip()
+        if category:
+            post.category = category
+
+        # Handle image update
+        if 'image' in request.FILES:
+            post.image = request.FILES['image']
+
+        post.save()
         serializer = ForumPostSerializer(post, context={'request': request})
         return Response(serializer.data)
 

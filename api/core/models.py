@@ -238,6 +238,20 @@ class Report(models.Model):
         return f"Report #{self.pk} [{self.target_type}] {self.target_value[:30]} ({self.status})"
 
 
+class ReportEvidence(models.Model):
+    """Multiple evidence images for a Report"""
+    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='evidence_images')
+    image = models.ImageField(upload_to='reports/evidence/%Y/%m/')
+    caption = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Evidence #{self.pk} for Report #{self.report_id}"
+
+
 # ─── Scan Event Model ───────────────────────────────────────────────────────
 
 class ScanEvent(models.Model):
@@ -516,6 +530,36 @@ class ForumCommentReport(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class ForumBan(models.Model):
+    """Ban a user from the forum"""
+    class BanType(models.TextChoices):
+        TEMPORARY = 'temporary', 'Tạm thời'
+        PERMANENT = 'permanent', 'Vĩnh viễn'
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='forum_bans')
+    banned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='forum_bans_issued')
+    reason = models.TextField()
+    ban_type = models.CharField(max_length=20, choices=BanType.choices, default=BanType.TEMPORARY)
+    expires_at = models.DateTimeField(null=True, blank=True, help_text="Null = vĩnh viễn")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Ban: {self.user.username} by {self.banned_by}"
+
+    @property
+    def is_expired(self):
+        if self.ban_type == self.BanType.PERMANENT:
+            return False
+        if self.expires_at and timezone.now() > self.expires_at:
+            return True
+        return False
+
 
 # ─── Article & Learn Model (Admin CMS) ──────────────────────────────────────
 

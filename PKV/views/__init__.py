@@ -21,6 +21,7 @@ from .page_views import (
     forum_view,
     forum_post_view,
     forum_create_view,
+    forum_edit_view,
     public_profile_view,
     scan_file_view,
     scan_audio_view,
@@ -29,4 +30,5 @@ from .page_views import (
     demo_video_view,
     lesson_detail_view,
     scan_lookup_view,
+    my_reports_view,
 )
