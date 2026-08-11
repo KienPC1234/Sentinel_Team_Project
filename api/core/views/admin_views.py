@@ -120,6 +120,7 @@ class AdminRAGManagementView(APIView):
     def get(self, request):
         from api.maintenance.models import RAGIndexLog
         from api.utils.vector_db import vector_db
+        from django.conf import settings
         
         query = request.query_params.get('query')
         test_results = []
@@ -130,17 +131,50 @@ class AdminRAGManagementView(APIView):
         
         # Current stats
         from api.utils.vector_db import MODEL_NAME
+        
+        # Check if a sync is currently running
+        running_log = RAGIndexLog.objects.filter(status='RUNNING').first()
+        last_success = RAGIndexLog.objects.filter(status='SUCCESS').first()
+        
+        # Get beat schedule interval
+        beat_interval = 3600
+        beat_schedule = getattr(settings, 'CELERY_BEAT_SCHEDULE', {})
+        for key, val in beat_schedule.items():
+            if 'vector' in key.lower() or 'rag' in key.lower():
+                sched = val.get('schedule', None)
+                if hasattr(sched, 'total_seconds'):
+                    beat_interval = int(sched.total_seconds())
+                elif isinstance(sched, (int, float)):
+                    beat_interval = int(sched)
+                break
+        
         stats = {
             'total_items': len(vector_db.metadata),
-            'last_sync': logs[0].completed_at if logs.exists() else None,
+            'last_sync': last_success.completed_at if last_success else None,
             'is_ready': vector_db.index is not None,
-            'model_name': MODEL_NAME
+            'model_name': MODEL_NAME,
+            'is_running': running_log is not None,
+            'running_since': running_log.started_at if running_log else None,
+            'beat_interval': beat_interval,
         }
         
         # If it's a JSON request or has json=1 param
         if 'json' in request.query_params or request.headers.get('Accept') == 'application/json':
+            # Also return latest logs for live table update
+            logs_data = [{
+                'id': str(l.id),
+                'status': l.status,
+                'trigger': l.trigger,
+                'documents_count': l.documents_count,
+                'error_message': l.error_message or '',
+                'started_at': l.started_at.strftime('%d/%m/%y %H:%M:%S') if l.started_at else '',
+                'completed_at': l.completed_at.strftime('%d/%m/%y %H:%M:%S') if l.completed_at else '',
+                'duration': str(l.completed_at - l.started_at) if l.completed_at and l.started_at else '',
+            } for l in logs[:20]]
+            
             return Response({
                 'stats': stats,
+                'logs': logs_data,
                 'test_results': test_results
             })
 
@@ -160,5 +194,15 @@ class AdminRAGRebuildView(APIView):
         from api.maintenance.tasks import rebuild_vector_index
         rebuild_vector_index.delay(trigger='MANUAL')
         return Response({'message': 'Đã lên lịch xây dựng lại chỉ mục Vector.'})
+
+class AdminRAGClearLogsView(APIView):
+    """POST /api/admin/rag/clear-logs — Clear sync history logs"""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        from api.maintenance.models import RAGIndexLog
+        count = RAGIndexLog.objects.count()
+        RAGIndexLog.objects.all().delete()
+        return Response({'message': f'Đã xóa {count} bản ghi lịch sử đồng bộ.', 'cleared': count})
 
 

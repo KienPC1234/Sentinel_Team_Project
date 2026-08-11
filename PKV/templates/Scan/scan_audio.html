@@ -136,17 +136,25 @@
                         <div x-show="isRecording" class="absolute -inset-3 rounded-full bg-red-500/5 animate-pulse"></div>
 
                         <button @click="isRecording ? stopRecording() : startRecording()"
+                                :disabled="processingRecording"
                                 class="relative w-28 h-28 rounded-full flex items-center justify-center text-4xl transition-all duration-500 z-10 shadow-2xl"
                                 :class="isRecording
                                     ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-red-500/40 scale-110 hover:from-red-400 hover:to-red-500'
-                                    : 'bg-white/[0.03] text-white/30 border-2 border-white/10 hover:border-violet-500/50 hover:text-violet-400 hover:shadow-violet-500/20 hover:scale-105'">
-                            <i :class="isRecording ? 'bi bi-stop-fill' : 'bi bi-mic-fill'" class="transition-all"></i>
+                                    : processingRecording
+                                        ? 'bg-white/[0.03] text-white/15 border-2 border-white/5 cursor-not-allowed'
+                                        : 'bg-white/[0.03] text-white/30 border-2 border-white/10 hover:border-violet-500/50 hover:text-violet-400 hover:shadow-violet-500/20 hover:scale-105'">
+                            <i :class="isRecording ? 'bi bi-stop-fill' : processingRecording ? 'bi bi-hourglass-split animate-pulse' : 'bi bi-mic-fill'" class="transition-all"></i>
                         </button>
                     </div>
 
                     <!-- Status Text -->
                     <div class="text-center space-y-2">
-                        <p x-show="!isRecording && !recordedBlob" class="text-white/40 text-sm font-bold">Nhấn để bắt đầu ghi âm</p>
+                        <p x-show="!isRecording && !recordedBlob && !processingRecording" class="text-white/40 text-sm font-bold">Nhấn để bắt đầu ghi âm</p>
+                        <!-- Processing transition indicator -->
+                        <div x-show="processingRecording && !recordedBlob" x-transition class="flex items-center justify-center gap-2">
+                            <svg class="animate-spin w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            <span class="text-violet-400 text-sm font-bold">Đang xử lý bản ghi...</span>
+                        </div>
                         <div x-show="isRecording" class="space-y-3">
                             <p class="text-red-400 text-sm font-black animate-pulse flex items-center justify-center gap-2">
                                 <span class="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/50"></span>
@@ -409,6 +417,7 @@ document.addEventListener('alpine:init', () => {
 
         /* Recording state */
         isRecording: false,
+        processingRecording: false,
         mediaRecorder: null,
         audioChunks: [],
         recordedBlob: null,
@@ -541,7 +550,7 @@ document.addEventListener('alpine:init', () => {
             try {
                 const audioConstraints = {
                     echoCancellation: true,
-                    noiseSuppression: true,
+                    noiseSuppression: false,
                     autoGainControl: true,
                     sampleRate: 44100,
                     channelCount: 1,
@@ -564,6 +573,29 @@ document.addEventListener('alpine:init', () => {
                 this.audioChunks = [];
                 this.recordingDuration = 0;
                 this.recordedBlob = null;
+                this._rawStream = stream; // Keep ref for cleanup
+
+                // Create AudioContext and route through GainNode for volume boost
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+                if (this.audioContext.state === 'suspended') await this.audioContext.resume();
+                const source = this.audioContext.createMediaStreamSource(stream);
+                
+                // Gain node to boost quiet microphone input
+                const gainNode = this.audioContext.createGain();
+                gainNode.gain.value = 2.5; // Boost volume 2.5x
+                
+                // Analyser for waveform visualization
+                this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 256;
+
+                // Route: mic → gain → analyser → destination (for recording)
+                const destination = this.audioContext.createMediaStreamDestination();
+                source.connect(gainNode);
+                gainNode.connect(this.analyser);
+                gainNode.connect(destination);
+
+                // Use the boosted stream for MediaRecorder
+                const boostedStream = destination.stream;
 
                 // Choose best available format
                 const mimeTypes = [
@@ -581,7 +613,7 @@ document.addEventListener('alpine:init', () => {
                 const recorderOptions = { audioBitsPerSecond: 128000 };
                 if (mimeType) recorderOptions.mimeType = mimeType;
 
-                this.mediaRecorder = new MediaRecorder(stream, recorderOptions);
+                this.mediaRecorder = new MediaRecorder(boostedStream, recorderOptions);
 
                 this.mediaRecorder.ondataavailable = (e) => {
                     if (e.data && e.data.size > 0) this.audioChunks.push(e.data);
@@ -590,7 +622,10 @@ document.addEventListener('alpine:init', () => {
                 this.mediaRecorder.onstop = () => {
                     const blobType = mimeType || 'audio/webm';
                     this.recordedBlob = new Blob(this.audioChunks, { type: blobType });
-                    stream.getTracks().forEach(t => t.stop());
+                    this.processingRecording = false;
+                    // Stop raw mic stream and boosted stream
+                    if (this._rawStream) this._rawStream.getTracks().forEach(t => t.stop());
+                    boostedStream.getTracks().forEach(t => t.stop());
                     this.stopWaveform();
 
                     if (this.recordingDuration < this.minRecordingDuration) {
@@ -632,13 +667,7 @@ document.addEventListener('alpine:init', () => {
                     }
                 }, 1000);
 
-                // Waveform visualization
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                if (this.audioContext.state === 'suspended') await this.audioContext.resume();
-                const source = this.audioContext.createMediaStreamSource(stream);
-                this.analyser = this.audioContext.createAnalyser();
-                this.analyser.fftSize = 256;
-                source.connect(this.analyser);
+                // Waveform visualization (AudioContext already set up above with GainNode)
                 this.drawWaveform();
             } catch (err) {
                 if (err.name === 'NotAllowedError') {
@@ -660,11 +689,39 @@ document.addEventListener('alpine:init', () => {
         },
 
         stopRecording() {
-            if (this.mediaRecorder && this.isRecording) {
-                this.isRecording = false;
+            // Always clear recording state regardless of mediaRecorder state
+            this.isRecording = false;
+            this.processingRecording = true;
+            if (this.recordingTimer) {
                 clearInterval(this.recordingTimer);
-                if (this.mediaRecorder.state !== 'inactive') {
-                    this.mediaRecorder.stop();
+                this.recordingTimer = null;
+            }
+            this.stopWaveform();
+            
+            if (this.mediaRecorder) {
+                try {
+                    if (this.mediaRecorder.state === 'recording' || this.mediaRecorder.state === 'paused') {
+                        this.mediaRecorder.stop();
+                    } else {
+                        // MediaRecorder already inactive — manually build blob from collected chunks
+                        if (this.audioChunks.length > 0 && !this.recordedBlob) {
+                            this.recordedBlob = new Blob(this.audioChunks, { type: this.mediaRecorder.mimeType || 'audio/webm' });
+                            this.processingRecording = false;
+                            if (this._rawStream) this._rawStream.getTracks().forEach(t => t.stop());
+                            this.$nextTick(() => {
+                                if (this.$refs.recordedPreview && this.recordedBlob) {
+                                    this.$refs.recordedPreview.src = URL.createObjectURL(this.recordedBlob);
+                                }
+                            });
+                        } else {
+                            this.processingRecording = false;
+                        }
+                    }
+                } catch(e) {
+                    console.error('Error stopping MediaRecorder:', e);
+                    this.processingRecording = false;
+                    // Cleanup raw stream on error
+                    if (this._rawStream) this._rawStream.getTracks().forEach(t => t.stop());
                 }
             }
         },
@@ -673,6 +730,7 @@ document.addEventListener('alpine:init', () => {
             this.recordedBlob = null;
             this.audioChunks = [];
             this.recordingDuration = 0;
+            this.processingRecording = false;
         },
 
         drawWaveform() {

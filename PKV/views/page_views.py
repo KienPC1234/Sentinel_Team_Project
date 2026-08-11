@@ -164,6 +164,27 @@ def report_view(request):
     })
 
 
+@login_required
+def my_reports_view(request):
+    """User's own reports tracking page"""
+    reports = Report.objects.filter(reporter=request.user).select_related('scan_event').prefetch_related('evidence_images').order_by('-created_at')
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        reports = reports.filter(status=status_filter)
+
+    stats = {
+        'total': reports.count(),
+        'pending': Report.objects.filter(reporter=request.user, status='pending').count(),
+        'approved': Report.objects.filter(reporter=request.user, status='approved').count(),
+        'rejected': Report.objects.filter(reporter=request.user, status='rejected').count(),
+    }
+    return render(request, "Report/my_reports.html", {
+        "reports": reports,
+        "stats": stats,
+        "status_filter": status_filter,
+    })
+
+
 def scam_radar_view(request):
     """Scam Radar page with real stats and chart data."""
     try:
@@ -201,11 +222,23 @@ def scam_radar_view(request):
             date_fmt = '%d/%m'
             chart_range_steps = 7
 
-        # 2. Key Metrics
-        reports_this_period = Report.objects.filter(created_at__gte=start_date).count()
-        reports_prev_period = Report.objects.filter(
-            created_at__gte=prev_start, created_at__lt=start_date
-        ).count()
+        # 2. Key Metrics (match API: only approved reports + risky scans)
+        reports_this_period = (
+            Report.objects.filter(created_at__gte=start_date, status=ReportStatus.APPROVED).count() +
+            ScanEvent.objects.filter(
+                created_at__gte=start_date, status='completed',
+                risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW]
+            ).count()
+        )
+        reports_prev_period = (
+            Report.objects.filter(
+                created_at__gte=prev_start, created_at__lt=start_date, status=ReportStatus.APPROVED
+            ).count() +
+            ScanEvent.objects.filter(
+                created_at__gte=prev_start, created_at__lt=start_date, status='completed',
+                risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW]
+            ).count()
+        )
         
         pct_change = 0
         if reports_prev_period > 0:
@@ -214,9 +247,9 @@ def scam_radar_view(request):
         new_phones = PhoneNumber.objects.filter(created_at__gte=start_date).count() if hasattr(PhoneNumber, 'created_at') else 0
         phishing_domains = Domain.objects.filter(created_at__gte=start_date).count()
 
-        # 3. Hot phone numbers
+        # 3. Hot phone numbers (only approved reports)
         hot_phones = (
-            Report.objects.filter(created_at__gte=start_date, target_type='phone')
+            Report.objects.filter(created_at__gte=start_date, target_type='phone', status=ReportStatus.APPROVED)
             .values('target_value', 'scam_type')
             .annotate(count=Count('id'))
             .order_by('-count')[:5]
@@ -228,8 +261,8 @@ def scam_radar_view(request):
             v = hp['target_value']
             hp['masked'] = v[:4] + '****' + v[-2:] if len(v) > 6 else v
 
-        # 4. Recent reports
-        recent_reports = Report.objects.select_related('reporter').order_by('-created_at')[:5]
+        # 4. Recent reports (only approved)
+        recent_reports = Report.objects.filter(status=ReportStatus.APPROVED).select_related('reporter').order_by('-created_at')[:5]
 
         # 5. Trend chart data
         trend_data = _build_dynamic_trend_data(start_date, range_key, trunc_func, date_fmt, chart_range_steps)
@@ -294,9 +327,9 @@ def _build_dynamic_trend_data(since, range_key, trunc_func, date_fmt, steps):
     else: # 7d
         expected_keys = [(now - timedelta(days=i)).strftime(date_fmt) for i in range(steps)][::-1]
 
-    # Get top 3 scam types
+    # Get top 3 scam types (only approved reports)
     top_types = (
-        Report.objects.filter(created_at__gte=since)
+        Report.objects.filter(created_at__gte=since, status=ReportStatus.APPROVED)
         .values('scam_type')
         .annotate(c=Count('id'))
         .order_by('-c')[:3]
@@ -314,9 +347,9 @@ def _build_dynamic_trend_data(since, range_key, trunc_func, date_fmt, steps):
     for i, tt in enumerate(top_types):
         st = tt['scam_type']
         
-        # Query
+        # Query (only approved reports)
         qs = (
-            Report.objects.filter(created_at__gte=since, scam_type=st)
+            Report.objects.filter(created_at__gte=since, scam_type=st, status=ReportStatus.APPROVED)
             .annotate(period=trunc_func('created_at'))
             .values('period')
             .annotate(c=Count('id'))
@@ -339,69 +372,11 @@ def _build_dynamic_trend_data(since, range_key, trunc_func, date_fmt, steps):
 
     return {'labels': expected_keys, 'datasets': datasets}
 
-    # But database returns Truncated object.
-    
-    # Helper to format db result key
-    def fmt_key(dt_obj):
-        if not dt_obj: return ""
-        return dt_obj.strftime(date_fmt)
-
-    # Note: '1y' range requires special handling for keys if we iterate 365 days vs 12 months
-    if range_key == '1y':
-         # Generate last 12 months keys
-         expected_keys = []
-         for i in range(12):
-             # 1st of month
-             d = (now.replace(day=1) - timedelta(days=30 * (11-i))).replace(day=1)
-             expected_keys.append(d.strftime(date_fmt))
-    
-    # If 24h, we want 24 points
-    if range_key == '24h':
-        expected_keys = [(now - timedelta(hours=i)).strftime(date_fmt) for i in range(24)][::-1]
-
-    # If 30d, we want 30 points
-    if range_key == '30d':
-        expected_keys = [(now - timedelta(days=i)).strftime(date_fmt) for i in range(30)][::-1]
-        
-    # If 7d
-    if range_key == '7d':
-        expected_keys = [(now - timedelta(days=i)).strftime(date_fmt) for i in range(7)][::-1]
-
-    if not labels: labels = expected_keys
-
-    for i, tt in enumerate(top_types):
-        st = tt['scam_type']
-        
-        # Query
-        qs = (
-            Report.objects.filter(created_at__gte=since, scam_type=st)
-            .annotate(period=trunc_func('created_at'))
-            .values('period')
-            .annotate(c=Count('id'))
-            .order_by('period')
-        )
-        
-        data_map = {fmt_key(item['period']): item['c'] for item in qs}
-        
-        # Fill zero
-        data_points = [data_map.get(k, 0) for k in expected_keys]
-        
-        datasets.append({
-            'label': scam_labels.get(st, st),
-            'data': data_points,
-            'borderColor': colors[i],
-            'backgroundColor': colors[i].replace('#', 'rgba(') + ',0.1)' if i == 0 else f'rgba({int(colors[i][1:3],16)},{int(colors[i][3:5],16)},{int(colors[i][5:7],16)},0.1)',
-            'fill': True,
-            'tension': 0.4,
-        })
-
-    return {'labels': expected_keys, 'datasets': datasets}
-
 
 def _build_type_distribution(since):
     """Build scam type pie chart data."""
     dist = (
-        Report.objects.filter(created_at__gte=since)
+        Report.objects.filter(created_at__gte=since, status=ReportStatus.APPROVED)
         .values('scam_type')
         .annotate(count=Count('id'))
         .order_by('-count')[:6]
@@ -647,18 +622,55 @@ def change_password_view(request):
 # ─── Forum Page Views ──────────────────────────────────────────────────────
 
 def forum_view(request):
-    """Forum listing page."""
-    posts = ForumPost.objects.select_related('author', 'author__profile').order_by('-is_pinned', '-created_at')[:50]
+    """Forum listing page — VOZ-style category layout."""
+    from django.db.models import Count, Max, Q, Subquery, OuterRef
+    from api.core.models import ForumCategory, ForumComment
+
+    posts = ForumPost.objects.select_related('author', 'author__profile').order_by('-is_pinned', '-created_at')[:100]
     serializer = ForumPostSerializer(posts, many=True, context={'request': request})
-    
+
+    # Build category stats for VOZ-style home
+    category_stats = []
+    for cat_value, cat_label in ForumCategory.choices:
+        cat_posts = ForumPost.objects.filter(category=cat_value)
+        threads_count = cat_posts.count()
+        messages_count = ForumComment.objects.filter(post__category=cat_value).count()
+        latest_post = cat_posts.order_by('-created_at').select_related('author', 'author__profile').first()
+
+        cat_info = {
+            'value': cat_value,
+            'label': cat_label,
+            'threads_count': threads_count,
+            'messages_count': messages_count,
+            'latest_post': None,
+        }
+        if latest_post:
+            cat_info['latest_post'] = {
+                'id': latest_post.id,
+                'title': latest_post.title,
+                'created_at': latest_post.created_at.isoformat(),
+                'author_name': latest_post.author.profile.display_name or latest_post.author.username,
+                'author_username': latest_post.author.username,
+                'author_avatar': latest_post.author.profile.avatar.url if latest_post.author.profile.avatar else None,
+            }
+        category_stats.append(cat_info)
+
     return render(request, "Forum/forum.html", {
         "title": "Diễn đàn",
         "posts_data": serializer.data,
+        "category_stats": category_stats,
     })
 
 def forum_post_view(request, post_id):
     """Forum post detail page."""
     post = get_object_or_404(ForumPost.objects.select_related('author', 'author__profile'), id=post_id)
+
+    # Block locked posts for non-staff users
+    if post.is_locked and not (request.user.is_authenticated and request.user.is_staff):
+        from django.contrib import messages as django_messages
+        django_messages.warning(request, 'Bài viết này đã bị khóa bởi quản trị viên.')
+        return redirect('forum')
+
     # Increment views
     ForumPost.objects.filter(id=post_id).update(views_count=F('views_count') + 1)
     post.refresh_from_db()
@@ -670,6 +682,7 @@ def forum_post_view(request, post_id):
         "post": post,
         "post_data": serializer.data,
         "comments_data": serializer.data.get('comments', []),
+        "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
     })
 
 @login_required
@@ -678,6 +691,27 @@ def forum_create_view(request):
     return render(request, "Forum/forum_create.html", {
         "title": "Tạo chủ đề mới",
         "TURNSTILE_SITEKEY": getattr(settings, 'TURNSTILE_SITEKEY', ''),
+    })
+
+
+@login_required
+def forum_edit_view(request, post_id):
+    """Page to edit an existing forum post (author only)."""
+    post = get_object_or_404(ForumPost.objects.select_related('author'), id=post_id)
+    if post.author != request.user and not request.user.is_staff:
+        from django.contrib import messages as django_messages
+        django_messages.error(request, 'Bạn không có quyền chỉnh sửa bài viết này.')
+        return redirect('forum-post', post_id=post_id)
+    if post.is_locked and not request.user.is_staff:
+        from django.contrib import messages as django_messages
+        django_messages.warning(request, 'Bài viết đã bị khóa, không thể chỉnh sửa.')
+        return redirect('forum-post', post_id=post_id)
+
+    serializer = ForumPostSerializer(post, context={'request': request})
+    return render(request, "Forum/forum_edit.html", {
+        "title": f"Chỉnh sửa: {post.title}",
+        "post": post,
+        "post_data": serializer.data,
     })
 
 
