@@ -168,6 +168,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'target_type', 'target_value', 'scam_type', 'scam_type_display', 'severity',
                   'description', 'status', 'created_at', 'reporter_email',
                   'scammer_name', 'scammer_phone', 'scammer_bank_account', 'scammer_bank_name',
+                  'scammer_info',
                   'evidence_file', 'evidence_url', 'evidence_images_data', 'ocr_text', 'ai_analysis', 'moderation_note']
 
     def get_reporter_email(self, obj):

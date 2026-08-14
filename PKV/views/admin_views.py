@@ -582,6 +582,17 @@ def approve_report(request, report_id):
     # Notify user via email
     from api.utils.email_utils import send_report_outcome_email
     send_report_outcome_email(report.reporter, "website/tài khoản", report.target_value, 'approved')
+
+    # Notify user via push notification + WebSocket
+    if report.reporter:
+        from api.utils.push_service import push_service
+        push_service.send_push(
+            report.reporter.id,
+            'Báo cáo đã được chấp thuận',
+            f'Báo cáo #{report_id} về {report.target_value} đã được chấp thuận. Cảm ơn bạn đã góp phần bảo vệ cộng đồng!',
+            url=f'/my-reports/',
+            notification_type='success'
+        )
     
     messages.success(request, f"Đã chấp thuận báo cáo #{report_id}.")
     return redirect('admin-manage-reports')
@@ -597,6 +608,17 @@ def reject_report(request, report_id):
     # Notify user via email
     from api.utils.email_utils import send_report_outcome_email
     send_report_outcome_email(report.reporter, "website/tài khoản", report.target_value, 'rejected')
+
+    # Notify user via push notification + WebSocket
+    if report.reporter:
+        from api.utils.push_service import push_service
+        push_service.send_push(
+            report.reporter.id,
+            'Báo cáo đã bị từ chối',
+            f'Báo cáo #{report_id} về {report.target_value} đã bị từ chối. Vui lòng kiểm tra lại thông tin.',
+            url=f'/my-reports/',
+            notification_type='warning'
+        )
     
     messages.info(request, f"Đã từ chối báo cáo #{report_id}.")
     return redirect('admin-manage-reports')
@@ -863,6 +885,75 @@ def magic_create_lesson_page(request):
 
 
 @admin_required
+def magic_create_article_page(request):
+    """Dedicated Magic Create Article page with real-time streaming."""
+    return render(request, "Admin/magic_create_article.html")
+
+
+@admin_required
+def magic_create_article_api(request):
+    """AI API to generate article structure — dispatched to Celery with WS progress."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
+        
+    try:
+        data = json.loads(request.body)
+        raw_text = data.get('text', '').strip()
+        
+        if not raw_text:
+            return JsonResponse({'status': 'error', 'message': 'Empty text'}, status=400)
+        
+        import uuid
+        task_id = uuid.uuid4().hex[:12]
+        
+        from api.core.tasks import magic_create_article_task
+        magic_create_article_task.delay(task_id, raw_text)
+        
+        return JsonResponse({'status': 'pending', 'task_id': task_id})
+        
+    except Exception as e:
+        logger.error(f"Error in magic_create_article_api: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@admin_required
+def magic_save_article_api(request):
+    """API to save the AI-generated article and quizzes"""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
+        
+    try:
+        data = json.loads(request.body)
+        
+        with transaction.atomic():
+            article = Article.objects.create(
+                title=data.get('title'),
+                content=data.get('content'),
+                category=data.get('category', 'news'),
+                is_published=False
+            )
+            
+            quizzes_data = data.get('quizzes', [])
+            for quiz_data in quizzes_data:
+                if quiz_data and quiz_data.get('question'):
+                    LearnQuiz.objects.create(
+                        article=article,
+                        question=quiz_data.get('question'),
+                        question_type=quiz_data.get('question_type', 'single_choice'),
+                        options=quiz_data.get('options', []),
+                        correct_answer=quiz_data.get('correct_answer'),
+                        correct_answers=quiz_data.get('correct_answers', []),
+                        explanation=quiz_data.get('explanation', '')
+                    )
+                
+        return JsonResponse({'status': 'success', 'article_id': article.id})
+        
+    except Exception as e:
+        logger.error(f"Error in magic_save_article_api: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@admin_required
 def magic_create_lesson_api(request):
     """AI API to generate lesson structure — dispatched to Celery with WS progress."""
     if request.method != 'POST':
@@ -954,7 +1045,7 @@ def manage_scenarios(request):
 
 @admin_required
 def edit_article(request, article_id=None):
-    """View to create or edit an Article"""
+    """View to create or edit an Article (news/alerts only — no quiz/scenario)"""
     article = None
     if article_id:
         article = get_object_or_404(Article, id=article_id)
@@ -963,53 +1054,15 @@ def edit_article(request, article_id=None):
         form = ArticleForm(request.POST, request.FILES, instance=article)
         if form.is_valid():
             article = form.save()
-            
-            # Handle Quizzes (Keep inline for now as requested or until simplified)
-            quizzes_data = request.POST.get('quizzes_json')
-            if quizzes_data:
-                try:
-                    quizzes = json.loads(quizzes_data)
-                    article.quizzes.all().delete()
-                    for q in quizzes:
-                        correct_answers = q.get('correct_answers') or []
-                        if not isinstance(correct_answers, list):
-                            correct_answers = []
-                        if not correct_answers and q.get('correct_answer'):
-                            correct_answers = [q.get('correct_answer')]
-                        LearnQuiz.objects.create(
-                            article=article,
-                            question=q.get('question'),
-                            question_type=q.get('question_type') or 'single_choice',
-                            options=q.get('options', []),
-                            correct_answer=q.get('correct_answer'),
-                            correct_answers=correct_answers,
-                            explanation=q.get('explanation', '')
-                        )
-                except Exception as e:
-                    logger.error(f"Error saving quizzes: {e}")
-
             messages.success(request, "Bài viết đã được lưu thành công.")
             return redirect('admin-manage-articles')
     else:
         form = ArticleForm(instance=article)
-    
-    existing_quizzes = []
-    if article:
-        for q in article.quizzes.all():
-            existing_quizzes.append({
-                'question': q.question,
-                'question_type': getattr(q, 'question_type', 'single_choice') or 'single_choice',
-                'options': q.options,
-                'correct_answer': q.correct_answer,
-                'correct_answers': getattr(q, 'correct_answers', []) or ([q.correct_answer] if q.correct_answer else []),
-                'explanation': q.explanation
-            })
 
     return render(request, "Admin/edit_article.html", {
         "form": form,
         "article": article,
         "title": "Chỉnh sửa tin tức" if article else "Thêm tin tức mới",
-        "existing_quizzes_json": json.dumps(existing_quizzes),
     })
 
 @admin_required

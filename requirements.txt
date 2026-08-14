@@ -36,3 +36,4 @@ markdown
 faster-whisper
 soundfile
 whitenoise
+faiss

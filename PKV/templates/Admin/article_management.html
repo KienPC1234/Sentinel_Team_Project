@@ -3,28 +3,34 @@
 <div class="container mx-auto px-4 py-10 mt-16 max-w-6xl">
     <div class="flex items-center justify-between mb-12">
         <div class="flex items-center gap-6">
-            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shadow-lg shadow-purple-500/5">
-                <i class="bi bi-mortarboard text-2xl"></i>
+            <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-lg shadow-indigo-500/5">
+                <i class="bi bi-newspaper text-2xl"></i>
             </div>
             <div>
-                <h1 class="text-3xl font-black text-white tracking-tight">Trung Tâm Học Tập</h1>
-                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Đào tạo kiến thức an ninh mạng</p>
+                <h1 class="text-3xl font-black text-white tracking-tight">Tin Tức / Cảnh Báo</h1>
+                <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Quản lý bài viết & cảnh báo an ninh mạng</p>
             </div>
         </div>
         
-        <a href="{% url 'admin-add-lesson' %}" class="px-8 py-3.5 rounded-2xl bg-purple-500 text-white font-black uppercase tracking-widest hover:bg-purple-400 hover:text-black transition-all shadow-xl shadow-purple-500/20 flex items-center gap-2">
-            <i class="bi bi-plus-lg text-lg"></i>
-            Bài học mới
-        </a>
+        <div class="flex items-center gap-3">
+            <a href="{% url 'admin-magic-create-article' %}" class="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-black uppercase tracking-widest hover:from-purple-500 hover:to-blue-500 transition-all shadow-xl shadow-purple-500/20 flex items-center gap-2">
+                <i class="bi bi-stars text-lg"></i>
+                Magic Create
+            </a>
+            <a href="{% url 'admin-add-article' %}" class="px-8 py-3.5 rounded-2xl bg-indigo-500 text-white font-black uppercase tracking-widest hover:bg-indigo-400 hover:text-black transition-all shadow-xl shadow-indigo-500/20 flex items-center gap-2">
+                <i class="bi bi-plus-lg text-lg"></i>
+                Tin tức mới
+            </a>
+        </div>
     </div>
 
     <!-- Articles List -->
     <div class="grid grid-cols-1 gap-6">
         {% for article in articles %}
-        <div class="group relative overflow-hidden p-8 rounded-[2.5rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl hover:border-purple-500/30 transition-all duration-500">
+        <div class="group relative overflow-hidden p-8 rounded-[2.5rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl hover:border-indigo-500/30 transition-all duration-500">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
                 <div class="flex items-center gap-8 flex-1">
-                    <div class="w-24 h-24 rounded-[2rem] bg-slate-800 overflow-hidden shrink-0 border border-white/10 group-hover:border-purple-500/30 transition-all shadow-2xl">
+                    <div class="w-24 h-24 rounded-[2rem] bg-slate-800 overflow-hidden shrink-0 border border-white/10 group-hover:border-indigo-500/30 transition-all shadow-2xl">
                         {% if article.cover_image %}
                         <img src="{{ article.cover_image.url }}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
                         {% else %}
@@ -35,7 +41,7 @@
                     </div>
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-3">
-                            <span class="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-400 text-[9px] font-black uppercase tracking-widest border border-purple-500/10">{{ article.category }}</span>
+                            <span class="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 text-[9px] font-black uppercase tracking-widest border border-indigo-500/10">{{ article.category }}</span>
                             {% if article.is_published %}
                             <span class="px-2 py-0.5 rounded-md bg-green-500/10 text-green-400 text-[9px] font-black uppercase tracking-widest border border-green-500/10">Public</span>
                             {% else %}
@@ -43,13 +49,13 @@
                             {% endif %}
                             <span class="text-[10px] font-bold text-white/20 uppercase tracking-widest ml-auto">{{ article.created_at|date:"d/m/Y" }}</span>
                         </div>
-                        <h3 class="text-2xl font-black text-white group-hover:text-purple-400 transition-colors tracking-tight mb-2">{{ article.title }}</h3>
+                        <h3 class="text-2xl font-black text-white group-hover:text-indigo-400 transition-colors tracking-tight mb-2">{{ article.title }}</h3>
                         <p class="text-xs text-white/40 leading-relaxed line-clamp-2">{{ article.content|striptags|truncatechars:180 }}</p>
                     </div>
                 </div>
                 
                 <div class="flex items-center gap-3 shrink-0">
-                    <a href="{% url 'admin-edit-article' article.id %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all shadow-lg" title="Sửa bài viết">
+                    <a href="{% url 'admin-edit-article' article.id %}" class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all shadow-lg" title="Sửa bài viết">
                         <i class="bi bi-pencil-square text-lg"></i>
                     </a>
                     <a href="{% url 'admin-delete-article' article.id %}" 

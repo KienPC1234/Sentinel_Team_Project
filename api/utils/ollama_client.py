@@ -1174,7 +1174,7 @@ def lookup_scamadviser(domain: str) -> Optional[Dict]:
         )
         if response.ok:
             html_text = response.text or ''
-            page_text = BeautifulSoup(html_text, 'html.parser').get_text(' ', strip=True)[:6000]
+            page_text = BeautifulSoup(html_text, 'html.parser').get_text(' ', strip=True)[:8000]
 
             # Parse <div id="app" data-page="..."> then read ratingScore.
             app_data_match = re.search(
@@ -1223,47 +1223,15 @@ def lookup_scamadviser(domain: str) -> Optional[Dict]:
                 if score_match:
                     trust_score_from_page = int(score_match.group(1))
 
-            # Known ScamAdviser-style conclusions to prioritize.
-            if not verdict_from_page:
-                verdict_patterns = [
-                    r'Very\s+Likely\s+Safe',
-                    r'Likely\s+Safe',
-                    r'Caution\s+Recommended',
-                    r'Suspicious',
-                    r'Unsafe',
-                    r'Scam',
-                ]
-                for pattern in verdict_patterns:
-                    match = re.search(pattern, page_text, flags=re.IGNORECASE)
-                    if match:
-                        verdict_from_page = match.group(0)
-                        break
     except Exception as exc:
         logger.debug(f"lookup_scamadviser: direct HTML parse failed ({exc})")
 
     # 2) Keep existing web relay extraction as primary content source.
-    result = web_fetch_url(url) or {
+    result = {
         'title': f'ScamAdviser report for {clean}',
         'content': page_text,
         'links': [],
     }
-
-    # 2) If not found from direct page text, attempt extraction from relay content.
-    if not verdict_from_page:
-        relay_content = result.get('content', '') or ''
-        verdict_patterns = [
-            r'Very\s+Likely\s+Safe',
-            r'Likely\s+Safe',
-            r'Caution\s+Recommended',
-            r'Suspicious',
-            r'Unsafe',
-            r'Scam',
-        ]
-        for pattern in verdict_patterns:
-            match = re.search(pattern, relay_content, flags=re.IGNORECASE)
-            if match:
-                verdict_from_page = match.group(0)
-                break
 
     existing_content = result.get('content', '') or ''
     prefix_lines = []
@@ -1839,8 +1807,8 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                     "Nếu không có thông tin từ nguồn nào, ghi 'Không tìm thấy thông tin cụ thể'."
                 ),
                 model=model,
-                think='medium',
-                max_iterations=7,
+                think='low',
+                max_iterations=8,
                 max_context_chars=8000,
             )
 

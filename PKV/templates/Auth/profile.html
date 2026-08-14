@@ -43,7 +43,7 @@
                         </div>
                     </template>
                 </div>
-                <p class="text-white/40 font-bold uppercase tracking-[0.2em] text-[10px]" x-text="user.email"></p>
+                <p class="text-cyan-400/80 font-bold tracking-[0.2em] text-[10px]" x-text="'@' + user.username"></p>
                 <div class="inline-flex flex-wrap items-center gap-2 mt-2">
                     <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] text-white/40 font-black uppercase tracking-widest">
                         <i class="bi bi-calendar3"></i> Đã tham gia: {{ user.date_joined|date:"d/m/Y" }}
@@ -158,6 +158,31 @@
             </h3>
         </div>
         <div class="divide-y divide-white/5">
+            <div class="p-6 bg-white/[0.01]" x-data="usernameManager()">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                            <i class="bi bi-at"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-black text-white uppercase tracking-wide">Đổi username</div>
+                            <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Username hiện tại: <span class="text-cyan-400" x-text="'@' + currentUsername"></span></p>
+                        </div>
+                    </div>
+                    <div class="w-full sm:w-auto sm:min-w-[360px] flex gap-2">
+                        <input type="text" x-model="newUsername" maxlength="150"
+                               class="liquid-input flex-1 py-3 px-4 text-xs font-bold"
+                               placeholder="Nhập username mới">
+                        <button @click="updateUsername()"
+                                class="liquid-btn py-3 px-4 text-[10px] font-black uppercase tracking-widest bg-cyan-500 text-black hover:bg-cyan-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                                :disabled="loading || !newUsername.trim() || newUsername.trim() === currentUsername">
+                            <span x-show="!loading">Cập nhật</span>
+                            <span x-show="loading" class="spinner w-4 h-4 border-black"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <a href="javascript:void(0)" @click="$dispatch('open-password-modal')" class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group">
                 <div class="flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
@@ -317,6 +342,30 @@
                 </div>
                 <i class="bi bi-chevron-right text-white/20 transition-transform group-hover:translate-x-1"></i>
             </a>
+            <a href="/profile/inbox/" class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                        <i class="bi bi-envelope-fill"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-black text-white uppercase tracking-wide">Hộp thư</div>
+                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Tin nhắn riêng giữa các thành viên</p>
+                    </div>
+                </div>
+                <i class="bi bi-chevron-right text-white/20 transition-transform group-hover:translate-x-1"></i>
+            </a>
+            <a href="/profile/tickets/" class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-400 group-hover:scale-110 transition-transform">
+                        <i class="bi bi-bug-fill"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-black text-white uppercase tracking-wide">Báo lỗi & Phản hồi</div>
+                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Gửi báo cáo lỗi hoặc góp ý cho quản trị viên</p>
+                    </div>
+                </div>
+                <i class="bi bi-chevron-right text-white/20 transition-transform group-hover:translate-x-1"></i>
+            </a>
         </div>
     </div>
 
@@ -358,6 +407,14 @@
                 editing: false,
                 loading: false,
                 init() {
+                    window.addEventListener('profile-updated', (event) => {
+                        if (event.detail?.user?.username) {
+                            this.user.username = event.detail.user.username;
+                        }
+                        if (event.detail?.user?.display_name !== undefined) {
+                            this.user.display_name = event.detail.user.display_name;
+                        }
+                    });
                     this.initEditor();
                 },
                 async initEditor() {
@@ -460,6 +517,68 @@
                             showToast(errorMsg, 'error');
                         }
                     } catch(e) { showToast('Lỗi kết nối', 'error'); }
+                    this.loading = false;
+                }
+            }
+        }
+
+        function usernameManager() {
+            return {
+                currentUsername: '{{ user.username|escapejs }}',
+                newUsername: '{{ user.username|escapejs }}',
+                loading: false,
+                init() {
+                    window.addEventListener('profile-updated', (event) => {
+                        if (event.detail?.user?.username) {
+                            this.currentUsername = event.detail.user.username;
+                            this.newUsername = event.detail.user.username;
+                        }
+                    });
+                },
+                async updateUsername() {
+                    const candidate = this.newUsername.trim();
+                    if (!candidate) {
+                        return showToast('Username không được để trống.', 'warning');
+                    }
+                    if (candidate.length < 3) {
+                        return showToast('Username phải có ít nhất 3 ký tự.', 'warning');
+                    }
+                    if (candidate === this.currentUsername) {
+                        return;
+                    }
+
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/v1/auth/me/', {
+                            method: 'PATCH',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken()
+                            },
+                            body: JSON.stringify({ username: candidate })
+                        });
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.currentUsername = data.user.username;
+                            this.newUsername = data.user.username;
+                            window.dispatchEvent(new CustomEvent('profile-updated', { detail: { user: data.user } }));
+                            showToast('Đã cập nhật username thành công', 'success');
+                        } else {
+                            let errorMsg = data.error || 'Lỗi cập nhật username';
+                            if (data.details) {
+                                const details = Object.entries(data.details)
+                                    .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
+                                    .join('\n');
+                                if (details) {
+                                    errorMsg += '\n' + details;
+                                }
+                            }
+                            showToast(errorMsg, 'error');
+                        }
+                    } catch (e) {
+                        showToast('Lỗi kết nối', 'error');
+                    }
                     this.loading = false;
                 }
             }

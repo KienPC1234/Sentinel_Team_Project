@@ -80,6 +80,8 @@ document.addEventListener('alpine:init', () => {
         posts: [],
         categoryStats: [],
         loading: false,
+        currentPage: 1,
+        postsPerPage: 20,
 
         init() {
             try {
@@ -90,6 +92,9 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 console.error('Forum Data Error:', e);
             }
+            this.$watch('activeTab', () => this.currentPage = 1);
+            this.$watch('searchQuery', () => this.currentPage = 1);
+            this.$watch('sortBy', () => this.currentPage = 1);
         },
         stripHtml(html) {
             if (!html) return '';
@@ -212,6 +217,33 @@ document.addEventListener('alpine:init', () => {
         categoryPosts(catValue) {
             if (!Array.isArray(this.posts)) return [];
             return this.posts.filter(p => p.category === catValue).slice(0, 5);
+        },
+        paginatedPosts() {
+            const all = this.filteredPosts();
+            const start = (this.currentPage - 1) * this.postsPerPage;
+            return all.slice(start, start + this.postsPerPage);
+        },
+        totalPages() {
+            return Math.max(1, Math.ceil(this.filteredPosts().length / this.postsPerPage));
+        },
+        goToPage(p) {
+            if (p >= 1 && p <= this.totalPages()) {
+                this.currentPage = p;
+                window.scrollTo({top: 0, behavior:'smooth'});
+            }
+        },
+        pageNumbers() {
+            const total = this.totalPages();
+            const cur = this.currentPage;
+            const pages = [];
+            let start = Math.max(1, cur - 2);
+            let end = Math.min(total, cur + 2);
+            if (start > 1) pages.push(1);
+            if (start > 2) pages.push('...');
+            for (let i = start; i <= end; i++) pages.push(i);
+            if (end < total - 1) pages.push('...');
+            if (end < total) pages.push(total);
+            return pages;
         }
     }));
 });
@@ -222,6 +254,13 @@ document.addEventListener('alpine:init', () => {
 {{ posts_data|json_script:"forum-posts-data" }}
 {{ category_stats|json_script:"forum-category-stats" }}
 <div x-data="forumApp" class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm mb-5 text-white/40" data-aos="fade-right">
+        <a href="/" class="hover:text-cyan-400 transition"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <span class="text-white/60">Diễn đàn</span>
+    </nav>
+
     <!-- Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8" data-aos="fade-up">
         <div>
@@ -377,7 +416,7 @@ document.addEventListener('alpine:init', () => {
                         <template x-for="post in posts.filter(p => !p.is_pinned).slice(0, 10)" :key="'recent-'+post.id">
                             <a :href="'/forum/' + post.id + '/'" class="voz-row grid grid-cols-12 gap-3 px-5 py-3 border-b border-white/5 items-center group/thread">
                                 <div class="col-span-12 sm:col-span-7 flex items-center gap-3 min-w-0">
-                                    <div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                    <div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                                         <template x-if="post.author_avatar">
                                             <img :src="post.author_avatar" class="w-full h-full object-cover">
                                         </template>
@@ -465,10 +504,10 @@ document.addEventListener('alpine:init', () => {
                             <div class="col-span-3 text-right">Hoạt động</div>
                         </div>
 
-                        <template x-for="post in filteredPosts()" :key="post.id">
+                        <template x-for="post in paginatedPosts()" :key="post.id">
                             <a :href="'/forum/' + post.id + '/'" class="voz-row grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 px-5 py-3.5 border-b border-white/5 items-center group/t">
                                 <div class="md:col-span-7 flex items-center gap-3 min-w-0">
-                                    <div class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                    <div class="w-10 h-10 rounded-full bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0" :data-usercard="post.author_username">
                                         <template x-if="post.author_avatar">
                                             <img :src="post.author_avatar" class="w-full h-full object-cover">
                                         </template>
@@ -538,6 +577,26 @@ document.addEventListener('alpine:init', () => {
                             <p class="text-white/30 text-sm font-bold">Không tìm thấy bài viết</p>
                         </div>
                     </div>
+
+                    <!-- Pagination -->
+                    <div x-show="totalPages() > 1" class="flex items-center justify-center gap-1 mt-4">
+                        <button @click="goToPage(currentPage - 1)" :disabled="currentPage <= 1"
+                            class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/40 hover:text-white hover:bg-white/10 transition disabled:opacity-30 disabled:cursor-not-allowed">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <template x-for="p in pageNumbers()" :key="'pg-'+p">
+                            <button x-text="p" @click="typeof p === 'number' && goToPage(p)" 
+                                :disabled="p === '...'"
+                                :class="p === currentPage ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-white/40 border-white/10 hover:text-white hover:bg-white/10'"
+                                class="w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold transition disabled:cursor-default">
+                            </button>
+                        </template>
+                        <button @click="goToPage(currentPage + 1)" :disabled="currentPage >= totalPages()"
+                            class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/40 hover:text-white hover:bg-white/10 transition disabled:opacity-30 disabled:cursor-not-allowed">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                        <span class="ml-2 text-[10px] text-white/20" x-text="`Trang ${currentPage}/${totalPages()} · ${filteredPosts().length} chủ đề`"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -588,6 +647,23 @@ document.addEventListener('alpine:init', () => {
                             </div>
                         </a>
                     </template>
+                </div>
+            </div>
+
+            <!-- Quick Links -->
+            <div class="voz-section rounded-2xl overflow-hidden" data-aos="fade-left" data-aos-delay="150">
+                <div class="px-4 py-3 border-b border-white/5">
+                    <h4 class="text-[10px] font-black text-white/40 uppercase tracking-widest">Liên kết nhanh</h4>
+                </div>
+                <div class="py-1">
+                    <a href="/forum/announcements/" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-all text-left text-white/50 hover:text-yellow-400">
+                        <i class="bi bi-megaphone-fill text-xs text-yellow-400/60"></i>
+                        <span class="text-[11px] font-bold">Thông báo</span>
+                    </a>
+                    <a href="/profile/tickets/" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-all text-left text-white/50 hover:text-cyan-400">
+                        <i class="bi bi-ticket-detailed text-xs text-cyan-400/60"></i>
+                        <span class="text-[11px] font-bold">Báo lỗi / Góp ý</span>
+                    </a>
                 </div>
             </div>
 

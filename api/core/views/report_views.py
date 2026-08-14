@@ -54,7 +54,24 @@ class ReportCreateView(APIView):
 
         serializer = ReportCreateSerializer(data=request.data,
                                             context={'request': request})
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            # Return field-level errors in a user-friendly format
+            field_labels = {
+                'target_type': 'Loại đối tượng',
+                'target_value': 'Thông tin đối tượng',
+                'scam_type': 'Phương thức lừa đảo',
+                'description': 'Nội dung mô tả',
+                'severity': 'Mức độ nghiêm trọng',
+            }
+            errors = []
+            for field, msgs in serializer.errors.items():
+                label = field_labels.get(field, field)
+                for msg in msgs:
+                    errors.append(f'{label}: {msg}')
+            return Response({
+                'error': ' | '.join(errors),
+                'field_errors': serializer.errors,
+            }, status=status.HTTP_400_BAD_REQUEST)
         report = serializer.save()
 
         # Save additional evidence images (multi-upload)

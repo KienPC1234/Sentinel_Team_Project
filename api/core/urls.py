@@ -83,8 +83,28 @@ urlpatterns = [
     path('utils/mentions/', views.MentionUserListView.as_view(), name='mentions'),
     path('notifications/test-push/', views.TestPushView.as_view(), name='test-push'),
     path('notifications/onesignal-register/', views.OneSignalRegistrationView.as_view(), name='onesignal-register'),
+    path('notifications/', views.NotificationListView.as_view(), name='notification-list'),
+    path('notifications/unread-count/', views.NotificationUnreadCountView.as_view(), name='notification-unread-count'),
+    path('notifications/<int:notification_id>/read/', views.NotificationMarkReadView.as_view(), name='notification-mark-read'),
+    path('notifications/read-all/', views.NotificationMarkAllReadView.as_view(), name='notification-read-all'),
+    path('admin/notifications/broadcast/', views.AdminNotificationBroadcastView.as_view(), name='admin-notification-broadcast'),
     path('admin/rag/reset/', views.ResetRAGView.as_view(), name='rag-reset'),
     
+    # Announcements
+    path('announcements/', views.AnnouncementListCreateView.as_view(), name='announcements'),
+    path('announcements/<int:announcement_id>/reaction/', views.AnnouncementReactionView.as_view(), name='announcement-reaction'),
+
+    # Direct Messages
+    path('dm/inbox/', views.DirectMessageInboxView.as_view(), name='dm-inbox'),
+    path('dm/thread/<str:username>/', views.DirectMessageThreadView.as_view(), name='dm-thread'),
+
+    # Support Tickets
+    path('tickets/', views.TicketListCreateView.as_view(), name='tickets'),
+    path('admin/tickets/', views.AdminTicketListView.as_view(), name='admin-tickets'),
+
+    # User Card
+    path('user/card/<str:username>/', views.UserCardView.as_view(), name='user-card'),
+
     # Debug
     path('debug/system/', DebugSystemView.as_view(), name='debug-system'),
 ]

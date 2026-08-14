@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}Thông báo - ShieldCall VN{% endblock %}
+{% block head_extra %}
+<style>
+    .notif-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        border-radius: 1.25rem;
+        transition: all 0.3s ease;
+    }
+    .notif-card:hover { border-color: rgba(24,255,255,0.15); }
+    .notif-item { transition: all 0.2s; cursor: pointer; }
+    .notif-item:hover { background: rgba(24,255,255,0.03); }
+    .notif-item.unread { background: rgba(24,255,255,0.03); border-left: 3px solid rgba(24,255,255,0.5); }
+    .notif-item.read { opacity: 0.7; }
+    .notif-type-info { --notif-color: #18ffff; }
+    .notif-type-success { --notif-color: #00e676; }
+    .notif-type-warning { --notif-color: #ffea00; }
+    .notif-type-error { --notif-color: #ff1744; }
+    .filter-btn { transition: all 0.2s; }
+    .filter-btn.active { background: rgba(24,255,255,0.1); color: #18ffff; border-color: rgba(24,255,255,0.3); }
+
+    /* Markdown inside SweetAlert notification popup */
+    .notif-md-content h1, .notif-md-content h2, .notif-md-content h3 { font-weight: 700; margin: 8px 0 4px; color: #fff; }
+    .notif-md-content h1 { font-size: 1.2em; }
+    .notif-md-content h2 { font-size: 1.1em; }
+    .notif-md-content h3 { font-size: 1em; }
+    .notif-md-content p { margin: 4px 0; }
+    .notif-md-content ul, .notif-md-content ol { padding-left: 1.5em; margin: 6px 0; }
+    .notif-md-content li { margin: 2px 0; }
+    .notif-md-content code { background: rgba(24,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; color: #18ffff; }
+    .notif-md-content pre { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
+    .notif-md-content pre code { background: none; padding: 0; color: #e0e0e0; }
+    .notif-md-content blockquote { border-left: 3px solid rgba(24,255,255,0.3); padding-left: 10px; color: rgba(255,255,255,0.6); margin: 6px 0; }
+    .notif-md-content a { color: #18ffff; text-decoration: underline; }
+    .notif-md-content strong { color: #fff; }
+    .notif-md-content hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('notificationsPage', () => ({
+        notifications: [],
+        loading: false,
+        page: 1,
+        totalPages: 1,
+        totalCount: 0,
+        unreadCount: 0,
+        filter: 'all', // all | unread | info | success | warning | error
+
+        async init() {
+            await this.fetchNotifications();
+        },
+
+        async fetchNotifications() {
+            this.loading = true;
+            try {
+                const resp = await fetch(`/api/v1/notifications/?page=${this.page}&per_page=20`, {
+                    headers: { 'X-CSRFToken': getCSRFToken() }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.notifications = data.results;
+                    this.totalPages = data.pages;
+                    this.totalCount = data.count;
+                    this.unreadCount = data.unread_count;
+                }
+            } catch(e) { showToast('Lỗi tải thông báo', 'error'); }
+            this.loading = false;
+        },
+
+        get filteredNotifications() {
+            if (this.filter === 'all') return this.notifications;
+            if (this.filter === 'unread') return this.notifications.filter(n => !n.is_read);
+            return this.notifications.filter(n => n.notification_type === this.filter);
+        },
+
+        async markRead(n) {
+            if (n.is_read) return;
+            try {
+                await fetch(`/api/v1/notifications/${n.id}/read/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCSRFToken() }
+                });
+                n.is_read = true;
+                this.unreadCount = Math.max(0, this.unreadCount - 1);
+            } catch(e) {}
+        },
+
+        renderMd(text) {
+            if (!text) return '';
+            if (window.marked && window.marked.parse) {
+                return window.marked.parse(text, { breaks: true, gfm: true });
+            }
+            // Fallback: escape HTML
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        stripMd(text) {
+            if (!text) return '';
+            return text
+                .replace(/#{1,6}\s+/g, '')
+                .replace(/\*\*(.+?)\*\*/g, '$1')
+                .replace(/\*(.+?)\*/g, '$1')
+                .replace(/__(.+?)__/g, '$1')
+                .replace(/_(.+?)_/g, '$1')
+                .replace(/~~(.+?)~~/g, '$1')
+                .replace(/`{1,3}([^`]+)`{1,3}/g, '$1')
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/^\s*[-*+]\s+/gm, '• ')
+                .replace(/^\s*\d+\.\s+/gm, '')
+                .replace(/^>\s?/gm, '')
+                .replace(/---+/g, '')
+                .trim();
+        },
+
+        async openNotification(n) {
+            await this.markRead(n);
+            const iconMap = { info: 'info', success: 'success', warning: 'warning', error: 'error' };
+            const renderedMsg = this.renderMd(n.message);
+            const result = await Swal.fire({
+                title: n.title,
+                html: `<div class="notif-md-content" style="text-align:left;line-height:1.7;color:#fff;font-size:14px;">${renderedMsg}</div>`
+                    + (n.url ? `<div style="margin-top:12px;"><a href="${n.url}" style="color:#18ffff;font-size:12px;"><i class="bi bi-box-arrow-up-right"></i> ${n.url}</a></div>` : '')
+                    + `<div style="margin-top:10px;font-size:10px;color:rgba(255,255,255,0.3);">${this.formatDate(n.created_at)}</div>`,
+                icon: iconMap[n.notification_type] || 'info',
+                background: '#161235',
+                color: '#fff',
+                confirmButtonText: n.url ? 'Mở liên kết' : 'Đóng',
+                showCancelButton: !!n.url,
+                cancelButtonText: 'Đóng',
+                confirmButtonColor: '#18ffff',
+            });
+            if (result.isConfirmed && n.url) {
+                window.location.href = n.url;
+            }
+        },
+
+        async markAllRead() {
+            try {
+                await fetch('/api/v1/notifications/read-all/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCSRFToken() }
+                });
+                this.notifications.forEach(n => n.is_read = true);
+                this.unreadCount = 0;
+                showToast('Đã đánh dấu tất cả đã đọc', 'success');
+            } catch(e) {}
+        },
+
+        async goPage(p) {
+            if (p < 1 || p > this.totalPages) return;
+            this.page = p;
+            await this.fetchNotifications();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        setFilter(f) {
+            this.filter = f;
+        },
+
+        typeIcon(type) {
+            const icons = { info: 'bi-info-circle-fill', success: 'bi-check-circle-fill', warning: 'bi-exclamation-triangle-fill', error: 'bi-x-circle-fill' };
+            return icons[type] || 'bi-bell-fill';
+        },
+
+        typeColor(type) {
+            const colors = { info: 'text-cyan-400 bg-cyan-400/10', success: 'text-green-400 bg-green-400/10', warning: 'text-yellow-400 bg-yellow-400/10', error: 'text-red-400 bg-red-400/10' };
+            return colors[type] || 'text-cyan-400 bg-cyan-400/10';
+        },
+
+        typeLabel(type) {
+            const labels = { info: 'Thông tin', success: 'Thành công', warning: 'Cảnh báo', error: 'Lỗi' };
+            return labels[type] || type;
+        },
+
+        timeAgo(dt) {
+            if (!dt) return '';
+            const diff = (Date.now() - new Date(dt)) / 1000;
+            if (diff < 60) return 'Vừa xong';
+            if (diff < 3600) return Math.floor(diff / 60) + ' phút trước';
+            if (diff < 86400) return Math.floor(diff / 3600) + ' giờ trước';
+            if (diff < 604800) return Math.floor(diff / 86400) + ' ngày trước';
+            return new Date(dt).toLocaleDateString('vi-VN');
+        },
+
+        formatDate(dt) {
+            if (!dt) return '';
+            return new Date(dt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+    }));
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="notificationsPage" class="max-w-4xl mx-auto px-4 py-8">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm mb-5 text-white/40">
+        <a href="/" class="hover:text-cyan-400 transition"><i class="bi bi-house-door"></i> Trang chủ</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <a href="/profile/" class="hover:text-cyan-400 transition">Hồ sơ</a>
+        <i class="bi bi-chevron-right text-[10px]"></i>
+        <span class="text-white/60">Thông báo</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6" data-aos="fade-up">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/20">
+                <i class="bi bi-bell-fill text-xl text-cyan-400"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-black text-white">Thông báo</h1>
+                <p class="text-xs text-white/40">
+                    <span x-text="totalCount"></span> thông báo · <span x-text="unreadCount" class="text-cyan-400"></span> chưa đọc
+                </p>
+            </div>
+        </div>
+        <button @click="markAllRead()" x-show="unreadCount > 0"
+                class="liquid-btn text-[11px] py-2 px-4 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl hover:bg-cyan-500/20 transition">
+            <i class="bi bi-check2-all mr-1"></i> Đánh dấu tất cả đã đọc
+        </button>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="flex items-center gap-2 mb-4 flex-wrap" data-aos="fade-up" data-aos-delay="100">
+        <button @click="setFilter('all')" class="filter-btn text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/10 text-white/50"
+                :class="filter === 'all' && 'active'">Tất cả</button>
+        <button @click="setFilter('unread')" class="filter-btn text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/10 text-white/50"
+                :class="filter === 'unread' && 'active'">
+            Chưa đọc <span x-show="unreadCount > 0" class="ml-1 px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[8px]" x-text="unreadCount"></span>
+        </button>
+        <button @click="setFilter('info')" class="filter-btn text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/10 text-cyan-400/50"
+                :class="filter === 'info' && 'active'"><i class="bi bi-info-circle mr-1"></i>Thông tin</button>
+        <button @click="setFilter('success')" class="filter-btn text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/10 text-green-400/50"
+                :class="filter === 'success' && 'active'"><i class="bi bi-check-circle mr-1"></i>Thành công</button>
+        <button @click="setFilter('warning')" class="filter-btn text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/10 text-yellow-400/50"
+                :class="filter === 'warning' && 'active'"><i class="bi bi-exclamation-triangle mr-1"></i>Cảnh báo</button>
+        <button @click="setFilter('error')" class="filter-btn text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/10 text-red-400/50"
+                :class="filter === 'error' && 'active'"><i class="bi bi-x-circle mr-1"></i>Lỗi</button>
+    </div>
+
+    <!-- Notification List -->
+    <div class="notif-card overflow-hidden" data-aos="fade-up" data-aos-delay="150">
+        <!-- Loading -->
+        <div x-show="loading" class="p-8 text-center">
+            <div class="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <p class="text-[10px] text-white/30">Đang tải...</p>
+        </div>
+
+        <!-- Empty state -->
+        <div x-show="!loading && filteredNotifications.length === 0" class="p-12 text-center">
+            <i class="bi bi-bell-slash text-4xl text-white/10 mb-3 block"></i>
+            <p class="text-white/30 text-sm font-bold">Không có thông báo</p>
+            <p class="text-white/15 text-xs mt-1" x-text="filter !== 'all' ? 'Thử bộ lọc khác' : 'Bạn sẽ nhận thông báo khi có cập nhật mới'"></p>
+        </div>
+
+        <!-- List -->
+        <template x-for="n in filteredNotifications" :key="n.id">
+            <div @click="openNotification(n)" 
+                 class="notif-item flex items-start gap-4 px-5 py-4 border-b border-white/5"
+                 :class="n.is_read ? 'read' : 'unread'">
+                <!-- Type Icon -->
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" :class="typeColor(n.notification_type)">
+                    <i class="bi text-lg" :class="typeIcon(n.notification_type)"></i>
+                </div>
+
+                <!-- Content -->
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <h3 class="text-sm font-bold text-white/80 truncate" x-text="n.title"></h3>
+                        <span class="text-[8px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0" 
+                              :class="typeColor(n.notification_type)" x-text="typeLabel(n.notification_type)"></span>
+                        <div x-show="!n.is_read" class="w-2 h-2 rounded-full bg-cyan-400 shrink-0 animate-pulse"></div>
+                    </div>
+                    <p class="text-xs text-white/40 leading-relaxed" x-text="stripMd(n.message)"></p>
+                    <div class="flex items-center gap-3 mt-2">
+                        <span class="text-[9px] text-white/20"><i class="bi bi-clock mr-1"></i><span x-text="timeAgo(n.created_at)"></span></span>
+                        <span class="text-[9px] text-white/15" x-text="formatDate(n.created_at)"></span>
+                        <span x-show="n.url" class="text-[9px] text-cyan-400/50"><i class="bi bi-box-arrow-up-right mr-0.5"></i>Nhấn để xem</span>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center gap-2 shrink-0">
+                    <button x-show="!n.is_read" @click.stop="markRead(n)" 
+                            class="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-cyan-400 transition" title="Đánh dấu đã đọc">
+                        <i class="bi bi-check2"></i>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Pagination -->
+    <div x-show="totalPages > 1" class="flex items-center justify-center gap-2 mt-6">
+        <button @click="goPage(page - 1)" :disabled="page <= 1"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 text-white/40 hover:text-white hover:border-cyan-400/30 transition disabled:opacity-30">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+        <template x-for="p in totalPages" :key="p">
+            <button @click="goPage(p)" 
+                    class="w-8 h-8 rounded-lg text-xs font-bold border transition"
+                    :class="p === page ? 'bg-cyan-400/10 text-cyan-400 border-cyan-400/30' : 'border-white/10 text-white/40 hover:text-white'">
+                <span x-text="p"></span>
+            </button>
+        </template>
+        <button @click="goPage(page + 1)" :disabled="page >= totalPages"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 text-white/40 hover:text-white hover:border-cyan-400/30 transition disabled:opacity-30">
+            <i class="bi bi-chevron-right"></i>
+        </button>
+    </div>
+</div>
+{% endblock %}

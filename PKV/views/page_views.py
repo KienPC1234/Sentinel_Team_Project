@@ -481,8 +481,15 @@ def dashboard_view(request):
         safe_scans = ScanEvent.objects.filter(user=user, risk_level__in=[RiskLevel.SAFE, RiskLevel.GREEN]).count()
         protection_score = int((safe_scans / max(total_scans, 1)) * 100) if total_scans > 0 else 100
 
-        # Recent scans
-        recent_scans = ScanEvent.objects.filter(user=user).order_by('-created_at')[:10]
+        # Recent scans - load more for pagination
+        recent_scans = list(ScanEvent.objects.filter(user=user).order_by('-created_at')[:100].values(
+            'id', 'scan_type', 'raw_input', 'risk_level', 'created_at'
+        ))
+        # Serialize for JSON
+        import json as _json
+        for s in recent_scans:
+            s['created_at'] = s['created_at'].strftime('%d/%m %H:%M') if s['created_at'] else ''
+        recent_scans_json = _json.dumps(recent_scans, default=str)
 
         # User reports
         user_reports = Report.objects.filter(reporter=user).order_by('-created_at')[:10]
@@ -516,7 +523,7 @@ def dashboard_view(request):
     except Exception as e:
         logger.error(f"Error loading dashboard: {e}")
         total_scans = danger_scans = total_reports = protection_score = 0
-        recent_scans = user_reports = user_alerts = recent_alerts = []
+        recent_scans = user_reports = user_alerts = recent_alerts = latest_articles = []
         chart_data = [0] * 7
         day_labels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 
@@ -526,7 +533,7 @@ def dashboard_view(request):
         "danger_scans": danger_scans,
         "total_reports": total_reports,
         "protection_score": protection_score,
-        "recent_scans": recent_scans,
+        "recent_scans_json": recent_scans_json if 'recent_scans_json' in dir() else '[]',
         "user_reports": user_reports,
         "user_alerts": user_alerts,
         "recent_alerts": recent_alerts,
@@ -712,6 +719,41 @@ def forum_edit_view(request, post_id):
         "title": f"Chỉnh sửa: {post.title}",
         "post": post,
         "post_data": serializer.data,
+    })
+
+
+# ─── Community Page Views ───────────────────────────────────────────────────
+
+def announcements_view(request):
+    """Announcements page — admin-only posts, reactions only."""
+    return render(request, "Forum/announcements.html", {
+        "title": "Thông báo",
+    })
+
+
+@login_required
+def tickets_view(request):
+    """User ticket / bug report page."""
+    return render(request, "Forum/tickets.html", {
+        "title": "Phản hồi & Báo lỗi",
+    })
+
+
+@login_required
+def inbox_view(request):
+    """Notifications inbox page."""
+    return render(request, "Auth/inbox.html", {
+        "title": "Thông báo",
+    })
+
+
+@login_required
+def admin_tickets_view(request):
+    """Admin ticket management page."""
+    if not request.user.is_staff:
+        return redirect('home')
+    return render(request, "Admin/admin_tickets.html", {
+        "title": "Quản lý Ticket",
     })
 
 

@@ -1,25 +1,28 @@
 # ShieldCall VN – Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo & các hình thức lừa đảo số
-> Tech stack mục tiêu: **Django + DRF**, **MySQL**, **Redis**, **Celery**, **TailwindCSS (Glassmorphism)**, **AI Microservice (FastAPI)**  
-> Mục tiêu: mô tả **đầy đủ tính năng + cách làm ra được** (data, pipeline, DB, session, queue, OCR, AI) để team dev triển khai.
+> Tech stack thực tế: **Django (ASGI) + DRF**, **MySQL**, **Redis**, **Celery**, **TailwindCSS (Liquid Glass)**, **Ollama (Local LLM)**  
+> Mục tiêu: mô tả **đầy đủ tính năng + kiến trúc hiện tại** (data, pipeline, DB, session, queue, OCR, AI) để team dev duy trì và phát triển.
 
 
 ---
 
-## 1) Kiến trúc hệ thống (cách làm ra)
+## 1) Kiến trúc hệ thống (Thực tế)
 ### 1.1 Tổng quan
-- **Django API (DRF)**: auth, scan endpoints, report, admin, trend
-- **MySQL**: dữ liệu chính
-- **Redis**: cache + session store + rate limiting + celery broker
-- **Celery workers**: chạy OCR/AI dài, tính trend, recompute risk
-- **AI Microservice (FastAPI)**: NLP classify, phishing classify, OCR pipeline helper
+- **Django (ASGI/Daphne)**: Xử lý cả HTTP API và WebSockets (Real-time scans).
+- **MySQL**: Lưu trữ dữ liệu quan hệ (Users, Reports, Phones, Domains).
+- **Redis**: Làm Channel Layer cho WebSockets, Cache kết quả scan, và Broker cho Celery.
+- **Celery Workers**: Xử lý các tác vụ nặng (Deep Scan, OCR, AI Analysis, Aggregating Trends).
+- **Ollama (Local AI)**: Sử dụng các mô hình như `neural-chat`, `ministral` để phân tích nội dung lừa đảo, trích xuất thực thể và gán nhãn dữ liệu.
 
-### 1.2 Luồng scan chung (Phone/Message/URL/QR)
-1) User gửi request -> Django API  
-2) Django normalize input + validate + check rate limit (Redis)  
-3) Check cache (Redis) -> nếu hit trả nhanh  
-4) Nếu miss -> ghi log scan -> đẩy job Celery (async) hoặc gọi AI service (sync nhẹ)  
-5) Celery/AI xử lý -> lưu kết quả MySQL -> update cache Redis  
-6) Nếu user bật notify -> push qua WebSocket / thông báo in-app
+### 1.2 Luồng scan hiện tại (Phone/Message/URL/QR)
+1) User gửi request (Hỗ trợ cả Scan nhanh qua HTTP và Deep Scan qua WebSocket).
+2) Django Channels/Celery khởi tạo tiến trình scan.
+3) **Metadata Phase**: Trích xuất thông tin cơ bản (Carrier, Country, SSL, Whois) sử dụng `phonenumbers` và `ipwhois`.
+4) **AI/Analysis Phase**: 
+   - Với Text/Image: Sử dụng `EasyOCR` và `Ollama` để phân tích ngữ cảnh.
+   - Với Website: Kiểm tra redirect chains, SSL age, và Levenshtein distance cho "lookalike" domains.
+5) **Risk Scoring**: Tính toán điểm rủi ro theo công thức weighted sum (Reports, Recency, AI Confidence, Trust Score).
+6) **Real-time Feedback**: Cập nhật trạng thái từng bước (OCR -> Analysis -> Finalizing) qua WebSocket với cơ chế tự động reconnect và polling fallback.
+7) **Result**: Lưu kết quả vào MySQL và Cache Redis, trả về UI Liquid Glass.
 
 ---
 
@@ -182,108 +185,50 @@ Indexes: (from_type, from_id), (to_type, to_id)
 
 ---
 
-## 6) AI Features – Không chỉ tên, mà “làm ra bằng cách nào”
-### 6.1 AI Text Analyzer (tin nhắn / chat / email)
-**Mục tiêu:** phân loại lừa đảo + giải thích + khuyến nghị hành động
+## 6) AI & Risk Features (Cập nhật cơ chế thực tế)
+### 6.1 AI Text Analyzer (Ollama)
+**Mục tiêu:** Nhận diện hội thoại, kịch bản lừa đảo qua tin nhắn.
 
-**Cách làm**
-- Thu thập dataset: text + label (scam_type, severity)
-- Model baseline: Logistic Regression / SVM (TF-IDF) (nhanh, dễ)
-- Model nâng cấp: Transformer fine-tune (PhoBERT/viBERT)
-- Output:
-  - risk_score
-  - scam_type prediction + confidence
-  - detected_patterns: OTP request, urgency, authority impersonation, money transfer request
-  - explanation (rule-based + LLM summary)
+**Cơ chế hiện tại:**
+- **Local Engine**: `Ollama` chạy `neural-chat` hoặc các mô hình tinh chỉnh (Ministral).
+- **Phân loại**: Scam types (mạo danh, đe dọa, mời gọi đầu tư) kèm độ tin cậy.
+- **Trích xuất**: Tự động bóc tách số tài khoản ngân hàng, liên kết độc hại, số điện thoại từ đoạn chat.
+- **Khuyến nghị**: Đưa ra các bước hành động cụ thể dựa trên mức độ rủi ro $R_{text}$.
 
-**Rule layer (điểm mạnh)**
-- Detect OTP, “chuyển khoản ngay”, “xác minh”, “phong toả”, “lệnh bắt”, “đường link”
-- Điểm rule -> cộng vào risk_score (ensemble với model)
+### 6.2 Phone Reputation Engine (Weighted & Time Decay)
+**Mục tiêu:** Tính điểm uy tín của số điện thoại.
 
-### 6.2 Phone Risk Engine (số điện thoại)
-**Mục tiêu:** điểm rủi ro dựa trên cộng đồng + AI + hành vi
+**Công thức hiện tại:**
+- **Risk Score** $S = \sum (w_i \times v_i) \times e^{-\lambda t}$
+- **Yếu tố**: Số lần bị report (đã duyệt), độ tin cậy của reporter (Trust Score), tần suất bị report trong 24h qua.
+- **Carrier/Geocoding**: Sử dụng `phonenumbers` để định danh Nhà mạng/Quốc gia (hỗ trợ toàn cầu, ưu tiên bản địa hóa VN).
+- **Disposable Check**: Kiểm tra các đầu số điện thoại ảo (VOIP/Virtual numbers) qua metadata.
 
-**Cách làm**
-- Risk = weighted sum:
-  - reports_verified * w1
-  - reports_pending * w2
-  - recency boost (bị report gần đây tăng điểm)
-  - model_score (nếu có message liên quan)
-- Deduplicate reports bằng similarity + hash
-- Verified_level tăng khi moderator approve + nhiều nguồn khác nhau
+### 6.3 Phishing Website Analysis (Deep Scan)
+**Mục tiêu:** Phát hiện trang web giả mạo, lừa đảo hoặc chứa mã độc.
 
-### 6.3 Phishing Domain Analyzer (URL)
-**Mục tiêu:** phát hiện trang giả mạo
+**Cơ chế hiện tại:**
+- **Network Check**: Phân tích SSL certificate (Tuổi đời SSL < 3 ngày được gán nhãn rủi ro cao), IP Reputation, Redirect Chains.
+- **Brand Protection**: Thuật toán Levenshtein distance so sánh domain với whitelist các thương hiệu ngân hàng/ví điện tử Việt Nam.
+- **Third-party Integration**: Kết hợp kết quả từ VirusTotal API và `ScamAdviser` (quét HTML động để lấy chỉ số trust).
+- **Screenshot Analysis**: (Phase đang thực hiện) Chụp màn hình để OCR logo/text so khớp với whitelist.
 
-**Cách làm**
-- Parse URL -> domain -> normalize (punycode)
-- Feature engineering:
-  - domain age (WHOIS)
-  - SSL valid
-  - suspicious patterns: lots of hyphens, lookalike, long subdomain
-  - similarity với whitelist (bank sites)
-- Model:
-  - Baseline rule-based + string similarity (Levenshtein)
-  - Nâng cấp: ML classifier trên feature vector
-- Optional: screenshot page -> OCR logo/text -> compare
+### 6.4 OCR & QR Analysis (EasyOCR)
+**Mục tiêu:** Phân tích hình ảnh chụp màn hình, biên lai chuyển khoản hoặc mã QR.
 
-### 6.4 OCR Scanner (ảnh chụp màn hình / bill / chat / QR)
-**Mục tiêu:** người dùng chụp màn hình tin nhắn/website/biên lai -> OCR -> phân tích
+**Cơ chế hiện tại:**
+- **OCR Engine**: `EasyOCR` xử lý đa ngôn ngữ (Tiếng Việt/Anh).
+- **QR Decoding**: `pyzbar` để bóc tách URL/Payload.
+- **Bounding Boxes**: Hiển thị trực quan cho người dùng vị trí phát hiện nội dung nhạy cảm.
+- **Pipeline**: Text sau khi OCR được đẩy vào `AI Text Analyzer` để đánh giá risk toàn diện.
 
-**Cách làm**
-- Upload image -> lưu object storage
-- Celery job:
-  1) preprocess: deskew, denoise, resize
-  2) OCR engine: Tesseract (vi) hoặc PaddleOCR (tốt)
-  3) Postprocess: remove noise, line merging
-  4) Extract entities:
-     - phone numbers regex
-     - bank account patterns
-     - URLs
-     - OTP codes
-  5) Feed extracted text vào Text Analyzer
-- Output: overlay highlights (frontend) + risk_score
+### 6.5 WebSocket Resilience (Real-time Scan)
+**Mục tiêu:** Đảm bảo trải nghiệm quét không bị gián đoạn.
 
-### 6.5 QR Code Analyzer
-**Mục tiêu:** QR chứa URL/tài khoản -> cảnh báo
-
-**Cách làm**
-- Decode QR: `zxing`/`pyzbar`
-- Nếu URL -> gửi qua Domain Analyzer
-- Nếu bank payload -> Bank Checker
-- Lưu scan history + evidence
-
-### 6.6 Voice Scam Detection (Phase 3)
-**Mục tiêu:** upload audio/recording -> chuyển text -> phân tích
-
-**Cách làm**
-- STT: Whisper
-- Text -> Text Analyzer
-- Add heuristics: authority threat words, urgency, “không được nói với ai”
-- Output: risk_score + transcript + highlights
-
-### 6.7 Fraud Graph / Scam Ring Detection
-**Mục tiêu:** tìm “cụm” lừa đảo (phone-domain-account liên kết)
-
-**Cách làm**
-- Tạo link từ:
-  - OCR extract (phone <-> account, phone <-> url)
-  - reports chứa cùng link/account
-  - message similarity
-- Chạy clustering (connected components / Louvain) định kỳ bằng Celery
-- Hiển thị bằng D3.js: nodes + edges + cluster id
-
-### 6.8 AI Chatbot tư vấn chống lừa đảo
-**Mục tiêu:** hướng dẫn người dùng theo tình huống
-
-**Cách làm**
-- Knowledge base: bài hướng dẫn + Q&A
-- Retrieval (RAG) từ nội dung Learn Hub + checklist
-- Guardrails:
-  - Không yêu cầu user cung cấp OTP/mật khẩu
-  - Luôn khuyến nghị kênh chính thống
-- Prompt template:
-  - “tình huống”, “mức rủi ro”, “hành động ngay”, “bằng chứng cần lưu”
+**Cơ chế:**
+- **State Machine**: Theo dõi trạng thái `Connecting`, `Connected`, `Reconnecting`, `Disconnected`.
+- **Exponential Backoff**: Tự động thử lại kết nối khi bị ngắt quãng với thời gian chờ tăng dần.
+- **HTTP Polling Fallback**: Nếu WebSocket không thể khôi phục, client sẽ tự động chuyển sang cơ chế Poll API `/api/v1/scan/status/` liên tục để lấy kết quả từ Celery worker.
 
 ---
 

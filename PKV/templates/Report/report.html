@@ -184,8 +184,26 @@
                         showToast('Báo cáo đã được gửi thành công!', 'success');
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     } else {
-                        this.error = res.error || 'Gửi báo cáo thất bại';
-                        showToast(this.error, 'error');
+                        // Parse field-level errors from API
+                        if (res.field_errors) {
+                            const fieldLabels = {
+                                target_type: 'Loại đối tượng',
+                                target_value: 'Thông tin đối tượng',
+                                scam_type: 'Phương thức lừa đảo',
+                                description: 'Nội dung mô tả',
+                                severity: 'Mức độ',
+                            };
+                            const parts = [];
+                            for (const [field, msgs] of Object.entries(res.field_errors)) {
+                                const label = fieldLabels[field] || field;
+                                parts.push(`<b>${label}</b>: ${msgs.join(', ')}`);
+                            }
+                            this.error = parts.join('<br>');
+                            showAlert('Thiếu thông tin bắt buộc', parts.join('\n'), 'warning');
+                        } else {
+                            this.error = res.error || 'Gửi báo cáo thất bại';
+                            showToast(this.error, 'error');
+                        }
                     }
                 } catch(e) { 
                     this.error = 'Lỗi kết nối';
