@@ -30,6 +30,7 @@ from .views.admin_views import (
     manage_forum, 
     manage_users, 
     toggle_admin_role, 
+    admin_user_action,
     manage_learn,
     edit_lesson,
     manage_articles,
@@ -45,6 +46,7 @@ from .views.admin_views import (
     delete_article,
     notify_lesson_email,
     magic_create_lesson_api,
+    generate_summary_api,
     magic_save_lesson_api,
     magic_create_lesson_page,
     magic_create_article_page,
@@ -57,18 +59,20 @@ from .views.admin_views import (
 )
 
 def service_worker(request):
-    # OneSignal expects these at root
     filename = request.path.lstrip('/')
     worker_path = os.path.join(settings.BASE_DIR, filename)
     if os.path.exists(worker_path) and filename.endswith('.js'):
         with open(worker_path, 'r') as f:
-            return HttpResponse(f.read(), content_type="application/javascript")
+            response = HttpResponse(f.read(), content_type="application/javascript")
+            response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
+            return response
     return HttpResponse("/* Service Worker Not Found */", status=404)
 
 urlpatterns = [
-    # OneSignal Service Workers (OneSignalSDKWorker.js and OneSignalSDK.sw.js)
-    path('OneSignalSDKWorker.js', service_worker),
-    path('OneSignalSDK.sw.js', service_worker),
+    # App service worker
+    path('sw.js', service_worker),
 
     # Pages
     path("", home_view, name="root"), 
@@ -123,6 +127,7 @@ urlpatterns = [
     path("admin-cp/forum/moderator/", forum_moderator_action, name="admin-forum-moderator-action"),
     path("admin-cp/users/", manage_users, name="admin-manage-users"),
     path("admin-cp/users/<int:user_id>/toggle-admin/", toggle_admin_role, name="admin-toggle-role"),
+    path("admin-cp/users/<int:user_id>/action/", admin_user_action, name="admin-user-action"),
     path("admin-cp/learn/", manage_learn, name="admin-manage-learn"),
     path("admin-cp/learn/add/", edit_lesson, name="admin-add-lesson"),
     path("admin-cp/learn/<int:lesson_id>/edit/", edit_lesson, name="admin-edit-lesson"),
@@ -166,6 +171,7 @@ urlpatterns = [
         path('', include('api.phone_security.urls')),
         path('chat/', include('api.ai_chat.urls')),
         path('admin/learn/ai-generate/', magic_create_lesson_api, name='admin-ai-generate-lesson'),
+        path('admin/content/generate-summary/', generate_summary_api, name='admin-generate-summary'),
         path('admin/learn/magic-save/', magic_save_lesson_api, name='admin-magic-save-lesson'),
         path('admin/articles/ai-generate/', magic_create_article_api, name='admin-ai-generate-article'),
         path('admin/articles/magic-save/', magic_save_article_api, name='admin-magic-save-article'),
@@ -179,6 +185,8 @@ urlpatterns = [
 ]
 
 handler404 = 'PKV.views.page_views.error_404_view'
+handler400 = 'PKV.views.page_views.error_400_view'
+handler403 = 'PKV.views.page_views.error_403_view'
 handler500 = 'PKV.views.page_views.error_500_view'
 
 # Always serve media files — required for uploads (avatars, reports, forum images, etc.)

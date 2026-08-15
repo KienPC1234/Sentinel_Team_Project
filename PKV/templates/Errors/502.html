@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}502 - Lỗi gateway - ShieldCall VN{% endblock %}
+
+{% block content %}
+<div class="animate-fadein flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8">
+    <div class="text-[10rem] font-black text-white/5 leading-none select-none">502</div>
+    <div class="space-y-2">
+        <h1 class="text-3xl font-black text-white tracking-tight">Gateway tạm thời lỗi</h1>
+        <p class="text-white/40 text-sm font-medium">Kết nối dịch vụ gián đoạn. Vui lòng chờ một chút để admin xử lý.</p>
+    </div>
+    <a href="/" class="liquid-btn py-3 px-10 text-xs font-black bg-cyan-500 text-black shadow-lg shadow-cyan-500/20 hover:bg-cyan-400 uppercase tracking-widest transition-all">Trang chủ</a>
+</div>
+{% endblock %}

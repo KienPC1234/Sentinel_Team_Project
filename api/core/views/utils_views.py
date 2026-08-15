@@ -22,9 +22,9 @@ class EditorImageUploadView(APIView):
         if not file_obj:
             return Response({"success": 0, "message": "No file uploaded"}, status=400)
 
-        # Save to media/editor_images/
+        # Save to media/editor_images/u_<user_id>/
         path = default_storage.save(
-            os.path.join('editor_images', file_obj.name),
+            os.path.join('editor_images', f'u_{request.user.id}', file_obj.name),
             ContentFile(file_obj.read())
         )
         url = os.path.join(settings.MEDIA_URL, path)
@@ -33,10 +33,71 @@ class EditorImageUploadView(APIView):
         return Response({
             "success": 1,
             "url": url,
+            "path": path,
             "file": {
                 "url": url
             }
         })
+
+
+class EditorMediaLibraryView(APIView):
+    """GET/DELETE /api/v1/utils/editor-media/ — list or delete user's uploaded CKEditor images."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        base_prefix = os.path.join('editor_images', f'u_{request.user.id}')
+        if not default_storage.exists(base_prefix):
+            return Response({"success": 1, "items": []})
+
+        try:
+            _, files = default_storage.listdir(base_prefix)
+        except Exception:
+            return Response({"success": 1, "items": []})
+
+        items = []
+        for name in files:
+            rel_path = os.path.join(base_prefix, name)
+            try:
+                modified = default_storage.get_modified_time(rel_path)
+                modified_iso = modified.isoformat() if modified else None
+            except Exception:
+                modified_iso = None
+            try:
+                size = default_storage.size(rel_path)
+            except Exception:
+                size = 0
+
+            items.append({
+                "name": name,
+                "path": rel_path,
+                "url": os.path.join(settings.MEDIA_URL, rel_path),
+                "size": size,
+                "modified_at": modified_iso,
+            })
+
+        items.sort(key=lambda x: x.get('modified_at') or '', reverse=True)
+        return Response({"success": 1, "items": items})
+
+    def delete(self, request):
+        target_path = request.data.get('path', '') if isinstance(request.data, dict) else ''
+        user_prefix = os.path.join('editor_images', f'u_{request.user.id}')
+        normalized_target = os.path.normpath(target_path).replace('\\', '/')
+        normalized_prefix = os.path.normpath(user_prefix).replace('\\', '/')
+
+        if not normalized_target or not (
+            normalized_target == normalized_prefix or normalized_target.startswith(normalized_prefix + '/')
+        ):
+            return Response({"success": 0, "message": "Invalid path"}, status=400)
+
+        if not default_storage.exists(normalized_target):
+            return Response({"success": 0, "message": "File not found"}, status=404)
+
+        default_storage.delete(normalized_target)
+        return Response({"success": 1})
+
+    def post(self, request):
+        """Allow POST as fallback for clients that don't send JSON body with DELETE."""
+        return self.delete(request)
 
 class EditorFetchUrlView(APIView):
     """GET /api/v1/utils/fetch-url/?url=... — Get metadata for Editor.js Link tool"""

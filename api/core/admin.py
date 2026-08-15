@@ -5,7 +5,7 @@ from django.contrib import admin
 from .models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily, EntityLink, UserAlert,
     Article, LearnLesson, LearnQuiz, LearnScenario, ForumPost, ForumComment,
-    ForumPostReport, UserProfile
+    ForumPostReport, UserProfile, WebPushSubscription
 )
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
@@ -117,3 +117,14 @@ class UserProfileAdmin(admin.ModelAdmin):
     list_display = ['user', 'display_name', 'rank_points', 'is_super_admin', 'created_at']
     search_fields = ['user__username', 'display_name']
     list_filter = ['is_super_admin']
+
+
+@admin.register(WebPushSubscription)
+class WebPushSubscriptionAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'user', 'is_active', 'fail_count',
+        'last_success_at', 'last_used_at', 'updated_at'
+    ]
+    list_filter = ['is_active', 'created_at', 'updated_at']
+    search_fields = ['endpoint', 'user__username', 'user_agent']
+    readonly_fields = ['created_at', 'updated_at', 'last_used_at', 'last_success_at']

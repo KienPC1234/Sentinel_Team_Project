@@ -67,6 +67,22 @@
         {% endfor %}
     </div>
 
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <div class="mt-6 flex items-center justify-between gap-3 px-2">
+        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest">
+            Trang {{ page_obj.number }}/{{ page_obj.paginator.num_pages }} · Tổng {{ page_obj.paginator.count }} bài học
+        </p>
+        <div class="flex items-center gap-2">
+            {% if page_obj.has_previous %}
+            <a href="?{% if query_no_page %}{{ query_no_page }}&{% endif %}page={{ page_obj.previous_page_number }}" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-cyan-400 hover:border-cyan-500/30 text-xs font-bold">Trước</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?{% if query_no_page %}{{ query_no_page }}&{% endif %}page={{ page_obj.next_page_number }}" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-cyan-400 hover:border-cyan-500/30 text-xs font-bold">Sau</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     </div>
 
     <!-- Magic Create is now a dedicated page -->

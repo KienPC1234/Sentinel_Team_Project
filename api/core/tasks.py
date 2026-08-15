@@ -154,9 +154,157 @@ def deduplicate_reports():
     logger.info(f'Found {duplicates} potential duplicate reports')
 
 
+@shared_task(
+    name='core.send_push_to_user',
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={'max_retries': 5},
+)
+def send_push_to_user(self, user_id: int, payload: dict):
+    """Queue task: send one push payload to one user with retry/backoff."""
+    from api.utils.push_service import push_service
+
+    title = str((payload or {}).get('title') or 'ShieldCall VN').strip()
+    body = str((payload or {}).get('body') or (payload or {}).get('message') or '').strip()
+    url = (payload or {}).get('url')
+    notification_type = str((payload or {}).get('notification_type') or 'info')
+
+    if not body:
+        body = 'Bạn có thông báo mới.'
+
+    ok = push_service.send_push(
+        user_id=user_id,
+        title=title,
+        message=body,
+        url=url,
+        notification_type=notification_type,
+    )
+    if not ok:
+        raise RuntimeError(f'Push send failed for user={user_id}')
+
+    return {'status': 'ok', 'user_id': user_id}
+
+
+@shared_task(
+    name='core.send_webpush_chunk',
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={'max_retries': 3},
+)
+def send_webpush_chunk(self, subscription_ids: list[int], payload: dict):
+    """Queue task: send WebPush to a chunk of subscriptions."""
+    from api.core.models import WebPushSubscription
+    from api.utils.push_service import PushNotificationService
+
+    if not subscription_ids:
+        return {'status': 'ok', 'sent': 0, 'failed': 0}
+
+    title = str((payload or {}).get('title') or 'ShieldCall VN').strip()
+    body = str((payload or {}).get('body') or (payload or {}).get('message') or '').strip() or 'Bạn có thông báo mới.'
+    url = (payload or {}).get('url')
+    notification_type = str((payload or {}).get('notification_type') or 'info')
+    tag = str((payload or {}).get('tag') or f'sc-{notification_type}-broadcast')
+    icon = str((payload or {}).get('icon') or '/static/logo.png')
+    ttl = int((payload or {}).get('ttl') or 3600)
+
+    sent = 0
+    failed = 0
+    fail_threshold = 5
+
+    subs = WebPushSubscription.objects.filter(id__in=subscription_ids, is_active=True)
+    for sub in subs.iterator():
+        ok, error_text, status_code = PushNotificationService.send_webpush(
+            sub,
+            {
+                'title': title,
+                'body': body,
+                'url': url,
+                'notification_type': notification_type,
+                'tag': tag,
+                'icon': icon,
+            },
+            ttl=ttl,
+        )
+        if ok:
+            sent += 1
+            sub.last_used_at = timezone.now()
+            sub.last_success_at = timezone.now()
+            sub.fail_count = 0
+            sub.last_error = ''
+            sub.is_active = True
+            sub.save(update_fields=['last_used_at', 'last_success_at', 'fail_count', 'is_active', 'last_error', 'updated_at'])
+        else:
+            failed += 1
+            sub.last_error = error_text
+            if status_code in (404, 410):
+                sub.is_active = False
+                sub.save(update_fields=['is_active', 'last_error', 'updated_at'])
+            else:
+                sub.fail_count = (sub.fail_count or 0) + 1
+                if sub.fail_count >= fail_threshold:
+                    sub.is_active = False
+                sub.save(update_fields=['fail_count', 'is_active', 'last_error', 'updated_at'])
+
+    return {'status': 'ok', 'sent': sent, 'failed': failed, 'count': len(subscription_ids)}
+
+
+@shared_task(name='core.send_broadcast_webpush', bind=True)
+def send_broadcast_webpush(self, payload: dict, user_ids: list[int] | None = None, chunk_size: int = 500):
+    """Queue dispatcher: split active subscriptions into chunks and enqueue send tasks."""
+    from api.core.models import WebPushSubscription
+
+    qs = WebPushSubscription.objects.filter(is_active=True)
+    if user_ids:
+        qs = qs.filter(user_id__in=user_ids)
+
+    sub_ids = list(qs.values_list('id', flat=True))
+    if not sub_ids:
+        return {'status': 'ok', 'chunks': 0, 'subscriptions': 0}
+
+    chunk_size = max(1, min(int(chunk_size or 500), 1000))
+    chunks = [sub_ids[i:i + chunk_size] for i in range(0, len(sub_ids), chunk_size)]
+    for chunk in chunks:
+        send_webpush_chunk.delay(chunk, payload)
+
+    return {'status': 'queued', 'chunks': len(chunks), 'subscriptions': len(sub_ids)}
+
+
+@shared_task(name='core.cleanup_webpush_subscriptions')
+def cleanup_webpush_subscriptions():
+    """Maintenance job: clean stale inactive/failed subscriptions."""
+    from api.core.models import WebPushSubscription
+
+    now = timezone.now()
+    inactive_cutoff = now - timedelta(days=30)
+    stale_cutoff = now - timedelta(days=60)
+
+    deleted_inactive, _ = WebPushSubscription.objects.filter(
+        is_active=False,
+        updated_at__lt=inactive_cutoff,
+    ).delete()
+
+    deactivated_stale = WebPushSubscription.objects.filter(
+        is_active=True,
+        fail_count__gte=5,
+    ).filter(
+        last_success_at__isnull=True,
+        created_at__lt=stale_cutoff,
+    ).update(is_active=False)
+
+    return {
+        'status': 'ok',
+        'deleted_inactive': deleted_inactive,
+        'deactivated_stale': deactivated_stale,
+    }
+
+
 def _notify_scan_complete(scan_event, title_suffix=''):
     """
-    Send push notification (OneSignal + WebSocket) when a scan completes.
+    Send push notification (WebSocket + WebPush) when a scan completes.
     Only sends if the scan was initiated by an authenticated user.
     """
     try:
@@ -1199,7 +1347,7 @@ def send_bulk_lesson_email(lesson_id):
         
         # Site URL fallback
         site_url = getattr(settings, 'SITE_URL', 'https://shieldcall.vn')
-        lesson_url = f"{site_url}/learn/{lesson.slug}/"
+        lesson_url = f"{site_url}/learn/lesson/{lesson.slug}/"
         
         # Send in batches of 10 to avoid spam limits/timeouts
         for i in range(0, len(emails), 10):
@@ -1901,7 +2049,7 @@ def _send_task_progress(task_id, status, message, step=None, data=None):
 
 
 @shared_task(name='core.magic_create_lesson_task', bind=True, max_retries=1)
-def magic_create_lesson_task(self, task_id, raw_text):
+def magic_create_lesson_task(self, task_id, raw_text, include_quiz=True, include_scenario=True):
     """
     AI-powered lesson generation via Celery.
     Generates: lesson content (HTML), 5 quizzes, rich scenario (10+ steps with AI roleplay).
@@ -2027,13 +2175,56 @@ YÊU CẦU:
             'title': title_data['title'],
             'category': title_data.get('category', 'guide'),
             'content': _content_html,
+            'summary': '',
         }
+
+        # Generate short summary (SMALL_MODEL) for cards/listing
+        try:
+            from django.conf import settings
+            summary_schema = {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string"}
+                },
+                "required": ["summary"]
+            }
+            summary_prompt = f"""Tạo tóm tắt ngắn cho bài học sau:
+
+TIÊU ĐỀ: {content_data['title']}
+NỘI DUNG:
+{_content_html}
+
+YÊU CẦU:
+- Tiếng Việt tự nhiên, dễ hiểu
+- 1 đoạn, tối đa 280 ký tự
+- Chỉ nêu ý chính, không markdown
+"""
+            summary_resp = generate_response(
+                prompt=summary_prompt,
+                system_prompt="Trả về JSON thuần theo schema, không markdown.",
+                format_schema=summary_schema,
+                model=getattr(settings, 'SMALL_MODEL', None),
+                tools=[],
+                max_tokens=250,
+                skip_filter=True,
+            )
+            parsed_summary = _parse_json_safe(summary_resp) or {}
+            if isinstance(parsed_summary, dict):
+                content_data['summary'] = str(parsed_summary.get('summary') or '').strip()[:280]
+        except Exception as summary_err:
+            logger.warning(f"[MagicCreate] Task {task_id}: summary generation failed: {summary_err}")
+
+        if not content_data['summary']:
+            fallback_text = re.sub(r'<[^>]+>', ' ', _content_html)
+            fallback_text = re.sub(r'\s+', ' ', fallback_text).strip()
+            content_data['summary'] = fallback_text[:280]
 
         # Send complete content at once
         _send_task_progress(task_id, 'processing', 'Nội dung bài học đã tạo xong!', step=2, data={
             'title': content_data['title'],
             'category': content_data.get('category', 'guide'),
-            'content': content_data['content']
+            'content': content_data['content'],
+            'summary': content_data.get('summary', ''),
         })
         logger.info(f"[MagicCreate] Task {task_id}: Content generated - {content_data['title']} "
                     f"({len(_accumulated_md)} chars md, {len(_content_html)} chars html)")
@@ -2043,15 +2234,210 @@ YÊU CẦU:
         _send_task_progress(task_id, 'error', f'Lỗi tạo nội dung: {str(e)}')
         return
 
-    # ──── STAGE 4: Finalize ────
+    quizzes = []
+    scenario_data = None
+
+    # ──── STAGE 3: Generate quizzes (optional) ────
+    if include_quiz:
+        _send_task_progress(task_id, 'processing', 'AI đang tạo bộ câu hỏi quiz...', step=3)
+        quiz_schema = {
+            "type": "object",
+            "properties": {
+                "quizzes": {
+                    "type": "array",
+                    "minItems": 5,
+                    "maxItems": 5,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"},
+                            "options": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "string"}},
+                            "correct_answer": {"type": "string"},
+                            "explanation": {"type": "string"}
+                        },
+                        "required": ["question", "options", "correct_answer", "explanation"]
+                    }
+                }
+            },
+            "required": ["quizzes"]
+        }
+        quiz_prompt = f"""Dựa trên bài học dưới đây, tạo 5 câu quiz trắc nghiệm để kiểm tra kiến thức chống lừa đảo.
+
+BÀI HỌC:
+{content_data['content']}
+
+YÊU CẦU:
+- Đúng 5 câu
+- Mỗi câu có 4 đáp án
+- correct_answer phải trùng 1 trong options
+- explanation ngắn gọn, dễ hiểu
+"""
+        try:
+            quiz_resp = generate_response(
+                prompt=quiz_prompt,
+                system_prompt="Trả về JSON thuần theo schema, không markdown.",
+                format_schema=quiz_schema,
+                max_tokens=8000,
+            )
+            parsed_quiz = _parse_json_safe(quiz_resp)
+            if isinstance(parsed_quiz, list):
+                quizzes = parsed_quiz
+            elif isinstance(parsed_quiz, dict):
+                quizzes = parsed_quiz.get('quizzes', []) or []
+            else:
+                quizzes = []
+            cleaned = []
+            for q in quizzes:
+                if not isinstance(q, dict):
+                    continue
+                options = q.get('options') if isinstance(q.get('options'), list) else []
+                if len(options) < 4:
+                    continue
+                correct_answer = q.get('correct_answer') or (options[0] if options else '')
+                if correct_answer not in options and options:
+                    correct_answer = options[0]
+                cleaned.append({
+                    'question': (q.get('question') or '').strip(),
+                    'options': [str(opt).strip() for opt in options[:4]],
+                    'correct_answer': str(correct_answer).strip(),
+                    'explanation': str(q.get('explanation') or '').strip(),
+                })
+            quizzes = [q for q in cleaned if q['question'] and q['options']]
+            _send_task_progress(task_id, 'processing', 'Đã tạo quiz.', step=3, data={'quizzes': quizzes})
+        except Exception as quiz_err:
+            logger.warning(f"[MagicCreate] Task {task_id}: quiz generation failed: {quiz_err}")
+            quizzes = []
+            _send_task_progress(task_id, 'processing', 'Không tạo được quiz, sẽ tiếp tục.', step=3, data={'quizzes': []})
+    else:
+        _send_task_progress(task_id, 'processing', 'Bỏ qua tạo quiz theo tùy chọn.', step=3, data={'quizzes': []})
+
+    # ──── STAGE 4: Generate scenario (optional) ────
+    if include_scenario:
+        _send_task_progress(task_id, 'processing', 'AI đang tạo kịch bản hội thoại...', step=4)
+        scenario_schema = {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "description": {"type": "string"},
+                "steps": {
+                    "type": "array",
+                    "minItems": 6,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "speaker": {"type": "string", "enum": ["scammer", "victim", "narrator"]},
+                            "text": {"type": "string"},
+                            "note": {"type": "string"}
+                        },
+                        "required": ["speaker", "text"]
+                    }
+                }
+            },
+            "required": ["title", "description", "steps"]
+        }
+        scenario_prompt = f"""Tạo kịch bản hội thoại mô phỏng lừa đảo dựa trên bài học sau.
+
+BÀI HỌC:
+{content_data['content']}
+
+YÊU CẦU:
+- 1 title + 1 description
+- Ít nhất 8 bước hội thoại
+- Mỗi bước có speaker: scammer|victim|narrator
+- Nội dung ngắn gọn, thực tế, có note cảnh báo nếu cần
+"""
+        try:
+            def _build_scenario_data(raw_response: str):
+                parsed_scenario = _parse_json_safe(raw_response)
+                if not isinstance(parsed_scenario, dict):
+                    return None
+
+                steps = parsed_scenario.get('steps', []) if isinstance(parsed_scenario.get('steps'), list) else []
+                cleaned_steps = []
+                for step in steps:
+                    if not isinstance(step, dict):
+                        continue
+                    speaker = step.get('speaker')
+                    if speaker not in ['scammer', 'victim', 'narrator']:
+                        speaker = 'narrator'
+                    text = str(step.get('text') or '').strip()
+                    if not text:
+                        continue
+                    cleaned_steps.append({
+                        'speaker': speaker,
+                        'text': text,
+                        'note': str(step.get('note') or '').strip(),
+                    })
+
+                if len(cleaned_steps) < 6:
+                    return None
+
+                return {
+                    'title': str(parsed_scenario.get('title') or 'Kịch bản mô phỏng').strip(),
+                    'description': str(parsed_scenario.get('description') or 'Mô phỏng tình huống lừa đảo để luyện tập.').strip(),
+                    'content_json': {'steps': cleaned_steps}
+                }
+
+            scenario_resp = generate_response(
+                prompt=scenario_prompt,
+                system_prompt="Trả về JSON thuần theo schema, không markdown.",
+                format_schema=scenario_schema,
+                max_tokens=10000,
+            )
+
+            scenario_data = _build_scenario_data(scenario_resp)
+
+            # Retry with safer educational framing if model refuses or output is invalid
+            if not scenario_data:
+                scenario_resp_l = str(scenario_resp or '').lower()
+                if any(k in scenario_resp_l for k in ["can't help", "cannot help", "i’m sorry", "i'm sorry", "xin lỗi"]):
+                    logger.warning(f"[MagicCreate] Task {task_id}: scenario refused by model, retrying with educational-safe prompt")
+                else:
+                    logger.warning(f"[MagicCreate] Task {task_id}: scenario invalid format/steps, retrying once")
+
+                safe_scenario_prompt = f"""Tạo KỊCH BẢN GIÁO DỤC phòng chống lừa đảo để đào tạo nhận diện rủi ro (mục đích an toàn).
+
+BÀI HỌC:
+{content_data['content']}
+
+YÊU CẦU:
+- Chỉ mô phỏng để cảnh báo người dùng, không cung cấp mẹo phạm tội
+- 1 title + 1 description
+- Ít nhất 8 bước hội thoại
+- Mỗi bước có speaker: scammer|victim|narrator
+- Mỗi bước có text ngắn gọn, có thể có note cảnh báo
+"""
+                scenario_resp_retry = generate_response(
+                    prompt=safe_scenario_prompt,
+                    system_prompt="Bạn tạo nội dung đào tạo an toàn thông tin. Trả về JSON thuần theo schema, không markdown.",
+                    format_schema=scenario_schema,
+                    max_tokens=10000,
+                )
+                scenario_data = _build_scenario_data(scenario_resp_retry)
+
+            if scenario_data:
+                _send_task_progress(task_id, 'processing', 'Đã tạo kịch bản hội thoại.', step=4, data={'scenario': scenario_data})
+            else:
+                logger.warning(f"[MagicCreate] Task {task_id}: scenario could not be generated after retry")
+                _send_task_progress(task_id, 'processing', 'Không tạo được kịch bản, sẽ tiếp tục.', step=4, data={'scenario': None})
+        except Exception as scenario_err:
+            logger.warning(f"[MagicCreate] Task {task_id}: scenario generation failed: {scenario_err}")
+            scenario_data = None
+            _send_task_progress(task_id, 'processing', 'Không tạo được kịch bản, sẽ tiếp tục.', step=4, data={'scenario': None})
+    else:
+        _send_task_progress(task_id, 'processing', 'Bỏ qua tạo kịch bản theo tùy chọn.', step=4, data={'scenario': None})
+
+    # ──── STAGE 5: Finalize ────
     final_data = {
         'title': content_data['title'],
+        'summary': content_data.get('summary', ''),
         'content': content_data['content'],
-        'category': content_data.get('category', 'news'),
-        
+        'category': content_data.get('category', 'guide'),
+        'quizzes': quizzes,
+        'scenario': scenario_data,
     }
-    _send_task_progress(task_id, 'done', 'Tạo bài viết thành công!', step=4, data=final_data)
-    logger.info(f"[MagicArticle] Task {task_id} completed: {content_data['title']} ")
+    _send_task_progress(task_id, 'done', 'Tạo bài học thành công!', step=5, data=final_data)
+    logger.info(f"[MagicCreate] Task {task_id} completed: {content_data['title']} quizzes={len(quizzes)} scenario={'yes' if scenario_data else 'no'}")
 
     try:
         from api.utils.push_service import PushNotificationService
@@ -2063,6 +2449,12 @@ YÊU CẦU:
         )
     except Exception as push_err:
         logger.warning(f"[MagicArticle] Push notification failed: {push_err}")
+
+
+@shared_task(name='core.magic_create_article_task', bind=True, max_retries=1)
+def magic_create_article_task(self, task_id, raw_text):
+    """Backward-compatible article task entrypoint used by admin article magic create API."""
+    return magic_create_lesson_task.run(task_id, raw_text, include_quiz=False, include_scenario=False)
 
 
 def _parse_json_safe(text):

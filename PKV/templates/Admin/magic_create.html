@@ -164,12 +164,42 @@
                         <i class="bi bi-stars text-3xl text-purple-400"></i>
                     </div>
                     <h2 class="text-xl font-black text-white mb-2">Biến tin tức thành bài học</h2>
-                    <p class="text-xs text-white/30 max-w-md mx-auto leading-relaxed">Dán bài báo, tin tức hoặc tài liệu về lừa đảo. AI sẽ tự động phân tích và tạo bài học hoàn chỉnh gồm nội dung, 5 câu quiz và kịch bản mô phỏng.</p>
+                    <p class="text-xs text-white/30 max-w-md mx-auto leading-relaxed">Dán bài báo, tin tức hoặc tài liệu về lừa đảo. AI sẽ tự động phân tích và tạo bài học; bạn có thể bật/tắt quiz và kịch bản bên dưới.</p>
                 </div>
             </div>
 
             <!-- Input area -->
             <div class="px-8 pb-8 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                        <div>
+                            <p class="text-[11px] font-bold text-white/70 uppercase tracking-wider">Tạo Quiz</p>
+                            <p class="text-[10px] text-white/30">Sinh bộ câu hỏi kiểm tra kiến thức</p>
+                        </div>
+                        <button type="button" @click="includeQuiz = !includeQuiz"
+                                class="relative w-11 h-6 rounded-full transition-all"
+                                :class="includeQuiz ? 'bg-purple-500/70' : 'bg-white/10'"
+                                :aria-pressed="includeQuiz">
+                            <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+                                  :class="includeQuiz ? 'left-5' : 'left-0.5'"></span>
+                        </button>
+                    </label>
+
+                    <label class="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                        <div>
+                            <p class="text-[11px] font-bold text-white/70 uppercase tracking-wider">Tạo Kịch bản</p>
+                            <p class="text-[10px] text-white/30">Sinh hội thoại mô phỏng tình huống</p>
+                        </div>
+                        <button type="button" @click="includeScenario = !includeScenario"
+                                class="relative w-11 h-6 rounded-full transition-all"
+                                :class="includeScenario ? 'bg-blue-500/70' : 'bg-white/10'"
+                                :aria-pressed="includeScenario">
+                            <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+                                  :class="includeScenario ? 'left-5' : 'left-0.5'"></span>
+                        </button>
+                    </label>
+                </div>
+
                 <div class="relative">
                     <textarea x-model="rawText" class="mc-textarea" rows="10" placeholder="Dán nội dung tin tức/bài báo về lừa đảo vào đây...&#10;&#10;Ví dụ: Công an vừa triệt phá đường dây lừa đảo qua mạng với thủ đoạn giả danh nhân viên ngân hàng gọi điện yêu cầu cung cấp OTP..."></textarea>
                 </div>
@@ -193,10 +223,10 @@
                     <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
                         <i class="bi bi-journal-richtext text-cyan-500/50"></i> Bài học Markdown
                     </span>
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
+                    <span x-show="includeQuiz" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
                         <i class="bi bi-patch-question text-purple-500/50"></i> 5 câu Quiz
                     </span>
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
+                    <span x-show="includeScenario" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
                         <i class="bi bi-chat-square-text text-blue-500/50"></i> Kịch bản 10+ bước
                     </span>
                     <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[10px] text-white/25">
@@ -324,6 +354,7 @@
                                 <div class="flex items-start gap-3 mb-4">
                                     <div class="flex-1 min-w-0">
                                         <h3 class="text-lg font-black text-white leading-tight" x-text="result.title"></h3>
+                                        <p x-show="result.summary" class="text-[11px] text-white/45 mt-2 leading-relaxed" x-text="result.summary"></p>
                                     </div>
                                     <span class="inline-flex px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider flex-shrink-0"
                                         :class="{
@@ -515,6 +546,8 @@ function magicCreate() {
         statusMsg: '',
         errorMsg: '',
         result: {},
+        includeQuiz: true,
+        includeScenario: true,
         quizzes: [],
         scenarioSteps: [],
         ws: null,
@@ -602,7 +635,11 @@ function magicCreate() {
                 const resp = await fetch('/api/v1/admin/learn/ai-generate/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCSRF() },
-                    body: JSON.stringify({ text: this.rawText })
+                    body: JSON.stringify({
+                        text: this.rawText,
+                        include_quiz: this.includeQuiz,
+                        include_scenario: this.includeScenario
+                    })
                 });
                 const res = await resp.json();
                 this._log('API response: ' + resp.status + ' ' + JSON.stringify(res));
@@ -683,6 +720,7 @@ function magicCreate() {
                 if (msg.data) {
                     if (msg.data.title) this.result.title = msg.data.title;
                     if (msg.data.category) this.result.category = msg.data.category;
+                    if (msg.data.summary) this.result.summary = msg.data.summary;
                     // Content streaming (progressive HTML sections)
                     if (msg.data.content_stream) this.result.content = msg.data.content_stream;
                     if (msg.data.content) this.result.content = msg.data.content;
@@ -752,6 +790,7 @@ function magicCreate() {
             try {
                 const payload = {
                     title: this.result.title,
+                    summary: this.result.summary,
                     content: this.result.content,
                     category: this.result.category,
                     quizzes: this.quizzes,

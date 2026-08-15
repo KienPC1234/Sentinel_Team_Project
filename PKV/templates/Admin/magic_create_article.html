@@ -275,6 +275,7 @@
                                 <div class="flex items-start gap-3 mb-4">
                                     <div class="flex-1 min-w-0">
                                         <h3 class="text-lg font-black text-white leading-tight" x-text="result.title"></h3>
+                                        <p x-show="result.summary" class="text-[11px] text-white/45 mt-2 leading-relaxed" x-text="result.summary"></p>
                                     </div>
                                     <span class="inline-flex px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider flex-shrink-0"
                                         :class="{
@@ -484,11 +485,8 @@ function magicCreateArticle() {
                 if (msg.data) {
                     if (msg.data.title) this.result.title = msg.data.title;
                     if (msg.data.category) this.result.category = msg.data.category;
+                    if (msg.data.summary) this.result.summary = msg.data.summary;
                     if (msg.data.content) this.result.content = msg.data.content;
-                     else {
-                        }
-                    }
-                    
                 }
             } else if (msg.status === 'done' && msg.data) {
                 this.result = msg.data;
@@ -518,6 +516,7 @@ function magicCreateArticle() {
             try {
                 const payload = {
                     title: this.result.title,
+                    summary: this.result.summary,
                     content: this.result.content,
                     category: this.result.category,
                     

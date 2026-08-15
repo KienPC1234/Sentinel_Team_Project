@@ -5,13 +5,15 @@ Expects Alpine.js 'result' variable to be available in outer x-data scope.
 
 <!-- OSINT Parser Script (safe: lives in <script>, not in x-data attribute) -->
 <script>
-document.addEventListener('alpine:init', function() {
-    if (Alpine.data.__osintParserRegistered) return;
-    Alpine.data.__osintParserRegistered = true;
+(function() {
+    function registerOsintParser() {
+        if (!window.Alpine) return false;
+        if (window.__osintParserRegistered) return true;
 
-    Alpine.data('osintParser', function() {
+        Alpine.data('osintParser', function() {
         return {
             sources: [],
+            badgeSources: [],
             osintExpanded: false,
 
             get visibleSources() {
@@ -20,14 +22,12 @@ document.addEventListener('alpine:init', function() {
 
             normalizeTitle(t) {
                 var c = (t || '').trim().replace(/^\[+|\]+$/g, '');
-                // Remove trailing " cho 'domain'" suffix
                 var lowered = c.toLowerCase();
                 var marker = " cho '";
                 var markerIdx = lowered.indexOf(marker);
                 if (markerIdx > -1 && c.endsWith("'")) {
                     c = c.slice(0, markerIdx);
                 }
-                // Clean trailing brackets and "Nguồn:" prefix
                 c = c.replace(/\]\s*$/, '');
                 c = c.replace(/^Nguồn\s*:\s*/i, '').replace(/\s+/g, ' ').trim();
                 return c || 'TỔNG HỢP TÌNH BÁO';
@@ -40,16 +40,37 @@ document.addEventListener('alpine:init', function() {
                 return text;
             },
 
-            parseContext() {
-                // 'result' is accessible from the parent Alpine scope
-                var raw = this.result && this.result.web_context;
-                if (!raw) { this.sources = []; return; }
+            isSummaryTitle(title) {
+                var normalized = (title || '').toLowerCase();
+                return normalized.includes('kết luận') || normalized.includes('tổng kết') || normalized.includes('tổng hợp');
+            },
 
-                // Strip <think> blocks
+            uniqList(items) {
+                var seen = Object.create(null);
+                return (items || []).filter(function(item) {
+                    if (!item) return false;
+                    var key = String(item).toLowerCase();
+                    if (seen[key]) return false;
+                    seen[key] = true;
+                    return true;
+                });
+            },
+
+            parseContext(raw, fallbackSources) {
+                if (!raw) { 
+                    this.sources = []; 
+                    this.badgeSources = this.uniqList((fallbackSources || []).map(this.normalizeTitle).filter((s) => !this.isSummaryTitle(s)));
+                    console.log('[OSINT] No raw context, sources cleared.');
+                    return; 
+                }
+
                 var cleanRaw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-                if (!cleanRaw) { this.sources = []; return; }
+                if (!cleanRaw) { 
+                    this.sources = []; 
+                    console.log('[OSINT] No cleanRaw after strip, sources cleared.');
+                    return; 
+                }
 
-                // Find ### headers
                 var headerRe = /^###\s+(.+)$/gm;
                 var headers = [];
                 var m;
@@ -63,12 +84,18 @@ document.addEventListener('alpine:init', function() {
 
                 var self = this;
                 var newSources = [];
+                var parsedBadgeSources = [];
                 var conclusionText = '';
-                var conclusionRe = /(Kết luận tổng thể\s*:[\s\S]*)$/i;
+                // Catches inline bold conclusion patterns like **Kết luận chung**: ... or **Tổng kết**: ...
+                // Note: proper ### [Kết luận chung] headers are handled via the headers loop above
+                var conclusionRe = /(?:^|\n)([ \t]*\*{1,2}[ \t]*(?:Kết luận|Tổng kết)(?:[^\n*]*)\*{0,2}[ \t]*:[\s\S]*)$/im;
 
                 if (headers.length > 0) {
                     for (var i = 0; i < headers.length; i++) {
                         var title = self.normalizeTitle(headers[i].title);
+                        if (title) {
+                            parsedBadgeSources.push(title);
+                        }
                         var contentEnd = (i + 1 < headers.length) ? headers[i + 1].idx : cleanRaw.length;
                         var content = cleanRaw.slice(headers[i].end, contentEnd).trim();
 
@@ -89,7 +116,6 @@ document.addEventListener('alpine:init', function() {
                         }
                     }
                 } else {
-                    // Fallback: no ### headers found
                     var fb = cleanRaw;
                     var cm = fb.match(conclusionRe);
                     if (cm && cm[1]) {
@@ -104,7 +130,6 @@ document.addEventListener('alpine:init', function() {
                     }
                 }
 
-                // Add conclusion as final card
                 if (conclusionText) {
                     newSources.push({
                         title: 'KẾT LUẬN TỔNG THỂ',
@@ -113,19 +138,30 @@ document.addEventListener('alpine:init', function() {
                 }
 
                 this.sources = newSources;
+
+                var filteredParsedBadges = this.uniqList(parsedBadgeSources.filter((s) => !this.isSummaryTitle(s)));
+                if (filteredParsedBadges.length > 0) {
+                    this.badgeSources = filteredParsedBadges;
+                } else {
+                    this.badgeSources = this.uniqList((fallbackSources || []).map(this.normalizeTitle).filter((s) => !this.isSummaryTitle(s)));
+                }
             },
 
             init() {
-                // Parse immediately and also watch for changes
-                var self = this;
-                this.parseContext();
-                this.$watch('result.web_context', function() {
-                    self.parseContext();
-                });
+                this.parseContext('', []);
+                console.log('[OSINT] Alpine osintParser initialized.');
             }
         };
-    });
-});
+        });
+
+        window.__osintParserRegistered = true;
+        return true;
+    }
+
+    if (!registerOsintParser()) {
+        document.addEventListener('alpine:init', registerOsintParser, { once: true });
+    }
+})();
 </script>
 
 <!-- OSINT Section Template -->
@@ -140,9 +176,9 @@ document.addEventListener('alpine:init', function() {
                 <p class="text-[10px] text-white/40 font-bold uppercase tracking-widest">Grounded Proofs &amp; Sources</p>
             </div>
             <div class="flex items-center gap-2">
-                <template x-if="result.web_sources && result.web_sources.length > 0">
+                <template x-if="badgeSources && badgeSources.length > 0">
                     <span class="px-3 py-1.5 rounded-xl bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20">
-                        <i class="bi bi-database-check mr-1"></i><span x-text="result.web_sources.length"></span> nguồn
+                        <i class="bi bi-database-check mr-1"></i><span x-text="badgeSources.length"></span> nguồn
                     </span>
                 </template>
                 <template x-if="result.searched_urls && result.searched_urls.length > 0">
@@ -153,11 +189,11 @@ document.addEventListener('alpine:init', function() {
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-6" x-data="osintParser()">
+        <div class="grid grid-cols-1 gap-6" x-data="osintParser" x-effect="parseContext((result && result.web_context) || '', (result && result.web_sources) || [])">
 
             <!-- Sources Badges -->
-            <div class="flex flex-wrap gap-2 mb-2" x-show="result.web_sources && result.web_sources.length">
-                <template x-for="source in result.web_sources" :key="source">
+            <div class="flex flex-wrap gap-2 mb-2" x-show="badgeSources && badgeSources.length">
+                <template x-for="source in badgeSources" :key="source">
                     <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black border border-cyan-500/20 uppercase" x-text="source"></span>
                 </template>
             </div>
