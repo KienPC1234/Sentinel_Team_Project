@@ -1,0 +1,11 @@
+Chào {{ user.username }},
+
+Báo cáo của bạn cho mục {{ report_type }} với đối tượng {{ target }} đã được cập nhật.
+
+Trạng thái: {% if status == 'approved' %}ĐÃ CHẤP THUẬN{% elif status == 'ai_flagged' %}AI GẮN CỜ · CHỜ ADMIN XÁC MINH{% else %}TỪ CHỐI{% endif %}
+{% if reason %}
+Lý do: {{ reason }}
+{% endif %}
+Cảm ơn bạn đã góp phần xây dựng cộng đồng số an toàn hơn cùng ShieldCall VN.
+
+© 2026 ShieldCall VN

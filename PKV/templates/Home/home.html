@@ -28,18 +28,11 @@
 
         <!-- Quick Scan Interface -->
         <div class="pt-8" data-aos="fade-up" data-aos-delay="300">
-            <div class="liquid-card max-w-2xl mx-auto p-2 sm:p-3 overflow-visible group focus-within:border-cyan-400/50 focus-within:shadow-[0_0_40px_rgba(34,211,238,0.15)] transition-all">
-                <form action="/scan/phone/" method="GET" class="flex flex-col sm:flex-row gap-2">
-                    <div class="flex-1 relative">
-                        <i class="bi bi-telephone absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-lg"></i>
-                        <input type="tel" name="phone" placeholder="Nhập số điện thoại (VD: 091...)" 
-                            class="w-full bg-white/[0.03] border-none text-white pl-12 pr-4 py-4 rounded-2xl focus:ring-2 focus:ring-cyan-500/40 text-base font-bold placeholder:text-white/20">
-                    </div>
-                    <button type="submit"
-                        class="liquid-btn bg-cyan-500 text-black border-none px-10 py-4 font-black hover:bg-cyan-400 hover:text-black">
-                        SCAN NGAY
-                    </button>
-                </form>
+            <div class="max-w-2xl mx-auto">
+                <a href="/scan/" class="inline-flex items-center justify-center gap-2 liquid-btn bg-cyan-500 text-black border-none px-10 py-4 font-black hover:bg-cyan-400 hover:text-black rounded-2xl">
+                    <i class="bi bi-shield-check"></i>
+                    MỞ TRUNG TÂM SCAN
+                </a>
             </div>
         </div>
     </div>
@@ -71,7 +64,7 @@
         <div class="space-y-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-2xl font-black text-white tracking-tight">Kiến thức mới</h2>
-                <a href="/learn/" class="text-cyan-400 text-xs font-black uppercase tracking-widest hover:text-cyan-300">Xem tất cả</a>
+                <a href="/learn/?tab=lessons" class="text-cyan-400 text-xs font-black uppercase tracking-widest hover:text-cyan-300">Xem tất cả</a>
             </div>
             {% if latest_lessons %}
             {% with featured=latest_lessons.0 %}
@@ -118,7 +111,7 @@
         <div class="space-y-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-2xl font-black text-white tracking-tight">Tin tức mới</h2>
-                <a href="/learn/" class="text-purple-400 text-xs font-black uppercase tracking-widest hover:text-purple-300">Xem tất cả</a>
+                <a href="/learn/?tab=news&category=news" class="text-purple-400 text-xs font-black uppercase tracking-widest hover:text-purple-300">Xem tất cả</a>
             </div>
             {% if latest_articles %}
             {% with featured=latest_articles.0 %}

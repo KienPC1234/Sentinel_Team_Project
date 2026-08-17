@@ -10,6 +10,7 @@ from .page_views import (
     report_view,
     scam_radar_view,
     learn_hub_view,
+    disclaimer_view,
     emergency_view,
     login_view,
     register_view,

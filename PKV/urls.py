@@ -10,11 +10,13 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from api.ai_chat.views import AssistantPageView
 from django.http import HttpResponse
 import os
+from .views.auth_overrides import TurnstilePasswordResetView
 from .views import (
     home_view, scan_phone_view, scan_message_view, scan_website_view,
     scan_email_view, scan_bank_view, scan_qr_view, scan_status_view,
     report_view,
     scam_radar_view, learn_hub_view, emergency_view, login_view,
+    disclaimer_view,
     register_view, logout_view, dashboard_view, admin_panel_view,
     profile_view, change_password_view, forum_view, forum_post_view,
     forum_create_view, forum_edit_view, public_profile_view, scan_file_view, scan_audio_view,
@@ -87,6 +89,7 @@ urlpatterns = [
     path("scan/bank/", scan_bank_view, name="scan-bank"),
     path("scan/email/", scan_email_view, name="scan-email"),
     path("scan/qr/", scan_qr_view, name="scan-qr"),
+    path('scan/', scan_lookup_view, name='scan-hub'),
     path('scan/file/', scan_file_view, name='scan-file'),
     path('scan/audio/', scan_audio_view, name='scan-audio'),
     path('scan/status/<int:scan_id>/', scan_status_view, name='scan-status'),
@@ -98,6 +101,7 @@ urlpatterns = [
     path("scam-radar/", scam_radar_view, name="scam-radar"),
     path("scam-radar/list/<str:list_type>/", scam_radar_list_view, name="scam-radar-list"),
     path("learn/", learn_hub_view, name="learn-hub"),
+    path("legal/disclaimer/", disclaimer_view, name="legal-disclaimer"),
     path("learn/lesson/<slug:slug>/", lesson_detail_view, name="lesson-detail"),
     path("learn/<slug:slug>/", article_detail_view, name="article-detail"),
     path("emergency/", emergency_view, name="emergency"),
@@ -181,6 +185,7 @@ urlpatterns = [
     ])),
 
     # Allauth (Google OAuth)
+    path('accounts/password/reset/', TurnstilePasswordResetView.as_view(), name='account_reset_password'),
     path('accounts/', include('allauth.urls')),
 ]
 

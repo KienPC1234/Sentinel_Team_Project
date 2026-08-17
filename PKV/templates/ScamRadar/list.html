@@ -16,7 +16,7 @@
     <div class="flex items-center justify-between" data-aos="fade-up" data-aos-delay="100">
         <h1 class="text-3xl font-black text-white glow-text">{{ title }}</h1>
         <div class="text-white/50 text-sm">
-            Top 200 báo cáo được hệ thống ghi nhận
+            Top 200 tín hiệu rủi ro (Report đã duyệt + AI Scan)
         </div>
     </div>
 
@@ -36,18 +36,12 @@
                     </tr>
                 </thead>
                 <tbody class="text-sm divide-y divide-white/5">
-                    {% for report in reports %}
+                    {% for report in rows %}
                     <tr class="hover:bg-white/5 transition-colors group">
                         <td class="p-4 text-white/30 font-mono">{{ forloop.counter }}</td>
                         <td class="p-4">
                             <div class="font-bold text-white font-mono tracking-tight">
-                                {% if list_type == 'phones' %}
-                                    {{ report.target_value|slice:":4" }}****{{ report.target_value|slice:"-3:" }}
-                                {% elif list_type == 'accounts' %}
-                                    {{ report.target_value|slice:":3" }}*****{{ report.target_value|slice:"-3:" }} ({{ report.scammer_bank_name|default:'N/A' }})
-                                {% else %}
-                                    {{ report.target_value }}
-                                {% endif %}
+                                {{ report.target_value_display }}
                             </div>
                             {% if report.scammer_name %}
                             <div class="text-xs text-white/40 mt-1 uppercase">{{ report.scammer_name }}</div>
@@ -55,7 +49,7 @@
                         </td>
                         <td class="p-4">
                             <span class="px-2 py-1 rounded-lg bg-white/5 text-xs font-semibold text-white/70 border border-white/10">
-                                {{ report.get_scam_type_display }}
+                                {{ report.scam_type_display }}
                             </span>
                         </td>
                         <td class="p-4">
@@ -68,22 +62,31 @@
                             {% endif %}
                         </td>
                         <td class="p-4 text-white/60">
-                            {% if report.reporter %}
-                            <div class="flex items-center gap-2">
-                                <i class="bi bi-person-circle"></i>
-                                {{ report.reporter.username }}
+                            {% if report.source == 'scan_ai' %}
+                            <div class="flex items-center gap-2 text-cyan-300/70">
+                                <i class="bi bi-cpu"></i>
+                                AI Scan
                             </div>
                             {% else %}
-                            <span class="italic text-white/30">Ẩn danh</span>
+                            <div class="flex items-center gap-2">
+                                <i class="bi bi-person-circle"></i>
+                                {{ report.reporter_name }}
+                            </div>
                             {% endif %}
                         </td>
                         <td class="p-4 text-white/40 whitespace-nowrap" title="{{ report.created_at }}">
                             {{ report.created_at|timesince }} trước
                         </td>
                         <td class="p-4 text-center">
+                            {% if report.source == 'scan_ai' %}
+                            <a href="/scan/status/{{ report.id }}/" class="inline-flex w-8 h-8 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20 items-center justify-center transition-colors text-cyan-300/80 hover:text-cyan-200">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                            </a>
+                            {% else %}
                             <button onclick="showReportDetail({{ report.id }})" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-white/60 hover:text-white">
                                 <i class="bi bi-eye-fill"></i>
                             </button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -138,8 +141,15 @@
                 // AI Analysis block
                 let aiAnalysisBlock = '';
                 if (data.ai_analysis) {
-                    // Simple formatting for AI text
-                    const safeAnalysis = data.ai_analysis.replace(/\n/g, '<br>');
+                    let aiRaw = data.ai_analysis;
+                    if (typeof aiRaw !== 'string') {
+                        try {
+                            aiRaw = JSON.stringify(aiRaw, null, 2);
+                        } catch (e) {
+                            aiRaw = String(aiRaw);
+                        }
+                    }
+                    const safeAnalysis = (aiRaw || '').replace(/\n/g, '<br>');
                     aiAnalysisBlock = `
                         <div class="mt-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
                             <div class="flex items-center gap-2 mb-2">

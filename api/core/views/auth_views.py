@@ -21,10 +21,11 @@ from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 
 from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
+from api.utils.security import verify_turnstile_token
 
 from api.core.models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, UserProfile,
+    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, UserProfile, MFARecoveryCode,
 )
 from api.core.serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
@@ -48,12 +49,19 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        cf_token = request.data.get('cf-turnstile-response')
+        forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
+        remote_ip = forwarded or request.META.get('REMOTE_ADDR')
+        if not verify_turnstile_token(cf_token, remote_ip=remote_ip):
+            return Response({'error': 'Xác thực bảo mật thất bại. Vui lòng thử lại.'}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         token, _ = Token.objects.get_or_create(user=user)
         return Response({
             'message': 'Đăng ký thành công!',
+            'welcome_message': f'Xin chào {user.email}! Tài khoản của bạn đã được tạo thành công.',
             'token': token.key,
             'user': UserSerializer(user).data,
         }, status=status.HTTP_201_CREATED)
@@ -66,6 +74,12 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        cf_token = request.data.get('cf-turnstile-response')
+        forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
+        remote_ip = forwarded or request.META.get('REMOTE_ADDR')
+        if not verify_turnstile_token(cf_token, remote_ip=remote_ip):
+            return Response({'error': 'Xác thực bảo mật thất bại. Vui lòng thử lại.'}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
@@ -90,12 +104,26 @@ class LoginView(APIView):
             request.session.modified = True # Ensure session is saved
             has_totp = TOTPDevice.objects.filter(user=user, confirmed=True).exists()
             has_email = EmailDevice.objects.filter(user=user, confirmed=True).exists()
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            preferred = profile.mfa_preferred_method
+            if preferred not in {'totp', 'email'}:
+                preferred = 'totp' if has_totp else ('email' if has_email else None)
+
+            methods = {'totp': False, 'email': False, 'recovery': False}
+            if preferred == 'totp' and has_totp:
+                methods['totp'] = True
+                methods['recovery'] = MFARecoveryCode.objects.filter(user=user, is_used=False).exists()
+            elif preferred == 'email' and has_email:
+                methods['email'] = True
+            else:
+                methods['totp'] = has_totp
+                methods['email'] = has_email
+                methods['recovery'] = has_totp and MFARecoveryCode.objects.filter(user=user, is_used=False).exists()
+
             return Response({
                 'mfa_required': True,
-                'methods': {
-                    'totp': has_totp,
-                    'email': has_email
-                },
+                'methods': methods,
+                'preferred_method': preferred,
                 'message': 'Hành động yêu cầu xác thực 2 lớp (2FA).'
             })
 

@@ -168,6 +168,10 @@
                         @click="$dispatch('start-contextual-chat', { context: 'Scan #{{ scan.id }}: ' + rawInput + '\nScore: ' + (result.risk_score||0) + '/100\n' + (result.explanation || '') })">
                         <i class="bi bi-chat-dots-fill"></i> Chat với AI
                     </button>
+                    <button class="liquid-btn py-2 px-6 text-xs bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 font-black"
+                        @click="reportToAdmin()">
+                        <i class="bi bi-flag-fill"></i> Gửi admin verify
+                    </button>
                     <a href="/dashboard/"
                         class="liquid-btn py-2 px-6 text-xs bg-white/5 text-white/60 border-white/10 hover:text-white">
                         <i class="bi bi-house"></i> Dashboard
@@ -313,6 +317,41 @@ function scanStatusApp() {
         destroy() {
             clearInterval(this.pollInterval);
             if (this.ws) this.ws.close();
+        },
+
+        async reportToAdmin() {
+            try {
+                const prompt = await Swal.fire({
+                    title: 'Gửi admin xác minh',
+                    input: 'textarea',
+                    inputPlaceholder: 'Lý do cần admin verify (tuỳ chọn)...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Gửi yêu cầu',
+                    cancelButtonText: 'Hủy',
+                    background: '#161235',
+                    color: '#fff'
+                });
+
+                if (!prompt.isConfirmed) return;
+
+                const response = await fetch(`/api/v1/scan/{{ scan.id }}/report-admin/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({ reason: prompt.value || '' })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    showToast(data.message || 'Đã gửi yêu cầu xác minh.', 'success');
+                } else {
+                    showToast(data.error || 'Không thể gửi yêu cầu xác minh.', 'error');
+                }
+            } catch (e) {
+                showToast('Lỗi kết nối', 'error');
+            }
         }
     };
 }

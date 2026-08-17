@@ -183,14 +183,14 @@
                 </div>
             </div>
 
-            <a href="javascript:void(0)" @click="$dispatch('open-password-modal')" class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group">
+            <a href="{% url 'change-password' %}" class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group">
                 <div class="flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
                         <i class="bi bi-key-fill"></i>
                     </div>
                     <div>
                         <div class="text-sm font-black text-white uppercase tracking-wide">Đổi mật khẩu</div>
-                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Yêu cầu xác thực OTP Email</p>
+                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Mở trang đổi mật khẩu bảo mật</p>
                     </div>
                 </div>
                 <i class="bi bi-chevron-right text-white/20 transition-transform group-hover:translate-x-1"></i>
@@ -209,6 +209,7 @@
                             <p class="text-[10px] font-bold uppercase tracking-widest mt-1" 
                                :class="has2fa ? 'text-green-500/60' : 'text-yellow-500/60'"
                                x-text="has2fa ? 'Đã kích hoạt bảo mật' : 'Tài khoản chưa được bảo mật'"></p>
+                            <p class="text-[10px] text-cyan-300/70 font-bold uppercase tracking-widest mt-1" x-show="has2fa" x-text="activeMethod === 'totp' ? 'Đang dùng: Authenticator (TOTP)' : 'Đang dùng: OTP qua Email'"></p>
                         </div>
                     </div>
                     <div class="flex gap-2" x-show="!loadingStatus">
@@ -236,7 +237,7 @@
                     <div class="flex items-start justify-between">
                         <div class="space-y-1">
                             <h4 class="text-xs font-black text-red-500 uppercase tracking-widest">Vô hiệu hóa Bảo vệ 2 lớp</h4>
-                            <p class="text-[11px] text-white/40 font-medium">Hành động này yêu cầu mật khẩu và mã OTP Email để xác nhận.</p>
+                            <p class="text-[11px] text-white/40 font-medium" x-text="activeMethod === 'totp' ? 'Nhập mật khẩu + mã TOTP (hoặc recovery code) để xác nhận.' : 'Hành động này yêu cầu mật khẩu và mã OTP Email để xác nhận.'"></p>
                         </div>
                         <button @click="showDeactivate=false" class="text-white/20 hover:text-white"><i class="bi bi-x-lg"></i></button>
                     </div>
@@ -252,15 +253,15 @@
                             
                             <div class="space-y-2">
                                 <div class="flex justify-between items-center ml-2">
-                                    <label class="text-[10px] font-black text-white/30 uppercase tracking-widest">Mã xác nhận Email</label>
-                                    <button @click="sendDeactivateOtp()" class="text-[9px] font-black text-cyan-400 uppercase tracking-widest hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline" :disabled="otpLoading || countdown > 0">
+                                    <label class="text-[10px] font-black text-white/30 uppercase tracking-widest" x-text="activeMethod === 'totp' ? 'Mã TOTP hoặc Recovery code' : 'Mã xác nhận Email'"></label>
+                                    <button @click="sendDeactivateOtp()" x-show="activeMethod === 'email'" class="text-[9px] font-black text-cyan-400 uppercase tracking-widest hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline" :disabled="otpLoading || countdown > 0">
                                         <span x-show="!otpLoading" x-text="countdown > 0 ? 'Gửi lại sau ' + (Math.floor(countdown / 60) + ':' + (countdown % 60).toString().padStart(2, '0')) : 'Gửi mã OTP'"></span>
                                         <span x-show="otpLoading">Đang gửi...</span>
                                     </button>
                                 </div>
-                                <input type="text" x-model="deactivateData.token" maxlength="6"
+                                    <input type="text" x-model="deactivateData.token" :maxlength="activeMethod === 'totp' ? 9 : 6"
                                        class="liquid-input w-full py-4 text-center text-xl font-black tracking-[0.5em]" 
-                                       placeholder="••••••">
+                                       :placeholder="activeMethod === 'totp' ? '123456 hoặc ABCD-EFGH' : '••••••'">
                             </div>
                         </div>
 
@@ -326,6 +327,26 @@
                         <button @click="confirmSetup()" class="liquid-btn w-full py-4 bg-green-500 text-black font-black hover:bg-green-400 shadow-lg shadow-green-500/20">
                             XÁC MINH & BẬT
                         </button>
+                    </div>
+                </div>
+
+                <div x-show="has2fa && activeMethod === 'totp'" x-transition class="mt-6 p-6 rounded-3xl bg-cyan-500/[0.04] border border-cyan-500/20 space-y-4 animate-fadein">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <h4 class="text-xs font-black text-cyan-300 uppercase tracking-widest">Recovery codes dự phòng</h4>
+                            <p class="text-[11px] text-white/50 font-medium mt-1">Tạo 10 mã dự phòng và lưu ở nơi bảo mật để dùng khi mất thiết bị Authenticator.</p>
+                            <p class="text-[10px] text-yellow-300/80 font-bold uppercase tracking-widest mt-2" x-text="'Còn lại: ' + recovery.remaining + '/' + recovery.total + ' mã chưa dùng'"></p>
+                        </div>
+                        <button @click="regenerateRecoveryCodes()" class="liquid-btn py-2 px-4 text-[10px] font-black bg-cyan-500 text-black hover:bg-cyan-400">TẠO MỚI 10 MÃ</button>
+                    </div>
+
+                    <div x-show="recovery.codes.length" class="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-3">
+                        <p class="text-[10px] text-yellow-300/90 font-black uppercase tracking-widest">Lưu ngay các mã này. Hệ thống sẽ không hiện lại lần nữa.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                            <template x-for="code in recovery.codes" :key="code">
+                                <div class="px-2 py-2 rounded-lg bg-white/5 border border-white/10 text-center text-[11px] font-black text-cyan-200 tracking-widest" x-text="code"></div>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -587,12 +608,14 @@
         function mfaManager() {
             return {
                 has2fa: false,
+                activeMethod: null,
                 loadingStatus: true,
                 setupMode: null, // 'totp' | 'email'
                 showDeactivate: false,
                 qrCode: '',
                 verifyToken: '',
                 deactivateData: { password: '', token: '' },
+                recovery: { total: 0, remaining: 0, hints: [], codes: [] },
                 otpLoading: false,
                 loading: false,
                 countdown: 0,
@@ -618,6 +641,12 @@
                         const data = await r.json();
                         console.log('[MFA] Status:', data);
                         this.has2fa = data.has_2fa;
+                        this.activeMethod = data.preferred_method || (data.methods?.totp ? 'totp' : (data.methods?.email ? 'email' : null));
+                        this.recovery.total = data.recovery_codes?.total || 0;
+                        this.recovery.remaining = data.recovery_codes?.remaining || 0;
+                        if (!this.has2fa || this.activeMethod !== 'totp') {
+                            this.recovery.codes = [];
+                        }
                     } catch (e) {
                         console.error('MFA status fetch failed');
                     } finally {
@@ -631,7 +660,7 @@
                         const r = await fetch('/api/v1/auth/mfa/setup/totp/');
                         const data = await r.json();
                         if (r.ok && data.qr_code) {
-                            this.qrCode = `<img src="${data.qr_code}" class="w-48 h-48 object-contain">`;
+                            this.qrCode = `<img src="${data.qr_code}" class="w-64 h-64 object-contain" style="image-rendering: pixelated;">`;
                             this.otpSecret = data.secret;
                         } else {
                             showToast(data.error || 'Không thể tạo mã QR', 'error');
@@ -673,6 +702,9 @@
                         });
                         const data = await r.json();
                         if (r.ok) {
+                            if (this.setupMode === 'totp' && Array.isArray(data.recovery_codes)) {
+                                this.recovery.codes = data.recovery_codes;
+                            }
                             showToast('Cấu hình 2FA thành công!', 'success');
                             this.setupMode = null;
                             this.fetchStatus();
@@ -684,6 +716,7 @@
                     }
                 },
                 async sendDeactivateOtp() {
+                    if (this.activeMethod !== 'email') return;
                     if (this.countdown > 0) return;
                     this.otpLoading = true;
                     try {
@@ -709,7 +742,7 @@
                                 'Content-Type': 'application/json',
                                 'X-CSRFToken': getCSRFToken() 
                             },
-                            body: JSON.stringify(this.deactivateData)
+                            body: JSON.stringify({ ...this.deactivateData, method: this.activeMethod })
                         });
                         const data = await r.json();
                         if (r.ok) {
@@ -724,6 +757,26 @@
                         showToast('Lỗi hệ thống', 'error');
                     }
                     this.loading = false;
+                },
+                async regenerateRecoveryCodes() {
+                    if (!(await window.scConfirm('Tạo bộ recovery code mới sẽ làm vô hiệu hóa bộ cũ. Tiếp tục?', { title: 'Tạo lại recovery code', icon: 'warning', confirmButtonText: 'Tiếp tục', cancelButtonText: 'Hủy' }))) return;
+                    try {
+                        const r = await fetch('/api/v1/auth/mfa/recovery/', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': getCSRFToken() }
+                        });
+                        const data = await r.json();
+                        if (r.ok) {
+                            this.recovery.codes = data.codes || [];
+                            this.recovery.total = this.recovery.codes.length;
+                            this.recovery.remaining = this.recovery.codes.length;
+                            showToast(data.message || 'Đã tạo recovery codes mới', 'success');
+                        } else {
+                            showToast(data.error || 'Không thể tạo recovery codes', 'error');
+                        }
+                    } catch (e) {
+                        showToast('Lỗi kết nối', 'error');
+                    }
                 }
             }
         }

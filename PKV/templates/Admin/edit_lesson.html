@@ -60,6 +60,18 @@
         transition: all 0.25s ease;
     }
     .cover-dropzone:hover { border-color: rgba(59,130,246,0.45); background: rgba(59,130,246,0.08); }
+    .cover-preview {
+        border-radius: 1rem;
+        border: 1px solid rgba(255,255,255,0.12);
+        overflow: hidden;
+        background: rgba(255,255,255,0.02);
+    }
+    .cover-preview img {
+        width: 100%;
+        height: 220px;
+        object-fit: cover;
+        display: block;
+    }
 
     .publish-toggle {
         width: 52px;
@@ -312,7 +324,7 @@
                 <div class="liquid-card p-6 space-y-6 border-white/5 bg-slate-900/40 sticky top-24">
                     <div class="space-y-2">
                         <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Danh mục</label>
-                        <div class="dropdown-container" x-data="liquidSelect({
+                        <div class="dropdown-container liquid-custom-select" x-data="liquidSelect({
                             value: '{{ form.category.value|default:'guide'|escapejs }}',
                             placeholder: 'Chọn danh mục',
                             options: [
@@ -321,7 +333,7 @@
                                 { value: 'story', label: 'Chuyện cảnh giác' },
                                 { value: 'news', label: 'Tin tức' }
                             ]
-                        })" class="liquid-custom-select" @change="document.getElementById('id_category').value = $event.detail">
+                        })" @change="document.getElementById('id_category').value = $event.detail">
                             {{ form.category }}
                             <div class="liquid-select-trigger" :class="{ 'active': open }" @click="open = !open">
                                 <span x-text="label" class="truncate"></span>
@@ -341,6 +353,7 @@
                         <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Ảnh đại diện (Cover)</label>
                         <div class="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3">
                             {{ form.cover_image }}
+                            <input type="hidden" id="lesson-cover-existing" value="{% if lesson and lesson.cover_image %}{{ lesson.cover_image.url }}{% endif %}">
                             <label for="id_cover_image" class="cover-dropzone block">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center">
@@ -352,11 +365,13 @@
                                     </div>
                                 </div>
                             </label>
-                            {% if lesson.cover_image %}
-                            <div class="mt-4 rounded-lg overflow-hidden border border-white/10">
-                                <img src="{{ lesson.cover_image.url }}" class="w-full h-auto">
+                            <div id="lesson-cover-preview" class="cover-preview {% if not lesson or not lesson.cover_image %}hidden{% endif %}">
+                                {% if lesson and lesson.cover_image %}
+                                <img id="lesson-cover-preview-img" src="{{ lesson.cover_image.url }}" alt="{{ lesson.title }}">
+                                {% else %}
+                                <img id="lesson-cover-preview-img" src="" alt="Preview" class="hidden">
+                                {% endif %}
                             </div>
-                            {% endif %}
                         </div>
                     </div>
 
@@ -387,7 +402,7 @@
                     </div>
 
                     {% if lesson %}
-                    <button type="button" onclick="if(confirm('Xóa bài học này?')) location.href='{% url 'admin-delete-lesson' lesson.id %}'" class="w-full py-4 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white font-black uppercase tracking-widest transition-all border border-red-500/20">
+                    <button type="button" onclick="window.scConfirm('Xóa bài học này?', {title: 'Xóa bài học', icon: 'warning', confirmButtonText: 'Xóa', cancelButtonText: 'Hủy'}).then(ok => { if (ok) location.href='{% url 'admin-delete-lesson' lesson.id %}'; });" class="w-full py-4 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white font-black uppercase tracking-widest transition-all border border-red-500/20">
                         <i class="bi bi-trash3 me-2 text-lg"></i> Xóa bài học
                     </button>
                     {% endif %}
@@ -552,16 +567,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const coverInput = document.getElementById('id_cover_image');
     const coverFilename = document.getElementById('lesson-cover-filename');
+    const coverPreview = document.getElementById('lesson-cover-preview');
+    const coverPreviewImg = document.getElementById('lesson-cover-preview-img');
+    const existingCover = document.getElementById('lesson-cover-existing')?.value || '';
     if (coverInput && coverFilename) {
+        if (!coverInput.files?.length && existingCover) {
+            coverFilename.textContent = 'Ảnh hiện tại đang được dùng';
+        }
         coverInput.addEventListener('change', () => {
             const file = coverInput.files && coverInput.files.length ? coverInput.files[0].name : '';
             coverFilename.textContent = file || 'PNG/JPG/WebP · Tối đa 5MB';
+            const pickedFile = coverInput.files && coverInput.files.length ? coverInput.files[0] : null;
+            if (pickedFile && coverPreview && coverPreviewImg) {
+                const objectUrl = URL.createObjectURL(pickedFile);
+                coverPreviewImg.src = objectUrl;
+                coverPreviewImg.classList.remove('hidden');
+                coverPreview.classList.remove('hidden');
+            } else if (!pickedFile && existingCover && coverPreview && coverPreviewImg) {
+                coverPreviewImg.src = existingCover;
+                coverPreviewImg.classList.remove('hidden');
+                coverPreview.classList.remove('hidden');
+            }
         });
     }
 
     const genBtn = document.getElementById('btn-gen-summary-lesson');
     const summaryEl = document.getElementById('id_summary');
     const titleEl = document.getElementById('id_title');
+    const normalizeSummaryText = (value) => {
+        let text = String(value || '').trim();
+        if (!text) return '';
+        const pick = (obj) => {
+            if (!obj || typeof obj !== 'object') return '';
+            return String(obj.summary || obj['tóm_tắt'] || obj.tom_tat || obj.content || obj.text || '').trim();
+        };
+        if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
+            try {
+                const parsed = JSON.parse(text);
+                const fromParsed = Array.isArray(parsed) ? pick(parsed[0]) : pick(parsed);
+                if (fromParsed) return fromParsed;
+            } catch (_) {}
+        }
+        return text;
+    };
     if (genBtn && summaryEl) {
         genBtn.addEventListener('click', async () => {
             const editorContent = window._lessonEditorInstance ? window._lessonEditorInstance.getData() : (document.getElementById('editor')?.value || '');
@@ -580,7 +628,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 const data = await resp.json();
                 if (resp.ok && data.status === 'success') {
-                    summaryEl.value = data.summary || '';
+                    summaryEl.value = normalizeSummaryText(data.summary);
                     showToast('Đã tạo tóm tắt', 'success');
                 } else {
                     showToast(data.message || 'Không tạo được tóm tắt', 'error');

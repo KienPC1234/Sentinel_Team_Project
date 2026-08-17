@@ -397,7 +397,15 @@
             // Evidence gallery
             let allImages = [];
             if (data.evidence_url) allImages.push({ url: data.evidence_url, caption: 'Ảnh bằng chứng chính (OCR)' });
-            if (data.evidence_images) data.evidence_images.forEach((img, i) => allImages.push({ url: img.url, caption: img.caption || `Ảnh bổ sung ${i+1}` }));
+            if (data.evidence_images) {
+                data.evidence_images.forEach((img, i) => {
+                    if (typeof img === 'string') {
+                        allImages.push({ url: img, caption: `Ảnh bổ sung ${i + 1}` });
+                    } else if (img && img.url) {
+                        allImages.push({ url: img.url, caption: img.caption || `Ảnh bổ sung ${i + 1}` });
+                    }
+                });
+            }
 
             let galleryHtml = '';
             if (allImages.length > 0) {
@@ -569,7 +577,15 @@
             
             let images = [];
             if (data.evidence_url) images.push({ url: data.evidence_url, caption: 'Ảnh bằng chứng chính (OCR)' });
-            if (data.evidence_images) data.evidence_images.forEach((img, i) => images.push({ url: img.url, caption: img.caption || `Ảnh bổ sung ${i+1}` }));
+            if (data.evidence_images) {
+                data.evidence_images.forEach((img, i) => {
+                    if (typeof img === 'string') {
+                        images.push({ url: img, caption: `Ảnh bổ sung ${i + 1}` });
+                    } else if (img && img.url) {
+                        images.push({ url: img.url, caption: img.caption || `Ảnh bổ sung ${i + 1}` });
+                    }
+                });
+            }
             
             let currentIdx = startIndex || 0;
             

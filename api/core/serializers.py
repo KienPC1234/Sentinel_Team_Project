@@ -2,6 +2,7 @@
 ShieldCall VN – Core Serializers
 DRF serializers for all MVP models + auth
 """
+import re
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
@@ -296,6 +297,8 @@ class UserAlertSerializer(serializers.ModelSerializer):
 # ─── Forum Serializers ───────────────────────────────────────────────────────
 
 class ForumCommentSerializer(serializers.ModelSerializer):
+    MAX_REPLY_DEPTH = 5
+
     author_name = serializers.SerializerMethodField()
     author_username = serializers.CharField(source='author.username', read_only=True)
     author_avatar = serializers.ImageField(source='author.profile.avatar', read_only=True)
@@ -308,14 +311,68 @@ class ForumCommentSerializer(serializers.ModelSerializer):
     user_disliked = serializers.SerializerMethodField()
     user_helpful = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
+    depth = serializers.SerializerMethodField()
+    scan_reference = serializers.SerializerMethodField()
+    scan_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = ForumComment
         fields = ['id', 'author_name', 'author_username', 'author_avatar', 'author_is_staff', 'author_rank', 'author_posts_count', 'author_joined',
                   'content', 'parent', 'parent_author_name', 
-                  'replies', 'likes_count', 'dislikes_count', 'helpful_count', 'user_liked', 'user_disliked', 'user_helpful', 'created_at']
+                  'replies', 'depth', 'scan_reference', 'scan_id', 'likes_count', 'dislikes_count', 'helpful_count', 'user_liked', 'user_disliked', 'user_helpful', 'created_at']
         read_only_fields = ['id', 'author_name', 'author_username', 'author_avatar', 'author_is_staff', 'author_rank', 'author_posts_count', 'author_joined',
-                            'created_at', 'parent_author_name', 'likes_count', 'dislikes_count', 'helpful_count']
+                            'created_at', 'parent_author_name', 'likes_count', 'dislikes_count', 'helpful_count', 'depth', 'scan_reference']
+
+    def validate(self, attrs):
+        parent = attrs.get('parent')
+        post = self.context.get('post')
+        if parent:
+            if post and parent.post_id != post.id:
+                raise serializers.ValidationError({'parent': 'Không thể trả lời bình luận thuộc bài viết khác.'})
+
+            depth = 1
+            node = parent
+            while node.parent_id:
+                depth += 1
+                node = node.parent
+            if depth >= self.MAX_REPLY_DEPTH:
+                raise serializers.ValidationError({
+                    'parent': [f'Đã đạt tối đa {self.MAX_REPLY_DEPTH} tầng trả lời.']
+                })
+
+        scan_id = attrs.get('scan_id')
+        if scan_id:
+            request = self.context.get('request')
+            scan = ScanEvent.objects.filter(id=scan_id).only('id', 'user_id', 'is_public_referable').first()
+            if not scan:
+                raise serializers.ValidationError({'scan_id': 'Kết quả scan không tồn tại.'})
+            request_user = request.user if request else None
+            is_owner = bool(request_user and request_user.is_authenticated and scan.user_id == request_user.id)
+            if not is_owner and not scan.is_public_referable:
+                raise serializers.ValidationError({
+                    'scan_id': 'Bạn chỉ có thể tham chiếu scan của mình, hoặc scan đã được tham chiếu công khai.'
+                })
+
+        return attrs
+
+    def create(self, validated_data):
+        scan_id = validated_data.pop('scan_id', None)
+        request = self.context.get('request')
+        request_user = request.user if request else None
+        content = validated_data.get('content', '') or ''
+        if scan_id:
+            validated_data['content'] = (
+                f'{content}<p><a href="/scan/status/{scan_id}/" data-scan-ref="{scan_id}" '
+                f'class="text-cyan-400 font-bold">📎 Scan Result #{scan_id}</a></p>'
+            )
+        instance = super().create(validated_data)
+
+        if scan_id and request_user and request_user.is_authenticated:
+            ScanEvent.objects.filter(id=scan_id, user_id=request_user.id, is_public_referable=False).update(
+                is_public_referable=True
+            )
+
+        return instance
 
     def get_author_name(self, obj):
         return obj.author.profile.display_name or obj.author.username
@@ -338,6 +395,24 @@ class ForumCommentSerializer(serializers.ModelSerializer):
         if obj.replies.exists():
             return ForumCommentSerializer(obj.replies.filter(parent=obj), many=True, context=self.context).data 
         return []
+
+    def get_depth(self, obj):
+        depth = 1
+        node = obj
+        while node.parent_id:
+            depth += 1
+            node = node.parent
+        return depth
+
+    def get_scan_reference(self, obj):
+        content = obj.content or ''
+        match = re.search(r'data-scan-ref="(\d+)"', content)
+        if not match:
+            match = re.search(r'/scan/status/(\d+)/', content)
+        if not match:
+            return None
+        scan_id = int(match.group(1))
+        return {'scan_id': scan_id, 'url': f'/scan/status/{scan_id}/'}
 
     def get_user_liked(self, obj):
         request = self.context.get('request')
@@ -380,6 +455,8 @@ class ForumPostSerializer(serializers.ModelSerializer):
     unique_views_count = serializers.SerializerMethodField()
     last_comment_author = serializers.SerializerMethodField()
     last_comment_at = serializers.SerializerMethodField()
+    scan_reference = serializers.SerializerMethodField()
+    scan_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = ForumPost
@@ -388,12 +465,47 @@ class ForumPostSerializer(serializers.ModelSerializer):
                   'title', 'content', 'category', 'image', 
                   'views_count', 'unique_views_count', 'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
                   'comments_count', 'is_pinned', 'is_locked', 'user_liked', 'user_helpful', 'user_shared', 'user_disliked',
-                  'comments', 'last_comment_author', 'last_comment_at', 'created_at']
+                  'comments', 'last_comment_author', 'last_comment_at', 'scan_reference', 'scan_id', 'created_at']
         read_only_fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar',
                             'author_rank', 'author_posts_count', 'author_comments_count', 'author_joined',
                             'views_count', 'unique_views_count',
                             'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
-                            'comments_count', 'last_comment_author', 'last_comment_at', 'created_at']
+                            'comments_count', 'last_comment_author', 'last_comment_at', 'scan_reference', 'created_at']
+
+    def validate_scan_id(self, value):
+        if not value:
+            return value
+
+        request = self.context.get('request')
+        scan = ScanEvent.objects.filter(id=value).only('id', 'user_id', 'is_public_referable').first()
+        if not scan:
+            raise serializers.ValidationError('Kết quả scan không tồn tại.')
+
+        request_user = request.user if request else None
+        is_owner = bool(request_user and request_user.is_authenticated and scan.user_id == request_user.id)
+        if not is_owner and not scan.is_public_referable:
+            raise serializers.ValidationError('Bạn chỉ có thể tham chiếu scan của mình, hoặc scan đã được tham chiếu công khai.')
+
+        return value
+
+    def create(self, validated_data):
+        scan_id = validated_data.pop('scan_id', None)
+        request = self.context.get('request')
+        request_user = request.user if request else None
+        content = validated_data.get('content', '') or ''
+        if scan_id:
+            validated_data['content'] = (
+                f'{content}<p><a href="/scan/status/{scan_id}/" data-scan-ref="{scan_id}" '
+                f'class="text-cyan-400 font-bold">📎 Scan Result #{scan_id}</a></p>'
+            )
+        instance = super().create(validated_data)
+
+        if scan_id and request_user and request_user.is_authenticated:
+            ScanEvent.objects.filter(id=scan_id, user_id=request_user.id, is_public_referable=False).update(
+                is_public_referable=True
+            )
+
+        return instance
 
     def get_comments(self, obj):
         # Only return top-level comments
@@ -428,6 +540,16 @@ class ForumPostSerializer(serializers.ModelSerializer):
     def get_last_comment_at(self, obj):
         last = obj.comments.order_by('-created_at').first()
         return last.created_at.isoformat() if last else None
+
+    def get_scan_reference(self, obj):
+        content = obj.content or ''
+        match = re.search(r'data-scan-ref="(\d+)"', content)
+        if not match:
+            match = re.search(r'/scan/status/(\d+)/', content)
+        if not match:
+            return None
+        scan_id = int(match.group(1))
+        return {'scan_id': scan_id, 'url': f'/scan/status/{scan_id}/'}
 
     def get_unique_views_count(self, obj):
         from api.core.models import ForumPostView

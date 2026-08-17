@@ -2,6 +2,7 @@
 {% block title %}Tạo chủ đề mới - ShieldCall Community{% endblock %}
 {% block head_extra %}
 <style>
+    [x-cloak] { display: none !important; }
     .create-card {
         background: var(--glass-bg);
         backdrop-filter: blur(40px);
@@ -32,6 +33,17 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('forumCreate', () => ({
         title: '',
         content: '',
+        scanId: '',
+        selectedScan: null,
+        scanPickerLoading: false,
+        scanPickerResults: [],
+        scanPickerFilters: {
+            scope: 'mine',
+            type: '',
+            riskLevel: '',
+            q: '',
+            manualId: ''
+        },
         category: 'discussion',
         loading: false,
         async init() {
@@ -45,6 +57,163 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 console.error('CKEditor init failed:', e);
             }
+        },
+        levelClass(level) {
+            const v = String(level || '').toUpperCase();
+            if (v === 'RED') return 'text-red-300 border-red-400/30 bg-red-500/10';
+            if (v === 'YELLOW') return 'text-yellow-300 border-yellow-400/30 bg-yellow-500/10';
+            if (v === 'GREEN') return 'text-green-300 border-green-400/30 bg-green-500/10';
+            return 'text-cyan-300 border-cyan-400/30 bg-cyan-500/10';
+        },
+        scanTypeLabel(scan) {
+            const type = (scan.scan_type || 'scan').toUpperCase();
+            const map = {
+                PHONE: 'Số điện thoại', MESSAGE: 'Tin nhắn', DOMAIN: 'Domain', ACCOUNT: 'Tài khoản',
+                QR: 'QR/Ảnh', EMAIL: 'Email', FILE: 'Tệp', AUDIO: 'Âm thanh'
+            };
+            return map[type] || type;
+        },
+        selectedScanLabel() {
+            if (!this.selectedScan || !this.scanId) return '';
+            return `#${this.selectedScan.id} · ${this.scanTypeLabel(this.selectedScan)} · ${this.selectedScan.risk_score || 0}/100`;
+        },
+        async openScanPicker() {
+            this.scanPickerFilters.manualId = String(this.scanId || '');
+            const rows = await this.fetchScanPicker();
+            if (!rows || !rows.length) {
+                const manual = await Swal.fire({
+                    title: 'Không có scan phù hợp',
+                    text: 'Bạn có thể nhập Scan ID thủ công',
+                    input: 'text',
+                    inputPlaceholder: 'Nhập Scan ID...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Dùng Scan ID',
+                    cancelButtonText: 'Hủy',
+                    background: '#161235',
+                    color: '#fff',
+                    customClass: {
+                        popup: 'liquid-card border border-white/10 !rounded-2xl'
+                    }
+                });
+                if (!manual.isConfirmed) return;
+                this.scanPickerFilters.manualId = manual.value || '';
+                await this.applyManualScanId();
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Chọn scan tham chiếu',
+                html: `
+                    <div class="space-y-3 text-left">
+                        <label for="forum-create-scan-select" class="text-[10px] font-black uppercase tracking-widest text-white/45">Danh sách scan</label>
+                        <select id="forum-create-scan-select" class="liquid-input w-full py-3 px-4 text-sm font-bold">
+                            <option value="">-- Chọn 1 scan --</option>
+                            ${rows.slice(0, 100).map((scan) => {
+                                const text = `#${scan.id} · ${this.scanTypeLabel(scan)} · ${(scan.risk_level || 'N/A').toUpperCase()}`;
+                                return `<option value="${scan.id}">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                `,
+                showCancelButton: true,
+                showDenyButton: true,
+                denyButtonText: 'Nhập ID',
+                confirmButtonText: 'Gắn scan',
+                cancelButtonText: 'Hủy',
+                background: '#161235',
+                color: '#fff',
+                customClass: {
+                    popup: 'liquid-card border border-white/10 !rounded-2xl'
+                },
+                preConfirm: () => {
+                    const selected = document.getElementById('forum-create-scan-select')?.value || '';
+                    if (!selected) {
+                        Swal.showValidationMessage('Vui lòng chọn scan');
+                        return null;
+                    }
+                    return selected;
+                }
+            });
+
+            if (result.isDenied) {
+                const manual = await Swal.fire({
+                    title: 'Nhập Scan ID',
+                    input: 'text',
+                    inputPlaceholder: 'VD: 123',
+                    showCancelButton: true,
+                    confirmButtonText: 'Dùng ID này',
+                    cancelButtonText: 'Hủy',
+                    background: '#161235',
+                    color: '#fff',
+                    customClass: {
+                        popup: 'liquid-card border border-white/10 !rounded-2xl'
+                    }
+                });
+                if (manual.isConfirmed) {
+                    this.scanPickerFilters.manualId = manual.value || '';
+                    await this.applyManualScanId();
+                }
+                return;
+            }
+
+            if (result.isConfirmed && result.value) {
+                const picked = rows.find((item) => String(item.id) === String(result.value));
+                this.selectScan(picked || { id: Number(result.value) });
+            }
+        },
+        async fetchScanPicker(extra = {}) {
+            this.scanPickerLoading = true;
+            try {
+                const params = new URLSearchParams();
+                params.set('scope', this.scanPickerFilters.scope || 'mine');
+                if (this.scanPickerFilters.type) params.set('type', this.scanPickerFilters.type);
+                if (this.scanPickerFilters.riskLevel) params.set('risk_level', this.scanPickerFilters.riskLevel);
+                if (this.scanPickerFilters.q && this.scanPickerFilters.q.trim()) params.set('q', this.scanPickerFilters.q.trim());
+                if (extra.scanId) params.set('scan_id', String(extra.scanId));
+
+                const resp = await fetch(`/api/v1/user/scan-picker/?${params.toString()}`, { credentials: 'same-origin' });
+                if (!resp.ok) {
+                    this.scanPickerResults = [];
+                    return null;
+                }
+                const payload = await resp.json();
+                const rows = Array.isArray(payload) ? payload : (payload.results || []);
+                this.scanPickerResults = rows;
+                return rows;
+            } catch (e) {
+                console.error('Load scan picker failed:', e);
+                this.scanPickerResults = [];
+                return null;
+            } finally {
+                this.scanPickerLoading = false;
+            }
+        },
+        selectScan(scan) {
+            if (!scan || !scan.id) return;
+            this.scanId = String(scan.id);
+            this.selectedScan = scan;
+            this.scanPickerFilters.manualId = String(scan.id);
+            this.closeScanPicker();
+            showToast(`Đã chọn Scan #${scan.id}`, 'success');
+        },
+        clearScanSelection() {
+            this.scanId = '';
+            this.selectedScan = null;
+            this.scanPickerFilters.manualId = '';
+            showToast('Đã xóa scan tham chiếu', 'info');
+        },
+        async applyManualScanId() {
+            const digits = String(this.scanPickerFilters.manualId || '').replace(/\D/g, '');
+            if (!digits) {
+                showToast('Vui lòng nhập Scan ID', 'warning');
+                return;
+            }
+            const rows = await this.fetchScanPicker({ scanId: digits });
+            if (!rows || !rows.length) {
+                showToast('Scan ID không thuộc bạn hoặc chưa được public refer bởi chủ scan', 'error');
+                return;
+            }
+            this.selectScan(rows[0]);
         },
         async submitPost() {
             if(!this.title.trim() || !this.content.trim()) {
@@ -60,6 +229,9 @@ document.addEventListener('alpine:init', () => {
             formData.append('title', this.title);
             formData.append('content', this.content);
             formData.append('category', this.category);
+            if (this.scanId && String(this.scanId).trim()) {
+                formData.append('scan_id', String(this.scanId).trim());
+            }
             formData.append('cf-turnstile-response', tsToken);
             if (this.$refs.imageInput.files[0]) {
                 formData.append('image', this.$refs.imageInput.files[0]);
@@ -124,6 +296,23 @@ document.addEventListener('alpine:init', () => {
                 <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Tiêu đề bài viết</label>
                 <input type="text" x-model="title" placeholder="Nhập tiêu đề ngắn gọn nhưng đủ thông tin..." 
                     class="input-premium w-full px-6 py-4 text-lg font-bold">
+            </div>
+
+            <div class="space-y-3">
+                <label class="text-[10px] font-black uppercase tracking-widest text-white/30 ml-1">Tham chiếu kết quả scan (tuỳ chọn)</label>
+                <div class="flex flex-wrap gap-2">
+                    <button @click="openScanPicker()" type="button" class="bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-cyan-500/25 transition-all">
+                        <i class="bi bi-search mr-1"></i> Chọn scan tham chiếu
+                    </button>
+                    <button x-show="scanId" @click="clearScanSelection()" type="button" class="bg-white/5 border border-white/10 text-white/60 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all">
+                        <i class="bi bi-x-circle mr-1"></i> Bỏ chọn
+                    </button>
+                </div>
+                <div x-show="scanId" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 text-xs font-bold">
+                    <i class="bi bi-link-45deg"></i>
+                    <span x-text="selectedScanLabel() || ('Scan #' + scanId)"></span>
+                </div>
+                <p class="text-[10px] text-white/25 font-medium">Hỗ trợ lọc theo loại/risk, tìm kiếm và nhập trực tiếp Scan ID để kiểm tra quyền refer.</p>
             </div>
 
             <!-- Image Upload -->

@@ -3,8 +3,12 @@ import re
 import hashlib
 import logging
 import json
+import html
 from urllib.parse import urlparse
 from api.utils.security import verify_turnstile_token
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from django.core.cache import cache
 
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Count, Sum, F, Q
@@ -12,6 +16,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 from django.http import StreamingHttpResponse
+from django.utils.html import strip_tags
 from rest_framework import status, permissions, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
@@ -44,6 +49,77 @@ logger = logging.getLogger(__name__)
 from api.core.models import ForumPost, ForumComment, ForumLike, ForumCommentLike, ForumPostReaction, ForumPostReport, ForumCommentReport, ForumReactionType, ForumCommentReaction, ForumPostView
 from api.core.serializers import ForumPostSerializer, ForumCommentSerializer, ForumPostReportSerializer, ForumCommentReportSerializer
 
+
+def _extract_mentioned_usernames(text: str) -> list[str]:
+    if not text:
+        return []
+    matches = re.findall(r'@([A-Za-z0-9_.+-]{3,150})', text)
+    seen = set()
+    usernames = []
+    for username in matches:
+        key = username.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        usernames.append(username)
+    return usernames[:20]
+
+
+def _notify_mentions(*, sender, content: str, post: ForumPost, actor_label: str):
+    mentioned = _extract_mentioned_usernames(content)
+    if not mentioned:
+        return
+
+    users = User.objects.filter(username__in=mentioned).only('id', 'username')
+    if not users:
+        return
+
+    from api.utils.push_service import push_service
+    post_url = f'/forum/{post.id}/'
+    snippet = _to_plain_notification_text(content, limit=120) or 'Bạn vừa được nhắc tới trong diễn đàn.'
+
+    for user in users:
+        if user.id == sender.id:
+            continue
+        try:
+            push_service.send_push(
+                user.id,
+                f'{actor_label} đã nhắc tới bạn',
+                snippet,
+                url=post_url,
+                notification_type='info'
+            )
+        except Exception as exc:
+            logger.error(f"Mention push notification failed for @{user.username}: {exc}")
+
+
+def _to_plain_notification_text(raw: str, limit: int = 120) -> str:
+    text = str(raw or '')
+    text = html.unescape(text)
+    text = strip_tags(text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    if not text:
+        return ''
+    return text[:limit]
+
+
+def _broadcast_forum_live(event_name: str, payload: dict):
+    try:
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+        async_to_sync(channel_layer.group_send)(
+            'forum_live',
+            {
+                'type': 'forum_live_event',
+                'event': event_name,
+                'payload': payload or {},
+                'timestamp': timezone.now().isoformat(),
+            }
+        )
+    except Exception as exc:
+        logger.warning(f"Forum live broadcast failed ({event_name}): {exc}")
+
 class ForumPostListCreateView(APIView):
     """GET /api/forum/posts/ — list, POST — create"""
 
@@ -51,6 +127,10 @@ class ForumPostListCreateView(APIView):
         if self.request.method == 'POST':
             return [IsAuthenticated()]
         return [AllowAny()]
+
+    def _get_client_ip(self, request):
+        forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
+        return forwarded or request.META.get('REMOTE_ADDR')
 
     def get(self, request):
         category = request.query_params.get('category')
@@ -65,13 +145,29 @@ class ForumPostListCreateView(APIView):
     def post(self, request):
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
+        remote_ip = self._get_client_ip(request)
+        if not verify_turnstile_token(cf_token, remote_ip=remote_ip):
              return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
         serializer = ForumPostSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         post = serializer.save(author=request.user)
-        return Response(ForumPostSerializer(post, context={'request': request}).data, status=201)
+
+        try:
+            sender_name = getattr(request.user, 'profile', None)
+            sender_name = sender_name.display_name if sender_name and sender_name.display_name else request.user.username
+            _notify_mentions(sender=request.user, content=post.content, post=post, actor_label=sender_name)
+        except Exception as e:
+            logger.error(f"Post mention notification failed: {e}")
+
+        serialized_post = ForumPostSerializer(post, context={'request': request}).data
+        _broadcast_forum_live('post_created', {
+            'post_id': post.id,
+            'title': post.title,
+            'author': request.user.username,
+            'category': post.category,
+        })
+        return Response(serialized_post, status=201)
 
 
 class ForumPostDetailView(APIView):
@@ -147,6 +243,7 @@ class ForumPostDetailView(APIView):
         title = request.data.get('title')
         content = request.data.get('content')
         category = request.data.get('category')
+        lock_state = request.data.get('is_locked', None)
         
         if title and title.strip():
             post.title = title.strip()
@@ -154,6 +251,9 @@ class ForumPostDetailView(APIView):
             post.content = content.strip()
         if category:
             post.category = category
+
+        if lock_state is not None:
+            post.is_locked = bool(lock_state)
 
         # Handle image update
         if 'image' in request.FILES:
@@ -168,6 +268,10 @@ class ForumPostCommentView(APIView):
     """POST /api/forum/posts/<id>/comment/"""
     permission_classes = [IsAuthenticated]
 
+    def _get_client_ip(self, request):
+        forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
+        return forwarded or request.META.get('REMOTE_ADDR')
+
     def post(self, request, post_id):
         try:
             post = ForumPost.objects.get(id=post_id)
@@ -178,10 +282,11 @@ class ForumPostCommentView(APIView):
 
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
+        remote_ip = self._get_client_ip(request)
+        if not verify_turnstile_token(cf_token, remote_ip=remote_ip):
              return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
-        serializer = ForumCommentSerializer(data=request.data, context={'request': request})
+        serializer = ForumCommentSerializer(data=request.data, context={'request': request, 'post': post})
         serializer.is_valid(raise_exception=True)
         comment = serializer.save(author=request.user, post=post)
 
@@ -200,7 +305,7 @@ class ForumPostCommentView(APIView):
                 push_service.send_push(
                     comment.parent.author.id,
                     f'{sender_name} đã trả lời bình luận của bạn',
-                    comment.content[:100] if comment.content else 'Bình luận mới',
+                    _to_plain_notification_text(comment.content, limit=100) or 'Bình luận mới',
                     url=post_url,
                     notification_type='info'
                 )
@@ -209,7 +314,7 @@ class ForumPostCommentView(APIView):
                 push_service.send_push(
                     post.author.id,
                     f'{sender_name} đã bình luận bài viết của bạn',
-                    comment.content[:100] if comment.content else 'Bình luận mới',
+                    _to_plain_notification_text(comment.content, limit=100) or 'Bình luận mới',
                     url=post_url,
                     notification_type='info'
                 )
@@ -217,7 +322,21 @@ class ForumPostCommentView(APIView):
             import logging
             logging.getLogger(__name__).error(f"Comment push notification failed: {e}")
 
-        return Response(ForumCommentSerializer(comment, context={'request': request}).data, status=201)
+        try:
+            sender_name = getattr(request.user, 'profile', None)
+            sender_name = sender_name.display_name if sender_name and sender_name.display_name else request.user.username
+            _notify_mentions(sender=request.user, content=comment.content, post=post, actor_label=sender_name)
+        except Exception as e:
+            logger.error(f"Comment mention notification failed: {e}")
+
+        serialized_comment = ForumCommentSerializer(comment, context={'request': request}).data
+        _broadcast_forum_live('comment_created', {
+            'post_id': post.id,
+            'comment_id': comment.id,
+            'parent_id': comment.parent_id,
+            'author': request.user.username,
+        })
+        return Response(serialized_comment, status=201)
 
 class ForumCommentLikeView(APIView):
     """POST /api/forum/comments/<id>/like/ — toggle like"""
@@ -322,9 +441,19 @@ class ForumPostReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, post_id):
-        reason = request.data.get('reason')
+        reason = (request.data.get('reason') or '').strip()
         if not reason:
             return Response({'error': 'Vui lòng cung cấp lý do báo cáo'}, status=400)
+        if len(reason) > 1200:
+            return Response({'error': 'Lý do báo cáo quá dài.'}, status=400)
+
+        if ForumPostReport.objects.filter(reporter=request.user, post_id=post_id, status='pending').exists():
+            return Response({'error': 'Bạn đã báo cáo bài viết này và đang chờ xử lý.'}, status=409)
+
+        rate_key = f"forum_report_post:{request.user.id}"
+        hits = int(cache.get(rate_key, 0))
+        if hits >= 10:
+            return Response({'error': 'Bạn đang gửi báo cáo quá nhanh. Vui lòng thử lại sau.'}, status=429)
 
         try:
             post = ForumPost.objects.get(id=post_id)
@@ -337,6 +466,7 @@ class ForumPostReportView(APIView):
             post=post,
             reason=reason
         )
+        cache.set(rate_key, hits + 1, timeout=600)
 
         # Increment report count
         ForumPost.objects.filter(id=post_id).update(reports_count=F('reports_count') + 1)
@@ -355,9 +485,19 @@ class ForumCommentReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, comment_id):
-        reason = request.data.get('reason')
+        reason = (request.data.get('reason') or '').strip()
         if not reason:
             return Response({'error': 'Vui lòng cung cấp lý do báo cáo'}, status=400)
+        if len(reason) > 1200:
+            return Response({'error': 'Lý do báo cáo quá dài.'}, status=400)
+
+        if ForumCommentReport.objects.filter(reporter=request.user, comment_id=comment_id, status='pending').exists():
+            return Response({'error': 'Bạn đã báo cáo bình luận này và đang chờ xử lý.'}, status=409)
+
+        rate_key = f"forum_report_comment:{request.user.id}"
+        hits = int(cache.get(rate_key, 0))
+        if hits >= 12:
+            return Response({'error': 'Bạn đang gửi báo cáo quá nhanh. Vui lòng thử lại sau.'}, status=429)
 
         try:
             comment = ForumComment.objects.select_related('post').get(id=comment_id)
@@ -373,6 +513,7 @@ class ForumCommentReportView(APIView):
             comment=comment,
             reason=reason
         )
+        cache.set(rate_key, hits + 1, timeout=600)
 
         # Trigger AI analysis task
         try:

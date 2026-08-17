@@ -154,3 +154,28 @@
     font-weight: 700;
     margin: 0.5rem 0 0.25rem;
 }
+
+/* Keep CKEditor and all floating UI above app overlays/components. */
+.ck.ck-editor,
+.ck.ck-editor__main,
+.ck.ck-editor__editable {
+    position: relative;
+    z-index: 2147483000 !important;
+}
+
+.ck.ck-toolbar,
+.ck.ck-sticky-panel,
+.ck.ck-sticky-panel .ck-sticky-panel__content {
+    z-index: 2147483200 !important;
+}
+
+.ck-body-wrapper,
+.ck.ck-reset_all,
+.ck.ck-balloon-panel,
+.ck.ck-dropdown__panel,
+.ck.ck-list,
+.ck.ck-tooltip,
+.ck.ck-dialog,
+.ck.ck-powered-by-balloon {
+    z-index: 2147483600 !important;
+}

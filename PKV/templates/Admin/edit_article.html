@@ -14,6 +14,18 @@
         transition: all 0.25s ease;
     }
     .cover-dropzone:hover { border-color: rgba(34,211,238,0.45); background: rgba(34,211,238,0.08); }
+    .cover-preview {
+        border-radius: 1rem;
+        border: 1px solid rgba(255,255,255,0.12);
+        overflow: hidden;
+        background: rgba(255,255,255,0.02);
+    }
+    .cover-preview img {
+        width: 100%;
+        height: 220px;
+        object-fit: cover;
+        display: block;
+    }
 
     .publish-toggle {
         width: 52px;
@@ -105,7 +117,7 @@
             <div class="liquid-card p-6 space-y-6 border-white/5 bg-slate-900/40">
                 <div class="space-y-2">
                     <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Danh mục bài viết</label>
-                    <div class="dropdown-container" x-data="liquidSelect({
+                    <div class="dropdown-container liquid-custom-select" x-data="liquidSelect({
                         value: '{{ form.category.value|default:'news'|escapejs }}',
                         placeholder: 'Chọn danh mục',
                         options: [
@@ -114,7 +126,7 @@
                             { value: 'alert', label: 'Cảnh báo mới' },
                             { value: 'story', label: 'Chuyện cảnh giác' }
                         ]
-                    })" class="liquid-custom-select" @change="document.getElementById('id_category').value = $event.detail">
+                    })" @change="document.getElementById('id_category').value = $event.detail">
                         {{ form.category }}
                         <div class="liquid-select-trigger" :class="{ 'active': open }" @click="open = !open">
                             <span x-text="label" class="truncate"></span>
@@ -134,6 +146,7 @@
                     <label class="block text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Ảnh đại diện (Cover)</label>
                     <div class="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3">
                         {{ form.cover_image }}
+                        <input type="hidden" id="article-cover-existing" value="{% if article and article.cover_image %}{{ article.cover_image.url }}{% endif %}">
                         <label for="id_cover_image" class="cover-dropzone block">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center">
@@ -145,11 +158,13 @@
                                 </div>
                             </div>
                         </label>
-                        {% if article and article.cover_image %}
-                        <div class="rounded-lg overflow-hidden border border-white/10">
-                            <img src="{{ article.cover_image.url }}" class="w-full h-auto" alt="{{ article.title }}">
+                        <div id="article-cover-preview" class="cover-preview {% if not article or not article.cover_image %}hidden{% endif %}">
+                            {% if article and article.cover_image %}
+                            <img id="article-cover-preview-img" src="{{ article.cover_image.url }}" alt="{{ article.title }}">
+                            {% else %}
+                            <img id="article-cover-preview-img" src="" alt="Preview" class="hidden">
+                            {% endif %}
                         </div>
-                        {% endif %}
                     </div>
                 </div>
 
@@ -193,16 +208,49 @@
         
         const coverInput = document.getElementById('id_cover_image');
         const coverFilename = document.getElementById('article-cover-filename');
+        const coverPreview = document.getElementById('article-cover-preview');
+        const coverPreviewImg = document.getElementById('article-cover-preview-img');
+        const existingCover = document.getElementById('article-cover-existing')?.value || '';
         if (coverInput && coverFilename) {
+            if (!coverInput.files?.length && existingCover) {
+                coverFilename.textContent = 'Ảnh hiện tại đang được dùng';
+            }
             coverInput.addEventListener('change', () => {
                 const file = coverInput.files && coverInput.files.length ? coverInput.files[0].name : '';
                 coverFilename.textContent = file || 'PNG/JPG/WebP · Tối đa 5MB';
+                const pickedFile = coverInput.files && coverInput.files.length ? coverInput.files[0] : null;
+                if (pickedFile && coverPreview && coverPreviewImg) {
+                    const objectUrl = URL.createObjectURL(pickedFile);
+                    coverPreviewImg.src = objectUrl;
+                    coverPreviewImg.classList.remove('hidden');
+                    coverPreview.classList.remove('hidden');
+                } else if (!pickedFile && existingCover && coverPreview && coverPreviewImg) {
+                    coverPreviewImg.src = existingCover;
+                    coverPreviewImg.classList.remove('hidden');
+                    coverPreview.classList.remove('hidden');
+                }
             });
         }
 
         const genBtn = document.getElementById('btn-gen-summary-article');
         const summaryEl = document.getElementById('id_summary');
         const titleEl = document.getElementById('id_title');
+        const normalizeSummaryText = (value) => {
+            let text = String(value || '').trim();
+            if (!text) return '';
+            const pick = (obj) => {
+                if (!obj || typeof obj !== 'object') return '';
+                return String(obj.summary || obj['tóm_tắt'] || obj.tom_tat || obj.content || obj.text || '').trim();
+            };
+            if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
+                try {
+                    const parsed = JSON.parse(text);
+                    const fromParsed = Array.isArray(parsed) ? pick(parsed[0]) : pick(parsed);
+                    if (fromParsed) return fromParsed;
+                } catch (_) {}
+            }
+            return text;
+        };
         if (genBtn && summaryEl) {
             genBtn.addEventListener('click', async () => {
                 const editorContent = window._articleEditorInstance ? window._articleEditorInstance.getData() : (document.getElementById('editor')?.value || '');
@@ -221,7 +269,7 @@
                     });
                     const data = await resp.json();
                     if (resp.ok && data.status === 'success') {
-                        summaryEl.value = data.summary || '';
+                        summaryEl.value = normalizeSummaryText(data.summary);
                         showToast('Đã tạo tóm tắt', 'success');
                     } else {
                         showToast(data.message || 'Không tạo được tóm tắt', 'error');

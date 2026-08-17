@@ -18,6 +18,11 @@ from django.dispatch import receiver
 
 class UserProfile(models.Model):
     """Extended user data including avatar and preferences"""
+    MFA_METHOD_CHOICES = [
+        ('totp', 'Authenticator app (TOTP)'),
+        ('email', 'Email OTP'),
+    ]
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     display_name = models.CharField(max_length=100, blank=True)
     avatar = models.ImageField(upload_to='profiles/avatars/', null=True, blank=True)
@@ -28,6 +33,7 @@ class UserProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_super_admin = models.BooleanField(default=False)
+    mfa_preferred_method = models.CharField(max_length=10, choices=MFA_METHOD_CHOICES, blank=True, null=True)
     
     @property
     def rank_info(self):
@@ -273,6 +279,11 @@ class ScanEvent(models.Model):
     dkim_status = models.CharField(max_length=50, blank=True, null=True)
     dmarc_status = models.CharField(max_length=50, blank=True, null=True)
     detected_urls = models.JSONField(default=list, blank=True, help_text="List of URLs found in email/message")
+    is_public_referable = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Bật khi chính chủ đã refer scan ra forum để cho phép người khác xem/refer.',
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -355,6 +366,24 @@ class UserAlert(models.Model):
 
     def __str__(self):
         return f"Alert: {self.target_type} {self.target_value[:30]}"
+
+
+class MFARecoveryCode(models.Model):
+    """One-time recovery codes for TOTP fallback login."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='mfa_recovery_codes')
+    code_hash = models.CharField(max_length=64, db_index=True)
+    hint = models.CharField(max_length=8, blank=True)
+    is_used = models.BooleanField(default=False, db_index=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        unique_together = ['user', 'code_hash']
+
+    def __str__(self):
+        state = 'used' if self.is_used else 'active'
+        return f"RecoveryCode<{self.user_id}:{self.hint}:{state}>"
 
 
 # ─── Forum Models (Community Scam Discussion) ──────────────────────────────
@@ -610,6 +639,62 @@ class LearnLesson(models.Model):
             from django.utils.text import slugify
             self.slug = slugify(self.title)
         super().save(*args, **kwargs)
+
+
+class LearnReactionType(models.TextChoices):
+    LIKE = 'like', 'Thích'
+    HELPFUL = 'helpful', 'Hữu ích'
+    INSIGHTFUL = 'insightful', 'Bổ ích'
+
+
+class LessonReaction(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=20, choices=LearnReactionType.choices, default=LearnReactionType.LIKE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'lesson']
+        ordering = ['-created_at']
+
+
+class ArticleReaction(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=20, choices=LearnReactionType.choices, default=LearnReactionType.LIKE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'article']
+        ordering = ['-created_at']
+
+
+class ArticleComment(models.Model):
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='article_comments')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    content = models.TextField()
+    is_hidden = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+
+class ArticleCommentReactionType(models.TextChoices):
+    UPVOTE = 'upvote', 'Upvote'
+    DOWNVOTE = 'downvote', 'Downvote'
+
+
+class ArticleCommentReaction(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    comment = models.ForeignKey(ArticleComment, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=10, choices=ArticleCommentReactionType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'comment']
+        ordering = ['-created_at']
 
 
 class QuizQuestionType(models.TextChoices):

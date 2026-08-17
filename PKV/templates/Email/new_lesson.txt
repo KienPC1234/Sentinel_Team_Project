@@ -1,0 +1,9 @@
+Chào bạn,
+
+Chúng tôi vừa xuất bản bài học mới trên ShieldCall VN:
+{{ lesson_title }}
+
+Xem ngay tại:
+{{ lesson_url }}
+
+© 2026 ShieldCall VN

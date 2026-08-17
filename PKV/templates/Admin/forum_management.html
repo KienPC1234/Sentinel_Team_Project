@@ -266,11 +266,11 @@
                                 </td>
                                 <td class="px-5 py-4">
                                     <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase border"
-                                          :class="r.status === 'approved' ? 'bg-green-500/10 text-green-500 border-green-500/20' : r.status === 'rejected' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-white/5 text-white/40 border-white/10'"
-                                          x-text="r.status"></span>
+                                          :class="statusBadgeClass(r.status)"
+                                          x-text="statusLabel(r.status)"></span>
                                 </td>
                                 <td class="px-5 py-4">
-                                    <div class="flex justify-end gap-1.5" :class="r.status === 'pending' ? '' : 'opacity-30 pointer-events-none'">
+                                    <div class="flex justify-end gap-1.5" :class="canReviewReport(r) ? '' : 'opacity-30 pointer-events-none'">
                                         <button @click="reportAction('post', r.id, 'analyze', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-blue-500/30 hover:text-blue-400 transition-all" title="AI"><i class="bi bi-cpu"></i></button>
                                         <button @click="reportAction('post', r.id, 'approve', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-green-500/30 hover:text-green-400 transition-all" title="Duyệt"><i class="bi bi-check-circle"></i></button>
                                         <button @click="reportAction('post', r.id, 'reject', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all" title="Từ chối"><i class="bi bi-x-circle"></i></button>
@@ -318,11 +318,11 @@
                                 </td>
                                 <td class="px-5 py-4">
                                     <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase border"
-                                          :class="r.status === 'approved' ? 'bg-green-500/10 text-green-500 border-green-500/20' : r.status === 'rejected' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-white/5 text-white/40 border-white/10'"
-                                          x-text="r.status"></span>
+                                          :class="statusBadgeClass(r.status)"
+                                          x-text="statusLabel(r.status)"></span>
                                 </td>
                                 <td class="px-5 py-4">
-                                    <div class="flex justify-end gap-1.5" :class="r.status === 'pending' ? '' : 'opacity-30 pointer-events-none'">
+                                    <div class="flex justify-end gap-1.5" :class="canReviewReport(r) ? '' : 'opacity-30 pointer-events-none'">
                                         <button @click="reportAction('comment', r.id, 'analyze', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-blue-500/30 hover:text-blue-400 transition-all" title="AI"><i class="bi bi-cpu"></i></button>
                                         <button @click="reportAction('comment', r.id, 'approve', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-green-500/30 hover:text-green-400 transition-all" title="Duyệt"><i class="bi bi-check-circle"></i></button>
                                         <button @click="reportAction('comment', r.id, 'reject', r)" class="h-7 px-2.5 rounded-lg bg-white/5 text-white/40 text-[10px] border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all" title="Từ chối"><i class="bi bi-x-circle"></i></button>
@@ -769,6 +769,26 @@ function forumAdmin() {
                 question: 'bg-yellow-500/20 text-yellow-500',
             };
             return map[cat] || 'bg-white/10 text-white/40';
+        },
+
+        canReviewReport(report) {
+            const status = report?.status;
+            return status === 'pending' || status === 'ai_flagged';
+        },
+
+        statusLabel(status) {
+            if (status === 'pending') return 'Chờ xử lý';
+            if (status === 'approved') return 'Vi phạm';
+            if (status === 'rejected') return 'Không vi phạm';
+            if (status === 'ai_flagged') return 'AI gắn cờ';
+            return status || '—';
+        },
+
+        statusBadgeClass(status) {
+            if (status === 'approved') return 'bg-green-500/10 text-green-500 border-green-500/20';
+            if (status === 'rejected') return 'bg-red-500/10 text-red-500 border-red-500/20';
+            if (status === 'ai_flagged') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+            return 'bg-white/5 text-white/40 border-white/10';
         },
 
         async postAction(postId, action) {

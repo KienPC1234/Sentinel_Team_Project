@@ -198,3 +198,32 @@ class TaskProgressConsumer(AsyncWebsocketConsumer):
             'step': event.get('step'),
             'data': event.get('data'),
         }))
+
+
+class ForumLiveConsumer(AsyncWebsocketConsumer):
+    """Realtime forum broadcast channel for new posts/comments."""
+
+    async def connect(self):
+        self.group_name = 'forum_live'
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def receive(self, text_data=None, bytes_data=None):
+        if text_data:
+            try:
+                msg = json.loads(text_data)
+                if msg.get('type') == 'ping':
+                    await self.send(text_data=json.dumps({'type': 'pong'}))
+            except json.JSONDecodeError:
+                pass
+
+    async def forum_live_event(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'forum_live_event',
+            'event': event.get('event'),
+            'payload': event.get('payload', {}),
+            'timestamp': event.get('timestamp'),
+        }))

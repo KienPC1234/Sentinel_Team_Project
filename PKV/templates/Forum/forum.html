@@ -92,9 +92,46 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 console.error('Forum Data Error:', e);
             }
+            this.initRealtime();
             this.$watch('activeTab', () => this.currentPage = 1);
             this.$watch('searchQuery', () => this.currentPage = 1);
             this.$watch('sortBy', () => this.currentPage = 1);
+        },
+        initRealtime() {
+            try {
+                const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+                const ws = new WebSocket(`${wsScheme}://${window.location.host}/ws/forum/`);
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data || '{}');
+                        if (data.type !== 'forum_live_event') return;
+                        if (data.event === 'post_created' || data.event === 'comment_created') {
+                            this.refreshForumData();
+                        }
+                    } catch (_) {}
+                };
+                ws.onopen = () => {
+                    setInterval(() => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'ping' }));
+                        }
+                    }, 30000);
+                };
+                ws.onclose = () => {
+                    setTimeout(() => this.initRealtime(), 2000);
+                };
+            } catch (e) {
+                console.warn('Forum WS init failed:', e);
+            }
+        },
+        async refreshForumData() {
+            try {
+                const resp = await fetch('/api/v1/forum/posts/');
+                if (!resp.ok) return;
+                const rows = await resp.json();
+                if (!Array.isArray(rows)) return;
+                this.posts = rows;
+            } catch (_) {}
         },
         stripHtml(html) {
             if (!html) return '';
