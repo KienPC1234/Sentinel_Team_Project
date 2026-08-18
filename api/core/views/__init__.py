@@ -3,7 +3,7 @@ ShieldCall VN – Views Package
 Re-exports all views so urls.py continues to work unchanged.
 """
 from .stream_views import ChatStreamView, ScanAnalyzeSSEView
-from .auth_views import RegisterView, LoginView, LogoutView, MeView, PasswordChangeView
+from .auth_views import RegisterRequestOTPView, RegisterView, LoginView, LogoutView, MeView, PasswordChangeView, DeleteAccountView, EmailChangeRequestOTPView, EmailChangeVerifyOTPView
 from .mfa_views import MFAStatusView, MFASetupTOTPView, MFASetupEmailView, MFAVerifyView, MFADeactivateView, MFARecoveryCodesView
 from .scan_views import (
     ScanPhoneView, ScanMessageView, ScanDomainView,
@@ -40,7 +40,7 @@ from .learn_views import (
 
 __all__ = [
     'ChatStreamView', 'ScanAnalyzeSSEView',
-    'RegisterView', 'LoginView', 'LogoutView', 'MeView',
+    'RegisterRequestOTPView', 'RegisterView', 'LoginView', 'LogoutView', 'MeView', 'DeleteAccountView', 'EmailChangeRequestOTPView', 'EmailChangeVerifyOTPView',
     'MFAStatusView', 'MFASetupTOTPView', 'MFASetupEmailView', 'MFAVerifyView', 'MFADeactivateView', 'MFARecoveryCodesView',
     'PasswordChangeView',
     'ScanPhoneView', 'ScanMessageView', 'ScanDomainView',

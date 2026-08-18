@@ -117,6 +117,7 @@
                            :disabled="!editing" :class="!editing && 'opacity-50 cursor-not-allowed'">
                     <i class="bi bi-chat-dots-fill absolute right-6 top-1/2 -translate-y-1/2 text-white/20"></i>
                 </div>
+                <p class="text-[9px] text-white/20 font-bold uppercase tracking-widest ml-2">Nếu để trống hoặc nhập "none", hồ sơ công khai sẽ tự ẩn nút nhắn tin.</p>
             </div>
 
             <div class="space-y-2">
@@ -183,6 +184,52 @@
                 </div>
             </div>
 
+            <div class="p-6 bg-white/[0.01]" x-data="emailChangeManager()">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-300">
+                            <i class="bi bi-envelope-at-fill"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-black text-white uppercase tracking-wide">Đổi email đăng nhập</div>
+                            <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Email hiện tại: <span class="text-cyan-300" x-text="currentEmail"></span></p>
+                        </div>
+                    </div>
+                    <button @click="expanded = !expanded" class="liquid-btn py-2.5 px-4 text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/10 hover:bg-white/10">
+                        <i class="bi bi-arrow-repeat mr-1"></i> Mở đổi email
+                    </button>
+                </div>
+
+                <div x-show="expanded" x-transition class="mt-6 rounded-3xl border border-indigo-400/20 bg-indigo-500/[0.04] p-5 space-y-4 animate-fadein">
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Email mới</label>
+                        <input type="email" x-model="newEmail" class="liquid-input w-full py-3.5 px-5 text-sm font-bold" placeholder="new-email@example.com">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Mật khẩu hiện tại</label>
+                        <input type="password" x-model="password" class="liquid-input w-full py-3.5 px-5 text-sm font-bold" placeholder="••••••••">
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <button @click="requestOtp()" :disabled="loading || cooldown > 0" class="liquid-btn py-2.5 px-4 text-[10px] font-black uppercase tracking-widest bg-cyan-500 text-black hover:bg-cyan-400 disabled:opacity-60">
+                            <span x-show="cooldown <= 0">Gửi OTP đến email mới</span>
+                            <span x-show="cooldown > 0" x-text="'Gửi lại sau ' + cooldown + 's'"></span>
+                        </button>
+                        <p class="text-[10px] text-white/35 font-bold uppercase tracking-widest self-center">OTP chỉ có hiệu lực 10 phút.</p>
+                    </div>
+
+                    <div class="space-y-2" x-show="otpRequested">
+                        <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Mã OTP (6 số)</label>
+                        <input type="text" x-model="otp" maxlength="6" class="liquid-input w-full py-3.5 px-5 text-center text-xl font-black tracking-[0.45em]" placeholder="••••••">
+                    </div>
+
+                    <button @click="verifyOtp()" x-show="otpRequested" :disabled="loading" class="liquid-btn w-full py-4 text-[11px] font-black uppercase tracking-[0.2em] bg-indigo-500 text-white hover:bg-indigo-400 shadow-lg shadow-indigo-500/20 disabled:opacity-60">
+                        <span x-show="!loading">XÁC THỰC OTP & ĐỔI EMAIL</span>
+                        <span x-show="loading" class="spinner w-4 h-4 border-white"></span>
+                    </button>
+                </div>
+            </div>
+
             <a href="{% url 'change-password' %}" class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group">
                 <div class="flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
@@ -195,6 +242,39 @@
                 </div>
                 <i class="bi bi-chevron-right text-white/20 transition-transform group-hover:translate-x-1"></i>
             </a>
+
+            <div class="p-6 bg-red-500/[0.03]" x-data="deleteAccountManager()">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400">
+                            <i class="bi bi-trash3-fill"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-black text-red-300 uppercase tracking-wide">Xóa tài khoản vĩnh viễn</div>
+                            <p class="text-[10px] text-red-200/70 font-bold uppercase tracking-widest mt-1">Hành động không thể hoàn tác, dữ liệu sẽ bị xóa khỏi hệ thống.</p>
+                        </div>
+                    </div>
+                    <button @click="open = !open" class="liquid-btn py-2.5 px-4 text-[10px] font-black uppercase tracking-widest bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30">
+                        <i class="bi bi-exclamation-triangle-fill mr-1"></i> Mở xác nhận
+                    </button>
+                </div>
+
+                <div x-show="open" x-transition class="mt-6 rounded-3xl border border-red-500/20 bg-black/20 p-5 space-y-4 animate-fadein">
+                    <p class="text-[11px] text-red-200/80 font-semibold leading-relaxed">Nhập mật khẩu hiện tại và gõ chính xác cụm từ <span class="font-black text-red-300">XOA TAI KHOAN</span> để xác nhận xóa tài khoản.</p>
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Mật khẩu hiện tại</label>
+                        <input type="password" x-model="password" class="liquid-input w-full py-3.5 px-5 text-sm font-bold" placeholder="••••••••">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Cụm từ xác nhận</label>
+                        <input type="text" x-model="confirmationText" class="liquid-input w-full py-3.5 px-5 text-sm font-black tracking-[0.15em] uppercase" placeholder="XOA TAI KHOAN">
+                    </div>
+                    <button @click="submitDelete()" :disabled="loading" class="liquid-btn w-full py-4 text-[11px] font-black uppercase tracking-[0.2em] bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20 disabled:opacity-60">
+                        <span x-show="!loading">XÓA TÀI KHOẢN NGAY</span>
+                        <span x-show="loading" class="spinner w-4 h-4 border-white"></span>
+                    </button>
+                </div>
+            </div>
             
             <!-- 2FA Section -->
             <div class="p-6 bg-white/[0.01]" x-data="mfaManager()">
@@ -370,7 +450,7 @@
                     </div>
                     <div>
                         <div class="text-sm font-black text-white uppercase tracking-wide">Hộp thư</div>
-                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Tin nhắn riêng giữa các thành viên</p>
+                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Quản lý thông báo của bạn</p>
                     </div>
                 </div>
                 <i class="bi bi-chevron-right text-white/20 transition-transform group-hover:translate-x-1"></i>
@@ -434,6 +514,9 @@
                         }
                         if (event.detail?.user?.display_name !== undefined) {
                             this.user.display_name = event.detail.user.display_name;
+                        }
+                        if (event.detail?.user?.email !== undefined) {
+                            this.user.email = event.detail.user.email;
                         }
                     });
                     this.initEditor();
@@ -507,6 +590,8 @@
                 async saveProfile() {
                     this.loading = true;
                     try {
+                        const normalizedMessenger = (this.formData.messenger_link || '').trim();
+                        this.formData.messenger_link = ['none', 'null', 'undefined', 'nan', 'false', '0'].includes(normalizedMessenger.toLowerCase()) ? '' : normalizedMessenger;
                         const r = await fetch('/api/v1/auth/me/', {
                             method: 'PATCH',
                             headers: { 
@@ -539,6 +624,160 @@
                         }
                     } catch(e) { showToast('Lỗi kết nối', 'error'); }
                     this.loading = false;
+                }
+            }
+        }
+
+        function emailChangeManager() {
+            return {
+                expanded: false,
+                loading: false,
+                otpRequested: false,
+                currentEmail: '{{ user.email|escapejs }}',
+                newEmail: '',
+                password: '',
+                otp: '',
+                cooldown: 0,
+                timer: null,
+                init() {
+                    window.addEventListener('profile-updated', (event) => {
+                        if (event.detail?.user?.email) {
+                            this.currentEmail = event.detail.user.email;
+                        }
+                    });
+                },
+                startCooldown() {
+                    this.cooldown = 60;
+                    if (this.timer) clearInterval(this.timer);
+                    this.timer = setInterval(() => {
+                        this.cooldown -= 1;
+                        if (this.cooldown <= 0) {
+                            clearInterval(this.timer);
+                            this.timer = null;
+                        }
+                    }, 1000);
+                },
+                async requestOtp() {
+                    const normalizedEmail = (this.newEmail || '').trim().toLowerCase();
+                    if (!normalizedEmail) return showToast('Vui lòng nhập email mới.', 'warning');
+                    if (!this.password) return showToast('Vui lòng nhập mật khẩu hiện tại.', 'warning');
+
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/v1/auth/email-change/request/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken(),
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({ new_email: normalizedEmail, password: this.password })
+                        });
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.error || 'Không thể gửi OTP.');
+
+                        this.newEmail = normalizedEmail;
+                        this.otpRequested = true;
+                        this.otp = '';
+                        this.startCooldown();
+                        showToast(data.message || 'OTP đã được gửi.', 'success');
+                    } catch (error) {
+                        showToast(error.message || 'Lỗi hệ thống.', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async verifyOtp() {
+                    if (!this.otpRequested) return;
+                    if (!/^\d{6}$/.test((this.otp || '').trim())) {
+                        return showToast('OTP phải gồm đúng 6 chữ số.', 'warning');
+                    }
+
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/v1/auth/email-change/verify/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken(),
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({ new_email: this.newEmail, otp: this.otp.trim() })
+                        });
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.error || 'Xác thực OTP thất bại.');
+
+                        this.currentEmail = data.user?.email || this.newEmail;
+                        this.newEmail = '';
+                        this.password = '';
+                        this.otp = '';
+                        this.otpRequested = false;
+                        this.expanded = false;
+
+                        window.dispatchEvent(new CustomEvent('profile-updated', { detail: { user: data.user || { email: this.currentEmail } } }));
+                        showToast(data.message || 'Đổi email thành công.', 'success');
+                    } catch (error) {
+                        showToast(error.message || 'Lỗi hệ thống.', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            }
+        }
+
+        function deleteAccountManager() {
+            return {
+                open: false,
+                loading: false,
+                password: '',
+                confirmationText: '',
+                async submitDelete() {
+                    const expected = 'XOA TAI KHOAN';
+                    if (!this.password) {
+                        return showToast('Vui lòng nhập mật khẩu hiện tại.', 'warning');
+                    }
+                    if ((this.confirmationText || '').trim().toUpperCase() !== expected) {
+                        return showToast('Bạn phải nhập chính xác cụm từ xác nhận.', 'warning');
+                    }
+
+                    const accepted = await window.scConfirm(
+                        'Bạn chắc chắn muốn xóa tài khoản vĩnh viễn? Hành động này không thể khôi phục.',
+                        {
+                            title: 'Xác nhận xóa tài khoản',
+                            icon: 'warning',
+                            confirmButtonText: 'Xóa vĩnh viễn',
+                            cancelButtonText: 'Hủy',
+                        }
+                    );
+                    if (!accepted) return;
+
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/v1/auth/account/delete/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken(),
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                password: this.password,
+                                confirmation_text: this.confirmationText,
+                            })
+                        });
+                        const data = await response.json();
+                        if (!response.ok) {
+                            throw new Error(data.error || 'Không thể xóa tài khoản.');
+                        }
+                        showToast(data.message || 'Tài khoản đã được xóa.', 'success');
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 800);
+                    } catch (error) {
+                        showToast(error.message || 'Lỗi hệ thống khi xóa tài khoản.', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
                 }
             }
         }

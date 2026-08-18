@@ -5,6 +5,7 @@ DRF serializers for all MVP models + auth
 import re
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.utils.text import slugify
 from rest_framework import serializers
 from api.utils.normalization import normalize_phone_e164
 from .models import (
@@ -23,6 +24,7 @@ User = get_user_model()
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
+    full_name = serializers.CharField(max_length=150, required=False, default='')
     first_name = serializers.CharField(max_length=150, required=False, default='')
     last_name = serializers.CharField(max_length=150, required=False, default='')
 
@@ -32,17 +34,59 @@ class RegisterSerializer(serializers.Serializer):
         return value.lower()
 
     def validate(self, attrs):
+        fallback_full_name = (
+            attrs.get('full_name')
+            or self.initial_data.get('username')
+            or self.initial_data.get('name')
+            or ''
+        )
+        fallback_full_name = str(fallback_full_name).strip()
+        if not attrs.get('full_name') and fallback_full_name:
+            attrs['full_name'] = fallback_full_name
         validate_password(attrs['password'])
         return attrs
 
+    def _generate_unique_username(self, full_name: str, email: str) -> str:
+        base = slugify(full_name or '', allow_unicode=False)
+        base = re.sub(r'[^a-z0-9._-]+', '', (base or '').lower())
+        if not base:
+            email_prefix = (email or '').split('@')[0]
+            base = re.sub(r'[^a-z0-9._-]+', '', email_prefix.lower()) or 'user'
+
+        if not User.objects.filter(username__iexact=base).exists():
+            return base
+
+        suffix = 2
+        while True:
+            candidate = f"{base}-{suffix}"
+            if not User.objects.filter(username__iexact=candidate).exists():
+                return candidate
+            suffix += 1
+
     def create(self, validated_data):
+        full_name = (validated_data.get('full_name') or '').strip()
+        name_parts = [part for part in full_name.split() if part]
+        first_name = validated_data.get('first_name', '').strip()
+        last_name = validated_data.get('last_name', '').strip()
+        if full_name and not first_name and not last_name:
+            if len(name_parts) == 1:
+                first_name = name_parts[0]
+            else:
+                first_name = ' '.join(name_parts[:-1])
+                last_name = name_parts[-1]
+
+        username = self._generate_unique_username(full_name=full_name, email=validated_data['email'])
         user = User.objects.create_user(
-            username=validated_data['email'],
+            username=username,
             email=validated_data['email'],
             password=validated_data['password'],
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', ''),
+            first_name=first_name,
+            last_name=last_name,
         )
+        profile = getattr(user, 'profile', None)
+        if profile:
+            profile.display_name = full_name or f"{first_name} {last_name}".strip() or username
+            profile.save(update_fields=['display_name'])
         return user
 
 
@@ -64,12 +108,33 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'display_name': {'required': False, 'allow_blank': True},
         }
 
+    def validate_messenger_link(self, value):
+        if value is None:
+            return ''
+        normalized = str(value).strip()
+        if not normalized:
+            return ''
+        if normalized.lower() in {'none', 'null', 'undefined', 'nan', 'false', '0'}:
+            return ''
+        return normalized
+
 class UserSerializer(serializers.ModelSerializer):
     display_name = serializers.CharField(source='profile.display_name', read_only=True)
     avatar = serializers.ImageField(source='profile.avatar', read_only=True)
     rank_info = serializers.ReadOnlyField(source='profile.rank_info')
     about = serializers.CharField(source='profile.about', read_only=True)
-    messenger_link = serializers.URLField(source='profile.messenger_link', read_only=True)
+    messenger_link = serializers.SerializerMethodField()
+
+    def get_messenger_link(self, obj):
+        raw = getattr(getattr(obj, 'profile', None), 'messenger_link', None)
+        if raw is None:
+            return ''
+        normalized = str(raw).strip()
+        if not normalized:
+            return ''
+        if normalized.lower() in {'none', 'null', 'undefined', 'nan', 'false', '0'}:
+            return ''
+        return normalized
     
     class Meta:
         model = User
