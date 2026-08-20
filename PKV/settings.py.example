@@ -192,6 +192,9 @@ OLLAMA_BASE_URL = 'http://localhost:11434' # Or cloud if using API
 OLLAMA_API_KEY = 'your-api-key-if-applicable'
 LLM_MODEL = 'llama3'
 
+# Optional: local Node Puppeteer host used by web-scan fallback
+PUPPETEER_HOST_URL = os.getenv('PUPPETEER_HOST_URL', 'http://127.0.0.1:3010/render')
+
 # SMTP Email
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

@@ -938,6 +938,21 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                 pass
         return re.sub(r'\s+', ' ', repaired)
 
+    def _looks_like_captcha(text: str) -> bool:
+        if not text:
+            return False
+        lower = text.lower()
+        signals = [
+            'captcha',
+            'i am not a robot',
+            'verify you are human',
+            'cloudflare',
+            'attention required',
+            'recaptcha',
+            'hcaptcha',
+        ]
+        return any(sig in lower for sig in signals)
+
     try:
         scan_event = ScanEvent.objects.get(id=scan_event_id)
         scan_event.status = ScanStatus.PROCESSING
@@ -953,6 +968,8 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         content = ""
         network_risk_score = 0
         network_details = []
+        puppeteer_used = False
+        captcha_detected = False
 
         # --- NETWORK ANALYSIS (Deep) ---
         send_progress("Đang kiểm tra thông tin tên miền (WHOIS, DNS)...", step="network_analysis")
@@ -1040,7 +1057,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             logger.error(f"[WebScan] Event {scan_event_id}: Deep network scan failed: {e}")
             send_progress(f"Lỗi kiểm tra mạng: {str(e)}", step="network_warning")
         
-        # 1. Fetch Content using requests + BeautifulSoup (replacing Ollama web_fetch)
+        # 1. Fetch Content - TRY PUPPETEER FIRST then requests fallback
         send_progress(f"Đang thu thập nội dung từ {domain}...", step="scraping")
         
         # Build full URL if scheme not provided
@@ -1052,52 +1069,89 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         fetch_success = False
         page_title = ""
         
+        # 1a. JS-render via Node Puppeteer host FIRST (priority for modern JS-heavy sites)
+        # This mode is for rendering dynamic pages and detecting CAPTCHA gates,
+        # not for bypassing CAPTCHA challenges.
         try:
-            import requests as http_requests
-            from bs4 import BeautifulSoup
+            from api.utils.puppeteer_host_client import fetch_with_puppeteer_host
 
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
-            }
-            resp = http_requests.get(target_url, headers=headers, timeout=15, verify=True, allow_redirects=True)
-            resp.raise_for_status()
+            send_progress("Đang tải nội dung bằng trình duyệt JS (Puppeteer)...", step="scraping_js")
+            js_result = fetch_with_puppeteer_host(target_url, timeout_ms=20000)
 
-            html_text = _decode_html_response(resp)
-            soup = BeautifulSoup(html_text, 'html.parser')
-
-            # Extract title
-            title_tag = soup.find('title')
-            page_title = _repair_mojibake(title_tag.get_text(strip=True) if title_tag else '')
-
-            # Remove script/style/nav/footer for cleaner content
-            for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'noscript', 'iframe']):
-                tag.decompose()
-
-            content = soup.get_text(separator='\n', strip=True)
-            if content:
+            if js_result.get('ok') and js_result.get('content'):
+                content = js_result.get('content', '')
+                page_title = _repair_mojibake(js_result.get('title', '') or '')
                 fetch_success = True
-                send_progress(f"Đã tải nội dung website ({len(content)} ký tự)", step="scraping_ok")
-                logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via requests+BS4 ({len(content)} chars)")
+                puppeteer_used = True
+                captcha_detected = bool(js_result.get('captcha_detected'))
+                if captcha_detected:
+                    network_details.append("Trang có dấu hiệu CAPTCHA/anti-bot")
+                send_progress(
+                    f"✓ Đã tải nội dung bằng Puppeteer ({len(content)} ký tự)",
+                    step="scraping_js_ok",
+                )
+                logger.info(
+                    f"[WebScan] Event {scan_event_id}: Puppeteer host fetch success (PRIMARY) "
+                    f"({len(content)} chars), captcha_detected={captcha_detected}"
+                )
+            else:
+                logger.warning(
+                    f"[WebScan] Event {scan_event_id}: Puppeteer host unavailable/failed: "
+                    f"{js_result.get('error', 'unknown error')} - falling back to requests"
+                )
+        except Exception as e:
+            logger.warning(f"[WebScan] Event {scan_event_id}: Puppeteer host error: {e} - falling back to requests")
 
-            # Try HTTP fallback if HTTPS failed and no content
-            if not fetch_success and target_url.startswith('https://'):
-                http_url = target_url.replace('https://', 'http://', 1)
-                resp = http_requests.get(http_url, headers=headers, timeout=15, verify=False, allow_redirects=True)
+        # 1b. FALLBACK: Fetch Content using requests + BeautifulSoup if Puppeteer fails
+        if not fetch_success:
+            try:
+                import requests as http_requests
+                from bs4 import BeautifulSoup
+
+                send_progress("Đang tải nội dung bằng requests (fallback)...", step="scraping_fallback")
+
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+                }
+                resp = http_requests.get(target_url, headers=headers, timeout=15, verify=True, allow_redirects=True)
                 resp.raise_for_status()
+
                 html_text = _decode_html_response(resp)
                 soup = BeautifulSoup(html_text, 'html.parser')
+
+                # Extract title
                 title_tag = soup.find('title')
                 page_title = _repair_mojibake(title_tag.get_text(strip=True) if title_tag else '')
+
+                # Remove script/style/nav/footer for cleaner content
                 for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'noscript', 'iframe']):
                     tag.decompose()
+
                 content = soup.get_text(separator='\n', strip=True)
                 if content:
                     fetch_success = True
-                    logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via HTTP fallback ({len(content)} chars)")
-        except Exception as e:
-            logger.warning(f"[WebScan] Event {scan_event_id}: Web fetch failed: {e}")
+                    send_progress(f"✓ Đã tải nội dung website ({len(content)} ký tự)", step="scraping_ok")
+                    logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via requests+BS4 (FALLBACK) ({len(content)} chars)")
+
+                # Try HTTP fallback if HTTPS failed and no content
+                if not fetch_success and target_url.startswith('https://'):
+                    http_url = target_url.replace('https://', 'http://', 1)
+                    resp = http_requests.get(http_url, headers=headers, timeout=15, verify=False, allow_redirects=True)
+                    resp.raise_for_status()
+                    html_text = _decode_html_response(resp)
+                    soup = BeautifulSoup(html_text, 'html.parser')
+                    title_tag = soup.find('title')
+                    page_title = _repair_mojibake(title_tag.get_text(strip=True) if title_tag else '')
+                    for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'noscript', 'iframe']):
+                        tag.decompose()
+                    content = soup.get_text(separator='\n', strip=True)
+                    if content:
+                        fetch_success = True
+                        logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via HTTP fallback ({len(content)} chars)")
+            except Exception as e:
+                logger.warning(f"[WebScan] Event {scan_event_id}: Requests fallback failed: {e}")
 
         if not fetch_success:
             # ❌ Mark fetch failure but CONTINUE analysis
@@ -1176,6 +1230,8 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             'url': url,
             'page_title': page_title,
             'fetch_success': fetch_success,
+            'puppeteer_used': puppeteer_used,
+            'captcha_detected': captcha_detected,
             'risk_score': final_risk_score,
             'risk_level': ai_res.get('risk_level', 'SAFE'),
             'explanation': explanation,

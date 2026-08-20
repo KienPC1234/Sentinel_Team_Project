@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Puppeteer Host deps",
+      "type": "shell",
+      "command": "npm",
+      "args": ["install"],
+      "options": {
+        "cwd": "${workspaceFolder}/scripts/puppeteer_host"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Puppeteer Host",
+      "type": "shell",
+      "command": "npm",
+      "args": ["start"],
+      "options": {
+        "cwd": "${workspaceFolder}/scripts/puppeteer_host",
+        "env": {
+          "PUPPETEER_HOST_PORT": "3010"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}
