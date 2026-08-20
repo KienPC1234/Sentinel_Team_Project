@@ -392,6 +392,44 @@ def filter_hallucinations(text: str) -> str:
     return text
 
 
+def sanitize_user_facing_tool_text(text: str) -> str:
+    """
+    Replace internal tool/function identifiers with user-friendly phrasing
+    before showing model text to end users.
+    """
+    if not text:
+        return ""
+
+    cleaned = text
+    replacements = {
+        '_tool_lookup_scamadviser': 'kiểm tra độ uy tín website',
+        '_tool_lookup_scamwave': 'tra cứu cảnh báo lừa đảo',
+        '_tool_lookup_trustpilot': 'tra cứu đánh giá người dùng',
+        '_tool_lookup_sitejabber': 'tra cứu đánh giá người dùng',
+        '_tool_lookup_tranco': 'đối chiếu độ phổ biến tên miền',
+        '_tool_lookup_tratencongty': 'tra cứu thông tin doanh nghiệp',
+        '_tool_web_search': 'tra cứu nguồn công khai',
+        '_tool_web_fetch': 'đọc nội dung trang web',
+        'scan_phone': 'kiểm tra số điện thoại',
+        'scan_url': 'kiểm tra website / URL',
+        'scan_bank_account': 'kiểm tra tài khoản ngân hàng',
+        'web_search': 'tra cứu nguồn công khai',
+        'web_fetch': 'đọc nội dung trang web',
+    }
+    for token, friendly in replacements.items():
+        cleaned = re.sub(rf'\b{re.escape(token)}\b', friendly, cleaned)
+
+    cleaned = re.sub(
+        r'\b(gọi|dùng|sử dụng)\s+(tool|công cụ|function)\b',
+        'thực hiện kiểm tra',
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r'\btool\b', 'bước kiểm tra', cleaned, flags=re.IGNORECASE)
+
+    return cleaned
+
+
 def filter_tool_call_artifacts(text: str) -> str:
     """
     Remove accidental tool-call JSON artifacts from agent textual output.
@@ -422,6 +460,8 @@ def filter_tool_call_artifacts(text: str) -> str:
         line for line in cleaned.splitlines()
         if '_tool_' not in line and '"arguments"' not in line
     )
+
+    cleaned = sanitize_user_facing_tool_text(cleaned)
 
     # Normalize excessive blank lines.
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
@@ -644,7 +684,7 @@ def generate_response(
                 iteration += 1
                 continue
             elif part:
-                reply = part.strip()
+                reply = filter_tool_call_artifacts(part.strip())
                 logger.info(f"[generate_response iter={iteration}] ✅ final answer (no tools), "
                             f"reply_len={len(reply)}, exiting loop")
                 break
@@ -726,8 +766,10 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None, m
                 content = msg.get('content', '') or ''
 
             if content:
-                yield content
-                full_response.append(content)
+                content = filter_tool_call_artifacts(content)
+                if content:
+                    yield content
+                    full_response.append(content)
 
         _log_llm(prompt, "".join(full_response), system_prompt)
 
@@ -857,6 +899,7 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                     
                     if content:
                         content = filter_hallucinations(content)
+                        content = filter_tool_call_artifacts(content)
                         if content: # Could be empty after filtering
                             yield content
                             current_content.append(content)
