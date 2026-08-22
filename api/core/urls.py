@@ -124,4 +124,10 @@ urlpatterns = [
 
     # Debug
     path('debug/system/', DebugSystemView.as_view(), name='debug-system'),
+
+    # Scam IQ Exam
+    path('scam-iq/start/', views.ScamIQStartView.as_view(), name='scam-iq-start'),
+    path('scam-iq/status/<str:task_id>/', views.ScamIQStatusView.as_view(), name='scam-iq-status'),
+    path('scam-iq/submit/', views.ScamIQSubmitView.as_view(), name='scam-iq-submit'),
+    path('scam-iq/history/', views.ScamIQHistoryView.as_view(), name='scam-iq-history'),
 ]

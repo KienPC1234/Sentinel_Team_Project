@@ -373,6 +373,49 @@
                         </div>
                     </template>
 
+                    <template x-if="result.osint_entities && ((result.osint_entities.urls && result.osint_entities.urls.length) || (result.osint_entities.phones && result.osint_entities.phones.length) || (result.osint_entities.bank_accounts && result.osint_entities.bank_accounts.length) || (result.osint_entities.emails && result.osint_entities.emails.length) || (result.osint_entities.handles && result.osint_entities.handles.length))">
+                        <div class="space-y-4">
+                            <h4 class="text-xs font-black text-white/40 uppercase tracking-widest">Thực thể OSINT đã trích xuất</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/10" x-show="result.osint_entities.urls && result.osint_entities.urls.length">
+                                    <p class="text-[10px] font-black text-cyan-300 uppercase tracking-widest mb-2">URLs</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <template x-for="u in result.osint_entities.urls" :key="u">
+                                            <span class="px-2 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-200 text-[11px] font-mono" x-text="u"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/10" x-show="result.osint_entities.phones && result.osint_entities.phones.length">
+                                    <p class="text-[10px] font-black text-purple-300 uppercase tracking-widest mb-2">Số điện thoại</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <template x-for="p in result.osint_entities.phones" :key="p">
+                                            <span class="px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-200 text-[11px] font-mono" x-text="p"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/10" x-show="result.osint_entities.bank_accounts && result.osint_entities.bank_accounts.length">
+                                    <p class="text-[10px] font-black text-yellow-300 uppercase tracking-widest mb-2">Tài khoản nghi ngờ</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <template x-for="a in result.osint_entities.bank_accounts" :key="a">
+                                            <span class="px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-200 text-[11px] font-mono" x-text="a"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/10" x-show="(result.osint_entities.emails && result.osint_entities.emails.length) || (result.osint_entities.handles && result.osint_entities.handles.length)">
+                                    <p class="text-[10px] font-black text-green-300 uppercase tracking-widest mb-2">Email / Handle</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <template x-for="e in (result.osint_entities.emails || [])" :key="e">
+                                            <span class="px-2 py-1 rounded-lg bg-green-500/10 border border-green-500/20 text-green-200 text-[11px] font-mono" x-text="e"></span>
+                                        </template>
+                                        <template x-for="h in (result.osint_entities.handles || [])" :key="h">
+                                            <span class="px-2 py-1 rounded-lg bg-green-500/10 border border-green-500/20 text-green-200 text-[11px] font-mono" x-text="h"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
                     <template x-if="(result.annotated_images && result.annotated_images.length > 0) || result.annotated_image">
                         <div class="space-y-4">
                             <h4 class="text-xs font-black text-white/40 uppercase tracking-widest">Phân tích vùng text từ ảnh</h4>

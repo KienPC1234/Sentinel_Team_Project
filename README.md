@@ -60,7 +60,7 @@
 ### Cài đặt nhanh
 ```bash
 # 1. Clone repository
-git clone <repo-url>
+git clone https://github.com/KienPC1234/Sentinel_Team_Project.git
 cd PKV_TEAM
 
 # 2. Tạo virtual environment

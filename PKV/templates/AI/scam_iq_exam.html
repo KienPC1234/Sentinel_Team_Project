@@ -1,0 +1,480 @@
+{% extends "base.html" %}
+
+{% block title %}Bài kiểm tra lừa đảo mới nhất{% endblock %}
+
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 space-y-6" x-data="scamIQExam()" x-init="init()">
+    <div class="liquid-card p-6 sm:p-8 border-cyan-500/20">
+        <p class="text-[10px] font-black text-cyan-300 uppercase tracking-[0.28em]">Scam IQ Exam</p>
+        <h1 class="text-2xl sm:text-3xl font-black text-white mt-2 leading-tight">Bài kiểm tra về những hình thức lừa đảo mới nhất hiện nay</h1>
+        <p class="text-sm text-white/55 mt-3 max-w-3xl">
+            Bộ đề gồm 30 câu từ dễ đến cực khó, cập nhật nhiều tình huống lừa đảo hiện đại. Mỗi câu tối đa 10 điểm, tổng điểm tối đa 300.
+        </p>
+
+        <div class="mt-6 flex flex-wrap items-center gap-3" x-show="stage === 'idle'">
+            <button @click="startExam()" :disabled="loading" class="liquid-btn py-3 px-6 bg-cyan-500 text-black font-black hover:bg-cyan-400 disabled:opacity-50">
+                <i class="bi bi-lightning-charge-fill mr-2"></i> Khởi tạo câu hỏi
+            </button>
+            <a href="/home/" class="liquid-btn py-3 px-6 bg-white/5 text-white font-black hover:bg-white/10">Về trang chủ</a>
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+            <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-black text-white/80 uppercase tracking-widest">Lịch sử làm bài gần đây</p>
+                <button @click="loadHistory()" class="text-[11px] text-cyan-300 hover:text-cyan-200 font-bold">Làm mới</button>
+            </div>
+            <div class="mt-3 overflow-x-auto" x-show="history.length">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-[10px] uppercase tracking-widest text-white/40">
+                            <th class="py-2 pr-3">Thời gian</th>
+                            <th class="py-2 pr-3">Điểm</th>
+                            <th class="py-2 pr-3">Đúng/Sai</th>
+                            <th class="py-2 pr-3">Xếp hạng</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="h in history" :key="h.id">
+                            <tr class="border-t border-white/5">
+                                <td class="py-2 pr-3 text-white/70" x-text="formatTime(h.created_at)"></td>
+                                <td class="py-2 pr-3 text-cyan-300 font-bold" x-text="`${h.score}/${h.max_score}`"></td>
+                                <td class="py-2 pr-3 text-white/70" x-text="`${h.correct_count}/${questions.length || 30} đúng`"></td>
+                                <td class="py-2 pr-3 text-purple-300" x-text="h.level_label || '—'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <p x-show="!history.length" class="text-[12px] text-white/45 mt-3">Bạn chưa có lượt làm bài nào. Hoàn thành 1 bài để lịch sử hiển thị tại đây.</p>
+        </div>
+
+        <div x-show="stage === 'loading'" class="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+            <p class="text-sm font-bold text-cyan-300">AI đang tạo bộ câu hỏi mới nhất...</p>
+            <p class="text-[11px] text-white/45 mt-1">Hệ thống đang tổng hợp tình huống lừa đảo mới từ nhiều nhóm chủ đề. Vui lòng đợi vài giây.</p>
+        </div>
+
+        <div x-show="error" class="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 text-sm" x-text="error"></div>
+    </div>
+
+    <template x-if="stage === 'ready' && currentQuestion">
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
+            <div class="liquid-card p-6 sm:p-8 space-y-6">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-white/5 text-white/60" x-text="`Câu ${index + 1} / ${questions.length}`"></span>
+                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 text-cyan-300" x-text="currentQuestion.difficulty_label"></span>
+                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-300" x-text="typeLabel(currentQuestion.type)"></span>
+                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-yellow-500/10 text-yellow-300" x-text="currentQuestion.category"></span>
+                </div>
+
+                <h2 class="text-xl font-black text-white leading-relaxed" x-text="currentQuestion.question"></h2>
+
+                <template x-if="isSimulationType(currentQuestion.type)">
+                    <div class="space-y-4">
+                        <template x-if="currentQuestion.type === 'simulation_sms'">
+                            <div class="rounded-3xl border border-white/10 bg-[#0b1020] p-4 max-w-xl">
+                                <div class="flex items-center justify-between text-[11px] text-white/50 mb-3">
+                                    <span x-text="(currentQuestion.simulation?.sender_name || 'Tin nhắn mới')"></span>
+                                    <span x-text="(currentQuestion.simulation?.time || '--:--')"></span>
+                                </div>
+                                <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
+                                    <p class="text-[11px] text-cyan-300 font-mono" x-text="currentQuestion.simulation?.from || 'Unknown sender'"></p>
+                                    <p class="text-sm text-white/85 mt-2 whitespace-pre-line" x-text="currentQuestion.simulation?.body || ''"></p>
+                                </div>
+                                <template x-if="currentQuestion.simulation?.trap_signals && currentQuestion.simulation.trap_signals.length">
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        <template x-for="sig in currentQuestion.simulation.trap_signals" :key="sig">
+                                            <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide bg-red-500/10 border border-red-500/20 text-red-300" x-text="sig"></span>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
+                        <template x-if="currentQuestion.type === 'simulation_email'">
+                            <div class="rounded-3xl border border-white/10 bg-[#0a0d18] overflow-hidden">
+                                <div class="px-4 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
+                                    <p class="text-[11px] text-white/60">Inbox / Security Alerts</p>
+                                    <i class="bi bi-envelope-open text-cyan-300"></i>
+                                </div>
+                                <div class="p-4 space-y-2">
+                                    <p class="text-[11px] text-white/55"><span class="text-white/80 font-bold">From:</span> <span x-text="currentQuestion.simulation?.from || ''"></span></p>
+                                    <p class="text-[11px] text-white/55"><span class="text-white/80 font-bold">Subject:</span> <span x-text="currentQuestion.simulation?.subject || ''"></span></p>
+                                    <p class="text-[11px] text-white/55"><span class="text-white/80 font-bold">Preview:</span> <span x-text="currentQuestion.simulation?.preview || ''"></span></p>
+                                    <div class="rounded-2xl bg-white/[0.03] border border-white/10 p-4 mt-2">
+                                        <p class="text-sm text-white/85 whitespace-pre-line" x-text="currentQuestion.simulation?.body || ''"></p>
+                                    </div>
+                                    <template x-if="currentQuestion.simulation?.risk_clues && currentQuestion.simulation.risk_clues.length">
+                                        <div class="pt-2 flex flex-wrap gap-2">
+                                            <template x-for="c in currentQuestion.simulation.risk_clues" :key="c">
+                                                <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide bg-red-500/10 border border-red-500/20 text-red-300" x-text="c"></span>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div class="space-y-2">
+                            <p class="text-[11px] font-black text-white/50 uppercase tracking-widest">Bạn sẽ làm gì tiếp theo?</p>
+                            <textarea class="liquid-input w-full min-h-[120px] p-4 text-sm font-medium"
+                                      :value="freeTextValue(currentQuestion.id)"
+                                      @input="setFreeText(currentQuestion.id, $event.target.value)"
+                                      placeholder="Viết phản hồi/hành động cụ thể (ví dụ: không bấm link, xác minh hotline chính thức, đổi mật khẩu, báo cáo phishing...)"></textarea>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="!isSimulationType(currentQuestion.type)">
+                    <div class="space-y-3">
+                        <template x-for="opt in currentQuestion.options" :key="opt.id">
+                            <label class="w-full flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 hover:border-cyan-400/30 cursor-pointer transition-all"
+                                   :class="isChecked(opt.id) ? 'border-cyan-400/50 bg-cyan-500/[0.08]' : ''">
+                                <template x-if="currentQuestion.type === 'multi_select'">
+                                    <input type="checkbox" :checked="isChecked(opt.id)" @change="toggleChoice(opt.id)" class="mt-1 accent-cyan-400" />
+                                </template>
+                                <template x-if="currentQuestion.type !== 'multi_select'">
+                                    <input type="radio" :name="`q-${currentQuestion.id}`" :checked="isChecked(opt.id)" @change="setSingleChoice(opt.id)" class="mt-1 accent-cyan-400" />
+                                </template>
+                                <div class="min-w-0">
+                                    <p class="text-xs font-black text-cyan-300" x-text="opt.id"></p>
+                                    <p class="text-sm text-white/80 mt-1" x-text="opt.text"></p>
+                                </div>
+                            </label>
+                        </template>
+                    </div>
+                </template>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <button @click="prevQuestion()" :disabled="index === 0" class="liquid-btn py-2.5 px-5 bg-white/5 text-white font-bold hover:bg-white/10 disabled:opacity-40">← Câu trước</button>
+                    <div class="text-[11px] text-white/40" x-text="`Đã trả lời ${answeredCount()} / ${questions.length}`"></div>
+                    <template x-if="index < questions.length - 1">
+                        <button @click="nextQuestion()" class="liquid-btn py-2.5 px-5 bg-cyan-500 text-black font-black hover:bg-cyan-400">Câu tiếp theo →</button>
+                    </template>
+                    <template x-if="index === questions.length - 1">
+                        <button @click="submitExam()" :disabled="submitting" class="liquid-btn py-2.5 px-5 bg-green-500 text-black font-black hover:bg-green-400 disabled:opacity-60">
+                            <span x-show="!submitting">Nộp bài</span>
+                            <span x-show="submitting">Đang chấm...</span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <aside class="liquid-card p-4 lg:sticky lg:top-24 space-y-3 border border-cyan-500/20 bg-gradient-to-b from-cyan-500/[0.06] to-transparent">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Điều hướng câu hỏi</p>
+                    <p class="text-[10px] text-cyan-300 font-bold" x-text="`${answeredCount()}/${questions.length}`"></p>
+                </div>
+                <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div class="h-full bg-cyan-400 transition-all duration-300" :style="`width:${Math.round((answeredCount()/Math.max(questions.length,1))*100)}%`"></div>
+                </div>
+                <div class="grid grid-cols-5 gap-2 max-h-[420px] overflow-y-auto pr-1 custom-scrollbar">
+                    <template x-for="(q, idx) in questions" :key="q.id">
+                        <button @click="jumpTo(idx)"
+                                class="h-10 rounded-xl text-[11px] font-black border transition-all shadow-sm"
+                                :class="idx === index
+                                    ? 'bg-cyan-400 text-black border-cyan-300 scale-[1.03] shadow-[0_0_14px_rgba(34,211,238,0.35)]'
+                                    : isAnswered(q)
+                                        ? 'bg-green-500/20 text-green-200 border-green-500/40 hover:bg-green-500/30'
+                                        : 'bg-white/[0.03] text-white/45 border-white/10 hover:border-cyan-500/40 hover:text-white/80'"
+                                x-text="idx + 1"></button>
+                    </template>
+                </div>
+                <div class="grid grid-cols-1 gap-1.5 text-[10px] text-white/55 pt-1">
+                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-cyan-300 mr-2"></span> Câu hiện tại</p>
+                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-2"></span> Đã trả lời</p>
+                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-white/25 mr-2"></span> Chưa trả lời</p>
+                </div>
+            </aside>
+        </div>
+    </template>
+
+    <template x-if="stage === 'result' && result">
+        <div class="liquid-card p-6 sm:p-8 space-y-6">
+            <div class="rounded-2xl border border-cyan-500/25 bg-cyan-500/8 p-5">
+                <p class="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">Kết quả</p>
+                <h3 class="text-2xl font-black text-white mt-2" x-text="`${result.score} / ${result.max_score} điểm`"></h3>
+                <p class="text-sm text-white/65 mt-1" x-text="result.level.label"></p>
+                <p class="text-xs text-white/50 mt-2" x-text="result.level.description"></p>
+                <p class="text-xs text-white/45 mt-3" x-text="`Đúng ${result.correct_count}/${questions.length} câu • Sai ${result.wrong_count} câu`"></p>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                <table class="w-full text-sm">
+                    <thead class="bg-white/[0.03]">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Mức</th>
+                            <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Điểm</th>
+                            <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Đánh giá</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="band in result.level_bands" :key="band.code">
+                            <tr :class="band.code === result.level.code ? 'bg-cyan-500/10' : 'border-t border-white/5'">
+                                <td class="px-4 py-3 text-white font-bold" x-text="band.label"></td>
+                                <td class="px-4 py-3 text-white/70" x-text="`${band.min} - ${band.max}`"></td>
+                                <td class="px-4 py-3 text-white/70" x-text="band.description"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <div>
+                <h4 class="text-lg font-black text-white">Các sai sót cần cải thiện</h4>
+                <template x-if="!result.mistakes.length">
+                    <p class="text-sm text-green-300 mt-2">Tuyệt vời! Bạn không có lỗi nào trong bài kiểm tra này.</p>
+                </template>
+                <div class="mt-3 space-y-3" x-show="result.mistakes.length">
+                    <template x-for="m in result.mistakes" :key="m.question_id">
+                        <div class="rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
+                            <p class="text-[11px] font-black text-red-300 uppercase tracking-widest" x-text="`${m.question_id} • ${m.category} • ${m.difficulty}`"></p>
+                            <p class="text-sm text-white mt-2" x-text="m.question"></p>
+                            <p class="text-xs text-white/55 mt-2" x-text="`Bạn chọn: ${m.selected.length ? m.selected.join(', ') : 'Chưa trả lời'} | Đáp án đúng: ${m.expected.join(', ')}`"></p>
+                            <p class="text-xs text-white/65 mt-2" x-text="m.explanation"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-3 pt-2">
+                <button @click="resetExam()" class="liquid-btn py-2.5 px-5 bg-cyan-500 text-black font-black hover:bg-cyan-400">Làm bài mới</button>
+                <a href="/home/" class="liquid-btn py-2.5 px-5 bg-white/5 text-white font-bold hover:bg-white/10">Về trang chủ</a>
+            </div>
+        </div>
+    </template>
+</section>
+
+<script>
+function scamIQExam() {
+    return {
+        stage: 'idle',
+        loading: false,
+        submitting: false,
+        error: '',
+        taskId: '',
+        examId: '',
+        questions: [],
+        index: 0,
+        answers: {},
+        result: null,
+        history: [],
+
+        init() {
+            this.loadHistory();
+        },
+
+        get currentQuestion() {
+            return this.questions[this.index] || null;
+        },
+
+        typeLabel(type) {
+            if (type === 'multi_select') return 'Nhiều đáp án';
+            if (type === 'true_false') return 'Đúng / Sai';
+            if (type === 'simulation_sms') return 'Mô phỏng SMS';
+            if (type === 'simulation_email') return 'Mô phỏng Email';
+            if (type === 'incident_response') return 'Phản ứng sự cố';
+            return 'Một đáp án';
+        },
+
+        isSimulationType(type) {
+            return ['simulation_sms', 'simulation_email', 'incident_response'].includes(type);
+        },
+
+        jumpTo(i) {
+            if (i >= 0 && i < this.questions.length) this.index = i;
+        },
+
+        isAnswered(q) {
+            if (!q || !q.id) return false;
+            const saved = this.answers[q.id];
+            if (!saved) return false;
+            if (Array.isArray(saved)) return saved.length > 0;
+            if (typeof saved === 'object') {
+                const ids = Array.isArray(saved.selected_ids) ? saved.selected_ids : [];
+                const txt = String(saved.free_text || '').trim();
+                return ids.length > 0 || txt.length > 0;
+            }
+            return !!String(saved).trim();
+        },
+
+        isChecked(optionId) {
+            const qid = this.currentQuestion?.id;
+            if (!qid) return false;
+            const raw = this.answers[qid] || [];
+            const cur = Array.isArray(raw) ? raw : (raw.selected_ids || []);
+            return cur.includes(optionId);
+        },
+
+        setSingleChoice(optionId) {
+            const qid = this.currentQuestion?.id;
+            if (!qid) return;
+            this.answers[qid] = { selected_ids: [optionId], free_text: this.freeTextValue(qid) };
+        },
+
+        toggleChoice(optionId) {
+            const qid = this.currentQuestion?.id;
+            if (!qid) return;
+            const raw = this.answers[qid] || {};
+            const selected = Array.isArray(raw) ? raw : (raw.selected_ids || []);
+            const cur = new Set(selected);
+            if (cur.has(optionId)) cur.delete(optionId);
+            else cur.add(optionId);
+            this.answers[qid] = { selected_ids: Array.from(cur), free_text: this.freeTextValue(qid) };
+        },
+
+        freeTextValue(qid) {
+            const raw = this.answers[qid] || {};
+            if (typeof raw === 'object' && !Array.isArray(raw)) return raw.free_text || '';
+            return '';
+        },
+
+        setFreeText(qid, text) {
+            const raw = this.answers[qid] || {};
+            const selected = Array.isArray(raw) ? raw : (raw.selected_ids || []);
+            this.answers[qid] = { selected_ids: selected, free_text: text || '' };
+        },
+
+        answeredCount() {
+            return Object.values(this.answers).filter(v => {
+                if (Array.isArray(v)) return v.length > 0;
+                if (v && typeof v === 'object') {
+                    const ids = Array.isArray(v.selected_ids) ? v.selected_ids : [];
+                    const txt = String(v.free_text || '').trim();
+                    return ids.length > 0 || txt.length > 0;
+                }
+                return !!String(v || '').trim();
+            }).length;
+        },
+
+        formatTime(iso) {
+            try {
+                return new Date(iso).toLocaleString('vi-VN');
+            } catch (_) {
+                return iso || '';
+            }
+        },
+
+        async loadHistory() {
+            try {
+                const resp = await fetch('/api/v1/scam-iq/history/?limit=10', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'X-CSRFToken': getCSRFToken() },
+                });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                this.history = Array.isArray(data.results) ? data.results : [];
+            } catch (_) {
+                this.history = this.history || [];
+            }
+        },
+
+        prevQuestion() {
+            if (this.index > 0) this.index -= 1;
+        },
+
+        nextQuestion() {
+            if (this.index < this.questions.length - 1) this.index += 1;
+        },
+
+        async startExam() {
+            this.error = '';
+            this.loading = true;
+            this.stage = 'loading';
+            this.result = null;
+            this.answers = {};
+            this.questions = [];
+            this.index = 0;
+
+            try {
+                const resp = await fetch('/api/v1/scam-iq/start/', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    },
+                    body: JSON.stringify({}),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Không thể khởi tạo bài kiểm tra.');
+
+                this.taskId = data.task_id;
+                await this.pollStatus();
+            } catch (err) {
+                this.error = err?.message || 'Khởi tạo bài kiểm tra thất bại.';
+                this.stage = 'idle';
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async pollStatus() {
+            for (let i = 0; i < 45; i++) {
+                const resp = await fetch(`/api/v1/scam-iq/status/${this.taskId}/`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'X-CSRFToken': getCSRFToken() },
+                });
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error(data.error || 'Không thể lấy trạng thái bài kiểm tra.');
+                }
+
+                if (data.ready) {
+                    this.examId = data.exam_id;
+                    this.questions = data.questions || [];
+                    this.stage = 'ready';
+                    this.index = 0;
+                    return;
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+
+            throw new Error('Tạo câu hỏi quá lâu. Vui lòng thử lại.');
+        },
+
+        async submitExam() {
+            this.error = '';
+            this.submitting = true;
+            try {
+                const resp = await fetch('/api/v1/scam-iq/submit/', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    },
+                    body: JSON.stringify({
+                        exam_id: this.examId,
+                        answers: this.answers,
+                    }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Nộp bài thất bại.');
+                this.result = data;
+                this.stage = 'result';
+                this.loadHistory();
+            } catch (err) {
+                this.error = err?.message || 'Nộp bài thất bại.';
+            } finally {
+                this.submitting = false;
+            }
+        },
+
+        resetExam() {
+            this.stage = 'idle';
+            this.taskId = '';
+            this.examId = '';
+            this.questions = [];
+            this.index = 0;
+            this.answers = {};
+            this.result = null;
+            this.error = '';
+        },
+    }
+}
+</script>
+{% endblock %}

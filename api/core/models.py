@@ -368,6 +368,29 @@ class UserAlert(models.Model):
         return f"Alert: {self.target_type} {self.target_value[:30]}"
 
 
+class ScamIQAttempt(models.Model):
+    """Persisted Scam IQ exam attempt history for each user."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='scam_iq_attempts')
+    exam_title = models.CharField(max_length=255, default='Scam IQ Exam')
+    score = models.IntegerField(default=0)
+    max_score = models.IntegerField(default=300)
+    correct_count = models.IntegerField(default=0)
+    wrong_count = models.IntegerField(default=0)
+    level_code = models.CharField(max_length=40, blank=True)
+    level_label = models.CharField(max_length=120, blank=True)
+    difficulty_breakdown = models.JSONField(default=dict, blank=True)
+    mistakes = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Scam IQ Attempt'
+        verbose_name_plural = 'Scam IQ Attempts'
+
+    def __str__(self):
+        return f"ScamIQAttempt<{self.user_id}:{self.score}/{self.max_score}>"
+
+
 class MFARecoveryCode(models.Model):
     """One-time recovery codes for TOTP fallback login."""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='mfa_recovery_codes')

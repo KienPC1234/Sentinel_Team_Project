@@ -91,6 +91,13 @@ def home_view(request):
     })
 
 
+@login_required
+def scam_iq_exam_view(request):
+    return render(request, "AI/scam_iq_exam.html", {
+        "title": "Bài kiểm tra về những hình thức lừa đảo mới nhất hiện nay",
+    })
+
+
 def demo_video_view(request):
     """Redirect to YouTube demo video."""
     video_url = getattr(settings, 'DEMO_VIDEO_URL', 'https://www.youtube.com/')
