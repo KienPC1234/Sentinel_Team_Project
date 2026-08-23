@@ -476,13 +476,16 @@ def perform_scan_task(self, scan_event_id):
         result = {}
 
         if scan_type == 'phone':
+            _send_scan_progress(scan_event_id, 'processing', 'Đang tra cứu dữ liệu số điện thoại...', step='lookup')
             result = _phone_risk_score(raw_input)
         elif scan_type == 'message':
+            _send_scan_progress(scan_event_id, 'processing', 'AI đang phân tích nội dung tin nhắn...', step='analyzing')
             result = _analyze_message_text(raw_input)
         elif scan_type == 'domain':
+            _send_scan_progress(scan_event_id, 'processing', 'Đang kiểm tra độ an toàn của website...', step='lookup')
             result = _analyze_domain(raw_input)
         elif scan_type == 'email':
-            # Basic email reputation check logic
+            _send_scan_progress(scan_event_id, 'processing', 'Đang kiểm tra bảo mật email...', step='lookup')
             from api.utils.normalization import normalize_domain
             email = raw_input.lower().strip()
             ai_res = None
@@ -512,6 +515,8 @@ def perform_scan_task(self, scan_event_id):
         scan_event.risk_level = result.get('risk_level', RiskLevel.SAFE)
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
+
+        _send_scan_progress(scan_event_id, 'completed', 'Phân tích hoàn tất!', step='completed', data=result)
 
         type_labels = {'phone': 'số điện thoại', 'message': 'tin nhắn', 'domain': 'website', 'email': 'email'}
         _notify_scan_complete(scan_event, f"Quét {type_labels.get(scan_type, scan_type)} hoàn tất")
@@ -1758,10 +1763,11 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             if domain:
                 send_progress(f"Đang kiểm tra domain: {domain}...", step="domain_check")
                 vt_res = vt.scan_url(url)
-                score = vt_res.get('risk_score', 0)
-                max_domain_score = max(max_domain_score, score)
-                if score > 0:
-                    domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
+                if vt_res:
+                    score = vt_res.get('risk_score', 0)
+                    max_domain_score = max(max_domain_score, score)
+                    if score > 0:
+                        domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
 
         if patterns_found or domain_risks:
             send_progress(f"Phát hiện {len(patterns_found) + len(domain_risks)} dấu hiệu đáng ngờ", step="pattern_done")
@@ -2239,14 +2245,17 @@ def perform_file_scan_task(self, scan_event_id, file_path):
     except ScanEvent.DoesNotExist:
         logger.error(f"[FileScan] ScanEvent #{scan_event_id} not found.")
     except Exception as e:
-        logger.error(f"[FileScan] perform_file_scan_task failed after {time.time() - start_time:.1f}s: {e}", exc_info=True)
+        logger.error(f"Error in perform_scan_task for event {scan_event_id}: {e}", exc_info=True)
         try:
-            scan_event = ScanEvent.objects.get(id=scan_event_id)
-            scan_event.status = ScanStatus.FAILED
-            scan_event.result_json = {'error': str(e)}
-            scan_event.save()
-        except Exception:
+            from api.core.models import ScanEvent, ScanStatus
+            event = ScanEvent.objects.get(id=scan_event_id)
+            event.status = ScanStatus.FAILED
+            event.result_json = {'error': str(e)}
+            event.save(update_fields=['status', 'result_json'])
+            _send_scan_progress(scan_event_id, 'failed', f'Lỗi: {str(e)}', step='error')
+        except:
             pass
+        return {'status': 'error', 'message': str(e)}
     finally:
         # Cleanup temp file
         try:
@@ -2269,6 +2278,21 @@ def _send_task_progress(task_id, status, message, step=None, data=None):
     if channel_layer:
         async_to_sync(channel_layer.group_send)(f'task_{task_id}', {
             'type': 'task_progress',
+            'status': status,
+            'message': message,
+            'step': step,
+            'data': data,
+        })
+
+
+def _send_scan_progress(scan_id, status, message, step=None, data=None):
+    """Helper to send progress over WebSocket for a specific scan."""
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        async_to_sync(channel_layer.group_send)(f'scan_{scan_id}', {
+            'type': 'scan_progress',
             'status': status,
             'message': message,
             'step': step,
@@ -2921,63 +2945,63 @@ def _build_scam_iq_fallback_questions() -> list:
     templates = [
         {
             "category": "Phishing đa kênh",
-            "scenario": "Bạn nhận email giả mạo ngân hàng yêu cầu cập nhật KYC qua link rút gọn.",
-            "safe": "Đăng nhập trực tiếp app ngân hàng và gọi hotline chính thức để xác minh.",
-            "risky": "Bấm link trong email rồi nhập tài khoản để kiểm tra nhanh.",
+            "scenario": "08:47 sáng, bạn nhận email mang tên thương hiệu ngân hàng nói tài khoản sẽ bị tạm ngưng do chưa cập nhật eKYC, kèm link rút gọn và yêu cầu hoàn tất trong 10 phút.",
+            "safe": "Mở app ngân hàng đã cài sẵn và gọi hotline in trên thẻ/app để xác minh độc lập.",
+            "risky": "Bấm link trong email và đăng nhập ngay để tránh bị khóa tài khoản.",
         },
         {
             "category": "Lừa đảo tuyển dụng",
-            "scenario": "Nhà tuyển dụng yêu cầu nộp phí giữ chỗ trước khi phỏng vấn online.",
-            "safe": "Từ chối chuyển tiền, xác minh công ty qua kênh công khai.",
-            "risky": "Chuyển khoản nhỏ vì nghĩ sẽ được hoàn lại sau.",
+            "scenario": "Sau vòng phỏng vấn nhanh qua Telegram, bên tuyển dụng gửi hợp đồng scan mờ và yêu cầu nộp phí hồ sơ 850.000đ trong 30 phút để giữ suất onboard.",
+            "safe": "Từ chối chuyển tiền, kiểm tra pháp nhân công ty qua website chính thức và kênh tuyển dụng công khai.",
+            "risky": "Chuyển trước một phần phí vì sợ mất cơ hội việc làm.",
         },
         {
             "category": "Đầu tư giả mạo",
-            "scenario": "Một nhóm Telegram cam kết lợi nhuận 20%/tuần nếu nạp USDT.",
-            "safe": "Từ chối tham gia, kiểm tra pháp lý và cảnh báo cộng đồng.",
-            "risky": "Nạp thử số tiền nhỏ để kiểm chứng trước.",
+            "scenario": "Bạn được mời vào nhóm đầu tư khoe ảnh lãi mỗi ngày, dashboard hiển thị tăng trưởng đều và quản trị viên thúc nạp thêm USDT để mở khóa rút tiền.",
+            "safe": "Dừng nạp ngay, đối chiếu giấy phép pháp lý và cảnh báo người thân/cộng đồng.",
+            "risky": "Nạp thêm để đạt ngưỡng rút vì thấy số dư trên dashboard vẫn tăng.",
         },
         {
             "category": "Giả danh cơ quan chức năng",
-            "scenario": "Cuộc gọi tự xưng công an yêu cầu chuyển tiền để 'chứng minh vô tội'.",
-            "safe": "Kết thúc cuộc gọi, liên hệ công an địa phương bằng số công khai.",
-            "risky": "Làm theo vì lo bị phong tỏa tài khoản ngay.",
+            "scenario": "Bạn nhận cuộc gọi video tự xưng điều tra viên, đọc đúng thông tin cá nhân và đe dọa liên quan vụ án rửa tiền, yêu cầu chuyển tiền vào ""tài khoản kiểm chứng"" trong ngày.",
+            "safe": "Ngắt liên lạc, tự gọi số công khai của cơ quan chức năng địa phương để xác minh hồ sơ.",
+            "risky": "Chuyển tiền ngay vì bên kia cung cấp ảnh lệnh có dấu đỏ.",
         },
         {
             "category": "Chiếm quyền mạng xã hội",
-            "scenario": "Bạn bè nhắn xin OTP gấp để nhận quà thương hiệu.",
-            "safe": "Không gửi OTP, gọi xác minh trực tiếp người quen.",
-            "risky": "Gửi OTP vì tin nhắn đến từ tài khoản quen biết.",
+            "scenario": "Tài khoản người quen nhắn mượn số điện thoại để nhận mã xác thực chương trình quà tặng, hối thúc cần OTP trong 2 phút.",
+            "safe": "Không gửi OTP/mã khôi phục, gọi video xác minh trực tiếp người quen qua kênh khác.",
+            "risky": "Gửi mã OTP vì tài khoản chat là người bạn thường xuyên liên hệ.",
         },
         {
-            "category": "Mua bán online giả",
-            "scenario": "Shop yêu cầu đặt cọc 100% trước khi cho kiểm hàng.",
-            "safe": "Chỉ giao dịch qua sàn có bảo vệ người mua.",
-            "risky": "Chuyển cọc vì giá ưu đãi sắp hết.",
+            "category": "Gian lận thương mại điện tử",
+            "scenario": "Người bán gửi hóa đơn vận chuyển giả và yêu cầu chuyển khoản cọc 100% để giữ đơn ""flash sale"", cam kết hoàn tiền nếu không nhận hàng.",
+            "safe": "Chỉ thanh toán qua nền tảng có escrow/bảo vệ người mua và kiểm tra lịch sử shop.",
+            "risky": "Chuyển cọc vì được hứa hoàn tiền và giảm sâu nếu chốt ngay.",
         },
         {
             "category": "Malvertising / SEO poisoning",
-            "scenario": "Bạn tìm app thuế và thấy quảng cáo đầu trang dẫn đến domain lạ.",
-            "safe": "Truy cập trang chính thức qua bookmark/cổng dịch vụ công.",
-            "risky": "Tải file cài đặt từ quảng cáo vì đứng top tìm kiếm.",
+            "scenario": "Bạn tìm ứng dụng kê khai thuế, kết quả quảng cáo đứng đầu dẫn tới tên miền gần giống cổng dịch vụ công và yêu cầu tải file .apk từ nguồn ngoài.",
+            "safe": "Truy cập cổng chính thức bằng bookmark đã lưu hoặc gõ thủ công tên miền chuẩn.",
+            "risky": "Cài app từ quảng cáo vì giao diện nhìn rất giống trang nhà nước.",
         },
         {
             "category": "Deepfake voice/video",
-            "scenario": "Sếp gọi video yêu cầu chuyển tiền ngay, giọng giống thật nhưng camera mờ.",
-            "safe": "Xác minh qua kênh nội bộ thứ hai trước khi chuyển tiền.",
-            "risky": "Thực hiện lệnh ngay vì đúng giọng nói và áp lực thời gian.",
+            "scenario": "Cuối ngày, ""sếp"" gọi video âm thanh rõ nhưng hình giật/mờ, yêu cầu kế toán chuyển gấp cho đối tác mới và cấm xác minh vì ""đang họp kín"".",
+            "safe": "Kích hoạt quy trình xác minh 2 lớp (duyệt nội bộ + callback số đã lưu) trước mọi lệnh chuyển tiền.",
+            "risky": "Bỏ qua quy trình vì giọng nói giống thật và lệnh được gắn mốc khẩn.",
         },
         {
             "category": "Quishing (QR phishing)",
-            "scenario": "Mã QR dán đè tại bãi đỗ xe dẫn tới trang thanh toán khác thường.",
-            "safe": "Kiểm tra URL trước khi nhập dữ liệu thẻ/OTP.",
-            "risky": "Quét và thanh toán ngay vì đang vội.",
+            "scenario": "Mã QR tại bãi xe bị dán đè, sau khi quét mở trang thanh toán có tên miền lạ và yêu cầu nhập đầy đủ thông tin thẻ + OTP.",
+            "safe": "Dừng thao tác, đối chiếu URL chính chủ và xác thực với điểm thu phí trước khi thanh toán.",
+            "risky": "Điền ngay thông tin thẻ/OTP vì hóa đơn hiển thị đúng số tiền.",
         },
         {
             "category": "Tấn công giả mạo phiên đăng nhập",
-            "scenario": "Bạn nhận thông báo 'Session hết hạn' và bị yêu cầu đăng nhập lại qua link chat.",
-            "safe": "Mở app chính thức để kiểm tra trạng thái phiên.",
-            "risky": "Đăng nhập qua link vì giao diện trông y hệt.",
+            "scenario": "Bạn nhận cảnh báo ""phiên đăng nhập Microsoft hết hạn"" trong nhóm chat công việc, kèm link đăng nhập có giao diện giống hệt trang thật.",
+            "safe": "Mở trực tiếp ứng dụng/trang đã bookmark để kiểm tra session và đăng xuất thiết bị lạ.",
+            "risky": "Đăng nhập qua link trong chat vì trùng màu sắc và logo thương hiệu.",
         },
     ]
 
@@ -3019,6 +3043,22 @@ def _build_scam_iq_fallback_questions() -> list:
             "safe_reply": "Công ty uy tín không thu phí tuyển dụng. Tôi từ chối chuyển tiền và sẽ xác minh qua website chính thức.",
             "trap_signals": ["thu phí tuyển dụng", "hối thúc", "không có hợp đồng chính thức"],
         },
+        {
+            "from": "Express Delivery",
+            "sender_name": "Đơn vị vận chuyển",
+            "time": "11:03",
+            "body": "Đơn hàng quốc tế của bạn bị treo tại hải quan. Thanh toán 34.000đ phí xử lý tại https://ship-fee-check.top trong 15 phút để tránh hoàn kho.",
+            "safe_reply": "Tôi không thanh toán qua link SMS. Tôi sẽ mở app vận chuyển chính thức để kiểm tra mã vận đơn.",
+            "trap_signals": ["phí nhỏ để dụ thao tác", "link lạ", "hối thúc thời hạn"],
+        },
+        {
+            "from": "Wallet Team",
+            "sender_name": "Ví điện tử",
+            "time": "19:47",
+            "body": "Thiết bị mới đang truy cập ví của bạn. Trả lời OTP và mã PIN xác minh để khóa giao dịch bất thường.",
+            "safe_reply": "Tôi không cung cấp OTP/PIN qua SMS. Tôi tự vào app ví để khóa đăng nhập và đổi mật khẩu.",
+            "trap_signals": ["xin OTP và PIN", "giả danh đội bảo mật", "tạo hoảng loạn"],
+        },
     ]
 
     simulation_email = [
@@ -3038,10 +3078,40 @@ def _build_scam_iq_fallback_questions() -> list:
             "safe_actions": ["kiểm tra trung tâm thông báo Apple chính thức", "không cung cấp mã recovery/card", "đổi mật khẩu từ app chính thức"],
             "risk_clues": ["đòi thông tin nhạy cảm", "đường dẫn không chính chủ", "ngôn ngữ đe dọa"],
         },
+        {
+            "from": "finance@suppIier-vn.com",
+            "subject": "Cập nhật gấp tài khoản nhận thanh toán",
+            "preview": "Đề nghị chuyển công nợ tháng này sang tài khoản mới do kiểm toán.",
+            "body": "Từ kỳ này vui lòng thanh toán vào tài khoản mới đính kèm. Không cần xác nhận thêm để tránh chậm tiến độ đối soát.",
+            "safe_actions": ["gọi xác minh số đối tác đã lưu", "kiểm tra domain ký tự giả", "không đổi tài khoản nhận tiền khi chưa xác minh đa kênh"],
+            "risk_clues": ["đổi tài khoản thụ hưởng đột ngột", "domain lookalike chữ I/l", "ép xử lý gấp"],
+        },
+        {
+            "from": "docsign@hr-payroll-alerts.co",
+            "subject": "Ký lại phụ lục lương ngay hôm nay",
+            "preview": "Vui lòng đăng nhập và xác nhận thông tin ngân hàng nhận lương.",
+            "body": "Mẫu ký mới yêu cầu điền user, mật khẩu email công ty và mã MFA để hoàn tất đồng bộ payroll.",
+            "safe_actions": ["không nhập mật khẩu/MFA ở link email", "truy cập HR portal nội bộ", "báo SOC/IT nếu nghi phishing"],
+            "risk_clues": ["đòi MFA", "yêu cầu credentials email", "link không thuộc miền công ty"],
+        },
     ]
 
     questions = []
     simulation_slots = {5, 8, 10, 12, 15, 18, 20, 22, 24, 26, 28, 29, 30}
+    multi_select_slots = {3, 6, 9, 13, 16, 19, 23, 25, 27}
+    true_false_slots = {7, 11, 14, 17, 21}
+    dynamic_wrong_actions = [
+        "Bật chia sẻ màn hình cho đối phương để họ hướng dẫn thao tác nhanh.",
+        "Gửi ảnh CCCD hai mặt để bên kia đối chiếu hồ sơ khẩn.",
+        "Nhập lại mã xác thực vào biểu mẫu được gửi qua chat để mở khóa tài khoản.",
+        "Tạm tắt cảnh báo bảo mật trên app để tránh gián đoạn giao dịch.",
+        "Cài ứng dụng điều khiển từ xa theo hướng dẫn để xử lý lỗi ngay.",
+        "Chuyển trước khoản xác minh nhỏ để hệ thống hoàn tiền tự động.",
+        "Đăng thông tin đăng nhập lên nhóm kín để nhờ mọi người kiểm tra giúp.",
+        "Cung cấp mã khôi phục vì bên hỗ trợ nói không cần mật khẩu.",
+        "Tin vào dấu tick xanh/tên thương hiệu mà bỏ qua bước xác minh độc lập.",
+        "Làm theo hướng dẫn nạp thêm tiền để mở khóa chức năng rút.",
+    ]
     idx = 1
     for round_idx in range(3):
         for t_idx, template in enumerate(templates):
@@ -3055,10 +3125,10 @@ def _build_scam_iq_fallback_questions() -> list:
                     q_type = "simulation_email"
                 else:
                     q_type = "incident_response"
-            elif (idx % 7) == 0:
-                q_type = "true_false"
-            elif (idx % 5) == 0:
+            elif idx in multi_select_slots:
                 q_type = "multi_select"
+            elif idx in true_false_slots:
+                q_type = "true_false"
 
             simulation_payload = {}
 
@@ -3105,7 +3175,7 @@ def _build_scam_iq_fallback_questions() -> list:
             elif q_type == "incident_response":
                 options = []
                 prompt = (
-                    f"[{template['category']}] Tình huống khẩn: {template['scenario']} "
+                    f"Tình huống khẩn cấp: {template['scenario']} "
                     "Hãy nêu kế hoạch 3 bước xử lý ngay trong 15 phút đầu để giảm thiệt hại."
                 )
                 simulation_payload = {
@@ -3126,18 +3196,20 @@ def _build_scam_iq_fallback_questions() -> list:
                 ]
                 correct = ["B"] if "không" not in template["safe"].lower() else ["A"]
                 prompt = (
-                    f"[{template['category']}] {template['scenario']}\n"
+                    f"{template['scenario']}\n"
                     f"Hành động sau có an toàn không: {template['risky']}"
                 )
             elif q_type == "multi_select":
+                wrong_1 = dynamic_wrong_actions[(idx + round_idx) % len(dynamic_wrong_actions)]
+                wrong_2 = dynamic_wrong_actions[(idx + round_idx + 4) % len(dynamic_wrong_actions)]
                 options = [
                     {"id": "A", "text": template["safe"]},
                     {"id": "B", "text": "Lưu bằng chứng (ảnh chụp, thời gian, URL) và báo cáo qua kênh chính thức."},
-                    {"id": "C", "text": template["risky"]},
-                    {"id": "D", "text": "Tạm làm theo 1 bước để kiểm tra phản ứng của đối phương."},
+                    {"id": "C", "text": wrong_1},
+                    {"id": "D", "text": wrong_2},
                 ]
                 correct = ["A", "B"]
-                prompt = f"[{template['category']}] Chọn các hành động đúng khi gặp tình huống: {template['scenario']}"
+                prompt = f"Chọn các hành động đúng khi gặp tình huống: {template['scenario']}"
             else:
                 if diff_code in {"hard", "extreme"}:
                     options = [
@@ -3155,7 +3227,7 @@ def _build_scam_iq_fallback_questions() -> list:
                         {"id": "D", "text": "Tắt 2FA để thao tác nhanh hơn trong trường hợp khẩn."},
                     ]
                     correct = ["A"]
-                prompt = f"[{template['category']}] Bạn nên làm gì đầu tiên khi: {template['scenario']}"
+                prompt = f"Bạn nên làm gì đầu tiên khi: {template['scenario']}"
 
             questions.append({
                 "id": f"Q{idx}",
@@ -3220,11 +3292,109 @@ def _rebalance_scam_iq_difficulty(questions: list) -> list:
     return arranged[:30]
 
 
+def _ensure_scam_iq_simulation_mix(questions: list) -> list:
+    """Guarantee minimum SMS/Email simulation coverage in final exam set."""
+    if not questions:
+        return []
+
+    import copy
+
+    normalized = list(questions[:30])
+
+    def _count_type(q_type: str) -> int:
+        return sum(1 for q in normalized if str(q.get('type') or '').strip().lower() == q_type)
+
+    target_sms = 3
+    target_email = 3
+    need_sms = max(0, target_sms - _count_type('simulation_sms'))
+    need_email = max(0, target_email - _count_type('simulation_email'))
+    if need_sms == 0 and need_email == 0:
+        return normalized
+
+    fallback_pool = _build_scam_iq_fallback_questions()
+    sms_pool = [q for q in fallback_pool if str(q.get('type') or '').lower() == 'simulation_sms']
+    email_pool = [q for q in fallback_pool if str(q.get('type') or '').lower() == 'simulation_email']
+
+    def _inject(pool: list, needed: int) -> int:
+        if needed <= 0 or not pool:
+            return needed
+        pool_idx = 0
+        for idx, current in enumerate(normalized):
+            if needed <= 0:
+                break
+            current_type = str(current.get('type') or '').lower()
+            if current_type in {'simulation_sms', 'simulation_email'}:
+                continue
+            sample = copy.deepcopy(pool[pool_idx % len(pool)])
+            sample['id'] = current.get('id') or f"Q{idx+1}"
+            sample['difficulty'] = current.get('difficulty') or sample.get('difficulty') or 'medium'
+            sample['difficulty_label'] = current.get('difficulty_label') or sample.get('difficulty_label') or 'Trung bình'
+            normalized[idx] = sample
+            pool_idx += 1
+            needed -= 1
+        return needed
+
+    need_sms = _inject(sms_pool, need_sms)
+    need_email = _inject(email_pool, need_email)
+
+    return normalized
+
+
 def _normalize_scam_iq_questions(raw_questions: list) -> list:
     """Normalize AI output to a strict 30-question exam contract."""
     normalized = []
     if not isinstance(raw_questions, list):
         raw_questions = []
+
+    def _strip_source_citations(text: str) -> str:
+        value = str(text or '')
+        value = re.sub(r'\(([^\)]{0,180}?(?:theo|nguồn|source|trích|VTV\d*|báo\s+\w+)[^\)]*)\)', '', value, flags=re.IGNORECASE)
+        value = re.sub(r'\[(?:nguồn|source|trích dẫn)\s*:[^\]]+\]', '', value, flags=re.IGNORECASE)
+        value = re.sub(r'\s*(?:-|–|—)\s*(?:theo|nguồn|source)\b[^\n\r]*$', '', value, flags=re.IGNORECASE)
+        value = re.sub(r'\b(?:nguồn|source|trích dẫn)\s*:\s*[^\n\r]+', '', value, flags=re.IGNORECASE)
+        value = re.sub(r'\s{2,}', ' ', value).strip()
+        return value
+
+    def _build_sim_question(qtype: str, sim: dict, q_index: int) -> str:
+        if qtype == 'simulation_sms':
+            sms_from = str(sim.get('from') or 'Unknown sender').strip()
+            sms_body = str(sim.get('body') or '').strip()
+            sms_sender_name = str(sim.get('sender_name') or '').strip()
+            sms_time = str(sim.get('time') or '').strip()
+            templates = [
+                f"Bạn nhận được SMS từ {sms_from}: \"{sms_body}\". Bạn nên phản hồi và xử lý thế nào để an toàn?",
+                f"Tin nhắn lúc {sms_time or '--:--'} từ {sms_sender_name or sms_from} ghi: \"{sms_body}\". Bước xử lý nào là đúng?",
+                f"Tình huống SMS: người gửi {sms_from} nhắn \"{sms_body}\". Hành động ưu tiên đầu tiên của bạn là gì?",
+                f"Nếu nhận SMS sau: \"{sms_body}\" (nguồn hiển thị: {sms_sender_name or sms_from}), bạn sẽ xử lý theo quy trình an toàn nào?",
+            ]
+            for t in templates:
+                if sms_body:
+                    return t
+            # fallback nếu sms_body rỗng
+            return f"Bạn nhận được một tin nhắn lạ. Bạn nên xử lý thế nào để an toàn?"
+
+        if qtype == 'simulation_email':
+            email_from = str(sim.get('from') or 'security-alert@unknown-domain').strip()
+            email_subject = str(sim.get('subject') or 'Security Alert').strip()
+            email_body = str(sim.get('body') or '').strip()
+            templates = [
+                f"Bạn nhận được email từ {email_from} với tiêu đề \"{email_subject}\". Nội dung chính: \"{email_body}\". Bạn nên xử lý thế nào để an toàn?",
+                f"Email từ {email_from}, tiêu đề \"{email_subject}\", có nội dung: \"{email_body}\". Đâu là quy trình xử lý đúng?",
+                f"Tình huống email nghi ngờ: người gửi {email_from} viết \"{email_body}\" dưới tiêu đề \"{email_subject}\". Bạn sẽ làm gì trước tiên?",
+                f"Khi nhận thư tiêu đề \"{email_subject}\" từ {email_from} với nội dung \"{email_body}\", hành động an toàn nhất là gì?",
+            ]
+            for t in templates:
+                if email_body:
+                    return t
+            # fallback nếu email_body rỗng
+            return f"Bạn nhận được một email lạ. Bạn nên xử lý thế nào để an toàn?"
+
+        # fallback cuối cùng
+        return str(sim.get('body') or 'Bạn gặp một tình huống nghi ngờ lừa đảo. Bạn nên làm gì?').strip()
+
+    fallback_bank = _build_scam_iq_fallback_questions()
+    sms_fallback_pool = [q for q in fallback_bank if str(q.get('type') or '').lower() == 'simulation_sms']
+    email_fallback_pool = [q for q in fallback_bank if str(q.get('type') or '').lower() == 'simulation_email']
 
     for i, item in enumerate(raw_questions, start=1):
         if not isinstance(item, dict):
@@ -3275,17 +3445,80 @@ def _normalize_scam_iq_questions(raw_questions: list) -> list:
         if not isinstance(sim, dict):
             sim = {}
 
+        raw_question = str(item.get('question') or '').strip()
+        cleaned_question = re.sub(r'^\[[^\]]{1,140}\]\s*', '', raw_question)
+        cleaned_question = _strip_source_citations(cleaned_question)
+        cleaned_question = re.sub(r'\s{2,}', ' ', cleaned_question).strip()
+        # fallback nếu rỗng
+        if not cleaned_question:
+            cleaned_question = 'Bạn gặp một tình huống nghi ngờ lừa đảo. Bạn nên làm gì?'
+
+        sms_inline_match = re.search(r"SMS\s*:\s*[\"“]([\s\S]{8,}?)[\"”]", cleaned_question, flags=re.IGNORECASE)
+        email_inline_match = re.search(r"Email\s*:\s*[\"“]([\s\S]{8,}?)[\"”]", cleaned_question, flags=re.IGNORECASE)
+        email_from_match = re.search(r'email\s+từ\s*["“]([^"”]{4,})["”]', cleaned_question, flags=re.IGNORECASE)
+        email_subject_match = re.search(r'tiêu\s*đề\s*["“]([^"”]{4,})["”]', cleaned_question, flags=re.IGNORECASE)
+
+        if qtype == 'simulation_sms':
+            fallback_sim = (sms_fallback_pool[(i - 1) % len(sms_fallback_pool)] if sms_fallback_pool else {}).get('simulation', {})
+            explicit_sms_body = str((sms_inline_match.group(1) if sms_inline_match else '') or '').strip()
+            if explicit_sms_body:
+                sim['body'] = explicit_sms_body
+                detected_phone = (re.search(r'(?:\+?84|0)\d[\d\s\-\.]{7,14}\d', explicit_sms_body) or [None])[0]
+                sim['from'] = str(detected_phone or 'Unknown sender').strip()
+                sim['sender_name'] = 'Tin nhắn mới'
+                sim['time'] = '--:--'
+            if not str(sim.get('body') or '').strip():
+                sim['body'] = fallback_sim.get('body') or cleaned_question
+            if not str(sim.get('from') or '').strip():
+                sim['from'] = fallback_sim.get('from') or '+84 xxx xxx xxx'
+            if not str(sim.get('sender_name') or '').strip():
+                sim['sender_name'] = fallback_sim.get('sender_name') or 'Tin nhắn cảnh báo'
+            if not str(sim.get('time') or '').strip():
+                sim['time'] = fallback_sim.get('time') or '--:--'
+            if not (sim.get('expected_keywords') or []):
+                sim['expected_keywords'] = fallback_sim.get('expected_keywords') or [
+                    'không bấm link', 'xác minh kênh chính thức', 'không cung cấp otp'
+                ]
+
+            cleaned_question = _build_sim_question(qtype, sim, i)
+
+        if qtype == 'simulation_email':
+            fallback_sim = (email_fallback_pool[(i - 1) % len(email_fallback_pool)] if email_fallback_pool else {}).get('simulation', {})
+            explicit_email_body = str((email_inline_match.group(1) if email_inline_match else '') or '').strip()
+            explicit_from = str((email_from_match.group(1) if email_from_match else '') or '').strip()
+            explicit_subject = str((email_subject_match.group(1) if email_subject_match else '') or '').strip()
+            if explicit_email_body:
+                sim['body'] = explicit_email_body
+                sim['from'] = explicit_from or 'security-alert@unknown-domain'
+                sim['subject'] = explicit_subject or 'Security Alert'
+                sim['preview'] = explicit_email_body[:180]
+            if not str(sim.get('body') or '').strip():
+                sim['body'] = fallback_sim.get('body') or cleaned_question
+            if not str(sim.get('from') or '').strip():
+                sim['from'] = fallback_sim.get('from') or 'security-alert@unknown-domain'
+            if not str(sim.get('subject') or '').strip():
+                sim['subject'] = fallback_sim.get('subject') or 'Security Alert'
+            if not str(sim.get('preview') or '').strip():
+                preview_text = str(sim.get('body') or fallback_sim.get('preview') or '').strip()
+                sim['preview'] = preview_text[:180] if preview_text else 'Không có preview'
+            if not (sim.get('expected_keywords') or []):
+                sim['expected_keywords'] = fallback_sim.get('expected_keywords') or [
+                    'xác minh domain', 'không nhập mật khẩu', 'báo cáo phishing'
+                ]
+
+            cleaned_question = _build_sim_question(qtype, sim, i)
+
         normalized.append({
             'id': f"Q{i}",
             'difficulty': difficulty,
             'difficulty_label': label_map[difficulty],
             'type': qtype,
             'category': str(item.get('category') or 'Nhận diện lừa đảo').strip()[:120],
-            'question': str(item.get('question') or '').strip()[:1200],
+            'question': cleaned_question[:1200],
             'options': safe_options,
             'correct_option_ids': sorted(set(answer_ids)),
             'simulation': {
-                'channel': str(sim.get('channel') or '').strip()[:30],
+                'channel': str(sim.get('channel') or (qtype.replace('simulation_', '') if qtype.startswith('simulation_') else '')).strip()[:30],
                 'from': str(sim.get('from') or '').strip()[:160],
                 'sender_name': str(sim.get('sender_name') or '').strip()[:120],
                 'time': str(sim.get('time') or '').strip()[:20],
@@ -3307,14 +3540,124 @@ def _normalize_scam_iq_questions(raw_questions: list) -> list:
         needed = 30 - len(normalized)
         normalized.extend(fallback[:needed])
 
+    normalized = _ensure_scam_iq_simulation_mix(normalized[:30])
     normalized = _rebalance_scam_iq_difficulty(normalized[:30])
     return normalized[:30]
+
+
+@shared_task(name='core.score_scamiq_responses_task', bind=True)
+def score_scamiq_responses_task(self, attempt_id):
+    """AI-powered scoring for ScamIQ simulation/free-text answers."""
+    from api.core.models import ScamIQAttempt
+    from api.utils.ollama_client import generate_response
+    import json
+
+    try:
+        attempt = ScamIQAttempt.objects.get(id=attempt_id)
+        # ai_feedback column initially holds the raw ai_review_questions if called from submmit view
+        # or we might have saved it elsewhere. For now, assume it's in ai_feedback.
+        ai_review_questions = attempt.ai_feedback
+        if not isinstance(ai_review_questions, list):
+            logger.warning(f"[ScamIQ Scoring] attempt {attempt_id} has no questions to score or is already scored.")
+            return
+            
+        final_feedback = []
+        additional_score = 0
+        total_q = len(ai_review_questions)
+        
+        task_id = getattr(self.request, 'id', None)
+        if task_id:
+            _send_task_progress(task_id, 'processing', f'AI đang chấm {total_q} câu hỏi thực tế...', step=1)
+
+        for i, q in enumerate(ai_review_questions):
+            q_text = q.get('question', '')
+            user_ans = q.get('free_text', '')
+            sim_data = q.get('simulation', {})
+            expected_kws = sim_data.get('expected_keywords', [])
+            
+            prompt = (
+                f"Bạn là giám khảo kỳ thi Scam IQ. Hãy chấm điểm câu trả lời của thí sinh cho tình huống sau.\n\n"
+                f"TÌNH HUỐNG: {q_text}\n"
+                f"CÂU TRẢ LỜI CỦA THÍ SINH: \"{user_ans}\"\n"
+                f"CÁC TỪ KHÓA MONG ĐỢI: {', '.join(expected_kws) if expected_kws else 'N/A'}\n\n"
+                f"YÊU CẦU CHẤM ĐIỂM:\n"
+                f"1. Cho điểm từ 0 đến 10 dựa trên độ chính xác, tính an toàn và tinh thần cảnh giác của câu trả lời.\n"
+                f"2. Đưa ra nhận xét ngắn gọn (tối đa 2 câu) lý do tại sao cho điểm đó và cách cải thiện.\n"
+                f"3. Trả về JSON THUẦN: {{\"score\": int, \"comment\": \"string\"}}\n"
+            )
+            
+            res = generate_response(prompt, tools=[], skip_filter=True)
+            parsed = {}
+            try:
+                # Basic JSON extraction if not pure
+                match = re.search(r'\{.*\}', res, re.DOTALL)
+                if match:
+                    parsed = json.loads(match.group())
+                else:
+                    parsed = json.loads(res)
+            except:
+                logger.warning(f"[ScamIQ Scoring] Failed to parse AI response: {res}")
+                parsed = {"score": 5 if user_ans else 0, "comment": "Bản chấm điểm đang được xử lý hoặc có lỗi định dạng."}
+            
+            q_score = parsed.get('score', 0)
+            additional_score += q_score
+            
+            final_feedback.append({
+                'question_id': q.get('question_id'),
+                'question': q_text,
+                'user_answer': user_ans,
+                'ai_score': q_score,
+                'ai_comment': parsed.get('comment', ''),
+                'is_correct': q_score >= 7,
+                'difficulty': q.get('difficulty', ''),
+            })
+            
+            if task_id:
+                _send_task_progress(task_id, 'processing', f'Đã chấm xong {i+1}/{total_q} câu hỏi.', step=1, data={'current': i+1, 'total': total_q})
+
+        # Update attempt
+        attempt.score += additional_score
+        # Also update correct_count based on AI score (e.g. 7/10 is correct)
+        correct_ai = sum(1 for f in final_feedback if f['is_correct'])
+        attempt.correct_count += correct_ai
+        
+        # Update difficulty breakdown for these questions
+        breakdown = attempt.difficulty_breakdown or {}
+        for f in final_feedback:
+            diff = str(f.get('difficulty') or 'medium').lower()
+            if diff in breakdown:
+                breakdown[diff]['total'] += 1
+                if f['is_correct']:
+                    breakdown[diff]['correct'] += 1
+        attempt.difficulty_breakdown = breakdown
+
+        # Recalculate level
+        level_info = ScamIQAttempt.calculate_level(attempt.score)
+        attempt.level_code = level_info['current']['code']
+        attempt.level_label = level_info['current']['label']
+        
+        attempt.ai_feedback = final_feedback
+        attempt.is_ai_scored = True
+        attempt.save()
+
+        if task_id:
+            _send_task_progress(task_id, 'done', 'AI đã hoàn tất chấm điểm!', step=2, data={
+                'score': attempt.score,
+                'level': level_info['current'],
+                'feedback': final_feedback,
+                'correct_count': attempt.correct_count,
+            })
+
+    except Exception as e:
+        logger.error(f"Error in score_scamiq_responses_task: {e}", exc_info=True)
+        if task_id:
+            _send_task_progress(task_id, 'failed', f'Lỗi khi chấm điểm: {str(e)}', step='error')
 
 
 @shared_task(name='core.generate_scam_iq_exam_task', bind=True, max_retries=1)
 def generate_scam_iq_exam_task(self, user_id=None):
     """Generate a 30-question Scam IQ exam from latest scam patterns via AI."""
-    from api.utils.ollama_client import generate_response
+    from api.utils.ollama_client import generate_response, stream_response, web_search_query
 
     schema = {
         "type": "object",
@@ -3368,36 +3711,214 @@ def generate_scam_iq_exam_task(self, user_id=None):
         "required": ["exam_title", "intro", "questions"]
     }
 
+    current_year = timezone.now().year
     prompt = (
         "Tạo BÀI KIỂM TRA Scam IQ 30 câu tiếng Việt về NHỮNG HÌNH THỨC LỪA ĐẢO MỚI NHẤT HIỆN NAY. "
-        "Dựa trên xu hướng lừa đảo online hiện đại (2024-2026), gồm: phishing đa kênh, quishing QR, deepfake, "
+        f"Dựa trên xu hướng lừa đảo online cập nhật đến thời điểm hiện tại (năm {current_year}), gồm: phishing đa kênh, quishing QR, deepfake, "
         "giả danh cơ quan chức năng, fake job, crypto/investment scam, account takeover, social engineering. "
         "YÊU CẦU: đúng 30 câu; thứ tự phải tăng dần easy->medium->hard->extreme, không trộn lẫn; "
         "nhiều dạng câu hỏi (single_choice, multi_select, true_false, simulation_sms, simulation_email, incident_response); "
-        "phải có ít nhất 8 câu simulation (SMS/Email/incident response) với dữ liệu mô phỏng thực tế để người dùng thao tác phản hồi; "
+        "phải có ít nhất 7 câu multi_select (chọn nhiều đáp án đúng) và ghi rõ phương án gây nhiễu có tính thực tế; "
+        "phải có ít nhất 8 câu simulation (SMS/Email/incident response), trong đó tối thiểu 3 câu simulation_sms và 3 câu simulation_email; "
+        "không chèn nhãn ví dụ dạng [Mua bán online giả] hoặc [Category] ở đầu câu hỏi; "
+        "TUYỆT ĐỐI không ghi nguồn/citation trong câu hỏi hoặc đáp án (ví dụ: '(theo VTV8 2026)', 'Nguồn: ...', 'Source: ...'); "
+        "mỗi câu phải bám ngữ cảnh đời thực (thời điểm, kênh liên hệ, áp lực tâm lý, bước leo thang) thay vì mô tả chung chung; "
+        "với simulation_sms/simulation_email: nội dung message/email trong field simulation phải khớp trực tiếp với nội dung câu hỏi, không được lệch ngữ cảnh; "
         "với simulation_* và incident_response, options có thể rỗng và expected_keywords phải khó, cụ thể, không chung chung; "
         "với câu trắc nghiệm, đáp án nhiễu phải 'gần đúng nhưng sai', tránh lộ đáp án quá rõ; "
         "bắt buộc có các kịch bản chuỗi tấn công nhiều bước, mạo danh có ngữ cảnh thực, và bẫy tâm lý cấp độ nâng cao; "
+        "BẮT BUỘC ĐA DẠNG VĂN PHONG: không dùng một mẫu mở đầu lặp lại quá 2 câu liên tiếp; "
+        "câu hỏi phải thay đổi ngôi kể và ngữ cảnh (người dùng cá nhân, nhân viên kế toán, chủ shop, phụ huynh, sinh viên, nhân sự); "
+        "độ dài câu hỏi xen kẽ ngắn/vừa/dài, tránh tất cả câu có cùng nhịp câu chữ; "
+        "không tạo 2 câu gần như trùng nhau về tình huống, chỉ khác vài từ; "
+        "mỗi mức độ khó phải có ít nhất 2 câu chứa yếu tố đối chiếu đa kênh (SMS + gọi điện, email + chat, QR + website...); "
+        "ưu tiên tình huống có dữ kiện cụ thể (thời điểm, số tiền, vai trò người gọi, bước ép hành động), nhưng không được lặp motif y hệt; "
         "với các loại còn lại mỗi câu có 2-5 lựa chọn; "
         "explanation ngắn, thực tế, chỉ ra dấu hiệu lừa đảo chính. "
         "Trả về đúng JSON schema."
     )
 
+    task_progress_id = getattr(getattr(self, 'request', None), 'id', None)
+    phase_label_map = {
+        'research': 'Phân tích xu hướng lừa đảo',
+        'drafting': 'Soạn thảo câu hỏi',
+        'hardening': 'Tăng độ khó & đáp án nhiễu',
+        'finalize': 'Rà soát và chuẩn hóa đề',
+    }
+
+    def _push_phase(phase: str, created: int, message: str, step: int = 2, extra_data: dict | None = None):
+        if not task_progress_id:
+            return
+        safe_created = max(0, min(30, int(created or 0)))
+        phase_key = str(phase or '').strip().lower() or 'drafting'
+        payload_data = {
+            'phase': phase_key,
+            'phase_label': phase_label_map.get(phase_key, 'Đang xử lý'),
+            'created_questions': safe_created,
+            'total_questions': 30,
+        }
+        if isinstance(extra_data, dict) and extra_data:
+            payload_data.update(extra_data)
+        _send_task_progress(
+            task_progress_id,
+            'processing',
+            message,
+            step=step,
+            data=payload_data,
+        )
+
+    if task_progress_id:
+        _send_task_progress(
+            task_progress_id,
+            'processing',
+            'Đang tổng hợp dữ liệu lừa đảo mới nhất...',
+            step=1,
+            data={'phase': 'research', 'phase_label': phase_label_map['research'], 'created_questions': 0, 'total_questions': 30},
+        )
+
+    web_context_block = ""
+    try:
+        web_queries = [
+            "hình thức lừa đảo mới nhất tại Việt Nam",
+            "scam trend phishing deepfake quishing mới nhất",
+            "cảnh báo lừa đảo tuyển dụng đầu tư giả mạo ngân hàng",
+        ]
+        collected_sources = []
+        seen_urls = set()
+        for query in web_queries:
+            results = web_search_query(query, max_results=4) or []
+            for item in results:
+                if len(collected_sources) >= 10:
+                    break
+                if not isinstance(item, dict):
+                    continue
+                url = str(item.get('url') or '').strip()
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                title = re.sub(r'\s+', ' ', str(item.get('title') or '').strip())[:160]
+                content = re.sub(r'\s+', ' ', str(item.get('content') or '').strip())[:280]
+                collected_sources.append({
+                    'title': title,
+                    'url': url,
+                    'content': content,
+                })
+            if len(collected_sources) >= 10:
+                break
+
+        if collected_sources:
+            lines = []
+            for idx, src in enumerate(collected_sources, start=1):
+                lines.append(
+                    f"{idx}. {src['title']} | {src['url']} | Tóm tắt: {src['content']}"
+                )
+            web_context_block = "\n\nNGUỒN WEB MỚI NHẤT (webtool):\n" + "\n".join(lines)
+            _push_phase(
+                'research',
+                2,
+                f"Đã thu thập {len(collected_sources)} nguồn web mới nhất về xu hướng lừa đảo.",
+                step=1,
+                extra_data={
+                    'web_sources': [x.get('url') for x in collected_sources if x.get('url')],
+                },
+            )
+        else:
+            _push_phase('research', 1, "Không lấy được nguồn web mới, AI sẽ dùng tri thức nội bộ + bộ đề dự phòng.", step=1)
+    except Exception as web_exc:
+        logger.warning(f"[ScamIQ] web intel fetch failed: {web_exc}")
+        _push_phase('research', 1, "Lỗi webtool tạm thời, tiếp tục tạo đề với dữ liệu sẵn có.", step=1)
+
+    prompt = prompt + web_context_block + (
+        "\n\nBẮT BUỘC: ưu tiên dùng dữ liệu webtool ở trên để đưa vào tình huống thực tế mới nhất; "
+        "không dùng mốc năm cố định cứng trong nội dung câu hỏi; "
+        "không chèn nguồn báo chí/tên kênh truyền thông vào chính câu hỏi."
+    )
+
     ai_data = None
     try:
-        raw = generate_response(
-            prompt=prompt,
+        stream_prompt = (
+            prompt
+            + "\n\nBẮT BUỘC STREAM THEO XML TAG (để cập nhật realtime):\n"
+              "- Trong lúc tạo đề, chèn các dòng XML hợp lệ theo mẫu:\n"
+              "  <phase name=\"research\" created=\"0\">Đang phân tích mẫu lừa đảo mới</phase>\n"
+              "  <phase name=\"drafting\" created=\"8\">Đã tạo 8 câu đầu tiên</phase>\n"
+              "  <phase name=\"hardening\" created=\"22\">Đang tăng độ khó & đáp án nhiễu</phase>\n"
+              "  <phase name=\"finalize\" created=\"30\">Đang kiểm tra tính nhất quán</phase>\n"
+              "- created là số nguyên 0..30.\n"
+              "- Kết quả cuối cùng phải nằm trong một block duy nhất:\n"
+              "  <exam_json>{ ... JSON theo schema ... }</exam_json>\n"
+              "- Không dùng markdown code fence."
+        )
+
+        full_stream = []
+        phase_scan_idx = 0
+        last_reported_created = 0
+        thinking_reported = False
+
+        for token in stream_response(
+            prompt=stream_prompt,
             system_prompt=(
                 "Bạn là chuyên gia an ninh mạng cho người dùng phổ thông. "
                 "Chỉ tạo nội dung huấn luyện an toàn, không cung cấp hướng dẫn tấn công."
             ),
-            format_schema=schema,
-            skip_filter=True,
-            max_tokens=7000,
-        )
+            max_tokens=7800,
+        ):
+            if token == "__STATUS__:thinking":
+                if not thinking_reported:
+                    _push_phase('research', 0, 'AI đang phân tích và lập kế hoạch đề thi...', step=1)
+                    thinking_reported = True
+                continue
+
+            full_stream.append(token)
+            stream_text = ''.join(full_stream)
+
+            phase_matches = list(re.finditer(r'<phase\s+name="([a-zA-Z_]+)"\s+created="(\d{1,2})"\s*>(.*?)</phase>', stream_text[phase_scan_idx:], flags=re.DOTALL))
+            for m in phase_matches:
+                phase_name = (m.group(1) or '').strip().lower()
+                created = max(0, min(30, int(m.group(2) or 0)))
+                phase_message = re.sub(r'\s+', ' ', (m.group(3) or '').strip())[:220]
+                if created >= last_reported_created or phase_name in {'hardening', 'finalize'}:
+                    _push_phase(
+                        phase_name,
+                        created,
+                        phase_message or f"Đang xử lý giai đoạn {phase_label_map.get(phase_name, phase_name)}...",
+                        step=2,
+                    )
+                    last_reported_created = max(last_reported_created, created)
+
+            if phase_matches:
+                phase_scan_idx += phase_matches[-1].end()
+
+        streamed_raw = ''.join(full_stream)
+        exam_json_match = re.search(r'<exam_json>\s*([\s\S]*?)\s*</exam_json>', streamed_raw)
+        raw = exam_json_match.group(1) if exam_json_match else streamed_raw
         ai_data = _parse_json_safe(raw) if isinstance(raw, str) else raw
+
+        if isinstance(ai_data, dict):
+            raw_count = len(ai_data.get('questions') or [])
+            _push_phase('finalize', raw_count, f'AI đã tạo {min(raw_count, 30)}/30 câu, đang chuẩn hóa dữ liệu...', step=3)
+        else:
+            fallback_raw = generate_response(
+                prompt=prompt,
+                system_prompt=(
+                    "Bạn là chuyên gia an ninh mạng cho người dùng phổ thông. "
+                    "Chỉ tạo nội dung huấn luyện an toàn, không cung cấp hướng dẫn tấn công."
+                ),
+                format_schema=schema,
+                skip_filter=True,
+                max_tokens=7000,
+            )
+            ai_data = _parse_json_safe(fallback_raw) if isinstance(fallback_raw, str) else fallback_raw
     except Exception as exc:
         logger.warning(f"[ScamIQ] AI generation failed: {exc}")
+        if task_progress_id:
+            _send_task_progress(
+                task_progress_id,
+                'processing',
+                'AI phản hồi chưa ổn định, chuyển sang bộ đề dự phòng nâng cao...',
+                step=2,
+                data={'phase': 'hardening', 'phase_label': phase_label_map['hardening'], 'created_questions': 12, 'total_questions': 30},
+            )
 
     if isinstance(ai_data, dict):
         questions = _normalize_scam_iq_questions(ai_data.get('questions') or [])
@@ -3411,7 +3932,17 @@ def generate_scam_iq_exam_task(self, user_id=None):
     if len(questions) != 30:
         questions = _normalize_scam_iq_questions(questions)
 
+    questions = _ensure_scam_iq_simulation_mix(questions)
     questions = _rebalance_scam_iq_difficulty(questions)
+
+    if task_progress_id:
+        _send_task_progress(
+            task_progress_id,
+            'processing',
+            f'Đã hoàn tất {len(questions)}/30 câu, đang đóng gói đề thi...',
+            step=3,
+            data={'phase': 'finalize', 'phase_label': phase_label_map['finalize'], 'created_questions': len(questions), 'total_questions': 30},
+        )
 
     exam_id = uuid.uuid4().hex
     public_questions = []
@@ -3438,6 +3969,15 @@ def generate_scam_iq_exam_task(self, user_id=None):
         'created_at': timezone.now().isoformat(),
     }
     cache.set(f"scam_iq_exam:{exam_id}", payload, timeout=60 * 60 * 4)
+
+    if task_progress_id:
+        _send_task_progress(
+            task_progress_id,
+            'done',
+            'Bộ câu hỏi đã sẵn sàng.',
+            step=4,
+            data={'phase': 'finalize', 'phase_label': phase_label_map['finalize'], 'created_questions': 30, 'total_questions': 30, 'exam_id': exam_id},
+        )
 
     return {
         'ok': True,

@@ -71,6 +71,23 @@
         scrollbar-color: rgba(24,255,255,0.42) rgba(255,255,255,0.04);
         color-scheme: dark;
     }
+    body {
+        position: relative;
+    }
+    body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background-image:
+            linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px),
+            radial-gradient(1200px 700px at 50% -10%, rgba(255,255,255,0.05), transparent 70%);
+        background-size: 30px 30px, 30px 30px, 100% 100%;
+        background-position: 0 0, 0 0, center top;
+        opacity: 0.12;
+    }
     html::-webkit-scrollbar,
     body::-webkit-scrollbar {
         width: 10px;
@@ -878,7 +895,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 
-<body x-data="{ 
+<body class="overflow-x-hidden" x-data="{ 
     mobileMenu: false, 
     user: { 
         username: '{{ user.username|escapejs }}', 
@@ -1231,8 +1248,8 @@
     </nav>
 
     <!-- Main content -->
-    <main class="animate-fadein"
-        style="max-width:1280px;margin:0 auto;padding:2rem 1.5rem;position:relative;z-index:1;min-height:calc(100vh - 180px);">
+    <main class="animate-fadein w-full"
+        style="{% block main_style %}max-width:1280px;margin:0 auto;padding:2rem 1.5rem;{% endblock %}position:relative;z-index:1;min-height:calc(100vh - 180px);">
         {% block content %}{% endblock %}
     </main>
 

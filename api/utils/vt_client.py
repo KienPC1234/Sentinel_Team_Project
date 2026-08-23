@@ -24,12 +24,24 @@ class VTClient:
                 analysis = self.client.scan_url(url, wait_for_completion=True)
                 stats = analysis.stats
             
+            malicious = stats.get('malicious', 0)
+            suspicious = stats.get('suspicious', 0)
+            harmless = stats.get('harmless', 0)
+            undetected = stats.get('undetected', 0)
+            total = sum(stats.values())
+            
+            risk_score = 0
+            if total > 0:
+                # Same formula as image scan: malicious=1, suspicious=0.5
+                risk_score = min(100, int(((malicious * 1.0 + suspicious * 0.5) / total) * 100))
+
             return {
-                'harmless': stats.get('harmless', 0),
-                'malicious': stats.get('malicious', 0),
-                'suspicious': stats.get('suspicious', 0),
-                'undetected': stats.get('undetected', 0),
-                'total': sum(stats.values())
+                'harmless': harmless,
+                'malicious': malicious,
+                'suspicious': suspicious,
+                'undetected': undetected,
+                'total': total,
+                'risk_score': risk_score
             }
         except Exception as e:
             logger.error(f"VirusTotal URL Scan Error: {e}")

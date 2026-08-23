@@ -796,10 +796,11 @@ def _analyze_message_text(text: str) -> dict:
         domain = normalize_domain(url)
         if domain:
             vt_res = vt.scan_url(url)
-            score = vt_res.get('risk_score', 0)
-            max_domain_score = max(max_domain_score, score)
-            if score > 0:
-                domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
+            if vt_res:
+                score = vt_res.get('risk_score', 0)
+                max_domain_score = max(max_domain_score, score)
+                if score > 0:
+                    domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
 
     # 3. Heuristic Patterns
     patterns_found = []

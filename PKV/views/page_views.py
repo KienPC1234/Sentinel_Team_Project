@@ -16,6 +16,7 @@ from datetime import timedelta
 from api.core.models import (
     ScanEvent, Report, Domain, TrendDaily,
     UserAlert, ScamType, RiskLevel,
+    ScanType,
     ForumPost, ForumComment,
     Article, ArticleCategory, ReportStatus,
     LearnLesson, LearnQuiz, LearnScenario,
@@ -155,8 +156,40 @@ def scan_qr_view(request):
 
 def scan_lookup_view(request):
     """Unified scan lookup / search page."""
+    selected_type = (request.GET.get('type') or '').strip().lower()
+    search_query = (request.GET.get('q') or '').strip()
+
+    if request.user.is_authenticated:
+        scans_qs = ScanEvent.objects.filter(user=request.user)
+    else:
+        scans_qs = ScanEvent.objects.filter(is_public_referable=True)
+
+    if search_query:
+        scans_qs = scans_qs.filter(raw_input__icontains=search_query)
+
+    if selected_type:
+        scans_qs = scans_qs.filter(scan_type=selected_type)
+
+    recent_scans = scans_qs.order_by('-created_at')[:80]
+
+    base_qs = ScanEvent.objects.filter(user=request.user) if request.user.is_authenticated else ScanEvent.objects.filter(is_public_referable=True)
+    type_counts_raw = base_qs.values('scan_type').annotate(count=Count('id')).order_by('-count')
+    type_labels = dict(ScanType.choices)
+    type_counts = [
+        {
+            'code': row['scan_type'],
+            'label': type_labels.get(row['scan_type'], row['scan_type']),
+            'count': row['count'],
+        }
+        for row in type_counts_raw
+    ]
+
     return render(request, "Scan/scan_lookup.html", {
         "title": "Tra cứu hệ thống",
+        "recent_scans": recent_scans,
+        "type_counts": type_counts,
+        "selected_type": selected_type,
+        "search_query": search_query,
     })
 
 

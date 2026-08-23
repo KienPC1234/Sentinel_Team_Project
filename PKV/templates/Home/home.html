@@ -2,53 +2,142 @@
 
 {% block title %}Trang chủ{% endblock %}
 {% block meta_description %}ShieldCall VN - Bảo mật tuyệt đối trước mọi hình thức lừa đảo số. Scan số điện thoại, tin nhắn, website với AI thông minh.{% endblock %}
+{% block main_style %}max-width:none;margin:0;padding:0;{% endblock %}
 
 {% block content %}
-<!-- Hero Section -->
-<section class="relative pt-20 pb-24 text-center overflow-hidden">
-    <!-- Background Ambient Glow -->
-    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10 opacity-30 pointer-events-none">
-        <div class="absolute top-0 left-1/4 w-[500px] h-[500px] bg-cyan-500/20 blur-[120px] rounded-full"></div>
-        <div class="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-500/20 blur-[120px] rounded-full"></div>
-    </div>
+<style>
+    .hero-breakout {
+        position: relative;
+        width: 100%;
+        left: auto;
+        right: auto;
+        margin-left: 0;
+        margin-right: 0;
+        overflow-x: clip;
+        overflow-y: visible;
+        isolation: isolate;
+    }
 
-    <div class="relative z-10 space-y-8 max-w-4xl mx-auto px-4">
-        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full liquid-glass border-cyan-500/20 text-cyan-400 text-xs font-black uppercase tracking-widest animate-fadein">
-            <i class="bi bi-shield-check"></i> Hệ thống bảo mật AI v2.0
-        </div>
-        
-        <h1 class="text-5xl md:text-7xl font-black text-white leading-tight tracking-tighter" data-aos="fade-up" data-aos-delay="100">
-            <span class="glow-text">Lớp giáp bảo vệ</span><br>
-            <span class="opacity-90 italic text-white md:text-inherit">cuộc sống số của bạn</span>
-        </h1>
-        
-        <p class="text-lg md:text-xl text-white/50 leading-relaxed max-w-2xl mx-auto font-medium" data-aos="fade-up" data-aos-delay="200">
-            Phát hiện và cảnh báo tức thì các cuộc gọi, tin nhắn và website lừa đảo bằng trí tuệ nhân tạo hàng đầu.
-        </p>
+    @supports not (overflow: clip) {
+        .hero-breakout {
+            overflow-x: hidden;
+        }
+    }
+</style>
 
-        <!-- Quick Scan Interface -->
-        <div class="pt-8" data-aos="fade-up" data-aos-delay="300">
-            <div class="max-w-2xl mx-auto">
-                <a href="/scan/" class="inline-flex items-center justify-center gap-2 liquid-btn bg-cyan-500 text-black border-none px-10 py-4 font-black hover:bg-cyan-400 hover:text-black rounded-2xl">
-                    <i class="bi bi-shield-check"></i>
-                    MỞ TRUNG TÂM SCAN
+<section class="relative pt-28 md:pt-32 pb-28 md:pb-36 hero-breakout">
+    <div class="absolute -top-48 left-[8%] w-[720px] h-[720px] bg-cyan-500/12 blur-[170px] rounded-full pointer-events-none"></div>
+    <div class="absolute -top-36 right-[8%] w-[620px] h-[620px] bg-indigo-500/10 blur-[170px] rounded-full pointer-events-none"></div>
+    <div class="absolute -bottom-56 left-1/2 -translate-x-1/2 w-[980px] h-[520px] bg-purple-500/12 blur-[180px] rounded-full pointer-events-none"></div>
+    <div class="absolute -bottom-24 left-0 right-0 h-40 bg-gradient-to-b from-transparent via-cyan-500/[0.05] to-transparent pointer-events-none"></div>
+
+    <div class="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 relative z-10">
+        
+        <div class="space-y-8 self-center" data-aos="fade-up" data-aos-delay="80">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-black uppercase tracking-widest backdrop-blur-md shadow-[0_0_20px_rgba(34,211,238,0.1)]">
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                </span>
+                Hệ thống bảo vệ AI
+            </div>
+            
+            <h1 class="text-5xl md:text-6xl lg:text-7xl font-black text-white leading-[1.12] tracking-tight">
+                Tìm đúng rủi ro.<br>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-blue-400 to-purple-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.2)]">
+                    Bảo vệ mọi<br>tài khoản.
+                </span>
+            </h1>
+            
+            <p class="text-base md:text-lg text-white/50 max-w-lg leading-relaxed font-medium">
+                Tra cứu và đối chiếu báo cáo lừa đảo từ đa nguồn. Tích hợp AI phân tích hành vi và bằng chứng OSINT theo thời gian thực để bảo vệ bạn 24/7.
+            </p>
+
+            <div class="flex flex-wrap gap-4 pt-2">
+                <a href="/scan/" class="group relative px-8 py-4 bg-cyan-500 text-black rounded-xl font-black hover:bg-cyan-400 transition-all duration-300 inline-flex items-center gap-3 overflow-hidden shadow-[0_0_30px_rgba(34,211,238,0.26)] hover:shadow-[0_0_42px_rgba(34,211,238,0.4)] hover:-translate-y-1">
+                    <i class="bi bi-radar relative z-10 text-lg"></i> 
+                    <span class="relative z-10">Kích hoạt Scanner</span>
                 </a>
+                <a href="/scam-iq-exam/" class="px-8 py-4 bg-white/5 text-white border border-white/10 rounded-xl font-black hover:bg-white/10 hover:border-white/20 transition-all duration-300 inline-flex items-center gap-2 backdrop-blur-md hover:-translate-y-1">
+                    <i class="bi bi-patch-question-fill text-purple-400"></i> BÀI KIỂM TRA SCAM IQ
+                </a>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-4 pt-1">
+                <span class="text-[11px] text-white/35 font-bold uppercase tracking-wider">Giám sát 24/7</span>
+                <span class="w-1 h-1 rounded-full bg-white/30"></span>
+                <span class="text-[11px] text-white/35 font-bold uppercase tracking-wider">Phân tích theo ngữ cảnh</span>
+                <span class="w-1 h-1 rounded-full bg-white/30"></span>
+                <span class="text-[11px] text-white/35 font-bold uppercase tracking-wider">Cảnh báo thời gian thực</span>
             </div>
         </div>
 
-        <div class="pt-4" data-aos="fade-up" data-aos-delay="350">
-            <div class="max-w-2xl mx-auto">
-                <a href="/scam-iq-exam/" class="inline-flex items-center justify-center gap-2 liquid-btn bg-purple-500/20 text-purple-200 border border-purple-400/30 px-8 py-3 font-black hover:bg-purple-500/30 rounded-2xl">
-                    <i class="bi bi-patch-question-fill"></i>
-                    BÀI KIỂM TRA SCAM IQ (TỐI ĐA 300 ĐIỂM)
-                </a>
+        <div class="relative w-full max-w-lg mx-auto lg:ml-auto lg:mr-0 self-center" data-aos="fade-up" data-aos-delay="180">
+            
+            <div class="relative p-[1px] rounded-[2.5rem] bg-gradient-to-b from-cyan-500/30 via-purple-500/10 to-transparent shadow-[0_20px_80px_-20px_rgba(34,211,238,0.15)]">
+                <div class="bg-[#0a0a16]/80 backdrop-blur-2xl rounded-[2.5rem] p-8 relative overflow-hidden">
+                    
+                    <div class="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/20 blur-[50px] rounded-full pointer-events-none"></div>
+
+                    <div class="relative z-10">
+                        <div class="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 class="text-xl font-black text-white mb-1">Scanner Engine</h3>
+                                <p class="text-[11px] text-white/40 uppercase tracking-widest font-bold">ShieldCall VN v2.0</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-cyan-400">
+                                <i class="bi bi-cpu text-lg"></i>
+                            </div>
+                        </div>
+
+                        <form action="/scan/lookup/" method="get" class="relative group">
+                            <div class="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-2xl blur opacity-0 group-focus-within:opacity-30 transition duration-500"></div>
+                            
+                            <div class="relative flex items-center">
+                                <i class="bi bi-search absolute left-5 text-cyan-400 text-lg"></i>
+                                <input
+                                    type="text"
+                                    name="q"
+                                    placeholder="Dán SĐT, URL, hoặc STK vào đây..."
+                                    class="w-full h-16 pl-14 pr-32 rounded-2xl bg-white/5 border border-white/10 text-white text-base placeholder:text-white/30 focus:outline-none focus:border-cyan-500/50 transition-all shadow-inner"
+                                >
+                                <button type="submit" class="absolute right-2 h-12 px-6 rounded-xl bg-white text-black text-sm font-black hover:bg-cyan-400 transition-colors flex items-center gap-2 shadow-lg">
+                                    Quét <i class="bi bi-arrow-right"></i>
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="mt-8">
+                            <p class="text-[11px] text-white/30 font-bold mb-4 uppercase tracking-widest">Phân tích chuyên sâu</p>
+                            <div class="grid grid-cols-4 gap-3">
+                                <a href="/scan/phone/" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-cyan-500/30 transition-all group">
+                                    <i class="bi bi-telephone text-white/50 group-hover:text-cyan-400 text-xl transition-colors"></i>
+                                    <span class="text-[10px] font-bold text-white/50 group-hover:text-white transition-colors">SĐT</span>
+                                </a>
+                                <a href="/scan/website/" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-blue-500/30 transition-all group">
+                                    <i class="bi bi-globe2 text-white/50 group-hover:text-blue-400 text-xl transition-colors"></i>
+                                    <span class="text-[10px] font-bold text-white/50 group-hover:text-white transition-colors">URL</span>
+                                </a>
+                                <a href="/scan/bank/" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-yellow-500/30 transition-all group">
+                                    <i class="bi bi-bank2 text-white/50 group-hover:text-yellow-400 text-xl transition-colors"></i>
+                                    <span class="text-[10px] font-bold text-white/50 group-hover:text-white transition-colors">Bank</span>
+                                </a>
+                                <a href="/scan/message/" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-purple-500/30 transition-all group">
+                                    <i class="bi bi-chat-left-text text-white/50 group-hover:text-purple-400 text-xl transition-colors"></i>
+                                    <span class="text-[10px] font-bold text-white/50 group-hover:text-white transition-colors">SMS</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+
         </div>
     </div>
 </section>
 
 <!-- Impact Stats Row -->
-<section class="max-w-6xl mx-auto px-4 mb-24 grid grid-cols-2 md:grid-cols-4 gap-4" data-aos="fade-up" data-aos-delay="400">
+<section class="max-w-6xl mx-auto px-4 mb-24 mt-8 md:mt-10 grid grid-cols-2 md:grid-cols-4 gap-4" data-aos="fade-up" data-aos-delay="400">
     <div class="liquid-card p-8 text-center bg-white/[0.02] border-white/5">
         <div class="text-3xl font-black text-white glow-text mb-1">{{ total_scans|default:"1.2M+" }}</div>
         <div class="text-[10px] text-white/30 font-black uppercase tracking-[0.2em]">Tổng Lượt Scan</div>

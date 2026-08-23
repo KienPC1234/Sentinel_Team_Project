@@ -5,54 +5,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.core.tasks import generate_scam_iq_exam_task
+from api.core.tasks import generate_scam_iq_exam_task, score_scamiq_responses_task
 from api.core.models import ScamIQAttempt
 
 logger = logging.getLogger(__name__)
 
 
-def _score_level(score: int) -> dict:
-    levels = [
-        {
-            'code': 'novice',
-            'label': 'Mức 1 - Cần củng cố',
-            'min': 0,
-            'max': 89,
-            'description': 'Bạn mới ở giai đoạn làm quen. Nên luyện thêm kỹ năng nhận diện phishing và social engineering.',
-        },
-        {
-            'code': 'aware',
-            'label': 'Mức 2 - Nhận diện cơ bản',
-            'min': 90,
-            'max': 149,
-            'description': 'Bạn đã có nền tảng cơ bản, nhưng vẫn dễ bị đánh lừa trong các tình huống áp lực cao.',
-        },
-        {
-            'code': 'defender',
-            'label': 'Mức 3 - Người phòng thủ',
-            'min': 150,
-            'max': 209,
-            'description': 'Bạn có năng lực phòng thủ tốt trước phần lớn tình huống lừa đảo phổ biến.',
-        },
-        {
-            'code': 'analyst',
-            'label': 'Mức 4 - Chuyên gia phân tích',
-            'min': 210,
-            'max': 269,
-            'description': 'Bạn phân tích được nhiều bẫy tinh vi như deepfake, quishing và giả mạo thương hiệu.',
-        },
-        {
-            'code': 'elite',
-            'label': 'Mức 5 - Scam Hunter Elite',
-            'min': 270,
-            'max': 300,
-            'description': 'Bạn đạt năng lực rất cao trong nhận diện và phản ứng với các hình thức lừa đảo mới nhất.',
-        },
-    ]
-    for item in levels:
-        if item['min'] <= score <= item['max']:
-            return {'current': item, 'bands': levels}
-    return {'current': levels[0], 'bands': levels}
 
 
 class ScamIQStartView(APIView):
@@ -163,9 +121,11 @@ class ScamIQSubmitView(APIView):
         questions = exam.get('questions') or []
         max_score = int(exam.get('max_score') or 300)
         per_question = 10
+
         score = 0
         correct_count = 0
         mistakes = []
+        ai_review_questions = []
 
         for q in questions:
             qid = q.get('id')
@@ -175,28 +135,28 @@ class ScamIQSubmitView(APIView):
             free_text = str(user_answer.get('free_text') or '').strip()
             q_type = str(q.get('type') or 'single_choice').lower()
 
+            is_free_text = q_type in {'simulation_sms', 'simulation_email', 'incident_response'}
             is_correct = False
             earned_points = 0
-            if q_type in {'simulation_sms', 'simulation_email', 'incident_response'}:
-                simulation = q.get('simulation') or {}
-                expected_keywords = [
-                    _normalize_text(x) for x in (simulation.get('expected_keywords') or []) if _normalize_text(x)
-                ]
-                if expected_keywords:
-                    match_count = 0
-                    norm_text = _normalize_text(free_text)
-                    for kw in expected_keywords:
-                        if kw and kw in norm_text:
-                            match_count += 1
-                    ratio = match_count / max(len(expected_keywords), 1)
-                    earned_points = round(per_question * min(1.0, ratio))
-                    is_correct = ratio >= 0.6
-                else:
-                    is_correct = bool(free_text)
-                    earned_points = per_question if is_correct else 0
-            else:
-                is_correct = selected == expected
-                earned_points = per_question if is_correct else 0
+
+            if is_free_text:
+                # Không tự động chấm, gom lại cho AI chấm sau
+                ai_review_questions.append({
+                    'question_id': qid,
+                    'question': q.get('question', ''),
+                    'category': q.get('category', ''),
+                    'difficulty': q.get('difficulty_label') or q.get('difficulty', ''),
+                    'type': q_type,
+                    'free_text': free_text,
+                    'simulation': q.get('simulation', {}),
+                    'explanation': q.get('explanation', ''),
+                })
+                # Không cộng điểm, không tính đúng/sai
+                continue
+
+            # Chấm tự động các câu chọn đáp án
+            is_correct = selected == expected
+            earned_points = per_question if is_correct else 0
 
             if is_correct:
                 score += earned_points
@@ -218,7 +178,7 @@ class ScamIQSubmitView(APIView):
                 })
 
         score = min(max_score, score)
-        level_info = _score_level(score)
+        level_info = ScamIQAttempt.calculate_level(score)
 
         breakdown = {
             'easy': {'total': 0, 'correct': 0},
@@ -257,16 +217,18 @@ class ScamIQSubmitView(APIView):
             'score': score,
             'max_score': max_score,
             'correct_count': correct_count,
-            'wrong_count': max(0, len(questions) - correct_count),
+            'wrong_count': max(0, len([q for q in questions if str(q.get('type') or '').lower() not in {'simulation_sms','simulation_email','incident_response'}]) - correct_count),
             'exam_title': exam.get('exam_title'),
             'level': level_info['current'],
             'level_bands': level_info['bands'],
             'mistakes': mistakes,
             'difficulty_breakdown': breakdown,
+            'ai_review_questions': ai_review_questions,
+            'is_ai_scored': not bool(ai_review_questions),
         }
 
         try:
-            ScamIQAttempt.objects.create(
+            attempt = ScamIQAttempt.objects.create(
                 user=request.user,
                 exam_title=str(exam.get('exam_title') or 'Scam IQ Exam')[:255],
                 score=score,
@@ -277,7 +239,14 @@ class ScamIQSubmitView(APIView):
                 level_label=str(level_info['current'].get('label') or '')[:120],
                 difficulty_breakdown=breakdown,
                 mistakes=mistakes[:30],
+                ai_feedback=ai_review_questions, # Save raw questions initially
+                is_ai_scored=not bool(ai_review_questions),
             )
+            response_payload['attempt_id'] = attempt.id
+            
+            if ai_review_questions:
+                task = score_scamiq_responses_task.delay(attempt.id)
+                response_payload['ai_task_id'] = task.id
         except Exception:
             logger.exception('Failed to persist Scam IQ attempt for user_id=%s', request.user.id)
 
