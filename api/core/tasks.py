@@ -3325,6 +3325,11 @@ def _ensure_scam_iq_simulation_mix(questions: list) -> list:
             current_type = str(current.get('type') or '').lower()
             if current_type in {'simulation_sms', 'simulation_email'}:
                 continue
+            # Only replace questions with few/no options (padding/fallback)
+            # Preserve AI-generated questions that have coherent options
+            current_options = current.get('options') or []
+            if len(current_options) >= 3:
+                continue
             sample = copy.deepcopy(pool[pool_idx % len(pool)])
             sample['id'] = current.get('id') or f"Q{idx+1}"
             sample['difficulty'] = current.get('difficulty') or sample.get('difficulty') or 'medium'
@@ -3449,9 +3454,17 @@ def _normalize_scam_iq_questions(raw_questions: list) -> list:
         cleaned_question = re.sub(r'^\[[^\]]{1,140}\]\s*', '', raw_question)
         cleaned_question = _strip_source_citations(cleaned_question)
         cleaned_question = re.sub(r'\s{2,}', ' ', cleaned_question).strip()
-        # fallback nếu rỗng
+        # fallback nếu rỗng — build contextual question from category + options
         if not cleaned_question:
-            cleaned_question = 'Bạn gặp một tình huống nghi ngờ lừa đảo. Bạn nên làm gì?'
+            cat = str(item.get('category') or '').strip()
+            if cat and safe_options:
+                cleaned_question = f'Trong tình huống liên quan đến {cat}, bạn nên làm gì?'
+            elif safe_options:
+                # derive topic from first option text
+                first_opt = str(safe_options[0].get('text') or '').strip()[:60]
+                cleaned_question = f'Bạn gặp tình huống sau. Hãy chọn phương án xử lý đúng: "{first_opt}..."'
+            else:
+                cleaned_question = 'Bạn gặp một tình huống nghi ngờ lừa đảo. Bạn nên làm gì?'
 
         sms_inline_match = re.search(r"SMS\s*:\s*[\"“]([\s\S]{8,}?)[\"”]", cleaned_question, flags=re.IGNORECASE)
         email_inline_match = re.search(r"Email\s*:\s*[\"“]([\s\S]{8,}?)[\"”]", cleaned_question, flags=re.IGNORECASE)
@@ -3542,6 +3555,28 @@ def _normalize_scam_iq_questions(raw_questions: list) -> list:
 
     normalized = _ensure_scam_iq_simulation_mix(normalized[:30])
     normalized = _rebalance_scam_iq_difficulty(normalized[:30])
+
+    # Post-normalization coherence check: fix generic questions with specific options
+    generic_patterns = [
+        'bạn gặp một tình huống nghi ngờ lừa đảo',
+        'bạn nên làm gì?',
+    ]
+    for q in normalized:
+        q_text_lower = str(q.get('question') or '').strip().lower()
+        opts = q.get('options') or []
+        q_type = str(q.get('type') or '').lower()
+        # Only fix choice-based questions with the generic fallback
+        if q_type in {'simulation_sms', 'simulation_email', 'incident_response'}:
+            continue
+        is_generic = all(p in q_text_lower for p in generic_patterns)
+        if is_generic and len(opts) >= 2:
+            cat = str(q.get('category') or '').strip()
+            if cat:
+                q['question'] = f'Trong tình huống liên quan đến {cat}, bạn nên làm gì?'
+            else:
+                first_opt = str(opts[0].get('text') or '').strip()[:80]
+                q['question'] = f'Hãy chọn phương án xử lý đúng trong tình huống sau: "{first_opt}..."'
+
     return normalized[:30]
 
 
@@ -3734,6 +3769,8 @@ def generate_scam_iq_exam_task(self, user_id=None):
         "mỗi mức độ khó phải có ít nhất 2 câu chứa yếu tố đối chiếu đa kênh (SMS + gọi điện, email + chat, QR + website...); "
         "ưu tiên tình huống có dữ kiện cụ thể (thời điểm, số tiền, vai trò người gọi, bước ép hành động), nhưng không được lặp motif y hệt; "
         "với các loại còn lại mỗi câu có 2-5 lựa chọn; "
+        "QUAN TRỌNG: mỗi câu hỏi PHẢI tự chứa đủ ngữ cảnh (tình huống cụ thể) ngay trong field question, "
+        "và các options PHẢI trực tiếp liên quan đến tình huống trong question — KHÔNG ĐƯỢC tạo câu hỏi chung chung rồi đáp án lại nói về chủ đề khác; "
         "explanation ngắn, thực tế, chỉ ra dấu hiệu lừa đảo chính. "
         "Trả về đúng JSON schema."
     )

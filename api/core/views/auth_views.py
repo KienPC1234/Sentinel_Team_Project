@@ -18,12 +18,13 @@ from django.utils import timezone
 from datetime import timedelta
 
 from django.http import StreamingHttpResponse
-from rest_framework import status, permissions, generics
+from rest_framework import status, permissions, generics, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from drf_spectacular.utils import extend_schema
 
 from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 from api.utils.security import verify_turnstile_token
@@ -73,6 +74,7 @@ class RegisterRequestOTPView(APIView):
     """POST /api/auth/register/request-otp — validate input then send OTP to email"""
     permission_classes = [AllowAny]
 
+    @extend_schema(request=RegisterSerializer, responses={200: serializers.DictField()})
     def post(self, request):
         cf_token = request.data.get('cf-turnstile-response')
         forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
@@ -108,6 +110,10 @@ class RegisterView(APIView):
     """POST /api/auth/register — create account after OTP verification"""
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request={'application/json': {'type': 'object', 'properties': {'email': {'type': 'string'}, 'otp': {'type': 'string'}}, 'required': ['email', 'otp']}},
+        responses={201: serializers.DictField()}
+    )
     def post(self, request):
         otp = (request.data.get('otp') or '').strip()
         email = (request.data.get('email') or '').strip().lower()
@@ -161,6 +167,7 @@ class LoginView(APIView):
     """POST /api/auth/login"""
     permission_classes = [AllowAny]
 
+    @extend_schema(request=LoginSerializer, responses={200: serializers.DictField()})
     def post(self, request):
         cf_token = request.data.get('cf-turnstile-response')
         forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
@@ -230,6 +237,7 @@ class LogoutView(APIView):
     """POST /api/auth/logout — revoke token"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def post(self, request):
         try:
             request.user.auth_token.delete()
@@ -242,6 +250,7 @@ class MeView(APIView):
     """GET /api/me — current user info"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         scan_count = ScanEvent.objects.filter(user=request.user).count()
         report_count = Report.objects.filter(reporter=request.user).count()
@@ -255,6 +264,7 @@ class MeView(APIView):
             }
         })
 
+    @extend_schema(request=UserProfileSerializer, responses={200: serializers.DictField()})
     def patch(self, request):
         """Update profile (avatar, bio, etc.)"""
         user = request.user
@@ -337,6 +347,10 @@ class DeleteAccountView(APIView):
     """POST /api/v1/auth/account/delete/ — permanently delete user account"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request={'application/json': {'type': 'object', 'properties': {'password': {'type': 'string'}, 'confirmation_text': {'type': 'string'}}, 'required': ['password', 'confirmation_text']}},
+        responses={200: serializers.DictField()}
+    )
     def post(self, request):
         user = request.user
         password = (request.data.get('password') or '').strip()
@@ -369,6 +383,10 @@ class EmailChangeRequestOTPView(APIView):
     """POST /api/v1/auth/email-change/request/ — verify password and send OTP to new email"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request={'application/json': {'type': 'object', 'properties': {'password': {'type': 'string'}, 'new_email': {'type': 'string'}}, 'required': ['password', 'new_email']}},
+        responses={200: serializers.DictField()}
+    )
     def post(self, request):
         user = request.user
         password = (request.data.get('password') or '').strip()
@@ -415,6 +433,10 @@ class EmailChangeVerifyOTPView(APIView):
     """POST /api/v1/auth/email-change/verify/ — verify OTP sent to new email and update account email"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request={'application/json': {'type': 'object', 'properties': {'new_email': {'type': 'string'}, 'otp': {'type': 'string'}}, 'required': ['new_email', 'otp']}},
+        responses={200: serializers.DictField()}
+    )
     def post(self, request):
         user = request.user
         new_email = (request.data.get('new_email') or '').strip().lower()
@@ -459,6 +481,10 @@ class PasswordChangeView(APIView):
     """POST /api/v1/auth/password/change/ — change password with OTP"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request={'application/json': {'type': 'object', 'properties': {'old_password': {'type': 'string'}, 'new_password': {'type': 'string'}, 'token': {'type': 'string'}}, 'required': ['old_password', 'new_password', 'token']}},
+        responses={200: serializers.DictField()}
+    )
     def post(self, request):
         user = request.user
         old_password = request.data.get('old_password')

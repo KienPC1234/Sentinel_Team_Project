@@ -11,11 +11,12 @@ from django.utils import timezone
 from datetime import timedelta
 
 from django.http import StreamingHttpResponse
-from rest_framework import status, permissions, generics
+from rest_framework import status, permissions, generics, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 from rest_framework.authtoken.models import Token
 
 from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
@@ -60,6 +61,7 @@ class AdminReportActionView(APIView):
     """POST /api/admin/reports/{id}/action — Approve or reject a report"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(request=ReportModerateSerializer, responses={200: serializers.DictField()})
     def post(self, request, report_id):
         serializer = ReportModerateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -120,6 +122,7 @@ class AdminStatsView(APIView):
     """GET /api/admin/stats — System overview stats"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         today = timezone.now().date()
         week_ago = today - timedelta(days=7)
@@ -140,6 +143,13 @@ class AdminRAGManagementView(APIView):
     """GET /api/admin/rag — Dashboard for RAG management"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        parameters=[
+            {'name': 'query', 'in': 'query', 'type': 'string', 'required': False},
+            {'name': 'json', 'in': 'query', 'type': 'integer', 'required': False},
+        ],
+        responses={200: serializers.DictField()} # Simplified for now as it handles both HTML and JSON
+    )
     def get(self, request):
         from api.maintenance.models import RAGIndexLog
         from api.utils.vector_db import vector_db
@@ -213,6 +223,7 @@ class AdminRAGRebuildView(APIView):
     """POST /api/admin/rag/rebuild — Trigger vector index rebuild"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def post(self, request):
         from api.maintenance.tasks import rebuild_vector_index
         rebuild_vector_index.delay(trigger='MANUAL')
@@ -222,6 +233,7 @@ class AdminRAGClearLogsView(APIView):
     """POST /api/admin/rag/clear-logs — Clear sync history logs"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def post(self, request):
         from api.maintenance.models import RAGIndexLog
         count = RAGIndexLog.objects.count()

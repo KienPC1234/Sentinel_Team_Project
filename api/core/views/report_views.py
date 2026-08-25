@@ -13,12 +13,13 @@ from django.utils import timezone
 from datetime import timedelta
 
 from django.http import StreamingHttpResponse
-from rest_framework import status, permissions, generics
+from rest_framework import status, permissions, generics, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from drf_spectacular.utils import extend_schema
 
 from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 
@@ -40,13 +41,12 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# REPORT APIs
-# ═══════════════════════════════════════════════════════════════════════════
-
 class ReportCreateView(APIView):
     """POST /api/report — Submit a scam report"""
     permission_classes = [AllowAny]
+    serializer_class = ReportCreateSerializer
 
+    @extend_schema(request=ReportCreateSerializer, responses={201: serializers.DictField()})
     def post(self, request):
         # Basic anti-spam throttle: 8 report submits / 10 minutes / IP
         client_ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', 'unknown')

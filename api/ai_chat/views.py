@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status, permissions, serializers
 from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from drf_spectacular.utils import extend_schema
@@ -30,11 +30,13 @@ class ChatFolderListView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: ChatFolderSerializer(many=True)})
     def get(self, request):
         folders = ChatFolder.objects.filter(user=request.user)
         serializer = ChatFolderSerializer(folders, many=True)
         return Response(serializer.data)
 
+    @extend_schema(request=ChatFolderSerializer, responses={201: ChatFolderSerializer})
     def post(self, request):
         serializer = ChatFolderSerializer(data=request.data)
         if serializer.is_valid():
@@ -45,6 +47,7 @@ class ChatFolderListView(APIView):
 class ChatFolderDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(request=ChatFolderSerializer, responses={200: ChatFolderSerializer})
     def patch(self, request, folder_id):
         folder = get_object_or_404(ChatFolder, id=folder_id, user=request.user)
         serializer = ChatFolderSerializer(folder, data=request.data, partial=True)
@@ -65,11 +68,13 @@ class ChatSessionListView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: ChatSessionSerializer(many=True)})
     def get(self, request):
         sessions = ChatSession.objects.filter(user=request.user)
         serializer = ChatSessionSerializer(sessions, many=True)
         return Response(serializer.data)
 
+    @extend_schema(request={'application/json': {'type': 'object', 'properties': {'folder_id': {'type': 'string'}}}}, responses={201: serializers.DictField()})
     def post(self, request):
         folder_id = request.data.get('folder_id')
         folder = None
@@ -90,6 +95,7 @@ class ChatSessionDetailView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request, session_id):
         session = get_object_or_404(ChatSession, id=session_id, user=request.user)
         messages = session.messages.all().order_by('created_at')
@@ -139,6 +145,7 @@ class ChatSessionClearAllView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={204: None})
     def delete(self, request):
         ChatSession.objects.filter(user=request.user).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -150,6 +157,7 @@ class ChatMessageDeleteAfterView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def delete(self, request, message_id):
         target_message = get_object_or_404(ChatMessage, id=message_id, session__user=request.user)
         session = target_message.session
@@ -170,6 +178,7 @@ class ChatAIStreamView(APIView):
     """
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(request=ChatAIRequestSerializer, responses={200: serializers.DictField()})
     def post(self, request):
         user_message = request.data.get('user_message')
         session_id = request.data.get('session_id')
@@ -309,6 +318,7 @@ class ChatSearchView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         q = request.query_params.get('q', '').strip()
         if not q or len(q) < 2:
@@ -359,6 +369,7 @@ class ChatbotConfigView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: ChatbotConfigSerializer})
     def get(self, request):
         config, _ = ChatbotConfig.objects.get_or_create(user=request.user)
         serializer = ChatbotConfigSerializer(config)
@@ -368,6 +379,7 @@ class ChatbotConfigView(APIView):
         data['language_style_choices'] = [{'value': c[0], 'label': c[1]} for c in ChatbotConfig.LANGUAGE_STYLE_CHOICES]
         return Response(data)
 
+    @extend_schema(request=ChatbotConfigSerializer, responses={200: ChatbotConfigSerializer})
     def put(self, request):
         config, _ = ChatbotConfig.objects.get_or_create(user=request.user)
         serializer = ChatbotConfigSerializer(config, data=request.data, partial=True)
@@ -384,11 +396,13 @@ class SavedMessageListView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: SavedMessageSerializer(many=True)})
     def get(self, request):
         saved = SavedMessage.objects.filter(user=request.user).select_related('message', 'message__session')
         serializer = SavedMessageSerializer(saved, many=True)
         return Response(serializer.data)
 
+    @extend_schema(request={'application/json': {'type': 'object', 'properties': {'message_id': {'type': 'integer'}, 'note': {'type': 'string'}}, 'required': ['message_id']}}, responses={201: SavedMessageSerializer, 200: serializers.DictField()})
     def post(self, request):
         message_id = request.data.get('message_id')
         note = request.data.get('note', '')
@@ -416,6 +430,7 @@ class SavedMessageDetailView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={204: None})
     def delete(self, request, saved_id):
         saved = get_object_or_404(SavedMessage, id=saved_id, user=request.user)
         saved.delete()

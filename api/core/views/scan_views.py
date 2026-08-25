@@ -16,13 +16,14 @@ from django.utils import timezone
 from datetime import timedelta
 
 from django.http import StreamingHttpResponse
-from rest_framework import status, permissions, generics
+from rest_framework import status, permissions, generics, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from drf_spectacular.utils import extend_schema
 
 from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response, lookup_tranco
 
@@ -1638,6 +1639,7 @@ class ScanStatusView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request, scan_id):
         from api.core.models import ScanEvent, ScanStatus
         try:

@@ -8,6 +8,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -22,6 +24,7 @@ class EditorImageUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def post(self, request):
         file_obj = request.FILES.get('image') or request.FILES.get('file') or request.FILES.get('upload')
         if not file_obj:
@@ -50,6 +53,7 @@ class EditorMediaLibraryView(APIView):
     """GET/DELETE /api/v1/utils/editor-media/ — list or delete user's uploaded CKEditor images."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         base_prefix = os.path.join('editor_images', f'u_{request.user.id}')
         if not default_storage.exists(base_prefix):
@@ -114,6 +118,7 @@ class EditorFetchUrlView(APIView):
     """GET /api/v1/utils/fetch-url/?url=... — Get metadata for Editor.js Link tool"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         url = request.query_params.get('url')
         if not url:
@@ -157,6 +162,7 @@ class MentionUserListView(APIView):
     """GET /api/v1/utils/mentions/?query=@... — Search users for mentions"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: serializers.ListField(child=serializers.DictField())})
     def get(self, request):
         query = request.query_params.get('query', '').replace('@', '')
         if len(query) < 1:
