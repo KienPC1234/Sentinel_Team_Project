@@ -842,3 +842,48 @@ select.liquid-input {
         opacity: 0;
     }
 }
+
+/* Premium Liquid Glass Tables */
+.markdown-content table, 
+.ai-markdown table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 1.5rem 0;
+    font-size: 0.85rem;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.markdown-content th, .ai-markdown th,
+.markdown-content td, .ai-markdown td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--glass-border);
+    border-right: 1px solid var(--glass-border);
+    text-align: left;
+}
+
+.markdown-content th:last-child, .ai-markdown th:last-child,
+.markdown-content td:last-child, .ai-markdown td:last-child {
+    border-right: none;
+}
+
+.markdown-content tr:last-child td, .ai-markdown tr:last-child td {
+    border-bottom: none;
+}
+
+.markdown-content th, .ai-markdown th {
+    background: rgba(255, 255, 255, 0.05);
+    font-weight: 700;
+    color: var(--accent-cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.75rem;
+}
+
+.markdown-content tr:hover td, .ai-markdown tr:hover td {
+    background: rgba(24, 255, 255, 0.03);
+}

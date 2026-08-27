@@ -1,4 +1,4 @@
-self.__SC_SW_VERSION__ = '2026-03-02-v2';
+self.__SC_SW_VERSION__ = '2026-03-12-pwa';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -50,4 +50,38 @@ self.addEventListener('notificationclick', event => {
       return null;
     })
   );
+});
+
+// PWA Installability Requirement: Fetch Listener
+self.addEventListener('fetch', event => {
+  // Filter for navigation requests (HTML pages) to ensure basic offline/loading support
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(error => {
+        console.log('[SW] Fetch failed; returning cached offline page if available.');
+        return caches.match(event.request);
+      })
+    );
+  } else {
+    // For other assets, try cache then network, but catch errors to prevent unhandled rejection
+    event.respondWith(
+      caches.match(event.request).then(response => {
+        if (response) return response;
+        
+        // Exclude noisy/failing external logs from interception to prevent console errors
+        if (event.request.url.includes('translate.googleapis.com/element/log')) {
+          return fetch(event.request);
+        }
+
+        return fetch(event.request).catch(err => {
+          console.warn('[SW] Fetch failed for:', event.request.url);
+          // Return an empty response or similar for logs/non-critical assets
+          if (event.request.url.includes('googleapis.com')) {
+            return new Response('', { status: 200, statusText: 'OK' });
+          }
+          throw err;
+        });
+      })
+    );
+  }
 });

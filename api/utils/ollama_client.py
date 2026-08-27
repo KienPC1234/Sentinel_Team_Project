@@ -464,11 +464,29 @@ def _process_outside_markdown_tables(text: str, processor: Callable[[str], str])
     return ''.join(output_parts)
 
 
+def _process_outside_html_tables(text: str, processor: Callable[[str], str]) -> str:
+    """
+    Apply processor to text outside of <table>...</table> blocks.
+    """
+    if not text or '<table' not in text.lower():
+        return processor(text)
+
+    # Split by table tags (case-insensitive)
+    parts = re.split(r'(<table[\s\S]*?</table>)', text, flags=re.IGNORECASE)
+    for idx, part in enumerate(parts):
+        if idx % 2 == 0:
+            parts[idx] = processor(part)
+    return ''.join(parts)
+
+
 def _process_markdown_safe(text: str, processor: Callable[[str], str]) -> str:
-    """Apply processor outside fenced code blocks and markdown tables."""
+    """Apply processor outside fenced code blocks, markdown tables, and HTML tables."""
+
+    def _process_no_markdown_table(segment: str) -> str:
+        return _process_outside_markdown_tables(segment, processor)
 
     def _process_non_code_segment(segment: str) -> str:
-        return _process_outside_markdown_tables(segment, processor)
+        return _process_outside_html_tables(segment, _process_no_markdown_table)
 
     return _process_outside_fenced_code(text, _process_non_code_segment)
 

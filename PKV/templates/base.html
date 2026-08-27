@@ -15,8 +15,19 @@
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     {% endblock %}
 
-    <link rel="icon" type="image/png" href="{% static 'logo.png' %}">
+    <link rel="icon" type="image/png" href="{% static 'favicon-96x96.png' %}" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}" />
+    <link rel="shortcut icon" href="{% static 'favicon.ico' %}" />
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'apple-touch-icon.png' %}" />
+    <meta name="apple-mobile-web-app-title" content="ShieldCall VN" />
+    <link rel="manifest" href="{% static 'site.webmanifest' %}" />
+    <meta name="theme-color" content="#ffffff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <link rel="stylesheet" href="{% static 'css/liquid-glass.css' %}">
+    <script src="{% static 'js/pwa-mobile.js' %}"></script>
     <style>
     /* ═══ Rich Text Content Styling (CKEditor output + Markdown) ═══ */
     .richtext-content ul, .rich-text-content ul, .ai-markdown ul { list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0; }
@@ -1291,6 +1302,9 @@
                     <h4 style="font-weight:600;margin-bottom:0.75rem;font-size:0.9rem;color:rgba(255,255,255,0.7);">Hỗ
                         trợ</h4>
                     <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.85rem;">
+                        <a href="{% url 'helps_root' %}" style="color:var(--accent-cyan);font-weight:700;transition:all 0.2s;"
+                            onmouseover="this.style.opacity='0.8'"
+                            onmouseout="this.style.opacity='1'">Trang Hướng dẫn</a>
                         <a href="/report/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
                             onmouseover="this.style.color='var(--accent-cyan)'"
                             onmouseout="this.style.color='rgba(255,255,255,0.5)'">Báo cáo lừa đảo</a>
@@ -1300,36 +1314,124 @@
                         <a href="/emergency/" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
                             onmouseover="this.style.color='var(--accent-cyan)'"
                             onmouseout="this.style.color='rgba(255,255,255,0.5)'">Hỗ trợ khẩn cấp</a>
-                        <a href="mailto:admin@fptoj.com" style="color:rgba(255,255,255,0.5);transition:color 0.2s;"
-                            onmouseover="this.style.color='var(--accent-cyan)'"
-                            onmouseout="this.style.color='rgba(255,255,255,0.5)'">Liên hệ admin: admin@fptoj.com</a>
                     </div>
                 </div>
                 <div>
                     <h4 style="font-weight:600;margin-bottom:0.75rem;font-size:0.9rem;color:rgba(255,255,255,0.7);">
-                        Hotline</h4>
-                    <p style="font-size:1.25rem;font-weight:700;color:var(--accent-cyan);margin-bottom:0.5rem;">
-                        1800-1031</p>
-                    <p style="font-size:0.8rem;color:rgba(255,255,255,0.4);">Tổng đài An toàn mạng (24/7)</p>
+                        Ngôn ngữ</h4>
+                    <div x-data="{ open: false }" class="relative">
+                        <button @click="open = !open" 
+                            style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 1rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:0.75rem;color:#fff;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.3s;"
+                            onmouseover="this.style.background='rgba(6,182,212,0.1)';this.style.borderColor='#06b6d4'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.borderColor='rgba(255,255,255,0.1)'">
+                            <i class="bi bi-translate" style="color:#06b6d4;"></i>
+                            <span>Chọn ngôn ngữ</span>
+                            <i class="bi bi-chevron-up" style="font-size:10px;opacity:0.5;"></i>
+                        </button>
+                        <div x-show="open" @click.away="open = false" 
+                            style="position:absolute;bottom:100%;left:0;margin-bottom:0.5rem;width:12rem;background:#161235;border:1px solid rgba(255,255,255,0.1);border-radius:1rem;padding:0.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);z-index:100;">
+                            <button onclick="changeLanguage('vi')" style="width:100%;text-align:left;padding:0.6rem 0.75rem;border-radius:0.75rem;background:transparent;color:#fff;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                                <span style="width:1.5rem;height:1.5rem;border-radius:0.25rem;background:rgba(239,68,68,0.1);display:flex;align-items:center;justify-content:center;font-size:9px;">VN</span> Tiếng Việt
+                            </button>
+                            <button onclick="changeLanguage('en')" style="width:100%;text-align:left;padding:0.6rem 0.75rem;border-radius:0.75rem;background:transparent;color:#fff;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                                <span style="width:1.5rem;height:1.5rem;border-radius:0.25rem;background:rgba(59,130,246,0.1);display:flex;align-items:center;justify-content:center;font-size:9px;">EN</span> English
+                            </button>
+                            <button onclick="changeLanguage('zh-CN')" style="width:100%;text-align:left;padding:0.6rem 0.75rem;border-radius:0.75rem;background:transparent;color:#fff;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                                <span style="width:1.5rem;height:1.5rem;border-radius:0.25rem;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;font-size:9px;">CN</span> 中文
+                            </button>
+                            <button onclick="changeLanguage('ja')" style="width:100%;text-align:left;padding:0.6rem 0.75rem;border-radius:0.75rem;background:transparent;color:#fff;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                                <span style="width:1.5rem;height:1.5rem;border-radius:0.25rem;background:rgba(236,72,153,0.1);display:flex;align-items:center;justify-content:center;font-size:9px;">JP</span> 日本語
+                            </button>
+                            <button onclick="changeLanguage('ko')" style="width:100%;text-align:left;padding:0.6rem 0.75rem;border-radius:0.75rem;background:transparent;color:#fff;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                                <span style="width:1.5rem;height:1.5rem;border-radius:0.25rem;background:rgba(167,139,250,0.1);display:flex;align-items:center;justify-content:center;font-size:9px;">KR</span> 한국어
+                            </button>
+                        </div>
+                    </div>
+                    <div id="google_translate_element" style="display:none;"></div>
                 </div>
             </div>
             <div
                 style="border-top:1px solid rgba(255,255,255,0.08);padding-top:1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
                 <p style="font-size:0.8rem;color:rgba(255,255,255,0.35);">© {% now "Y" %} ShieldCall VN. Bảo vệ cộng đồng bằng
                     công nghệ.</p>
-                <div style="display:flex;gap:1rem;font-size:0.8rem;">
-                    <a href="/legal/disclaimer/#terms" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.35)'">Điều khoản</a>
-                    <a href="/legal/disclaimer/#data" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.35)'">Chính sách</a>
-                    <a href="/api/docs/" style="color:rgba(255,255,255,0.35);transition:color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-cyan)'"
-                        onmouseout="this.style.color='rgba(255,255,255,0.35)'">API Docs</a>
+                <div style="display:flex;gap:1.5rem;align-items:center;font-size:0.8rem;">
+                    <a href="{% url 'helps_root' %}" style="color:rgba(255,255,255,0.6);font-weight:600;">Hỗ trợ</a>
+                    <a href="/legal/disclaimer/#terms" style="color:rgba(255,255,255,0.35);">Điều khoản</a>
+                    <a href="/legal/disclaimer/#data" style="color:rgba(255,255,255,0.35);">Chính sách</a>
+                    <a href="/api/docs/" style="color:rgba(255,255,255,0.35);">API Docs</a>
                 </div>
             </div>
         </div>
+
+        <script type="text/javascript">
+            // Safe localStorage wrapper
+            const SCStorage = {
+                set: (key, val) => { try { localStorage.setItem(key, val); } catch(e) {} },
+                get: (key) => { try { return localStorage.getItem(key); } catch(e) { return null; } },
+                remove: (key) => { try { localStorage.removeItem(key); } catch(e) {} }
+            };
+
+            function googleTranslateElementInit() {
+                new google.translate.TranslateElement({
+                    pageLanguage: 'vi',
+                    autoDisplay: false
+                }, 'google_translate_element');
+                
+                // Check for saved language on init
+                const savedLang = SCStorage.get('preferred_language');
+                if (savedLang && savedLang !== 'vi') {
+                    setTimeout(() => changeLanguage(savedLang, 0, true), 1200);
+                }
+            }
+
+            function changeLanguage(langCode, retryCount = 0, isInitial = false) {
+                // If Vietnamese, we want to reset to original
+                if (langCode === 'vi') {
+                    SCStorage.remove('preferred_language');
+                    // Clear Google Translate cookie to restore original
+                    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + document.domain;
+                    
+                    if (!isInitial) {
+                        if (typeof showToast === 'function') showToast('Đã khôi phục ngôn ngữ gốc (Tiếng Việt)', 'success');
+                        setTimeout(() => window.location.reload(), 500);
+                    }
+                    return;
+                }
+
+                const googleCombo = document.querySelector('.goog-te-combo');
+                if (googleCombo) {
+                    googleCombo.value = langCode;
+                    googleCombo.dispatchEvent(new Event('change'));
+                    SCStorage.set('preferred_language', langCode);
+                    
+                    if (!isInitial && typeof showToast === 'function') {
+                        const langNames = { 'en': 'Tiếng Anh', 'zh-CN': 'Tiếng Trung', 'ja': 'Tiếng Nhật', 'ko': 'Tiếng Hàn' };
+                        showToast('Đã chuyển sang ' + (langNames[langCode] || langCode), 'success');
+                    }
+                } else {
+                    if (retryCount < 10) {
+                        setTimeout(() => changeLanguage(langCode, retryCount + 1, isInitial), 500);
+                    } else {
+                        console.error('Google Translate failed to initialize');
+                        if (!isInitial && typeof showToast === 'function') showToast('Dịch vụ dịch thuật chưa sẵn sàng', 'error');
+                    }
+                }
+            }
+        </script>
+        <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+        <style>
+            /* Premium Google Translate Styling */
+            #google_translate_element { display: none; }
+            .goog-te-banner-frame { display: none !important; }
+            .goog-te-balloon-frame { display: none !important; }
+            body { top: 0 !important; }
+            .skiptranslate iframe { display: none !important; }
+            .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
+            
+            /* Accessibility for translated text */
+            font { background-color: transparent !important; box-shadow: none !important; color: inherit !important; }
+        </style>
     </footer>
 
     <div id="sc-noti-banner" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[100000] w-[min(92vw,620px)]">
