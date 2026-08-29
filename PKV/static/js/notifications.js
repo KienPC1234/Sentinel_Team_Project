@@ -201,25 +201,8 @@ window.NotificationManager = {
 
         if (allowBtn) {
             allowBtn.onclick = async () => {
-                try {
-                    const permission = await Notification.requestPermission();
-                    if (permission === 'granted') {
-                        localStorage.setItem(this._prefKey, 'allow');
-                        localStorage.removeItem(this._snoozeKey);
-                        banner.classList.add('hidden');
-                        await this.ensureWebPushSubscription();
-                    } else if (permission === 'denied') {
-                        localStorage.setItem(this._prefKey, 'deny');
-                        localStorage.removeItem(this._snoozeKey);
-                        banner.classList.add('hidden');
-                    } else {
-                        localStorage.setItem(this._prefKey, 'later');
-                        localStorage.setItem(this._snoozeKey, String(Date.now() + (2 * 24 * 60 * 60 * 1000)));
-                        banner.classList.add('hidden');
-                    }
-                } catch (e) {
-                    console.warn('[WebPush] Permission request failed', e);
-                }
+                banner.classList.add('hidden');
+                await this.requestPermission();
             };
         }
 
@@ -314,12 +297,12 @@ window.NotificationManager = {
             }
             if (!window.WEBPUSH_PUBLIC_KEY) {
                 console.warn('[WebPush] Missing WEBPUSH_PUBLIC_KEY');
-                this.showReliableToast('Thiếu VAPID public key, chưa thể đăng ký thông báo.', 'error');
                 return;
             }
 
-            const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-            this._log('Service worker registered', registration.scope);
+            await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+            const registration = await navigator.serviceWorker.ready;
+            this._log('Service worker ready', registration.scope);
 
             navigator.serviceWorker.addEventListener('message', (event) => {
                 if (event?.data?.type === 'push_click' && event?.data?.url) {
@@ -327,8 +310,12 @@ window.NotificationManager = {
                 }
             });
 
+            const activeWorker = registration.active || registration.installing || registration.waiting;
+            this._log('Service worker state:', activeWorker?.state, 'Scope:', registration.scope);
+
             let subscription = await registration.pushManager.getSubscription();
             if (!subscription) {
+                this._log('Starting new subscription with public key:', window.WEBPUSH_PUBLIC_KEY ? `${window.WEBPUSH_PUBLIC_KEY.slice(0, 10)}...` : 'NONE');
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: this.urlBase64ToUint8Array(window.WEBPUSH_PUBLIC_KEY),
@@ -350,14 +337,17 @@ window.NotificationManager = {
             if (!subscribeResp.ok) {
                 const txt = await subscribeResp.text();
                 this._log('Subscribe API failed', subscribeResp.status, txt.slice(0, 260));
-                this.showReliableToast('Đăng ký WebPush thất bại. Mở Console để xem chi tiết.', 'error');
                 return;
             }
 
             this._log('Subscribe API success');
         } catch (e) {
-            console.warn('[WebPush] Subscription setup failed', e);
-            this.showReliableToast('Lỗi khi đăng ký WebPush. Mở Console để kiểm tra.', 'error');
+            console.error('[WebPush] Subscription setup failed error details:', {
+                name: e.name,
+                message: e.message,
+                code: e.code,
+                stack: e.stack
+            });
         }
     },
 

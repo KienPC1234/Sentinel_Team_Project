@@ -14,6 +14,19 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
+class Gender(models.TextChoices):
+    MALE = 'male', 'Nam'
+    FEMALE = 'female', 'Nữ'
+    NON_BINARY = 'non_binary', 'Phi nhị nguyên giới (Non-binary)'
+    TRANSGENDER = 'transgender', 'Người chuyển giới (Transgender)'
+    GENDER_FLUID = 'gender_fluid', 'Linh hoạt giới (Genderfluid)'
+    BIGENDER = 'bigender', 'Song giới (Bigender)'
+    GENDERQUEER = 'genderqueer', 'Giới phi chuẩn (Genderqueer)'
+    AGENDER = 'agender', 'Vô giới (Agender)'
+    INTERSEX = 'intersex', 'Liên giới tính (Intersex)'
+    OTHER = 'other', 'Khác'
+    PREFER_NOT_TO_SAY = 'prefer_not_to_say', 'Tôi không muốn tiết lộ'
+
 # ─── User Profile Model ──────────────────────────────────────────────────────
 
 class UserProfile(models.Model):
@@ -25,11 +38,17 @@ class UserProfile(models.Model):
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     display_name = models.CharField(max_length=100, blank=True)
+    gender = models.CharField(max_length=30, choices=Gender.choices, default=Gender.PREFER_NOT_TO_SAY)
     avatar = models.ImageField(upload_to='profiles/avatars/', null=True, blank=True)
     rank_points = models.IntegerField(default=0)
     bio = models.TextField(max_length=500, blank=True)
     about = models.TextField(blank=True, help_text="Markdown supported bio/about section")
     messenger_link = models.URLField(max_length=500, blank=True, null=True, help_text="Link to Facebook Messenger, Zalo, etc.")
+    
+    # Accolades for gender diversity and special recognition
+    accolade_title = models.CharField(max_length=200, blank=True, help_text="Danh hiệu vinh danh")
+    accolade_description = models.TextField(blank=True, help_text="Mô tả vinh danh đặc biệt")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_super_admin = models.BooleanField(default=False)
@@ -463,6 +482,9 @@ class ForumCategory(models.TextChoices):
     DISCUSSION = 'discussion', 'Thảo luận'
     EXPERIENCE = 'experience', 'Kinh nghiệm'
     QUESTION = 'question', 'Hỏi đáp'
+    LGBTQ_SAFETY = 'lgbtq_safety', 'An toàn LGBTQ+'
+    WOMEN_SECURITY = 'women_security', 'Phụ nữ & An ninh số'
+    HEALING_STORIES = 'healing_stories', 'Chữa lành & Chia sẻ'
 
 
 class ForumPost(models.Model):
@@ -664,6 +686,8 @@ class ArticleCategory(models.TextChoices):
     GUIDE = 'guide', 'Hướng dẫn'
     ALERT = 'alert', 'Cảnh báo mới'
     STORY = 'story', 'Chuyện cảnh giác'
+    INCLUSIVE = 'inclusive', 'An ninh số Bao trùm'
+    EMPATHY = 'empathy', 'Góc thấu cảm'
 
 
 class Article(models.Model):

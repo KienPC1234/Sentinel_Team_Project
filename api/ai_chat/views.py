@@ -185,10 +185,11 @@ class ChatAIStreamView(APIView):
         images_data = request.data.get('images', [])
         preview_ocr = request.data.get('preview_ocr', False)
         scan_context = request.data.get('scan_context', '')
+        safe_mode = request.data.get('safe_mode', False)
         debug = request.data.get('debug', False)
 
         user = request.user if request.user.is_authenticated else None
-        agent = get_agent(session_id=session_id, user=user)
+        agent = get_agent(session_id=session_id, user=user, safe_mode=safe_mode)
         if scan_context:
             agent._scan_context = scan_context
 
@@ -240,7 +241,7 @@ class ChatAIStreamView(APIView):
                 class_future = executor.submit(classify_message, user_message or ocr_text)
 
                 # Use sync_to_async for the blocking generator
-                agent_stream = await sync_to_async(agent.chat_stream)(final_query, images_data=images_data, debug=debug)
+                agent_stream = await sync_to_async(agent.chat_stream)(final_query, images_data=images_data, debug=debug, safe_mode=safe_mode)
                 
                 chunk_count = 0
                 # We need to handle the agent_stream correctly if it's a generator

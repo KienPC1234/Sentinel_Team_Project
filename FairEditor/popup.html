@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+  <style type="text/tailwindcss">
+    @theme {
+      --color-accent: #ff80ab;
+      --color-dark: #1a1a2e;
+      --color-glass: rgba(255, 255, 255, 0.05);
+    }
+    .fe-glass {
+      @apply bg-glass backdrop-blur-xl border border-white/10;
+    }
+  </style>
+</head>
+<body class="w-[320px] bg-dark text-white font-sans m-0 p-5 overflow-hidden">
+  <div class="flex items-center gap-3 mb-6 pb-3 border-b border-accent/30">
+    <img src="icons/icon48.png" class="w-6 h-6" alt="Logo">
+    <h1 class="text-lg font-black bg-gradient-to-r from-accent to-pink-300 bg-clip-text text-transparent italic">
+      FAIREDITOR
+    </h1>
+  </div>
+
+  <div id="login-section" class="mb-6 p-4 rounded-2xl fe-glass hidden">
+    <div class="text-sm font-bold mb-2">👋 Chào bạn!</div>
+    <p class="text-xs text-white/60 mb-4 leading-relaxed">Vui lòng đăng nhập vào ShieldCall VN để sử dụng đầy đủ các tính năng bảo vệ AI.</p>
+    <button id="login-button" class="w-full py-2.5 bg-accent text-dark font-black rounded-xl hover:scale-105 transition-transform active:scale-95 shadow-lg shadow-accent/20">
+      ĐĂNG NHẬP NGAY
+    </button>
+  </div>
+
+  <div id="main-controls" class="space-y-4">
+    <div class="flex items-center justify-between p-4 rounded-2xl fe-glass">
+      <div class="flex flex-col">
+        <span class="text-sm font-bold">SafeTalk AI Hub</span>
+        <span class="text-[10px] text-accent/80 font-medium uppercase tracking-wider">Hỗ trợ khẩn cấp</span>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" id="safetalk-toggle" class="sr-only peer" checked>
+        <div class="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent shadow-inner"></div>
+      </label>
+    </div>
+
+    <div class="p-4 rounded-2xl fe-glass">
+      <div class="text-[10px] text-white/40 font-black uppercase mb-2 tracking-widest">Trạng thái</div>
+      <div class="flex items-center gap-2 text-sm font-bold text-accent">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
+        </span>
+        ĐANG BẢO VỆ
+      </div>
+    </div>
+  </div>
+
+  <button class="w-full mt-6 py-3 border border-white/10 hover:border-accent/50 text-white/60 hover:text-white rounded-2xl text-xs font-bold transition-all uppercase tracking-widest bg-white/5 hover:bg-white/10">
+    Cài đặt nâng cao
+  </button>
+
+  <footer class="mt-6 text-[10px] text-white/30 text-center font-medium tracking-tight">
+    SHIELDCALL VN 2.0 &bull; HỆ SINH THÁI GIỚI 🏳️‍🌈
+  </footer>
+
+  <script>
+    const toggle = document.getElementById('safetalk-toggle');
+    const loginSection = document.getElementById('login-section');
+    const mainControls = document.getElementById('main-controls');
+    
+    // Check Auth Status (Mocked for now, wired to check API in future)
+    chrome.storage.local.get(['token', 'safetalkEnabled'], (result) => {
+      if (!result.token) {
+        loginSection.classList.remove('hidden');
+        mainControls.classList.add('opacity-50', 'pointer-events-none');
+      }
+      toggle.checked = result.safetalkEnabled !== false;
+    });
+
+    toggle.onchange = () => {
+      chrome.storage.local.set({ safetalkEnabled: toggle.checked });
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: "toggleSafeTalk", enabled: toggle.checked });
+      });
+    };
+
+    document.getElementById('login-button').onclick = () => {
+      chrome.tabs.create({ url: 'https://cs.fptoj.com/auth/login/' });
+    };
+  </script>
+</body>
+</html>

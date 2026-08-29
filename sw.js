@@ -1,4 +1,4 @@
-self.__SC_SW_VERSION__ = '2026-03-12-pwa';
+self.__SC_SW_VERSION__ = '2026-03-28-v3';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -52,8 +52,19 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
-// PWA Installability Requirement: Fetch Listener
 self.addEventListener('fetch', event => {
+  const url = event.request.url;
+  
+  // Do NOT intercept third-party trackers, analytics, or Google APIs.
+  // Letting the browser handle these natively avoids Uncaught Promise rejections in the SW
+  // when they are blocked by AdBlockers or fail due to SRI checks.
+  if (url.includes('googleapis.com') || 
+      url.includes('cloudflareinsights.com') || 
+      url.includes('youtube.com') || 
+      url.includes('google-analytics.com')) {
+      return; 
+  }
+
   // Filter for navigation requests (HTML pages) to ensure basic offline/loading support
   if (event.request.mode === 'navigate') {
     event.respondWith(
@@ -63,24 +74,11 @@ self.addEventListener('fetch', event => {
       })
     );
   } else {
-    // For other assets, try cache then network, but catch errors to prevent unhandled rejection
+    // For other assets, try cache then network
     event.respondWith(
       caches.match(event.request).then(response => {
         if (response) return response;
-        
-        // Exclude noisy/failing external logs from interception to prevent console errors
-        if (event.request.url.includes('translate.googleapis.com/element/log')) {
-          return fetch(event.request);
-        }
-
-        return fetch(event.request).catch(err => {
-          console.warn('[SW] Fetch failed for:', event.request.url);
-          // Return an empty response or similar for logs/non-critical assets
-          if (event.request.url.includes('googleapis.com')) {
-            return new Response('', { status: 200, statusText: 'OK' });
-          }
-          throw err;
-        });
+        return fetch(event.request);
       })
     );
   }

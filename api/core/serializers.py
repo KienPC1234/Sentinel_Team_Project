@@ -102,8 +102,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = UserProfile
-        fields = ['display_name', 'avatar', 'bio', 'about', 'messenger_link', 'rank_points', 'rank_info']
-        read_only_fields = ['rank_points', 'rank_info']
+        fields = ['display_name', 'gender', 'avatar', 'bio', 'about', 'messenger_link', 'rank_points', 'rank_info', 'accolade_title', 'accolade_description']
+        read_only_fields = ['rank_points', 'rank_info', 'accolade_title', 'accolade_description']
         extra_kwargs = {
             'avatar': {'required': False, 'allow_null': True},
             'display_name': {'required': False, 'allow_blank': True},
@@ -136,10 +136,20 @@ class UserSerializer(serializers.ModelSerializer):
         if normalized.lower() in {'none', 'null', 'undefined', 'nan', 'false', '0'}:
             return ''
         return normalized
+
+    gender = serializers.CharField(source='profile.gender', read_only=True)
+    gender_label = serializers.CharField(source='profile.get_gender_display', read_only=True)
+    accolade_title = serializers.CharField(source='profile.accolade_title', read_only=True)
+    accolade_description = serializers.CharField(source='profile.accolade_description', read_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'display_name', 'date_joined', 'is_staff', 'avatar', 'rank_info', 'about', 'messenger_link']
+        fields = [
+            'id', 'email', 'username', 'first_name', 'last_name', 
+            'display_name', 'gender', 'gender_label', 'date_joined', 
+            'is_staff', 'avatar', 'rank_info', 'about', 'messenger_link',
+            'accolade_title', 'accolade_description'
+        ]
         read_only_fields = fields
 
 

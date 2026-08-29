@@ -306,8 +306,8 @@ class MeView(APIView):
             if user.username != new_username:
                 user.username = new_username
         
-        # Profile data (avatar, bio, display_name, about, messenger_link)
-        profile_fields = ['avatar', 'bio', 'display_name', 'about', 'messenger_link']
+        # Profile data (avatar, bio, display_name, about, messenger_link, gender)
+        profile_fields = ['avatar', 'bio', 'display_name', 'about', 'messenger_link', 'gender']
         if any(k in request.data for k in profile_fields):
             # If avatar is a string (URL), remove it from data to avoid ImageField validation error
             patch_data = request.data.copy() if hasattr(request.data, 'copy') else request.data

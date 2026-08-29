@@ -1377,24 +1377,39 @@
                     autoDisplay: false
                 }, 'google_translate_element');
                 
-                // Check for saved language on init
+                // Atomic check for saved language
                 const savedLang = SCStorage.get('preferred_language');
                 if (savedLang && savedLang !== 'vi') {
-                    setTimeout(() => changeLanguage(savedLang, 0, true), 1200);
+                    // Check if cookie already matches, if not, apply
+                    const currentCookieStr = document.cookie.split('; ').find(row => row.startsWith('googtrans='));
+                    if (!currentCookieStr || !currentCookieStr.includes('/vi/' + savedLang)) {
+                        setTimeout(() => changeLanguage(savedLang, 0, true), 800);
+                    }
                 }
             }
 
             function changeLanguage(langCode, retryCount = 0, isInitial = false) {
-                // If Vietnamese, we want to reset to original
                 if (langCode === 'vi') {
                     SCStorage.remove('preferred_language');
-                    // Clear Google Translate cookie to restore original
-                    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + document.domain;
                     
+                    // Comprehensive cookie clearing for all possible variations
+                    const clearCookie = (name, domain) => {
+                        const base = name + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                        document.cookie = base;
+                        if (domain) document.cookie = base + " domain=" + domain;
+                    };
+                    
+                    const hostname = window.location.hostname;
+                    clearCookie('googtrans');
+                    clearCookie('googtrans', hostname);
+                    clearCookie('googtrans', '.' + hostname);
+                    if (hostname.split('.').length > 2) {
+                        clearCookie('googtrans', '.' + hostname.split('.').slice(-2).join('.'));
+                    }
+
                     if (!isInitial) {
-                        if (typeof showToast === 'function') showToast('Đã khôi phục ngôn ngữ gốc (Tiếng Việt)', 'success');
-                        setTimeout(() => window.location.reload(), 500);
+                        if (typeof showToast === 'function') showToast('Đang khôi phục Tiếng Việt...', 'success');
+                        setTimeout(() => window.location.reload(), 300);
                     }
                     return;
                 }
@@ -1410,11 +1425,11 @@
                         showToast('Đã chuyển sang ' + (langNames[langCode] || langCode), 'success');
                     }
                 } else {
-                    if (retryCount < 10) {
-                        setTimeout(() => changeLanguage(langCode, retryCount + 1, isInitial), 500);
+                    if (retryCount < 15) {
+                        setTimeout(() => changeLanguage(langCode, retryCount + 1, isInitial), 400);
                     } else {
-                        console.error('Google Translate failed to initialize');
-                        if (!isInitial && typeof showToast === 'function') showToast('Dịch vụ dịch thuật chưa sẵn sàng', 'error');
+                        console.error('Google Translate timeout');
+                        if (!isInitial && typeof showToast === 'function') showToast('Không thể kết nối máy chủ dịch thuật', 'error');
                     }
                 }
             }

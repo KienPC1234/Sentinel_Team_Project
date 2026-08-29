@@ -32,11 +32,26 @@ QUY TẮC QUAN TRỌNG:
 HÔM NAY LÀ: {current_time}
 """
 
+SAFETALK_SYSTEM_PROMPT = """Bạn là SafeTalk AI - Trợ lý bảo vệ & chữa lành trên không gian mạng của ShieldCall VN.
+Nhiệm vụ của bạn là hỗ trợ những người yếu thế (phụ nữ, trẻ em gái, cộng đồng LGBTQ+) đối phó với bạo lực giới trực tuyến (OGBV), quấy rối, bắt nạt mạng và lừa đảo.
+
+QUY TẮC THỨ THÁI & BAO TRÙM:
+1. THẤU CẢM & KHÔNG ĐỔ LỖI: Luôn lắng nghe với sự thấu cảm cao nhất. Tuyệt đối KHÔNG đưa ra các lời khuyên mang tính đổ lỗi cho nạn nhân (ví dụ: không hỏi "Tại sao bạn lại gửi ảnh đó?").
+2. NGÔN TỪ TRUNG HÒA: Sử dụng ngôn từ bao trùm, không mang định kiến giới. Ví dụ: dùng "người quyết đoán" thay vì "nam giới mạnh mẽ".
+3. AN TOÀN LÀ TRÊN HẾT: Nếu phát hiện dấu hiệu bạo lực nghiêm trọng hoặc đe dọa tính mạng, hãy cung cấp ngay danh sách số điện thoại khẩn cấp (Công an, Tổng đài 111, các tổ chức cứu trợ phụ nữ).
+4. HƯỚNG DẪN KỸ THUẬT: Hướng dẫn người dùng cách chặn (block), báo cáo (report) và bảo mật tài khoản để ngăn chặn quấy rối tiếp diễn.
+5. CHỮA LÀNH: Đưa ra các lời động viên nhẹ nhàng, giúp người dùng bình tâm trước khi thực hiện các bước xử lý kỹ thuật.
+6. CHỐNG THIÊN KIẾN: Bạn đã được huấn luyện với dữ liệu sạch về giới. Hãy đảm bảo mọi câu trả lời của bạn thúc đẩy sự bình đẳng và an toàn.
+
+HÔM NAY LÀ: {current_time}
+"""
+
 class AIAgent:
-    def __init__(self, session_id=None, user=None):
+    def __init__(self, session_id=None, user=None, safe_mode=False):
         self.session_id = session_id
         self.user = user
         self.session = None
+        self.safe_mode = safe_mode
         if session_id:
             from django.core.exceptions import ValidationError
             try:
@@ -119,10 +134,13 @@ class AIAgent:
             context_str += f"Nguồn: {res['title']} ({res['url']})\nNội dung: {res['text']}\n\n"
         return context_str, results
 
-    def chat_stream(self, user_message: str, images_data: List[str] = None, debug: bool = False) -> Generator[str, None, None]:
+    def chat_stream(self, user_message: str, images_data: List[str] = None, debug: bool = False, safe_mode: bool = False) -> Generator[str, None, None]:
         """
         Main entry point for streaming chat with RAG and History.
         """
+        # Set instance safe_mode if provided in stream call
+        if safe_mode:
+            self.safe_mode = True
         # 1. Save user message
         if self.session:
             user_msg = ChatMessage.objects.create(
@@ -174,7 +192,8 @@ class AIAgent:
         now = datetime.now()
         time_str = now.strftime("%A, ngày %d/%m/%Y, %H:%M:%S")
         
-        messages = [{"role": "system", "content": SYSTEM_PROMPT.format(current_time=time_str) + self._get_personalization_prompt()}]
+        base_prompt = SAFETALK_SYSTEM_PROMPT if self.safe_mode else SYSTEM_PROMPT
+        messages = [{"role": "system", "content": base_prompt.format(current_time=time_str) + self._get_personalization_prompt()}]
         if rag_context:
             messages.append({"role": "system", "content": f"SỬ DỤNG BỐI CẢNH SAU ĐỂ TRẢ LỜI:\n{rag_context}"})
         
@@ -336,5 +355,5 @@ class AIAgent:
             
         return ""
 
-def get_agent(session_id=None, user=None):
-    return AIAgent(session_id, user)
+def get_agent(session_id=None, user=None, safe_mode=False):
+    return AIAgent(session_id, user, safe_mode=safe_mode)

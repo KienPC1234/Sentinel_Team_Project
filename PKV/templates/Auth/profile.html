@@ -43,6 +43,15 @@
                         </div>
                     </template>
                 </div>
+                
+                <!-- Gender Badge -->
+                <template x-if="user.gender_label">
+                    <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-pink-500/10 border border-pink-500/20 text-[9px] font-bold text-pink-400 uppercase tracking-wider mb-2">
+                        <i class="bi bi-gender-ambiguous"></i>
+                        <span x-text="user.gender_label"></span>
+                    </div>
+                </template>
+
                 <p class="text-cyan-400/80 font-bold tracking-[0.2em] text-[10px]" x-text="'@' + user.username"></p>
                 <div class="inline-flex flex-wrap items-center gap-2 mt-2">
                     <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] text-white/40 font-black uppercase tracking-widest">
@@ -54,6 +63,21 @@
                 </div>
             </div>
         </div>
+
+        <!-- Special Accolades -->
+        <template x-if="user.accolade_title">
+            <div class="p-6 rounded-3xl bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20 animate-pulse-subtle">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-pink-500/20 flex items-center justify-center text-pink-400 text-xl shadow-lg shadow-pink-500/20">
+                        <i class="bi bi-patch-check-fill"></i>
+                    </div>
+                    <div class="space-y-1">
+                        <h4 class="text-sm font-black text-pink-300 uppercase tracking-widest" x-text="user.accolade_title"></h4>
+                        <p class="text-xs text-white/60 font-medium leading-relaxed" x-text="user.accolade_description"></p>
+                    </div>
+                </div>
+            </div>
+        </template>
 
         <!-- Quick Stats -->
         <div class="grid grid-cols-3 gap-4">
@@ -78,6 +102,26 @@
                 <input type="text" x-model="formData.display_name" class="liquid-input w-full py-4 px-6 text-sm font-bold" 
                        placeholder="Nhập nickname bạn muốn hiển thị..."
                        :disabled="!editing" :class="!editing && 'opacity-50 cursor-not-allowed'">
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Giới tính & Định danh</label>
+                <select x-model="formData.gender" class="liquid-input w-full py-4 px-6 text-sm font-bold appearance-none bg-no-repeat bg-[right_1.5rem_center]" 
+                        style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff44%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E');"
+                        :disabled="!editing" :class="!editing && 'opacity-50 cursor-not-allowed'">
+                    <option value="male" class="bg-slate-900 text-white">Nam</option>
+                    <option value="female" class="bg-slate-900 text-white">Nữ</option>
+                    <option value="prefer_not_to_say" class="bg-slate-900 text-white">Tôi không muốn tiết lộ</option>
+                    <hr class="border-white/10">
+                    <option value="non_binary" class="bg-slate-900 text-white">Phi nhị nguyên giới (Non-binary)</option>
+                    <option value="transgender" class="bg-slate-900 text-white">Người chuyển giới (Transgender)</option>
+                    <option value="gender_fluid" class="bg-slate-900 text-white">Linh hoạt giới (Genderfluid)</option>
+                    <option value="bigender" class="bg-slate-900 text-white">Song giới (Bigender)</option>
+                    <option value="genderqueer" class="bg-slate-900 text-white">Giới phi chuẩn (Genderqueer)</option>
+                    <option value="agender" class="bg-slate-900 text-white">Vô giới (Agender)</option>
+                    <option value="intersex" class="bg-slate-900 text-white">Liên giới tính (Intersex)</option>
+                    <option value="other" class="bg-slate-900 text-white">Khác</option>
+                </select>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -504,6 +548,10 @@
                     first_name: '{{ user.first_name|escapejs }}',
                     last_name: '{{ user.last_name|escapejs }}',
                     display_name: '{{ user.profile.display_name|escapejs }}',
+                    gender: '{{ user.profile.gender|escapejs }}',
+                    gender_label: '{{ user.profile.get_gender_display|escapejs }}',
+                    accolade_title: '{{ user.profile.accolade_title|escapejs }}',
+                    accolade_description: '{{ user.profile.accolade_description|escapejs }}',
                     about: '{{ user.profile.about|escapejs }}',
                     messenger_link: '{{ user.profile.messenger_link|escapejs }}',
                     avatar: '{% if user.profile.avatar %}{{ user.profile.avatar.url|escapejs }}{% endif %}',
@@ -513,6 +561,7 @@
                     first_name: '{{ user.first_name|escapejs }}',
                     last_name: '{{ user.last_name|escapejs }}',
                     display_name: '{{ user.profile.display_name|escapejs }}',
+                    gender: '{{ user.profile.gender|escapejs }}',
                     bio: '{{ user.profile.bio|escapejs }}',
                     about: '{{ user.profile.about|escapejs }}',
                     messenger_link: '{{ user.profile.messenger_link|escapejs }}'
@@ -617,6 +666,8 @@
                             this.user.first_name = data.user.first_name;
                             this.user.last_name = data.user.last_name;
                             this.user.display_name = data.user.display_name;
+                            this.user.gender = data.user.gender;
+                            this.user.gender_label = data.user.gender_label;
                             this.user.about = data.user.about;
                             window.dispatchEvent(new CustomEvent('profile-updated', { detail: { user: data.user } }));
                             this.editing = false;
