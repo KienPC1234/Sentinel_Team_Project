@@ -23,6 +23,7 @@ initFairEditorSuite();
 function initFairEditorSuite() {
   createSafeTalkBubble();
   checkToxicZone();
+  checkBiasSite();
   setupSmartHide();
 }
 
@@ -113,11 +114,34 @@ function showToxicAlert() {
   const alert = document.createElement("div");
   alert.className = "fe-toxic-alert";
   alert.innerHTML = `
-    <i class="bi bi-shield-lock-fill"></i>
-    <span>Khu vực này có dấu hiệu bạo lực mạng. Hãy cẩn trọng!</span>
-    <button onclick="this.parentElement.remove()">Đã hiểu</button>
+    <div class="fe-alert-icon"><i class="bi bi-shield-lock-fill"></i></div>
+    <div class="fe-alert-text">
+      <strong>Vùng đỏ độc hại!</strong>
+      <span>Khu vực này có dấu hiệu bạo lực mạng cao. Hãy cẩn trọng.</span>
+    </div>
+    <button onclick="this.parentElement.remove()">×</button>
   `;
   document.body.appendChild(alert);
+}
+
+function checkBiasSite() {
+  const biasedDomains = ["baomoi.com", "hate-site.xxx", "biased-news.vn"]; // Mock list
+  if (biasedDomains.some(d => window.location.hostname.includes(d))) {
+    showBiasWarning();
+  }
+}
+
+function showBiasWarning() {
+  const banner = document.createElement("div");
+  banner.className = "fe-bias-banner";
+  banner.innerHTML = `
+    <div class="fe-bias-inner">
+      <i class="bi bi-exclamation-octagon-fill"></i>
+      <span>Trang web này có chỉ số thiên kiến cao. FairSpace gợi ý bạn nên xem xét thông tin từ nhiều nguồn khác nhau.</span>
+      <button onclick="this.parentElement.parentElement.remove()">Đã hiểu</button>
+    </div>
+  `;
+  document.body.appendChild(banner);
 }
 
 function setupSmartHide() {
@@ -295,17 +319,21 @@ function removeHighlights() {
 }
 
 function setupSmartHide() {
-  const selectors = [".comment-content", ".post-text", ".chat-msg", ".comment-body", ".reply-text"];
+  const selectors = [".comment-content", ".post-text", ".chat-msg", ".comment-body", ".reply-text", "article p", "section p"];
   const toxicKeywords = ["ngu", "chết", "xấu", "mập", "béo", "đồ hèn", "vô dụng"];
+  const biasKeywords = ["tộc", "mọi", "khuyết tật", "què", "quặt", "nhà quê", "tỉnh lẻ", "bê đê", "xăng pha nhớt"];
+  
+  const allKeywords = [...toxicKeywords, ...biasKeywords];
   
   document.querySelectorAll(selectors.join(",")).forEach(el => {
     const text = el.innerText.toLowerCase();
-    if (toxicKeywords.some(kw => text.includes(kw))) {
+    if (allKeywords.some(kw => text.includes(kw))) {
       el.classList.add("fe-smart-hide");
       if (!el.querySelector(".fe-blur-label")) {
         const label = document.createElement("div");
         label.className = "fe-blur-label";
-        label.innerText = "Nội dung nhạy cảm - Nhấn để xem";
+        const isBias = biasKeywords.some(kw => text.includes(kw));
+        label.innerText = isBias ? "Nội dung có dấu hiệu định kiến - Nhấn để xem" : "Nội dung nhạy cảm - Nhấn để xem";
         el.appendChild(label);
         el.onclick = (e) => {
           e.stopPropagation();

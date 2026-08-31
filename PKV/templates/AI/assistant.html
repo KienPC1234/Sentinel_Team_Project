@@ -369,6 +369,68 @@
             padding-bottom: 220px;
             scroll-padding-bottom: 220px;
         }
+
+        /* SafeTalk Mode Styles */
+        body.safe-mode {
+            background-color: #0d0217 !important;
+        }
+        body.safe-mode .mesh-bg {
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(236, 72, 153, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+                radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.05) 0px, transparent 50%) !important;
+        }
+
+        body.safe-mode .msg-assistant {
+            background: rgba(236, 72, 153, 0.05);
+            border: 1px solid rgba(236, 72, 153, 0.15);
+        }
+
+        body.safe-mode .typing-cursor {
+            background: #ec4899;
+        }
+
+        body.safe-mode .tool-widget {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid rgba(236, 72, 153, 0.2);
+        }
+
+        body.safe-mode .tool-widget i {
+            color: #ec4899;
+        }
+
+        .safetalk-toggle {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .safetalk-toggle.active {
+            background: rgba(236, 72, 153, 0.15) !important;
+            border-color: rgba(236, 72, 153, 0.4) !important;
+            color: #ec4899 !important;
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.2);
+        }
+
+        .safetalk-badge {
+            display: none;
+            padding: 2px 8px;
+            border-radius: 99px;
+            background: #ec4899;
+            color: white;
+            font-size: 8px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-left: 8px;
+            animation: pulse-pink 2s infinite;
+        }
+        body.safe-mode .safetalk-badge { display: inline-block; }
+
+        @keyframes pulse-pink {
+            0% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0); }
+        }
     </style>
 </head>
 <body class="bg-[#020617] text-slate-200 antialiased h-screen overflow-hidden">
@@ -532,7 +594,10 @@
                     </button>
                     <div class="flex flex-col">
                         <h1 id="chat-title" class="text-sm font-bold text-slate-100 truncate max-w-[180px] md:max-w-md">Cuộc trò chuyện mới</h1>
-                        <div id="chat-status" class="text-[9px] text-cyan-500/70 font-medium hidden">AI đang xử lý...</div>
+                        <div class="flex items-center">
+                            <div id="chat-status" class="text-[9px] text-cyan-500/70 font-medium hidden">AI đang xử lý...</div>
+                            <span class="safetalk-badge ml-2">SafeTalk Active</span>
+                        </div>
                     </div>
                 </div>
                 
@@ -565,7 +630,7 @@
                         </div>
                         
                         <!-- Quick Scan Feature Prompts -->
-                        <div class="w-full max-w-2xl px-4">
+                        <div id="quick-features" class="w-full max-w-2xl px-4">
                             <div class="text-[9px] font-black text-white/20 uppercase tracking-widest mb-3 flex items-center gap-2">
                                 <i class="bi bi-lightning-charge-fill text-cyan-500/40"></i> Thử ngay các tính năng quét
                             </div>
@@ -595,7 +660,7 @@
                         </div>
 
                         <!-- General Prompt Cards -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl px-4">
+                        <div id="general-prompts" class="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl px-4">
                             <div onclick="setPrompt('Tôi vừa nhận cuộc gọi từ số lạ tự xưng là công an yêu cầu chuyển tiền, phải làm sao?')" class="group p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-amber-500/30 transition-all cursor-pointer text-left">
                                 <i class="bi bi-exclamation-triangle text-amber-400 text-lg mb-2 block"></i>
                                 <p class="text-xs font-bold text-slate-200 mb-1">Phân tích cuộc gọi lạ</p>
@@ -642,6 +707,10 @@
                             </div>
                             
                             <div class="flex items-center gap-1.5 pb-1 pr-1">
+                                <button id="safetalk-toggle" onclick="toggleSafeMode()" class="safetalk-toggle p-2.5 rounded-2xl bg-white/5 text-slate-400 hover:text-pink-400 hover:bg-pink-500/10 transition-all border border-transparent" title="Chế độ thấu cảm (SafeTalk)">
+                                    <i class="bi bi-heart-pulse text-lg"></i>
+                                </button>
+                                
                                 <label class="cursor-pointer p-2.5 rounded-2xl bg-white/5 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all" title="Đính kèm ảnh">
                                     <i class="bi bi-image text-lg"></i>
                                     <input type="file" id="image-input" multiple accept="image/*" class="hidden">
@@ -688,6 +757,7 @@
         const AI_ASSISTANT_DEBUG = false;
         let currentSessionId = normalizeSessionId(INITIAL_SESSION_ID);
         let isStreaming = false;
+        let isSafeMode = false;
         let abortController = null;
         let pendingImages = [];
         let lastRenderedTime = 0;
@@ -729,6 +799,29 @@
             });
 
             await loadSessions();
+
+            // Auto-toggle SafeTalk for FairSpace
+            const isFairSpace = window.location.href.toLowerCase().includes('fairspace');
+            if (isFairSpace) {
+                // Call toggleSafeMode without toast for silent init
+                isSafeMode = true;
+                const btn = document.getElementById('safetalk-toggle');
+                btn.classList.add('active');
+                document.body.classList.add('safe-mode');
+                
+                // Update specific FairSpace texts
+                const welcomeTitle = document.querySelector('.glow-text');
+                if (welcomeTitle) welcomeTitle.innerText = "FairSpace Intelligence";
+                const welcomeDesc = welcomeTitle?.nextElementSibling;
+                if (welcomeDesc) welcomeDesc.innerText = "Trợ lý ảo thấu cảm, bảo vệ bạn khỏi bạo lực mạng và định kiến giới thông qua công nghệ AI nhân văn.";
+                
+                const toolLabels = document.querySelectorAll('.uppercase.tracking-tighter');
+                toolLabels.forEach(el => {
+                    if (el.innerText.includes('ShieldCall')) el.innerText = el.innerText.replace('ShieldCall', 'FairSpace');
+                });
+                updateWelcomeScreen();
+            }
+
             if (normalizedInitialSession) {
                 await loadSessionDetail(normalizedInitialSession);
             } else {
@@ -789,6 +882,79 @@
             updateComposerSafeSpace();
             window.addEventListener('resize', updateComposerSafeSpace);
         });
+
+        function updateWelcomeScreen() {
+            const qf = document.getElementById('quick-features');
+            const gp = document.getElementById('general-prompts');
+            if (!qf || !gp) return;
+
+            if (isSafeMode) {
+                // SafeTalk Mode
+                qf.innerHTML = `
+                    <div class="text-[9px] font-black text-pink-400/40 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <i class="bi bi-heart-fill"></i> Hỗ trợ thấu cảm & An toàn
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                        <div onclick="setPrompt('Tôi đang bị quấy rối trên mạng, tôi nên làm gì ngay bây giờ?')" class="group p-4 rounded-2xl bg-gradient-to-br from-pink-500/[0.06] to-pink-500/[0.02] border border-pink-500/15 hover:border-pink-500/40 hover:shadow-lg hover:shadow-pink-500/10 transition-all cursor-pointer text-left">
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <div class="w-8 h-8 rounded-lg bg-pink-500/15 flex items-center justify-center"><i class="bi bi-shield-shaded text-pink-400 text-sm"></i></div>
+                                <p class="text-xs font-bold text-slate-200">Thoát quấy rối</p>
+                            </div>
+                            <p class="text-[10px] text-slate-500 leading-relaxed">Các bước bảo vệ bản thân khi bị tấn công mạng.</p>
+                        </div>
+                        <div onclick="setPrompt('Mình cảm thấy rất áp lực và sợ hãi vì những bình luận tiêu cực về mình...')" class="group p-4 rounded-2xl bg-gradient-to-br from-purple-500/[0.06] to-purple-500/[0.02] border border-purple-500/15 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/10 transition-all cursor-pointer text-left">
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <div class="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center"><i class="bi bi-chat-heart text-purple-400 text-sm"></i></div>
+                                <p class="text-xs font-bold text-slate-200">Lắng nghe</p>
+                            </div>
+                            <p class="text-[10px] text-slate-500 leading-relaxed">Chia sẻ cảm xúc và nhận sự khích lệ từ SafeTalk.</p>
+                        </div>
+                        <div onclick="setPrompt('Hãy cho tôi biết các số điện thoại hỗ trợ khẩn cấp tại Việt Nam')" class="group p-4 rounded-2xl bg-gradient-to-br from-red-500/[0.06] to-red-500/[0.02] border border-red-500/15 hover:border-red-500/40 hover:shadow-lg hover:shadow-red-500/10 transition-all cursor-pointer text-left">
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <div class="w-8 h-8 rounded-lg bg-red-500/15 flex items-center justify-center"><i class="bi bi-telephone-outbound text-red-400 text-sm"></i></div>
+                                <p class="text-xs font-bold text-slate-200">Hotline khẩn</p>
+                            </div>
+                            <p class="text-[10px] text-slate-500 leading-relaxed">Danh sách 111, Công an và các quỹ cứu trợ.</p>
+                        </div>
+                    </div>
+                `;
+                gp.innerHTML = `
+                    <div onclick="setPrompt('Làm thế nào để báo cáo nội dung bắt nạt trên Facebook/TikTok?')" class="group p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-pink-500/30 transition-all cursor-pointer text-left">
+                        <i class="bi bi-flag text-pink-400 text-lg mb-2 block"></i>
+                        <p class="text-xs font-bold text-slate-200 mb-1">Báo cáo vi phạm</p>
+                        <p class="text-[10px] text-slate-500">Hướng dẫn report bài viết và tài khoản độc hại.</p>
+                    </div>
+                    <div onclick="setPrompt('Hãy chia sẻ cho tôi các nguyên tắc về an toàn giới và bao trùm số')" class="group p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-purple-500/30 transition-all cursor-pointer text-left">
+                        <i class="bi bi-universal-access text-purple-400 text-lg mb-2 block"></i>
+                        <p class="text-xs font-bold text-slate-200 mb-1">Kiến thức bao trùm</p>
+                        <p class="text-[10px] text-slate-500">Hiểu về quyền con người và sự bình đẳng trên mạng.</p>
+                    </div>
+                `;
+            } else {
+                // ShieldCall Mode
+                location.reload(); // Simple way to restore default, or re-render
+            }
+        }
+
+        function toggleSafeMode() {
+            isSafeMode = !isSafeMode;
+            const btn = document.getElementById('safetalk-toggle');
+            if (isSafeMode) {
+                btn.classList.add('active');
+                document.body.classList.add('safe-mode');
+                showToast('Đã bật chế độ SafeTalk thấu cảm', 'success');
+                if (!userInput.value.trim() || userInput.value.includes("Chào")) {
+                    const isFairSpace = window.location.href.toLowerCase().includes('fairspace');
+                    userInput.value = isFairSpace ? "Chào bạn, mình cần một người để chia sẻ..." : "Chào Shield, mình cần một người để chia sẻ...";
+                }
+            } else {
+                btn.classList.remove('active');
+                document.body.classList.remove('safe-mode');
+                showToast('Đã tắt chế độ SafeTalk', 'info');
+                location.reload(); // Khôi phục giao diện mặc định
+            }
+            updateWelcomeScreen();
+        }
 
         window.addEventListener('pageshow', () => {
             debugAssistant('pageshow reset loading state');
@@ -980,7 +1146,8 @@
                         user_message: text, 
                         session_id: currentSessionId, 
                         images: images,
-                        preview_ocr: previewOcr
+                        preview_ocr: previewOcr,
+                        safe_mode: isSafeMode
                     })
                 });
 

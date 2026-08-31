@@ -189,7 +189,19 @@ class ChatAIStreamView(APIView):
         debug = request.data.get('debug', False)
 
         user = request.user if request.user.is_authenticated else None
-        agent = get_agent(session_id=session_id, user=user, safe_mode=safe_mode)
+        
+        # Dynamic Branding Detection
+        host = request.get_host().lower()
+        branding = "ShieldCall"
+        branding_full = "ShieldCall VN"
+        
+        if "fairspace" in host:
+            branding = "FairSpace"
+            branding_full = "FairSpace"
+            # Auto-enable safe_mode if on fairspace domain
+            safe_mode = True 
+            
+        agent = get_agent(session_id=session_id, user=user, safe_mode=safe_mode, branding=branding, branding_full=branding_full)
         if scan_context:
             agent._scan_context = scan_context
 

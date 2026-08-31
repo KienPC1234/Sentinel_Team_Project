@@ -104,11 +104,23 @@
         </div>
 
         <div x-show="messages.length <= 1" class="p-3 flex gap-2 overflow-x-auto no-scrollbar bg-black/10 border-t border-white/5">
-            <button @click="toggleSafeMode()" class="flex-none bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all text-pink-400">
-                <i class="bi bi-heart-pulse-fill mr-1"></i> Bật SafeTalk
+            <button @click="toggleSafeMode()" :class="isSafeMode ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-pink-500/10 border-pink-500/30 text-pink-400'" class="flex-none border rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">
+                <i :class="isSafeMode ? 'bi bi-robot' : 'bi bi-heart-pulse-fill'" class="mr-1"></i>
+                <span x-text="isSafeMode ? 'Về ShieldCall' : 'Bật SafeTalk'"></span>
             </button>
-            <button @click="sendQuick('Kiểm tra số điện thoại')" class="flex-none bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Kiểm tra SĐT</button>
-            <button @click="sendQuick('Cách nhận diện lừa đảo')" class="flex-none bg-white/5 hover:bg-purple-500/10 border border-white/10 hover:border-purple-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Cách phòng tránh</button>
+            <template x-if="!isSafeMode">
+                <div class="flex gap-2">
+                    <button @click="sendQuick('Kiểm tra số điện thoại')" class="flex-none bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Kiểm tra SĐT</button>
+                    <button @click="sendQuick('Cách nhận diện lừa đảo')" class="flex-none bg-white/5 hover:bg-purple-500/10 border border-white/10 hover:border-purple-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all">Cách phòng tránh</button>
+                </div>
+            </template>
+            <template x-if="isSafeMode">
+                <div class="flex gap-2">
+                    <button @click="sendQuick('Tôi đang bị quấy rối, phải làm sao?')" class="flex-none bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all text-pink-300">Cách xử lý quấy rối</button>
+                    <button @click="sendQuick('Tôi cần một người lắng nghe...')" class="flex-none bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all text-pink-300">Cần sự lắng nghe</button>
+                    <button @click="sendQuick('Cung cấp cho tôi các hotline hỗ trợ khẩn cấp')" class="flex-none bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-full px-3 py-1.5 text-[10px] font-bold transition-all text-red-300">Hotline hỗ trợ</button>
+                </div>
+            </template>
         </div>
 
         <div x-show="imagePreviews.length > 0" class="px-4 py-2 flex gap-2 bg-black/20 border-t border-white/5">
@@ -262,6 +274,14 @@
                 }
             ],
             init() {
+                // Auto-toggle SafeTalk for FairSpace
+                const isFairSpace = window.location.href.toLowerCase().includes('fairspace');
+                if (isFairSpace) {
+                    this.isSafeMode = true;
+                    this.chatTitle = 'FairSpace AI';
+                    this.messages[0].text = 'Chào mừng bạn đến với **FairSpace**. <i class="bi bi-heart-fill text-pink-400"></i> Tôi là trợ lý thấu cảm, luôn sẵn sàng đồng hành cùng bạn trên không gian mạng.\n\nĐừng ngần ngại chia sẻ nếu bạn đang gặp tình huống quấy rối hoặc định kiến giới nhé.';
+                }
+
                 if (window.renderMd) {
                     this.messages[0].html = window.renderMd(this.messages[0].text);
                 }
@@ -297,16 +317,17 @@
             toggleSafeMode() {
                 this.isSafeMode = !this.isSafeMode;
                 if (this.isSafeMode) {
-                    this.messages.push({
+                    const safeBotMsg = {
                         from: 'bot',
                         text: '🛡️ **Đã kích hoạt chế độ SafeTalk.**\n\nTôi ở đây để lắng nghe và giúp bạn xử lý các tình huống quấy rối, bạo lực mạng hoặc bạo lực giới. Bạn có ổn không? Hãy chia sẻ với tôi nhé.',
                         time: this.now(),
                         isSafe: true,
                         html: ''
-                    });
+                    };
                     if (window.renderMd) {
-                        this.messages[this.messages.length-1].html = window.renderMd(this.messages[this.messages.length-1].text);
+                        safeBotMsg.html = window.renderMd(safeBotMsg.text);
                     }
+                    this.messages.push(safeBotMsg);
                     if (typeof showToast === 'function') showToast('Đã chuyển sang chế độ SafeTalk', 'info');
                 } else {
                     if (typeof showToast === 'function') showToast('Đã quay lại chế độ ShieldCall', 'info');
@@ -402,6 +423,7 @@
                     isThinking: false,
                     thinkingContent: '',
                     thinkingCollapsed: false,
+                    isSafe: this.isSafeMode,
                     metadata: null,
                     streaming: true
                 };

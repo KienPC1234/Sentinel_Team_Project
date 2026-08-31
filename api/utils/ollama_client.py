@@ -1044,7 +1044,9 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
 
                 # If no tool calls, we are done — exit both loops
                 if not current_tool_calls:
-                    _log_llm("Chat history...", "".join(current_content))
+                    full_resp_text = "".join(current_content)
+                    sys_prompt = next((m['content'] for m in messages if m.get('role') == 'system'), None)
+                    _log_llm("Chat history...", full_resp_text, system_prompt=sys_prompt)
                     done = True
                     break
 
