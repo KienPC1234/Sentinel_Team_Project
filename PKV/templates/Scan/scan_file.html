@@ -6,13 +6,13 @@
     <!-- Header -->
     <div class="text-center mb-10" data-aos="fade-down">
         <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink-500/10 border border-pink-500/20 text-pink-400 text-xs font-black uppercase tracking-widest mb-4">
-            <i class="bi bi-shield-lock-fill"></i> Zero-Trust Docker Sandbox
+            <i class="bi bi-shield-check"></i> Kiểm Tra File An Toàn
         </div>
         <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight mb-3">
-            Phân Tích File & Mã Độc Chuyên Sâu
+            Kiểm Tra Tệp Tin & Mã Độc
         </h1>
         <p class="text-white/60 text-sm sm:text-base max-w-2xl mx-auto">
-            Cách ly và mổ xẻ tệp tin trong môi trường Docker Container độc lập. Phát hiện Ransomware, Macro Office, Trojan, Shellcode, và Virus ẩn sâu bằng YARA, OLETools, PEFile và ClamAV.
+            Tự động quét và phát hiện các loại virus, mã độc tống tiền, phần mềm gián điệp và file lừa đảo trước khi mở trên thiết bị của bạn.
         </p>
     </div>
 
@@ -29,7 +29,7 @@
                     <input type="file" x-ref="fileInput" class="hidden" @change="handleFileSelect($event)">
                     <i class="bi bi-cloud-arrow-up text-5xl text-white/20 mb-4 group-hover:text-pink-500/50 transition-colors"></i>
                     <p class="text-white font-bold text-lg mb-2">Click hoặc kéo thả file vào đây</p>
-                    <p class="text-white/40 text-sm">Hỗ trợ .exe, .zip, .rar, .pdf, .docx, .xlsx, .apk, .bat, .ps1, .vbs, .sh, .bin (Tối đa 500MB)</p>
+                    <p class="text-white/40 text-sm">Hỗ trợ .exe, .zip, .rar, .pdf, .docx, .xlsx, .apk, .bat, .ps1, .vbs (Tối đa 500MB)</p>
                 </div>
             </template>
 
@@ -53,7 +53,7 @@
                 <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'" data-size="flexible"></div>
                 
                 <button @click="startScan()" class="liquid-button bg-pink-500 hover:bg-pink-400 text-white px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-pink-500/25 flex items-center gap-3">
-                    <i class="bi bi-shield-check"></i> Bắt Đầu Phân Tích Sandbox
+                    <i class="bi bi-shield-check"></i> Bắt Đầu Kiểm Tra
                 </button>
             </div>
             
@@ -97,7 +97,7 @@
                         </svg>
                         <div class="absolute inset-0 flex flex-col items-center justify-center">
                             <span class="text-3xl font-black text-white" x-text="result.risk_score"></span>
-                            <span class="text-[9px] uppercase font-bold text-white/40">Điểm Rủi Ro</span>
+                            <span class="text-[9px] uppercase font-bold text-white/40">Mức Rủi Ro</span>
                         </div>
                     </div>
                     
@@ -111,7 +111,7 @@
                             x-text="result.risk_level === 'RED' ? 'MÃ ĐỘC NGUY HIỂM' : (result.risk_level === 'YELLOW' ? 'CẢNH BÁO NGHI VẤN' : 'TỆP TIN AN TOÀN')"></span>
 
                             <span class="bg-white/10 text-white/70 px-3 py-1 rounded-full text-xs font-medium border border-white/5 flex items-center gap-1.5">
-                                <i class="bi bi-box-seam text-pink-400"></i> Sentinel Docker Sandbox
+                                <i class="bi bi-shield-check text-pink-400"></i> Phòng Cách Ly An Toàn
                             </span>
                         </div>
 
@@ -130,10 +130,10 @@
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
-                                <h3 class="text-lg font-black text-white">Báo Cáo Giải Thích Chi Tiết (AI Dành Cho Người Dùng)</h3>
+                                <h3 class="text-lg font-black text-white">AI Giải Thích & Hướng Dẫn Chi Tiết</h3>
                                 <span class="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 text-[10px] font-black uppercase">Dễ Hiểu</span>
                             </div>
-                            <p class="text-xs text-white/50">Phân tích bản chất tệp tin, kịch bản hacker khai thác và hướng dẫn phòng vệ từng bước</p>
+                            <p class="text-xs text-white/50">Giải thích file này dùng làm gì, kẻ xấu có thể làm gì và bạn nên xử lý ra sao</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
@@ -142,7 +142,7 @@
                         </button>
                         <button @click="startAIAnalysis()" :disabled="aiStreaming" class="text-xs bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/30 px-4 py-2 rounded-xl text-pink-300 font-bold transition-all flex items-center gap-1.5">
                             <i class="bi bi-arrow-clockwise" :class="aiStreaming ? 'animate-spin' : ''"></i> 
-                            <span x-text="aiStreaming ? 'Đang viết báo cáo...' : 'Tạo Lại Báo Cáo'"></span>
+                            <span x-text="aiStreaming ? 'Đang viết...' : 'Tạo Lại Báo Cáo'"></span>
                         </button>
                     </div>
                 </div>
@@ -152,7 +152,7 @@
                     <template x-if="aiStreaming && !aiExplanation">
                         <div class="flex items-center gap-3 py-8 text-pink-400 text-sm font-medium">
                             <div class="w-5 h-5 rounded-full border-2 border-pink-400/20 border-t-pink-400 animate-spin"></div>
-                            <span>AI đang tổng hợp dữ liệu pháp y và soạn thảo báo cáo dễ hiểu...</span>
+                            <span>AI đang soạn báo cáo dễ hiểu cho bạn...</span>
                         </div>
                     </template>
 
@@ -166,19 +166,19 @@
 
                     <template x-if="!aiStreaming && !aiExplanation">
                         <div class="text-center py-8 space-y-3">
-                            <p class="text-white/50 text-sm">Chưa tạo báo cáo AI. Nhấn nút bên dưới để nhận phân tích chi tiết.</p>
+                            <p class="text-white/50 text-sm">Chưa tạo báo cáo giải thích. Nhấn nút bên dưới để AI phân tích chi tiết.</p>
                             <button @click="startAIAnalysis()" class="px-6 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-bold text-xs uppercase tracking-wider transition-all">
-                                <i class="bi bi-magic mr-1"></i> Tạo Báo Cáo AI Dễ Hiểu
+                                <i class="bi bi-magic mr-1"></i> Nhờ AI Giải Thích File Này
                             </button>
                         </div>
                     </template>
                 </div>
             </div>
 
-            <!-- Forensic Proofs Card Grid -->
+            <!-- Suspicious Anomalies Grid -->
             <div class="liquid-card p-6 border border-white/10 rounded-2xl" x-show="result.forensic_evidence && result.forensic_evidence.length > 0">
                 <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <i class="bi bi-search text-pink-400"></i> Bằng Chứng Kỹ Thuật Pháp Y (Forensic Proofs)
+                    <i class="bi bi-exclamation-octagon text-pink-400"></i> Dấu Hiệu Bất Thường Phát Hiện Được
                 </h3>
                 <div class="space-y-3">
                     <template x-for="(evidence, idx) in result.forensic_evidence" :key="idx">
@@ -192,41 +192,41 @@
                                     }" class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase border" x-text="evidence.severity"></span>
                                     <span class="text-white font-semibold text-sm" x-text="evidence.description"></span>
                                 </div>
-                                <p class="text-white/40 text-xs font-mono" x-show="evidence.evidence" x-text="'Chi tiết: ' + evidence.evidence"></p>
+                                <p class="text-white/40 text-xs font-mono" x-show="evidence.evidence" x-text="'Dấu hiệu: ' + evidence.evidence"></p>
                             </div>
                         </div>
                     </template>
                 </div>
             </div>
 
-            <!-- Cryptographic Hashes & Entropy Grid -->
+            <!-- Summary Info Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Hashes -->
                 <div class="liquid-card p-6 border border-white/10 rounded-2xl space-y-3">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
-                        <i class="bi bi-fingerprint text-pink-400"></i> Chữ Ký Mã Hóa (Hashes)
+                        <i class="bi bi-fingerprint text-pink-400"></i> Mã Định Danh Tệp (SHA-256 / MD5)
                     </h3>
                     <div class="space-y-2 text-xs font-mono">
                         <div>
-                            <span class="text-white/40">SHA-256:</span>
+                            <span class="text-white/40">Mã SHA-256:</span>
                             <div class="text-white/80 break-all bg-black/40 p-2 rounded mt-1 border border-white/5" x-text="result.file_metadata?.sha256 || 'N/A'"></div>
                         </div>
                         <div>
-                            <span class="text-white/40">MD5:</span>
+                            <span class="text-white/40">Mã MD5:</span>
                             <div class="text-white/80 break-all bg-black/40 p-2 rounded mt-1 border border-white/5" x-text="result.file_metadata?.md5 || 'N/A'"></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Shannon Entropy & Engine -->
+                <!-- Antivirus & Security Status -->
                 <div class="liquid-card p-6 border border-white/10 rounded-2xl space-y-4">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
-                        <i class="bi bi-activity text-cyan-400"></i> Độ Hỗn Loạn Entropy & Antivirus
+                        <i class="bi bi-shield-check text-cyan-400"></i> Trạng Thái Kiểm Tra Diệt Virus
                     </h3>
                     <div>
                         <div class="flex justify-between text-xs font-bold mb-1">
-                            <span class="text-white">Shannon Entropy: <span class="text-pink-400" x-text="result.file_metadata?.entropy || '0.0'"></span> / 8.0</span>
-                            <span class="text-white/40" x-text="(result.file_metadata?.entropy > 7.2) ? 'Nén/Mã Hóa Cao' : 'Bình Thường'"></span>
+                            <span class="text-white">Độ phức tạp tệp: <span class="text-pink-400" x-text="result.file_metadata?.entropy || '0.0'"></span> / 8.0</span>
+                            <span class="text-white/40" x-text="(result.file_metadata?.entropy > 7.2) ? 'Dấu hiệu ẩn giấu mã' : 'Bình thường'"></span>
                         </div>
                         <div class="overflow-hidden h-2 rounded-full bg-white/5 border border-white/5">
                             <div :style="'width: ' + ((result.file_metadata?.entropy || 0) / 8.0 * 100) + '%'"
@@ -235,12 +235,12 @@
                     </div>
                     <div class="pt-2 border-t border-white/5 space-y-1.5 text-xs">
                         <div class="flex justify-between">
-                            <span class="text-white/50">ClamAV Engine:</span>
+                            <span class="text-white/50">Phần mềm diệt virus:</span>
                             <span class="text-emerald-400 font-semibold" x-text="result.clamav?.available ? (result.clamav?.infected ? 'Phát hiện độc hại' : 'Đã quét (Sạch)') : 'Sẵn sàng'"></span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-white/50">Docker Sandbox:</span>
-                            <span class="text-cyan-400 font-semibold">Zero-Trust Capped</span>
+                            <span class="text-white/50">Môi trường kiểm tra:</span>
+                            <span class="text-cyan-400 font-semibold">Cách ly an toàn 100%</span>
                         </div>
                     </div>
                 </div>
@@ -249,7 +249,7 @@
             <!-- Actions -->
             <div class="flex flex-wrap gap-4 pt-4">
                 <button @click="reset()" class="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-3.5 rounded-xl text-white font-bold transition-all">
-                    <i class="bi bi-arrow-repeat mr-1"></i> Quét File Khác
+                    <i class="bi bi-arrow-repeat mr-1"></i> Kiểm Tra File Khác
                 </button>
                 <a :href="'/report/?scammer_name=' + encodeURIComponent(file ? file.name : '') + '&target_type=file'" 
                    class="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 px-8 py-3.5 rounded-xl text-red-400 font-bold transition-all flex items-center gap-2">
@@ -358,7 +358,7 @@ function fileScanHandler() {
             if (!this.file) return;
             this.loading = true;
             this.progress = 15;
-            this.statusMsg = 'Đang tải file lên Sandbox...';
+            this.statusMsg = 'Đang tải file lên kiểm tra...';
 
             const formData = new FormData();
             formData.append('file', this.file);
@@ -383,7 +383,7 @@ function fileScanHandler() {
                     this.scanId = data.scan_id;
                     this.loading = false;
                     this.scanning = true;
-                    this.statusMsg = 'Docker Sandbox đang phân tích...';
+                    this.statusMsg = 'Hệ thống đang phân tích mã độc...';
                     this.startPolling();
                 } else {
                     window.showToast(data.error || 'Lỗi khi tải file lên.', 'error');
@@ -416,7 +416,7 @@ function fileScanHandler() {
                     } else {
                         if (this.progress < 90) this.progress += 3;
                         dots = (dots + 1) % 4;
-                        this.statusMsg = 'Zero-Trust Sandbox đang phân tích' + '.'.repeat(dots);
+                        this.statusMsg = 'Hệ thống đang kiểm tra an toàn' + '.'.repeat(dots);
                     }
                 } catch (e) {
                     console.error('Polling error', e);

@@ -1124,7 +1124,7 @@ def _analyze_domain(url: str) -> dict:
          score += 5
          # details.append('Thiếu các header bảo mật cơ bản') # Maybe too technical for user?
 
-    # 2. VirusTotal Scan
+    # 2. Sentinel Threat Intelligence Engine
     with VTClient() as vt:
         vt_results = vt.scan_url(full_url)
         if vt_results:
@@ -1132,12 +1132,12 @@ def _analyze_domain(url: str) -> dict:
             suspicious = vt_results.get('suspicious', 0)
             if malicious > 0:
                 score += min(60, malicious * 20)
-                details.append(f"VirusTotal: {malicious} engine(s) gắn cờ ĐỘC HẠI")
+                details.append(f"Sentinel Threat Intel: {malicious} chỉ số gắn cờ ĐỘC HẠI")
             elif suspicious > 0:
                 score += min(30, suspicious * 10)
-                details.append(f"VirusTotal: {suspicious} engine(s) gắn cờ NGHI NGỜ")
+                details.append(f"Sentinel Threat Intel: {suspicious} chỉ số gắn cờ NGHI NGỜ")
             else:
-                details.append("VirusTotal: Sạch (không phát hiện mã độc)")
+                details.append("Sentinel Threat Intel: Sạch (không phát hiện mã độc)")
 
     # 3. Tranco Rank (Pro-active Popularity Check)
     tranco_data = lookup_tranco(domain)
