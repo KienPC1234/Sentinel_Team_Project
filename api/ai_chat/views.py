@@ -302,12 +302,13 @@ class ChatAIStreamView(APIView):
                 if agent.session:
                     await sync_to_async(agent.session.refresh_from_db)()
 
-                yield f"data: {json.dumps({
+                final_payload = {
                     'action_suggested': action, 
                     'session_id': str(agent.session.id) if agent.session else None,
                     'title': agent.session.title if agent.session else 'Guest Session',
                     'done': True
-                })}\n\n"
+                }
+                yield f"data: {json.dumps(final_payload)}\n\n"
             except Exception as e:
                 logging.getLogger(__name__).error(f"Stream Error: {e}")
                 yield f"data: {json.dumps({'error': str(e), 'done': True})}\n\n"

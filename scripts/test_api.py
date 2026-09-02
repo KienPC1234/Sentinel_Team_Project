@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-API_BASE_URL = "http://localhost:8001"
+API_BASE_URL = "http://localhost:8001/api/v1"
 
 class APITester:
     def __init__(self, base_url):
@@ -119,25 +119,24 @@ class APITester:
             try:
                 payload = {
                     "user_message": test["message"],
-                    "session_id": self.session_id,
+                    "session_id": str(self.session_id) if self.session_id else None,
                     "context": test["context"]
                 }
                 
                 req = urllib.request.Request(
-                    f"{self.base_url}/chat-ai",
+                    f"{self.base_url}/chat/stream/",
                     data=json.dumps(payload).encode('utf-8'),
                     headers={'Content-Type': 'application/json'},
                     method='POST'
                 )
                 
-                response = urllib.request.urlopen(req)
-                data = json.loads(response.read())
-                
-                if ("ai_response" in data):
+                response = urllib.request.urlopen(req, timeout=30)
+                raw_chunk = response.read(256).decode('utf-8', errors='ignore')
+                if raw_chunk:
                     self.log_test(f"Chat AI - Test {i+1}", "PASS", 
-                                 f"Response length: {len(data['ai_response'])}")
+                                 f"Streaming initial chunk received: {raw_chunk[:50]}...")
                 else:
-                    self.log_test(f"Chat AI - Test {i+1}", "FAIL", str(data))
+                    self.log_test(f"Chat AI - Test {i+1}", "FAIL", "Empty stream response")
             except Exception as e:
                 self.log_test(f"Chat AI - Test {i+1}", "FAIL", str(e))
     

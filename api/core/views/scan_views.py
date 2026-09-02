@@ -994,9 +994,14 @@ def _analyze_network(url: str, domain: str) -> dict:
 
     # 2. HTTP Analysis (Redirects, Headers)
     try:
+        from api.utils.security import is_safe_url
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         req_url = url if url.startswith('http') else f'https://{domain}'
         
+        if not is_safe_url(req_url):
+            network_info['error'] = 'Địa chỉ IP nội bộ bị chặn vì lý do an toàn.'
+            return network_info
+
         response = requests.get(req_url, headers=headers, timeout=5, allow_redirects=True)
         
         network_info['redirects'] = len(response.history)
@@ -1502,9 +1507,11 @@ class ScanImageView(APIView):
 
 class ScanFileView(APIView):
     """
-    POST /api/scan/file — File upload scan using VirusTotal
+    POST /api/scan/file — Zero-Trust Isolated Sandbox File Analysis (Up to 500MB)
     """
     permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+    MAX_SIZE = 500 * 1024 * 1024  # 500 MB
 
     def post(self, request):
         from api.core.serializers import ScanFileSerializer
@@ -1513,6 +1520,10 @@ class ScanFileView(APIView):
         
         uploaded_file = request.FILES['file']
         
+        # Check maximum file size (500MB)
+        if uploaded_file.size > self.MAX_SIZE:
+            return Response({'error': 'Tệp quá lớn. Dung lượng tối đa là 500 MB.'}, status=400)
+
         # Turnstile Verification
         cf_token = request.data.get('cf-turnstile-response')
         if not verify_turnstile_token(cf_token):
@@ -1529,8 +1540,10 @@ class ScanFileView(APIView):
         # Save file to temp location
         import tempfile
         import os
+        from api.utils.security import sanitize_filename
+        clean_name = sanitize_filename(uploaded_file.name)
         temp_dir = tempfile.gettempdir()
-        file_path = os.path.join(temp_dir, f"{scan_event.id}_{uploaded_file.name}")
+        file_path = os.path.join(temp_dir, f"{scan_event.id}_{clean_name}")
         
         with open(file_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
@@ -1617,6 +1630,11 @@ class ScanAudioView(APIView):
         from api.core.tasks import perform_audio_scan_task
         try:
             perform_audio_scan_task.delay(scan_event.id, file_path)
+            return Response({
+                'scan_id': scan_event.id,
+                'status': scan_event.status,
+                'message': 'Đang nhận diện giọng nói và phân tích rủi ro...'
+            })
         except Exception as e:
             logger.error(f"Failed to dispatch audio scan task: {e}")
             scan_event.status = ScanStatus.FAILED
@@ -1624,13 +1642,7 @@ class ScanAudioView(APIView):
             scan_event.save()
             if os.path.exists(file_path):
                 os.remove(file_path)
-            return Response({'error': 'Lỗi hệ thống khi bắt đầu quét.'}, status=500)
-
-        return Response({
-            'scan_id': scan_event.id,
-            'status': scan_event.status,
-            'message': 'Đang xử lý âm thanh...',
-        })
+            return Response({'error': 'Lỗi hệ thống khi bắt đầu quét audio.'}, status=500)
 
 
 class ScanStatusView(APIView):
@@ -1645,7 +1657,8 @@ class ScanStatusView(APIView):
         try:
             event = ScanEvent.objects.get(id=scan_id)
             can_view = bool(
-                request.user.is_staff
+                event.user_id is None
+                or request.user.is_staff
                 or (request.user.is_authenticated and event.user_id == request.user.id)
                 or event.is_public_referable
             )

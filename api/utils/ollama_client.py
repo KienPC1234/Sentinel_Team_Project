@@ -710,7 +710,15 @@ def get_available_models() -> list:
     """Get list of available models in Ollama."""
     try:
         models = client.list()
-        return [m['name'] for m in models['models']]
+        model_list = []
+        raw_models = getattr(models, 'models', None) or (models.get('models', []) if isinstance(models, dict) else [])
+        for m in raw_models:
+            name = getattr(m, 'model', None) or getattr(m, 'name', None)
+            if not name and isinstance(m, dict):
+                name = m.get('model') or m.get('name')
+            if name:
+                model_list.append(str(name))
+        return model_list
     except Exception as e:
         logger.error(f"Error getting Ollama models: {e}")
     return []
@@ -1240,10 +1248,30 @@ def web_fetch_url(url: str) -> Optional[Dict]:
     if not re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', target_url):
         target_url = f"https://{target_url}"
 
-    # Block requests to Ollama local server (prevent SSRF)
-    blocked = ('localhost:11434', '127.0.0.1:11434')
-    if any(b in target_url for b in blocked):
-        logger.warning(f"web_fetch_url blocked internal URL: {target_url}")
+    # Comprehensive SSRF Protection
+    try:
+        from urllib.parse import urlparse
+        import socket
+        import ipaddress
+        
+        parsed_url = urlparse(target_url)
+        hostname = parsed_url.hostname
+        if not hostname:
+            return None
+        
+        hostname_lower = hostname.lower()
+        if hostname_lower in ('localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254'):
+            logger.warning(f"web_fetch_url blocked localhost/metadata URL: {target_url}")
+            return None
+            
+        for addr_info in socket.getaddrinfo(hostname, None):
+            ip_str = addr_info[4][0]
+            ip_obj = ipaddress.ip_address(ip_str)
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved or ip_obj.is_multicast:
+                logger.warning(f"web_fetch_url blocked private/internal IP {ip_str} for URL: {target_url}")
+                return None
+    except Exception as ssrf_err:
+        logger.warning(f"web_fetch_url SSRF validation failed for {target_url}: {ssrf_err}")
         return None
     
     browser_headers = {

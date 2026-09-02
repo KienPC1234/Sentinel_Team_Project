@@ -41,6 +41,10 @@ class Migration(migrations.Migration):
             name='user',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='chat_sessions', to=settings.AUTH_USER_MODEL),
         ),
+        migrations.RemoveField(
+            model_name='chatmessage',
+            name='session_id',
+        ),
         migrations.AddField(
             model_name='chatmessage',
             name='session',
@@ -49,9 +53,5 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name='chatmessage',
             index=models.Index(fields=['session', 'created_at'], name='chat_messag_session_597c4e_idx'),
-        ),
-        migrations.RemoveField(
-            model_name='chatmessage',
-            name='session_id',
         ),
     ]

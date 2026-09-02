@@ -1,5 +1,5 @@
 const express = require('express');
-const { isHttpUrl, detectCaptcha } = require('./browser/utils');
+const { isHttpUrl, isSafeExternalUrl, detectCaptcha } = require('./browser/utils');
 const { launchBrowser, closeBrowser, getBrowserInfo } = require('./browser/manager');
 const controller = require('./browser/controller');
 
@@ -24,8 +24,9 @@ app.get('/health', async (req, res) => {
 app.post('/render', async (req, res) => {
   const { url, timeoutMs } = req.body;
 
-  if (!isHttpUrl(url)) {
-    return res.status(400).json({ ok: false });
+  const isSafe = await isSafeExternalUrl(url);
+  if (!isSafe) {
+    return res.status(400).json({ ok: false, error: 'Invalid or blocked internal URL' });
   }
 
   try {
@@ -45,8 +46,9 @@ app.post('/render', async (req, res) => {
 
 app.post('/open', async (req, res) => {
   const { url } = req.body;
-  if (!isHttpUrl(url)) {
-    return res.status(400).json({ ok: false, error: 'Invalid url' });
+  const isSafe = await isSafeExternalUrl(url);
+  if (!isSafe) {
+    return res.status(400).json({ ok: false, error: 'Invalid or blocked internal URL' });
   }
 
   try {

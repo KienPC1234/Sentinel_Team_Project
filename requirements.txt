@@ -41,4 +41,4 @@ pywebpush>=2.0.3
 sentence-transformers
 transformers
 torch
-
+martor

@@ -197,7 +197,8 @@ def scan_status_view(request, scan_id):
     """Display scan result page for /scan/status/<id>/."""
     scan = get_object_or_404(ScanEvent, id=scan_id)
     can_view = bool(
-        request.user.is_staff
+        scan.user_id is None
+        or request.user.is_staff
         or (request.user.is_authenticated and scan.user_id == request.user.id)
         or scan.is_public_referable
     )

@@ -30,6 +30,8 @@ urlpatterns = [
 
     # Scan
     path('scan/analyze-sse/', views.ScanAnalyzeSSEView.as_view(), name='scan-analyze-sse'),
+    path('scan/analyze/stream/', views.ScanAnalyzeSSEView.as_view(), name='scan-analyze-stream'),
+    path('scan/analyze/', views.ScanAnalyzeSSEView.as_view(), name='scan-analyze'),
     path('scan/phone/', views.ScanPhoneView.as_view(), name='scan-phone'),
     path('scan/message/', views.ScanMessageView.as_view(), name='scan-message'),
     path('scan/domain/', views.ScanDomainView.as_view(), name='api-scan-domain'),

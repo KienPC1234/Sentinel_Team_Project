@@ -176,8 +176,13 @@ def _analyze_network(url: str, domain: str) -> dict:
         network_info['ssl_error'] = str(e)
 
     try:
+        from api.utils.security import is_safe_url
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         req_url = url if url.startswith('http') else f'https://{domain}'
+        if not is_safe_url(req_url):
+            network_info['error'] = 'Blocked internal destination'
+            return network_info
+
         response = requests.get(req_url, headers=headers, timeout=5, allow_redirects=True)
         network_info['redirects'] = len(response.history)
         network_info['final_url'] = response.url

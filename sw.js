@@ -1,4 +1,4 @@
-self.__SC_SW_VERSION__ = '2026-03-28-v3';
+self.__SC_SW_VERSION__ = '2026-09-01-v4';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -54,32 +54,43 @@ self.addEventListener('notificationclick', event => {
 
 self.addEventListener('fetch', event => {
   const url = event.request.url;
-  
-  // Do NOT intercept third-party trackers, analytics, or Google APIs.
-  // Letting the browser handle these natively avoids Uncaught Promise rejections in the SW
-  // when they are blocked by AdBlockers or fail due to SRI checks.
-  if (url.includes('googleapis.com') || 
-      url.includes('cloudflareinsights.com') || 
-      url.includes('youtube.com') || 
-      url.includes('google-analytics.com')) {
-      return; 
+
+  // Do not intercept non-GET requests (e.g. POST, SSE streams, etc.)
+  if (event.request.method !== 'GET') {
+    return;
   }
 
-  // Filter for navigation requests (HTML pages) to ensure basic offline/loading support
+  // Do NOT intercept API endpoints, OAuth callbacks, SSE streams, or external domains
+  if (url.includes('/api/v1/') ||
+      url.includes('/accounts/') ||
+      url.includes('googleapis.com') ||
+      url.includes('google.com') ||
+      url.includes('cloudflareinsights.com') ||
+      url.includes('challenges.cloudflare.com') ||
+      url.includes('youtube.com') ||
+      url.includes('google-analytics.com')) {
+    return;
+  }
+
+  // Navigation requests (HTML pages)
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(error => {
-        console.log('[SW] Fetch failed; returning cached offline page if available.');
-        return caches.match(event.request);
+      fetch(event.request).catch(() => {
+        return caches.match(event.request).then(cached => cached || caches.match('/'));
       })
     );
-  } else {
-    // For other assets, try cache then network
-    event.respondWith(
-      caches.match(event.request).then(response => {
-        if (response) return response;
-        return fetch(event.request);
-      })
-    );
+    return;
   }
+
+  // Assets: Cache-first with safe Network fallback
+  event.respondWith(
+    caches.match(event.request).then(cachedResponse => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(event.request).catch(err => {
+        return new Response('', { status: 404, statusText: 'Resource Not Found' });
+      });
+    })
+  );
 });

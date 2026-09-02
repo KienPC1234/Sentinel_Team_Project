@@ -1,488 +1,263 @@
 <div align="center">
-  <img src="PKV/static/logo.png" alt="ShieldCall VN Logo" width="200"/>
-  <h1>ShieldCall VN 🛡️</h1>
-  <p><b>Nền tảng Bảo vệ Người dùng Số Việt Nam Toàn diện bằng AI</b></p>
-  
-  [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
-  [![Django](https://img.shields.io/badge/Django-5.2.x-green.svg)](https://www.djangoproject.com/)
-  [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4-blueviolet.svg)](https://tailwindcss.com/)
-  [![AI](https://img.shields.io/badge/AI-Multi--Agent-orange.svg)](https://ollama.ai/)
+  <h1>ShieldCall VN (Sentinel Core)</h1>
+  <p><b>Advanced Multi-Modal Threat Intelligence, Zero-Trust Sandbox & Anti-Fraud Architecture</b></p>
+  <p><b>Production Endpoint:</b> <a href="https://sc.fptoj.com">https://sc.fptoj.com</a></p>
+
+  [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+  [![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
+  [![Database](https://img.shields.io/badge/Database-MariaDB%2FMySQL-orange.svg)](https://mariadb.org/)
+  [![Cache%2FBroker](https://img.shields.io/badge/Broker-Redis%208-red.svg)](https://redis.io/)
+  [![Inference](https://img.shields.io/badge/LLM-Ollama%20(DeepSeek%20%7C%20Gemma4)-purple.svg)](https://ollama.com/)
+  [![Docker](https://img.shields.io/badge/Sandbox-Docker%20Zero--Trust-2496ED.svg)](https://www.docker.com/)
+  [![Orchestration](https://img.shields.io/badge/Process-PM2-lightgrey.svg)](https://pm2.keymetrics.io/)
 </div>
 
 ---
 
-## 🌟 Giới thiệu
-**ShieldCall VN** là giải pháp công nghệ tiên phong giúp phát hiện, ngăn chặn và giáo dục về các hình thức lừa đảo kỹ thuật số (cuộc gọi rác, tin nhắn giả mạo, website lừa đảo, tài khoản ngân hàng đen) dành riêng cho người dùng tại Việt Nam. Dự án được phát triển bởi **Sentinel Team**.
+## 1. Executive Summary & Architecture
 
-## ✨ Tính năng nổi bật
+**ShieldCall VN** is an enterprise-grade digital safety and cyber-fraud mitigation platform designed to detect, analyze, and neutralize multifaceted threats across telecommunication, financial, digital communication, and executable file vectors.
 
-### 1. Hệ thống Quét Đa nguyên (Multi-Vector Scan)
-*   **Website Scan:** Kiểm tra WHOIS (độ tuổi tên miền), DNS MX, uy tín Hosting (ASN) và phân tích nội dung bằng AI Reasoning Engine.
-*   **Audio Scan:** Chuyển đổi cuộc gọi thành văn bản bằng **Faster-Whisper** và phân tích kịch bản lừa đảo (giả danh công an, ngân hàng).
-*   **Email Analysis:** Phân tích file `.eml`, xác thực SPF/DMARC và vạch trần kịch bản thao túng tâm lý.
-*   **Phone & Account Check:** Tra cứu mức độ rủi ro dựa trên cơ sở dữ liệu cộng đồng và thuật toán trọng số.
-*   **AI OCR Magic (Mắt thần):** Trích xuất thông tin lừa đảo từ ảnh chụp màn hình bằng EasyOCR kết hợp AI phân tích thực thể.
+The platform employs a hybrid asynchronous architecture combining real-time ASGI WebSocket/SSE streams, background distributed task workers, GPU-accelerated neural computing, and an isolated Zero-Trust Docker Sandbox backed by industry-standard forensic toolsets.
 
-### 2. Hệ sinh thái Cộng đồng & Giáo dục
-*   **Scam Radar:** Bản đồ nhiệt và xu hướng lừa đảo cập nhật theo thời gian thực.
-*   **Learn Hub:** Kho bài giảng tương tác về an ninh mạng.
-*   **Interactive Scenarios:** Thực hành đối đầu với kẻ gian trong môi trường giả lập AI.
-*   **Forum:** Diễn đàn cộng đồng chia sẻ kinh nghiệm và cảnh báo lừa đảo.
-
-### 3. Công nghệ Quản trị Đẳng cấp
-*   **AI Magic Create:** Quy trình 5 giai đoạn (Phân tích -> Lesson -> Quiz -> Scenario -> Push) biến tin tức thô thành bài học hoàn chỉnh.
-*   **Dashboard Thông minh:** Hệ thống giám sát dữ liệu và báo cáo lừa đảo chuyên sâu.
-*   **RAG Knowledge Base:** Quản lý Vector DB (FAISS) với HTTP polling real-time, lịch đồng bộ tự động.
-
-## 🛠️ Stack Công nghệ
-| Layer | Technology |
-|---|---|
-| **Core** | Django 5.2 (Python 3.12), Django REST Framework |
-| **AI Engine** | GPT-OSS Cloud (gpt-oss:120b), Faster-Whisper (STT), RAG (FAISS), EasyOCR |
-| **Async** | Celery & Redis (Background Tasks), Celery Beat (Scheduled Jobs) |
-| **Real-time** | Django Channels (WebSocket), HTTP Polling |
-| **Design** | Liquid Glass Aesthetic (TailwindCSS v4), Alpine.js |
-| **Auth** | Django Allauth (Google OAuth), 2FA (django-otp), Cloudflare Turnstile |
-| **Database** | MySQL 8.0, Redis 7.0 (Cache + Broker) |
-| **Security** | VirusTotal API, WHOIS/DNS Analysis, Trust Score Engine |
-
----
-
-## 🚀 Cài đặt & Khởi chạy (Development)
-
-### Yêu cầu hệ thống
-- **Python** 3.12+
-- **MySQL** 8.0+
-- **Redis** 7.0+
-- **Ollama** (LLM local) — https://ollama.ai
-- **Node.js** 18+ (cho TailwindCSS build)
-
-### Cài đặt nhanh
-```bash
-# 1. Clone repository
-git clone https://github.com/KienPC1234/Sentinel_Team_Project.git
-cd PKV_TEAM
-
-# 2. Tạo virtual environment
-python3 -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-# .venv\Scripts\activate         # Windows
-
-# 3. Cài dependencies
-pip install -r requirements.txt
-
-# 4. Cấu hình settings
-cp PKV/settings.py.example PKV/settings.py
-# → Sửa thông tin DB, API keys trong PKV/settings.py
-
-# 5. Khởi tạo database
-python manage.py migrate
-
-# 6. Build TailwindCSS
-python manage.py tailwind build
-
-# 7. Collect static files
-python manage.py collectstatic --noinput
-
-# 8. Tạo superuser (admin)
-python manage.py createsuperuser
-
-# 9. Chạy dev server
-python manage.py runserver 0.0.0.0:8000
 ```
-
-### Khởi chạy AI Engine (Ollama)
-Dự án sử dụng **Ollama** để vận hành mô hình ngôn ngữ lớn (LLM). Hiện đã nâng cấp lên model siêu tham số **GPT-OSS:120b** để xử lý các kịch bản lừa đảo phức tạp với độ chính xác cao.
-
-```bash
-# 1. Cài đặt Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# 2. Pull model chính (hoặc cấu hình remote Ollama endpoint trong PKV/settings.py)
-ollama pull gpt-oss:120b
-
-# 3. Kiểm tra kết nối
-curl http://localhost:11434/api/tags
-```
-
-> **Lưu ý:** Nếu hạ tầng không đủ tài nguyên để chạy model 120b (Yêu cầu VRAM/RAM lớn), bạn có thể sử dụng giải pháp **Ollama Cloud/Remote** hoặc hạ cấp xuống model nhẹ hơn như `qwen2.5:7b`.
-
-### Khởi chạy Background Workers
-```bash
-# Terminal 2 — Celery Worker (xử lý task nền)
-celery -A PKV worker -l info --concurrency=4
-
-# Terminal 3 — Celery Beat (lịch tự động: RAG rebuild mỗi 60 phút, ...)
-celery -A PKV beat -l info
-```
-
-### Puppeteer Host (Node.js) cho Web Scan fallback
-Khi website cần render JS, task `core.perform_web_scrapping_task` có thể gọi service Puppeteer nội bộ để lấy nội dung trang.
-
-```bash
-# Cài dependencies cho host
-cd scripts/puppeteer_host
-npm install
-
-# Chạy host (mặc định port 3010)
-npm start
-```
-
-Thiết lập endpoint trong môi trường Django:
-
-```bash
-export PUPPETEER_HOST_URL="http://127.0.0.1:3010/render"
-```
-
-Lưu ý: host này chỉ render trang và phát hiện tín hiệu CAPTCHA/anti-bot để cảnh báo phân tích; không triển khai cơ chế vượt CAPTCHA trái điều khoản dịch vụ.
-
-### WebPush (VAPID) setup
-Tạo VAPID key 1 lần và lưu vào ENV (không commit private key):
-
-```bash
-python scripts/generate_vapid_keys.py --subject mailto:admin@yourdomain.com
-```
-
-Thêm vào môi trường chạy app:
-
-```bash
-export WEBPUSH_VAPID_PUBLIC_KEY="..."
-export WEBPUSH_VAPID_PRIVATE_KEY="..."
-export WEBPUSH_VAPID_SUBJECT="mailto:admin@yourdomain.com"
-```
-
-Frontend đọc public key qua:
-- context template: `WEBPUSH_VAPID_PUBLIC_KEY`
-- endpoint: `/api/v1/push/public-key/`
-
-### Script tự động
-```bash
-chmod +x setup.sh
-./setup.sh
+                                      [ Client Layer ]
+                      (Web Frontend / Mobile Client / REST API Consumer)
+                                             │
+                                             ▼
+                            [ Reverse Proxy / TLS Termination ]
+                                        (sc.fptoj.com)
+                                             │
+                 ┌───────────────────────────┴───────────────────────────┐
+                 │                                                       │
+                 ▼ (HTTP / WebSocket / SSE)                              ▼ (Headless JS Render)
+        [ Daphne ASGI Server :8001 ]                                [ Puppeteer Host :3010 ]
+           ├── Django REST Framework                                     ├── Anti-SSRF DNS Resolver
+           ├── Channels Protocol Router                                  ├── Auto Memory Tab Recycling
+           └── Anti-SSRF Web Scraping Relay ◄────────────────────────────└── Stealth Mode (Blink Masking)
+                 │
+                 ├───► [ MariaDB / MySQL 11.x ] (Relational Persistence & Auth)
+                 │
+                 ├───► [ Redis 8.x ] (Channel Layers, Cache, Celery Broker)
+                 │        ▲
+                 │        │ (Task Distribution)
+                 │     [ Celery Workers & Celery Beat ]
+                 │        ├── Deep OCR Extraction (EasyOCR - GPU CUDA)
+                 │        ├── Voice Impersonation & Speech-to-Text (Faster-Whisper - GPU CUDA)
+                 │        └── Vector Index Ingestion (FAISS + Nomic Embed)
+                 │
+                 ├───► [ Zero-Trust Docker Malware Sandbox ] (Ephemeral Container : sentinel-sandbox)
+                 │        ├── YARA Multi-Vector Signature Rules
+                 │        ├── OLETools (VBA Macro Forensics & IOC Extraction)
+                 │        ├── PEFile (Windows PE Inspection, Section Entropy & API Imports)
+                 │        ├── PyPDF Exploit & Stream Decoder (/Launch, /JS, /OpenAction)
+                 │        └── ClamAV Antivirus Scanner
+                 │
+                 └───► [ Ollama Local / Cloud Daemon :11434 ]
+                          ├── Primary LLM: deepseek-v4-flash:cloud
+                          └── Fast / Classification LLM: gemma4:31b-cloud
 ```
 
 ---
 
-## 🌐 Deploy Production
+## 2. Core Subsystems
 
-### Kiến trúc Production
-```
-                    ┌─────────────┐
-     Internet ────> │  Nginx/LB   │
-                    │ (SSL + WS)  │
-                    └──────┬──────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────▼───┐  ┌────▼────┐ ┌─────▼───┐
-        │ Daphne  │  │ Daphne  │ │ Daphne  │  ← ASGI Workers
-        │  :8001  │  │  :8002  │ │  :8003  │
-        └────┬────┘  └────┬────┘ └────┬────┘
-             │            │           │
-        ┌────▼────────────▼───────────▼────┐
-        │           Redis 7.0              │ ← Cache + Broker + Channel Layer
-        └──────────────────────────────────┘
-                           │
-        ┌──────────────────▼───────────────┐
-        │          MySQL 8.0               │ ← Database chính
-        └──────────────────────────────────┘
-              │            │
-        ┌─────▼───┐  ┌────▼────┐
-        │ Celery  │  │ Celery  │  ← Background Workers
-        │ Worker  │  │  Beat   │
-        └─────────┘  └─────────┘
+### 2.1 Multi-Vector Threat Analysis Pipeline
+- **Telecommunication & Number Scoring**: Normalizes international and domestic Vietnamese MSISDN formats, cross-referencing threat telemetry and blacklist repositories.
+- **Financial Account Verification**: Detects fraudulent accounts and illicit beneficiary channels.
+- **Domain & Web Intelligence**: Inspects DNS MX records, domain age (WHOIS), SSL reputation, and ScamAdviser / Trustpilot metrics with SSRF-isolated relays.
+- **Multi-Modal AI Analysis**:
+  - **Audio Streams**: Acoustic transcription via `Faster-Whisper` running on NVIDIA GPU CUDA followed by psychological manipulation analysis.
+  - **Visual Media**: Image OCR via `EasyOCR` (GPU accelerated) combined with QR code matrix decoding and phishing banner classification.
+
+### 2.2 Zero-Trust Local Malware Sandbox Engine
+Replaces third-party external dependencies with an entirely isolated on-premise containment engine:
+- **Containment Model**: Every suspicious file is mounted read-only inside an ephemeral container (`sentinel-sandbox:latest`) with `--network none`, `--cap-drop ALL`, `--read-only`, `--memory 1g`, `--cpus 2.0`, and `--pids-limit 64`.
+- **Multi-Engine Static & Heuristic Dissection**:
+  - **YARA Engine**: Scans binary patterns for ransomware extortion notes, process injection calls, and obfuscated droppers.
+  - **OLETools (`olevba`)**: Dissects VBA macro streams in `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm` files to detect `Auto_Open`, `Shell()`, and `WScript.Shell`.
+  - **PEFile Engine**: Computes `imphash`, analyzes section Shannon entropy, and flags critical injection APIs (`VirtualAllocEx`, `WriteProcessMemory`, `CreateRemoteThread`).
+  - **PyPDF Dissection**: Flags `/Launch` system execution commands, `/EmbeddedFiles` droppers, and `/JS` JavaScript streams.
+  - **ClamAV Engine**: Cross-references against updated open-source antivirus definitions.
+
+### 2.3 Hardened Puppeteer Headless Web Cluster
+- **Anti-SSRF Isolation**: Validates all target hostnames and DNS resolutions to block access to private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.169.254`).
+- **Anti-Detection Stealth**: Employs `puppeteer-extra-plugin-stealth` with automated flag masking (`navigator.webdriver` removal, custom humanized User-Agents).
+- **Leak Prevention & Resource Optimization**: Utilizes `WeakMap` page tracking, blocks heavy media streams (`audio`, `video`, `fonts`), and automatically recycles browser instances after 50 renders to release accumulated V8 memory.
+
+---
+
+## 3. Technology Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Runtime Environment** | Python 3.11 (Virtualenv), Node.js v24.x, Docker Engine v29.x |
+| **Web & API Framework** | Django 5.2.x, Django REST Framework, Daphne ASGI, Channels 4.x |
+| **Database & Caching** | MariaDB 11.x / MySQL 8.x (`PyMySQL`), Redis 8.x (`django-redis`, `channels-redis`) |
+| **Distributed Tasks** | Celery 5.6.x (Thread Pool Worker + Periodic Beat Scheduler) |
+| **Hardware Acceleration** | NVIDIA CUDA GPU (RTX 4070 SUPER), cuDNN |
+| **Malware Sandbox** | Docker Isolated Ephemeral Containers, YARA, OLETools, PEFile, PyPDF, ClamAV |
+| **Browser Cluster** | Puppeteer Extra, Chromium (Headless), Stealth Plugin, Anti-SSRF Relay |
+| **AI & Neural Computing** | Ollama SDK, PyTorch 2.x CUDA, Sentence-Transformers, FAISS, Faster-Whisper, EasyOCR |
+| **Process Manager** | PM2 (Production Ecosystem with Dynamic Path Resolution) |
+| **Security & Auth** | Cloudflare Turnstile, Django-OTP (TOTP/Email MFA), Google OAuth2, WhiteNoise |
+
+---
+
+## 4. API Specification Overview
+
+Base URL: `https://sc.fptoj.com/api/v1`
+
+| Endpoint | Method | Purpose | Authentication |
+| :--- | :--- | :--- | :--- |
+| `/check-session` | `GET` | Validates or provisions ephemeral mobile sessions | Public |
+| `/check-phone` | `GET` | High-speed risk classification for MSISDNs | Public |
+| `/scan/phone/` | `POST` | Comprehensive telephone threat assessment | Turnstile |
+| `/scan/message/` | `POST` | SMS and social messaging fraud analysis | Turnstile |
+| `/scan/domain/` | `POST` | URL, domain reputation, and DNS/WHOIS scan | Turnstile |
+| `/scan/account/` | `POST` | Bank account fraud verification | Turnstile |
+| `/scan/image/` | `POST` | OCR extraction and visual fraud detection | Turnstile |
+| `/scan/audio/` | `POST` | Speech-to-text and voice phishing detection | Turnstile |
+| `/scan/file/` | `POST` | Zero-Trust Docker sandbox file analysis | Turnstile |
+| `/chat/stream/` | `POST` | Server-Sent Events (SSE) AI assistant stream | Session / Token |
+| `/auth/register/` | `POST` | User registration with OTP validation | Public |
+| `/auth/login/` | `POST` | Credential validation and MFA challenge trigger | Public |
+| `/auth/mfa/verify/` | `POST` | Multi-Factor Authentication verification | Pre-auth Token |
+
+Interactive OpenAPI / Swagger Documentation is available at:
+- **Swagger UI**: `https://sc.fptoj.com/api/docs/`
+- **ReDoc**: `https://sc.fptoj.com/api/redoc/`
+- **OpenAPI Schema**: `https://sc.fptoj.com/api/schema/`
+
+---
+
+## 5. Complete Setup & Deployment Guide
+
+### 5.1 System Prerequisites
+```bash
+# Ubuntu / Debian
+sudo apt-get update && sudo apt-get install -y \
+  python3.11 python3.11-venv python3-pip \
+  mariadb-server redis-server clamav clamav-daemon \
+  docker.io docker-compose-v2 \
+  chromium-browser chromium-chromedriver \
+  nodejs npm ffmpeg git
+
+# Start core services
+sudo systemctl enable --now mariadb redis-server docker clamav-daemon
+sudo chmod 666 /var/run/docker.sock
 ```
 
-### Bước 1: Chuẩn bị Server
+### 5.2 Environment Configuration (`.env`)
+Create `.env` at the project root:
 
 ```bash
-# Ubuntu 22.04+ / Debian 12+
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3.12 python3.12-venv python3.12-dev \
-    mysql-server redis-server nginx supervisor curl git
+# Core
+DEBUG=False
+SECRET_KEY='<cryptographically_secure_token>'
+ALLOWED_HOSTS=sc.fptoj.com,localhost,127.0.0.1
+SITE_URL=https://sc.fptoj.com
 
-# Cài Ollama trên server
-curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull gpt-oss:120b
+# Database (MariaDB / MySQL)
+DB_ENGINE=mysql
+DB_NAME=shieldcall_db
+DB_USER=shieldcall_user
+DB_PASSWORD=<db_password>
+DB_HOST=127.0.0.1
+DB_PORT=3306
+
+# Redis & Broker
+REDIS_URL=redis://127.0.0.1:6379/0
+REDIS_CACHE_URL=redis://127.0.0.1:6379/1
+
+# AI & LLM Inference
+OLLAMA_BASE_URL=http://localhost:11434
+LLM_MODEL=deepseek-v4-flash:cloud
+SMALL_MODEL=gemma4:31b-cloud
+
+# GPU Acceleration
+EASYOCR_GPU=True
+WHISPER_DEVICE=cuda
+WHISPER_MODEL_SIZE=small
+VECTOR_DB_USE_GPU=True
+
+# Anti-Bot & Auth
+TURNSTILE_SITEKEY=<cloudflare_turnstile_sitekey>
+TURNSTILE_SECRET=<cloudflare_turnstile_secret>
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY=<google_oauth2_client_id>
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET=<google_oauth2_secret>
+
+# Mail Delivery (SMTP)
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=mail.fptoj.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=noreply@fptoj.com
+EMAIL_HOST_PASSWORD=<smtp_password>
+DEFAULT_FROM_EMAIL=FPTOJ Support <noreply@fptoj.com>
 ```
 
-### Bước 2: Setup Database
-
+### 5.3 Build the Docker Malware Sandbox Image
 ```bash
-# Đăng nhập MySQL
-sudo mysql -u root
-
-# Tạo database & user
-CREATE DATABASE shieldcall_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'shieldcall'@'localhost' IDENTIFIED BY 'YOUR_STRONG_PASSWORD';
-GRANT ALL PRIVILEGES ON shieldcall_db.* TO 'shieldcall'@'localhost';
-FLUSH PRIVILEGES;
-EXIT;
+docker build -t sentinel-sandbox:latest ./sandbox
 ```
 
-### Bước 3: Deploy Code
-
+### 5.4 Install Dependencies & Build Frontend Assets
 ```bash
-# Tạo user hệ thống
-sudo useradd -m -s /bin/bash shieldcall
-sudo su - shieldcall
-
-# Clone & setup
-git clone https://github.com/KienPC1234/Sentinel_Team_Project.git /home/shieldcall/PKV_TEAM
-cd /home/shieldcall/PKV_TEAM
-python3.12 -m venv .venv
-source .venv/bin/activate
-
-# Cài dependencies
-pip install -r requirements.txt
-pip install daphne gunicorn   # ASGI server
-
-# Cấu hình production
-cp PKV/settings.py.example PKV/settings.py
-```
-
-Sửa `PKV/settings.py` cho production:
-```python
-DEBUG = False
-ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com', 'YOUR_SERVER_IP']
-SITE_URL = 'https://yourdomain.com'
-
-# Database (thông tin đã tạo ở Bước 2)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'shieldcall_db',
-        'USER': 'shieldcall',
-        'PASSWORD': 'YOUR_STRONG_PASSWORD',
-        'HOST': 'localhost',
-        'PORT': '3306',
-        'OPTIONS': {'charset': 'utf8mb4'},
-    }
-}
-
-# Static files - WhiteNoise production
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-# Security headers
-SECURE_SSL_REDIRECT = True
-SECURE_HSTS_SECONDS = 31536000
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-```
-
-```bash
-# Migrate & build
-python manage.py migrate
-python manage.py tailwind build
-python manage.py collectstatic --noinput
-python manage.py createsuperuser
-```
-
-### Bước 4: Cấu hình Supervisor (Process Manager)
-
-Sử dụng file cấu hình mẫu [supervisor_pkv.conf](supervisor_pkv.conf) có sẵn trong thư mục gốc. File này đã được tối ưu hóa cho môi trường production với cơ chế Group (pkv:*) giúp quản lý Daphne, Celery Worker và Celery Beat dễ dàng hơn.
-
-```bash
-# 1. Copy file cấu hình vào thư mục của Supervisor
-sudo cp /data/PKV_TEAM/supervisor_pkv.conf /etc/supervisor/conf.d/pkv.conf
-
-# 2. Tạo thư mục log (nếu chưa có)
-sudo mkdir -p /var/log/supervisor
-sudo chown -R $USER:$USER /var/log/supervisor
-
-# 3. Cập nhật & Khởi động
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl start pkv:*
-
-# 4. Kiểm tra trạng thái
-sudo supervisorctl status pkv:*
-```
-
-### Bước 5: Cấu hình Nginx (Reverse Proxy + SSL)
-
-```nginx
-# /etc/nginx/sites-available/shieldcall
-
-upstream shieldcall_backend {
-    server 127.0.0.1:8001;
-}
-
-server {
-    listen 80;
-    server_name yourdomain.com www.yourdomain.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com www.yourdomain.com;
-
-    # SSL (Let's Encrypt)
-    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    client_max_body_size 50M;
-
-    # Static files (served by Nginx, bypass Django)
-    location /static/ {
-        alias /home/shieldcall/PKV_TEAM/PKV/static/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Media uploads
-    location /media/ {
-        alias /home/shieldcall/PKV_TEAM/media/;
-        expires 7d;
-    }
-
-    # WebSocket connections
-    location /ws/ {
-        proxy_pass http://shieldcall_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 86400;
-    }
-
-    # Django application
-    location / {
-        proxy_pass http://shieldcall_backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-```bash
-# Kích hoạt site
-sudo ln -s /etc/nginx/sites-available/shieldcall /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl restart nginx
-
-# SSL miễn phí với Let's Encrypt
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
-```
-
-### Bước 6: Cấu hình Firewall
-
-```bash
-sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 80/tcp    # HTTP
-sudo ufw allow 443/tcp   # HTTPS
-sudo ufw enable
-```
-
-### Bước 7: Kiểm tra
-
-```bash
-# Kiểm tra tất cả services
-sudo supervisorctl status            # Daphne, Celery, Beat
-sudo systemctl status nginx          # Nginx
-sudo systemctl status mysql          # MySQL
-sudo systemctl status redis          # Redis
-systemctl status ollama              # Ollama
-
-# Test endpoint
-curl -I https://yourdomain.com
-curl https://yourdomain.com/api/v1/health/
-```
-
-### Cập nhật code (Re-deploy)
-
-```bash
-cd /home/shieldcall/PKV_TEAM
-git pull origin main
+# Python Virtual Environment
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# Database Migrations & Static Files
 python manage.py migrate
-python manage.py tailwind build
 python manage.py collectstatic --noinput
-sudo supervisorctl restart all
+
+# Build Tailwind CSS Assets
+npm --prefix theme/static_src install
+npm --prefix theme/static_src run build
+
+# Install Puppeteer Node Dependencies
+cd scripts/puppeteer_host && npm install && cd ../..
 ```
 
----
-
-## 📁 Cấu trúc dự án
-
-```
-PKV_TEAM/
-├── PKV/                    # Django project settings & templates
-│   ├── settings.py         # Cấu hình chính
-│   ├── urls.py             # URL routing gốc
-│   ├── asgi.py             # ASGI entry (Daphne + WebSocket)
-│   ├── celery.py           # Celery app config
-│   ├── templates/          # Jinja2/Django templates
-│   │   ├── base.html       # Base layout (Alpine.js, SweetAlert2, marked.js)
-│   │   ├── Home/           # Trang chủ
-│   │   ├── Scan/           # Các trang quét (URL, Audio, Email, ...)
-│   │   ├── Report/         # Trang báo cáo lừa đảo
-│   │   ├── Admin/          # Admin dashboard & management
-│   │   ├── Forum/          # Diễn đàn cộng đồng
-│   │   ├── LearnHub/       # Hub giáo dục
-│   │   └── AI/             # AI Assistant chat
-│   ├── static/             # CSS, JS, images
-│   └── views/              # Page views (non-API)
-├── api/                    # Django REST Framework APIs
-│   ├── core/               # Core models, views, consumers
-│   ├── ai_chat/            # AI chatbot API
-│   ├── maintenance/        # RAG, crash reports, error logs
-│   ├── media_analysis/     # Image/OCR analysis
-│   ├── phone_security/     # Phone & bank account lookup
-│   ├── sessions_api/       # User sessions management
-│   └── utils/              # Shared utilities
-│       ├── ai_agent.py     # Multi-agent AI orchestration
-│       ├── ollama_client.py# Ollama LLM client
-│       ├── vector_db.py    # FAISS vector database
-│       ├── vt_client.py    # VirusTotal integration
-│       └── trust_score.py  # Trust scoring algorithm
-├── media/                  # User uploads & vector index
-├── requirements.txt        # Python dependencies
-├── setup.sh                # Auto setup script
-└── manage.py               # Django CLI
-```
-
-## ⚙️ Biến cấu hình quan trọng
-
-| Biến | Mô tả | Bắt buộc |
-|---|---|---|
-| `SECRET_KEY` | Django secret key (random 50+ chars) | ✅ |
-| `DATABASES` | MySQL connection | ✅ |
-| `CELERY_BROKER_URL` | Redis broker URL | ✅ |
-| `OLLAMA_BASE_URL` | Local/Remote Ollama API endpoint | ✅ |
-| `OLLAMA_API_KEY` | API Key (nếu sử dụng Cloud AI) | ✅ |
-| `LLM_MODEL` | Tên model (gpt-oss:120b, ...) | ✅ |
-| `VT_API_KEY` | VirusTotal API key | ⚠️ Scan feature |
-| `TURNSTILE_SITEKEY` / `TURNSTILE_SECRET` | Cloudflare anti-spam | ⚠️ Forms |
-| `WEBPUSH_VAPID_PUBLIC_KEY` | VAPID public key cho WebPush | ⚠️ Push |
-| `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key (secret, chỉ ENV) | ⚠️ Push |
-| `WEBPUSH_VAPID_SUBJECT` | VAPID subject (`mailto:` hoặc URL) | ⚠️ Push |
-| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | SMTP email | ❌ Optional |
-
-### Tạo VAPID key (1 lần)
+### 5.5 Process Management via PM2
+The system is managed via [ecosystem.config.js](file:///data/Sentinel_Team_Project/ecosystem.config.js):
 
 ```bash
-python scripts/generate_vapid_keys.py --subject mailto:admin@yourdomain.com
+# Start all microservices
+pm2 start ecosystem.config.js
+
+# Persist process configuration across reboots
+pm2 save
+
+# Inspect cluster health
+pm2 status
+pm2 logs --lines 50
 ```
 
-- Copy 3 dòng output vào ENV/.env của server.
-- Không commit `WEBPUSH_VAPID_PRIVATE_KEY` vào git.
+Managed cluster processes:
+- `pkv-web`: ASGI server handling HTTP requests and WebSocket/SSE streams (`0.0.0.0:8001`).
+- `pkv-celery`: Multi-threaded Celery worker handling CUDA OCR, speech transcription, and sandbox jobs.
+- `pkv-celery-beat`: Periodic task scheduler.
+- `pkv-puppeteer`: Headless Chromium render cluster with SSRF protection (`0.0.0.0:3010`).
 
 ---
 
-## 👨‍💻 Đội ngũ phát triển
-Dự án được thực hiện bởi **SENTINEL TEAM**.
-- **Quy mô dự án:** ~50,000 dòng code production.
-- **Phương trình phát triển:** **AI-Native Workflow**. Tận dụng mạng lưới **Multi-Agent Collaboration** (Đặc vụ AI cộng tác) và kỹ thuật **Prompt Engineering** nâng cao (Chain-of-Thought, Feedback Loop) để tối ưu hóa kiến trúc và đảm bảo độ ổn định của hệ thống.
-- **Kiến trúc:** Cloud-native, AI-integrated.
+## 6. Verification & Test Suites
 
-**License:** MIT
+Execute test suites to validate database integrity, LLM reasoning, sandbox analysis, and API endpoints:
+
+```bash
+# 1. Validate Ollama Integration & Model Readiness
+.venv/bin/python scripts/test_ollama.py
+
+# 2. Execute Backend API Integration Suite
+.venv/bin/python scripts/test_api.py
+```
+
+---
+
+## 7. License & Authorship
+
+Developed by **Sentinel Team**. Proprietary and Confidential. Distributed under standard project terms.

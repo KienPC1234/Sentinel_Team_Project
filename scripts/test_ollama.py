@@ -138,6 +138,17 @@ def test_django_integration():
     """Test Django integration"""
     print("\n5️⃣ Testing Django Integration...")
     try:
+        import os
+        from pathlib import Path
+        import django
+        
+        base_dir = Path(__file__).resolve().parent.parent
+        if str(base_dir) not in sys.path:
+            sys.path.insert(0, str(base_dir))
+            
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'PKV.settings')
+        django.setup()
+        
         from django.conf import settings
         from api.utils.ollama_client import is_ollama_available, get_available_models
         

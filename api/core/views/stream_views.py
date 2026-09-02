@@ -14,7 +14,8 @@ from api.utils.prompts import (
     SCAN_MESSAGE_PROMPT,
     SCAN_DOMAIN_PROMPT,
     SCAN_ACCOUNT_PROMPT,
-    SCAN_EMAIL_PROMPT
+    SCAN_EMAIL_PROMPT,
+    SCAN_FILE_PROMPT,
 )
 import base64
 import io
@@ -29,9 +30,20 @@ class ScanAnalyzeSSEView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        scan_id = request.data.get('scan_id')
         scan_type = request.data.get('scan_type')
         scan_data = request.data.get('scan_data')
         raw_input = request.data.get('raw_input', '')
+
+        if scan_id:
+            from api.core.models import ScanEvent
+            try:
+                ev = ScanEvent.objects.get(id=scan_id)
+                scan_type = scan_type or ev.scan_type
+                scan_data = scan_data or ev.result_json or {}
+                raw_input = raw_input or ev.raw_input or ''
+            except Exception:
+                pass
 
         logger.info(f"SSE Request: type={scan_type}, raw_input={raw_input[:50]}...")
         logger.debug(f"SSE scan_data: {scan_data}")
@@ -47,7 +59,27 @@ class ScanAnalyzeSSEView(APIView):
 
         def event_stream():
             try:
-                if scan_type == 'phone':
+                if scan_type == 'file':
+                    proofs = scan_data.get('forensic_evidence', [])
+                    proofs_str = '\n'.join([
+                        f"- [{p.get('severity', 'INFO')}] {p.get('description', '')} (Bằng chứng: {p.get('evidence', '')})"
+                        for p in proofs
+                    ]) if proofs else 'Không phát hiện chữ ký độc hại rõ ràng'
+                    
+                    file_meta = scan_data.get('file_metadata', {})
+                    meta_str = f"Entropy: {file_meta.get('entropy', 'N/A')}/8.0, SHA256: {file_meta.get('sha256', 'N/A')}"
+                    
+                    prompt = SCAN_FILE_PROMPT.format(
+                        file_name=scan_data.get('file_name', raw_input or 'Tệp đã tải lên'),
+                        file_size=f"{round(scan_data.get('file_size', 0) / (1024*1024), 2)} MB" if scan_data.get('file_size') else 'N/A',
+                        risk_level=scan_data.get('risk_level', 'SAFE'),
+                        risk_score=scan_data.get('risk_score', 0),
+                        verdict=scan_data.get('verdict', 'SAFE'),
+                        threat_family=scan_data.get('threat_family') or 'Chưa phân loại cụ thể',
+                        forensic_evidence=proofs_str,
+                        file_metadata=meta_str,
+                    )
+                elif scan_type == 'phone':
                     prompt = SCAN_PHONE_PROMPT.format(
                         phone=raw_input,
                         scan_data=json.dumps(scan_data, ensure_ascii=False)
@@ -117,7 +149,8 @@ class ChatStreamView(APIView):
                 # 1. OCR Processing
                 ocr_text = ""
                 if images:
-                    yield f"data: {json.dumps({'chunk': '🔄 *Đang xử lý hình ảnh...*\\n\\n'})}\n\n"
+                    msg_ocr = json.dumps({'chunk': '🔄 *Đang xử lý hình ảnh...*\n\n'})
+                    yield f"data: {msg_ocr}\n\n"
                     ocr_accumulation = []
                     for img_b64 in images:
                         try:
@@ -133,9 +166,11 @@ class ChatStreamView(APIView):
                     
                     if ocr_accumulation:
                         ocr_text = "\n---\n".join(ocr_accumulation)
-                        yield f"data: {json.dumps({'chunk': '✅ *Đã trích xuất nội dung từ ảnh. Bắt đầu phân tích...*\\n\\n'})}\n\n"
+                        msg_extracted = json.dumps({'chunk': '✅ *Đã trích xuất nội dung từ ảnh. Bắt đầu phân tích...*\n\n'})
+                        yield f"data: {msg_extracted}\n\n"
                     else:
-                        yield f"data: {json.dumps({'chunk': 'ℹ️ *Không tìm thấy văn bản trong ảnh. Tiến hành phân tích tổng quát...*\\n\\n'})}\n\n"
+                        msg_none = json.dumps({'chunk': 'ℹ️ *Không tìm thấy văn bản trong ảnh. Tiến hành phân tích tổng quát...*\n\n'})
+                        yield f"data: {msg_none}\n\n"
 
                 # 2. Final Prompt Construction
                 final_message = user_message

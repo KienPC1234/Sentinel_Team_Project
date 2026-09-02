@@ -19,6 +19,10 @@ def _public_media_url(path: str) -> str:
     normalized = str(path or '').replace('\\', '/').lstrip('/')
     return f"{settings.MEDIA_URL.rstrip('/')}/{normalized}"
 
+from api.utils.security import is_safe_url, sanitize_filename
+
+ALLOWED_IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.webp', '.gif')
+
 class EditorImageUploadView(APIView):
     """POST /api/v1/utils/upload-image/ — Editor.js image upload"""
     permission_classes = [IsAuthenticated]
@@ -30,9 +34,14 @@ class EditorImageUploadView(APIView):
         if not file_obj:
             return Response({"success": 0, "message": "No file uploaded"}, status=400)
 
+        clean_name = sanitize_filename(file_obj.name)
+        ext = os.path.splitext(clean_name)[1].lower()
+        if ext not in ALLOWED_IMAGE_EXTS:
+            return Response({"success": 0, "message": "Chỉ hỗ trợ tệp ảnh hợp lệ (.jpg, .png, .webp, .gif)"}, status=400)
+
         # Save to media/editor_images/u_<user_id>/
         path = default_storage.save(
-            os.path.join('editor_images', f'u_{request.user.id}', file_obj.name),
+            os.path.join('editor_images', f'u_{request.user.id}', clean_name),
             ContentFile(file_obj.read())
         )
         url = _public_media_url(path)
@@ -67,7 +76,7 @@ class EditorMediaLibraryView(APIView):
         items = []
         for name in files:
             lowered = (name or '').lower()
-            if not lowered.endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg')):
+            if not lowered.endswith(ALLOWED_IMAGE_EXTS):
                 continue
             rel_path = os.path.join(base_prefix, name)
             try:
@@ -114,6 +123,7 @@ class EditorMediaLibraryView(APIView):
         """Allow POST as fallback for clients that don't send JSON body with DELETE."""
         return self.delete(request)
 
+
 class EditorFetchUrlView(APIView):
     """GET /api/v1/utils/fetch-url/?url=... — Get metadata for Editor.js Link tool"""
     permission_classes = [IsAuthenticated]
@@ -121,8 +131,8 @@ class EditorFetchUrlView(APIView):
     @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
         url = request.query_params.get('url')
-        if not url:
-            return Response({"success": 0}, status=400)
+        if not url or not is_safe_url(url):
+            return Response({"success": 0, "message": "URL không hợp lệ hoặc bị chặn vì lý do bảo mật"}, status=400)
 
         try:
             resp = requests.get(url, timeout=5, headers={'User-Agent': 'ShieldCall-Bot/1.0'})

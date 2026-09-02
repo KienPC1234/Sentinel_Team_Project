@@ -1113,6 +1113,10 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         # 1b. FALLBACK: Fetch Content using requests + BeautifulSoup if Puppeteer fails
         if not fetch_success:
             try:
+                from api.utils.security import is_safe_url
+                if not is_safe_url(target_url):
+                    raise ValueError(f"Blocked internal/unsafe URL: {target_url}")
+
                 import requests as http_requests
                 from bs4 import BeautifulSoup
 
@@ -2167,12 +2171,12 @@ def perform_file_scan_task(self, scan_event_id, file_path):
         file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
         logger.info(f"[FileScan] Event {scan_event_id}: START — file='{file_name}', size={file_size} bytes")
 
-        # Scan with VirusTotal (timeout 5 min)
-        logger.info(f"[FileScan] Event {scan_event_id}: Uploading to VirusTotal...")
+        # Scan with Local Threat Engine & ClamAV Sandbox (100% on-premise)
+        logger.info(f"[FileScan] Event {scan_event_id}: Scanning with Local Zero-Trust Sandbox...")
         vt = VTClient()
-        vt_result = vt.scan_file(file_path, timeout=300)
+        vt_result = vt.scan_file(file_path, timeout=60)
         elapsed = time.time() - start_time
-        logger.info(f"[FileScan] Event {scan_event_id}: VT scan returned after {elapsed:.1f}s — result={'OK' if vt_result else 'None'}")
+        logger.info(f"[FileScan] Event {scan_event_id}: Sandbox scan returned after {elapsed:.1f}s — result={'OK' if vt_result else 'None'}")
 
         if vt_result:
             malicious = vt_result.get('malicious', 0)
@@ -2180,30 +2184,29 @@ def perform_file_scan_task(self, scan_event_id, file_path):
             harmless = vt_result.get('harmless', 0)
             undetected = vt_result.get('undetected', 0)
             total = vt_result.get('total', 0) or (malicious + suspicious + harmless + undetected)
-
-            # Calculate risk score (0-100)
-            if total > 0:
-                risk_score = min(100, int(((malicious * 1.0 + suspicious * 0.5) / total) * 100))
-            else:
-                risk_score = 0
+            risk_score = vt_result.get('risk_score', 0)
+            forensic_evidence = vt_result.get('forensic_evidence', [])
+            file_metadata = vt_result.get('file_metadata', {})
+            clamav = vt_result.get('clamav', {})
+            docker_sandbox = vt_result.get('docker_sandbox', {})
+            ai_explanation = vt_result.get('ai_explanation', '')
+            threat_family = vt_result.get('threat_family')
 
             # Determine risk level
-            if malicious >= 5 or risk_score >= 70:
+            if malicious >= 1 or risk_score >= 70:
                 risk_level = RiskLevel.RED
-            elif malicious >= 1 or suspicious >= 3 or risk_score >= 30:
+            elif suspicious >= 1 or risk_score >= 30:
                 risk_level = RiskLevel.YELLOW
             else:
                 risk_level = RiskLevel.GREEN
 
             details = []
-            if malicious > 0:
-                details.append(f"⚠️ {malicious}/{total} engine phát hiện mã độc.")
-            if suspicious > 0:
-                details.append(f"🔍 {suspicious}/{total} engine đánh giá đáng ngờ.")
-            if harmless > 0:
-                details.append(f"✅ {harmless}/{total} engine đánh giá an toàn.")
-            if undetected > 0:
-                details.append(f"❔ {undetected}/{total} engine không phát hiện gì.")
+            if clamav.get('infected'):
+                details.append(f"Chữ ký mã độc xác thực bởi ClamAV: {clamav.get('threat_name')}")
+            for proof in forensic_evidence:
+                details.append(f"[{proof.get('severity', 'INFO')}] {proof.get('description', '')}")
+            if not details:
+                details.append("Không phát hiện chữ ký độc hại hay cấu trúc bất thường.")
 
             scan_event.result_json = {
                 'file_name': file_name,
@@ -2215,21 +2218,28 @@ def perform_file_scan_task(self, scan_event_id, file_path):
                 'total': total,
                 'risk_score': risk_score,
                 'risk_level': risk_level,
+                'verdict': vt_result.get('verdict', 'SAFE'),
+                'threat_family': threat_family,
+                'forensic_evidence': forensic_evidence,
+                'file_metadata': file_metadata,
+                'clamav': clamav,
+                'docker_sandbox': docker_sandbox,
+                'ai_explanation': ai_explanation,
                 'details': details,
-                'summary': f"Kết quả quét: {malicious} mã độc, {suspicious} đáng ngờ trên tổng {total} engine.",
+                'summary': f"Kết quả phân tích: {malicious} chỉ số độc hại, {suspicious} bất thường trên hệ thống Sandbox ClamAV.",
+                'engine': 'Sentinel Zero-Trust Local Sandbox',
             }
             scan_event.risk_score = risk_score
             scan_event.risk_level = risk_level
         else:
-            # VT scan failed or returned None
-            logger.warning(f"[FileScan] Event {scan_event_id}: VirusTotal returned no result after {elapsed:.1f}s")
+            logger.warning(f"[FileScan] Event {scan_event_id}: Sandbox returned no result after {elapsed:.1f}s")
             scan_event.result_json = {
                 'file_name': file_name,
                 'file_size': file_size,
                 'risk_score': 0,
                 'risk_level': RiskLevel.GREEN,
-                'details': ['Không thể quét file qua VirusTotal. Vui lòng thử lại sau.'],
-                'summary': 'Quét file thất bại. Không có kết quả từ VirusTotal.',
+                'details': ['Không thể hoàn tất phân tích tệp tin. Vui lòng thử lại.'],
+                'summary': 'Quét tệp tin thất bại.',
             }
             scan_event.risk_score = 0
             scan_event.risk_level = RiskLevel.GREEN

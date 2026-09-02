@@ -1,28 +1,23 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Scan File - ShieldCall VN{% endblock %}
-
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
-<div class="max-w-4xl mx-auto" x-data="fileScanHandler()">
+<div class="min-h-screen py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto" x-data="fileScanHandler()">
     <!-- Header -->
-    <div class="text-center mb-12" data-aos="fade-up">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-pink-500/10 text-pink-500 mb-6 border border-pink-500/20 shadow-lg shadow-pink-500/10" data-aos="zoom-in" data-aos-delay="100">
-            <i class="bi bi-file-earmark-medical text-3xl"></i>
+    <div class="text-center mb-10" data-aos="fade-down">
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink-500/10 border border-pink-500/20 text-pink-400 text-xs font-black uppercase tracking-widest mb-4">
+            <i class="bi bi-shield-lock-fill"></i> Zero-Trust Docker Sandbox
         </div>
-        <h1 class="text-4xl font-black text-white mb-4 tracking-tight leading-none" data-aos="fade-up" data-aos-delay="200">
-            Scan <span class="glow-text text-pink-500">File</span> Nghi Vấn
+        <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight mb-3">
+            Phân Tích File & Mã Độc Chuyên Sâu
         </h1>
-        <p class="text-white/40 text-lg max-w-2xl mx-auto leading-relaxed" data-aos="fade-up" data-aos-delay="300">
-            Phát hiện mã độc, phần mềm gián điệp và các tệp tin độc hại bằng công nghệ VirusTotal & AI.
+        <p class="text-white/60 text-sm sm:text-base max-w-2xl mx-auto">
+            Cách ly và mổ xẻ tệp tin trong môi trường Docker Container độc lập. Phát hiện Ransomware, Macro Office, Trojan, Shellcode, và Virus ẩn sâu bằng YARA, OLETools, PEFile và ClamAV.
         </p>
     </div>
 
     <!-- Upload Card -->
-    <div x-show="!result" class="liquid-card p-8 sm:p-12 mb-8 relative group" data-aos="fade-up" data-aos-delay="400">
-        <div class="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-        
+    <div x-show="!result" class="liquid-card p-8 sm:p-12 mb-8 relative group" data-aos="fade-up">
         <div class="relative z-10">
             <template x-if="!file">
                 <div class="flex flex-col items-center justify-center py-12 border-2 border-dashed border-white/10 rounded-2xl hover:border-pink-500/30 transition-all cursor-pointer"
@@ -34,12 +29,12 @@
                     <input type="file" x-ref="fileInput" class="hidden" @change="handleFileSelect($event)">
                     <i class="bi bi-cloud-arrow-up text-5xl text-white/20 mb-4 group-hover:text-pink-500/50 transition-colors"></i>
                     <p class="text-white font-bold text-lg mb-2">Click hoặc kéo thả file vào đây</p>
-                    <p class="text-white/40 text-sm">Hỗ trợ .exe, .zip, .pdf, .apk và nhiều định dạng khác (Max: 32MB)</p>
+                    <p class="text-white/40 text-sm">Hỗ trợ .exe, .zip, .rar, .pdf, .docx, .xlsx, .apk, .bat, .ps1, .vbs, .sh, .bin (Tối đa 500MB)</p>
                 </div>
             </template>
 
             <template x-if="file">
-                <div class="bg-black/20 rounded-2xl p-6 border border-white/10 flex items-center gap-4">
+                <div class="bg-black/30 rounded-2xl p-6 border border-white/10 flex items-center gap-4">
                     <div class="w-14 h-14 rounded-xl bg-pink-500/10 flex items-center justify-center text-pink-500 text-2xl">
                         <i class="bi" :class="getFileIcon(file.name)"></i>
                     </div>
@@ -47,90 +42,218 @@
                         <h4 class="text-white font-bold truncate" x-text="file.name"></h4>
                         <p class="text-white/40 text-xs" x-text="formatBytes(file.size)"></p>
                     </div>
-                    <button @click="reset()" x-show="!loading" class="text-white/30 hover:text-white transition-colors">
+                    <button @click="reset()" x-show="!loading && !scanning" class="text-white/30 hover:text-white transition-colors">
                         <i class="bi bi-x-circle text-xl"></i>
                     </button>
-                    
                     <div x-show="loading" class="w-8 h-8 rounded-full border-2 border-pink-500/20 border-t-pink-500 animate-spin"></div>
                 </div>
             </template>
 
             <div class="mt-8 flex flex-col items-center gap-6" x-show="file && !loading && !scanning">
-                <!-- Turnstile Widget -->
                 <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'" data-size="flexible"></div>
                 
                 <button @click="startScan()" class="liquid-button bg-pink-500 hover:bg-pink-400 text-white px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-pink-500/25 flex items-center gap-3">
-                    <i class="bi bi-shield-shaded"></i> Bắt đầu phân tích
+                    <i class="bi bi-shield-check"></i> Bắt Đầu Phân Tích Sandbox
                 </button>
             </div>
             
-            <!-- Progress Stepper -->
-            <div x-show="loading || scanning" class="mt-8 space-y-6">
-                <div class="relative pt-1">
-                    <div class="flex mb-2 items-center justify-between text-xs">
-                        <span class="font-bold text-pink-400 uppercase tracking-widest" x-text="statusMsg"></span>
-                        <span class="text-white/40 font-bold" x-text="progress + '%'"></span>
-                    </div>
-                    <div class="overflow-hidden h-2 text-xs flex rounded-full bg-white/5 border border-white/5">
-                        <div :style="'width: ' + progress + '%'" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-700"></div>
-                    </div>
+            <!-- Progress -->
+            <div x-show="loading || scanning" class="mt-8 space-y-4">
+                <div class="flex items-center justify-between text-xs font-bold">
+                    <span class="text-pink-400 uppercase tracking-widest flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-pink-400 animate-ping"></span>
+                        <span x-text="statusMsg"></span>
+                    </span>
+                    <span class="text-white/50" x-text="progress + '%'"></span>
+                </div>
+                <div class="overflow-hidden h-2.5 rounded-full bg-white/5 border border-white/5">
+                    <div :style="'width: ' + progress + '%'" class="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-400 transition-all duration-500"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Results Section -->
+    <!-- Comprehensive Results Section -->
     <template x-if="result">
-        <div class="animate__animated animate__fadeInUp">
+        <div class="animate__animated animate__fadeInUp space-y-6">
+            <!-- Main Verdict Card -->
             <div :class="{
-                'bg-red-500/10 border-red-500/20': result.risk_level === 'RED',
-                'bg-yellow-500/10 border-yellow-500/20': result.risk_level === 'YELLOW',
-                'bg-green-500/10 border-green-500/20': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
-            }" class="p-8 rounded-3xl border-2 mb-8">
+                'bg-red-500/10 border-red-500/30 shadow-red-500/10': result.risk_level === 'RED',
+                'bg-yellow-500/10 border-yellow-500/30 shadow-yellow-500/10': result.risk_level === 'YELLOW',
+                'bg-emerald-500/10 border-emerald-500/30 shadow-emerald-500/10': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
+            }" class="p-8 rounded-3xl border shadow-xl">
                 <div class="flex flex-col sm:flex-row items-center gap-8">
-                    <div class="relative">
+                    <!-- Gauge -->
+                    <div class="relative flex-shrink-0">
                         <svg class="w-32 h-32 transform -rotate-90">
-                            <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="8" fill="transparent" class="text-white/5" />
-                            <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="8" fill="transparent" 
-                                    :stroke-dasharray="364.4" :stroke-dashoffset="364.4 * (1 - result.risk_score/100)"
+                            <circle cx="64" cy="64" r="54" stroke="currentColor" stroke-width="8" fill="transparent" class="text-white/5" />
+                            <circle cx="64" cy="64" r="54" stroke="currentColor" stroke-width="8" fill="transparent" 
+                                    :stroke-dasharray="339.3" :stroke-dashoffset="339.3 * (1 - result.risk_score/100)"
                                     :class="{
                                         'text-red-500': result.risk_level === 'RED',
                                         'text-yellow-400': result.risk_level === 'YELLOW',
-                                        'text-green-400': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
+                                        'text-emerald-400': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
                                     }" class="transition-all duration-1000 ease-out" />
                         </svg>
                         <div class="absolute inset-0 flex flex-col items-center justify-center">
                             <span class="text-3xl font-black text-white" x-text="result.risk_score"></span>
-                            <span class="text-[8px] uppercase font-black text-white/30">Rủi ro</span>
+                            <span class="text-[9px] uppercase font-bold text-white/40">Điểm Rủi Ro</span>
                         </div>
                     </div>
                     
-                    <div class="flex-1 text-center sm:text-left">
-                        <div class="flex items-center justify-center sm:justify-start gap-2 mb-2">
+                    <div class="flex-1 text-center sm:text-left space-y-2">
+                        <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                             <span :class="{
-                                'bg-red-500': result.risk_level === 'RED',
-                                'bg-yellow-400': result.risk_level === 'YELLOW',
-                                'bg-green-400': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
-                            }" class="px-3 py-1 rounded-full text-[10px] font-black uppercase text-black" x-text="result.risk_level === 'RED' ? 'Độc hại' : (result.risk_level === 'YELLOW' ? 'Nghi vấn' : 'An toàn')"></span>
+                                'bg-red-500 text-white': result.risk_level === 'RED',
+                                'bg-yellow-400 text-black': result.risk_level === 'YELLOW',
+                                'bg-emerald-400 text-black': result.risk_level === 'SAFE' || result.risk_level === 'GREEN'
+                            }" class="px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider" 
+                            x-text="result.risk_level === 'RED' ? 'MÃ ĐỘC NGUY HIỂM' : (result.risk_level === 'YELLOW' ? 'CẢNH BÁO NGHI VẤN' : 'TỆP TIN AN TOÀN')"></span>
+
+                            <span class="bg-white/10 text-white/70 px-3 py-1 rounded-full text-xs font-medium border border-white/5 flex items-center gap-1.5">
+                                <i class="bi bi-box-seam text-pink-400"></i> Sentinel Docker Sandbox
+                            </span>
                         </div>
-                        <h2 class="text-2xl font-black text-white mb-2" x-text="result.risk_level === 'RED' ? 'PHÁT HIỆN MÃ ĐỘC!' : 'Tệp tin có vẻ an toàn'"></h2>
-                        <ul class="space-y-1.5">
-                            <template x-for="detail in result.details" :key="detail">
-                                <li class="flex items-center gap-2 text-white/60 text-sm">
-                                    <i class="bi bi-check2-circle text-cyan-400"></i>
-                                    <span x-text="detail"></span>
-                                </li>
-                            </template>
-                        </ul>
+
+                        <h2 class="text-2xl font-black text-white" x-text="result.file_name"></h2>
+                        <p class="text-white/60 text-sm" x-text="result.summary"></p>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- AI Low-Tech Deep Analysis Card (Streaming) -->
+            <div class="liquid-card p-6 sm:p-8 border border-pink-500/20 bg-gradient-to-br from-pink-500/[0.03] to-purple-500/[0.03] rounded-3xl shadow-2xl relative overflow-hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center text-white text-xl shadow-lg shadow-pink-500/20 flex-shrink-0">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-lg font-black text-white">Báo Cáo Giải Thích Chi Tiết (AI Dành Cho Người Dùng)</h3>
+                                <span class="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 text-[10px] font-black uppercase">Dễ Hiểu</span>
+                            </div>
+                            <p class="text-xs text-white/50">Phân tích bản chất tệp tin, kịch bản hacker khai thác và hướng dẫn phòng vệ từng bước</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="copyAIReport()" x-show="aiExplanation && !aiStreaming" class="text-xs bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-2 rounded-xl text-white/80 hover:text-white transition-all flex items-center gap-1.5">
+                            <i class="bi bi-clipboard"></i> <span x-text="copied ? 'Đã sao chép!' : 'Sao chép'"></span>
+                        </button>
+                        <button @click="startAIAnalysis()" :disabled="aiStreaming" class="text-xs bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/30 px-4 py-2 rounded-xl text-pink-300 font-bold transition-all flex items-center gap-1.5">
+                            <i class="bi bi-arrow-clockwise" :class="aiStreaming ? 'animate-spin' : ''"></i> 
+                            <span x-text="aiStreaming ? 'Đang viết báo cáo...' : 'Tạo Lại Báo Cáo'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Streaming Content Body -->
+                <div class="pt-6">
+                    <template x-if="aiStreaming && !aiExplanation">
+                        <div class="flex items-center gap-3 py-8 text-pink-400 text-sm font-medium">
+                            <div class="w-5 h-5 rounded-full border-2 border-pink-400/20 border-t-pink-400 animate-spin"></div>
+                            <span>AI đang tổng hợp dữ liệu pháp y và soạn thảo báo cáo dễ hiểu...</span>
+                        </div>
+                    </template>
+
+                    <template x-if="aiExplanation">
+                        <div class="prose prose-invert max-w-none text-white/80 text-sm leading-relaxed space-y-4" x-html="renderMarkdown(aiExplanation)"></div>
+                    </template>
+
+                    <template x-if="aiStreaming && aiExplanation">
+                        <span class="inline-block w-2 h-4 bg-pink-400 animate-pulse ml-1 align-middle"></span>
+                    </template>
+
+                    <template x-if="!aiStreaming && !aiExplanation">
+                        <div class="text-center py-8 space-y-3">
+                            <p class="text-white/50 text-sm">Chưa tạo báo cáo AI. Nhấn nút bên dưới để nhận phân tích chi tiết.</p>
+                            <button @click="startAIAnalysis()" class="px-6 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-bold text-xs uppercase tracking-wider transition-all">
+                                <i class="bi bi-magic mr-1"></i> Tạo Báo Cáo AI Dễ Hiểu
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Forensic Proofs Card Grid -->
+            <div class="liquid-card p-6 border border-white/10 rounded-2xl" x-show="result.forensic_evidence && result.forensic_evidence.length > 0">
+                <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <i class="bi bi-search text-pink-400"></i> Bằng Chứng Kỹ Thuật Pháp Y (Forensic Proofs)
+                </h3>
+                <div class="space-y-3">
+                    <template x-for="(evidence, idx) in result.forensic_evidence" :key="idx">
+                        <div class="bg-black/30 border border-white/10 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span :class="{
+                                        'bg-red-500/20 text-red-400 border-red-500/30': evidence.severity === 'CRITICAL' || evidence.severity === 'HIGH',
+                                        'bg-yellow-500/20 text-yellow-400 border-yellow-500/30': evidence.severity === 'MEDIUM',
+                                        'bg-cyan-500/20 text-cyan-400 border-cyan-500/30': evidence.severity === 'LOW' || evidence.severity === 'INFO'
+                                    }" class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase border" x-text="evidence.severity"></span>
+                                    <span class="text-white font-semibold text-sm" x-text="evidence.description"></span>
+                                </div>
+                                <p class="text-white/40 text-xs font-mono" x-show="evidence.evidence" x-text="'Chi tiết: ' + evidence.evidence"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Cryptographic Hashes & Entropy Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Hashes -->
+                <div class="liquid-card p-6 border border-white/10 rounded-2xl space-y-3">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
+                        <i class="bi bi-fingerprint text-pink-400"></i> Chữ Ký Mã Hóa (Hashes)
+                    </h3>
+                    <div class="space-y-2 text-xs font-mono">
+                        <div>
+                            <span class="text-white/40">SHA-256:</span>
+                            <div class="text-white/80 break-all bg-black/40 p-2 rounded mt-1 border border-white/5" x-text="result.file_metadata?.sha256 || 'N/A'"></div>
+                        </div>
+                        <div>
+                            <span class="text-white/40">MD5:</span>
+                            <div class="text-white/80 break-all bg-black/40 p-2 rounded mt-1 border border-white/5" x-text="result.file_metadata?.md5 || 'N/A'"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shannon Entropy & Engine -->
+                <div class="liquid-card p-6 border border-white/10 rounded-2xl space-y-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
+                        <i class="bi bi-activity text-cyan-400"></i> Độ Hỗn Loạn Entropy & Antivirus
+                    </h3>
+                    <div>
+                        <div class="flex justify-between text-xs font-bold mb-1">
+                            <span class="text-white">Shannon Entropy: <span class="text-pink-400" x-text="result.file_metadata?.entropy || '0.0'"></span> / 8.0</span>
+                            <span class="text-white/40" x-text="(result.file_metadata?.entropy > 7.2) ? 'Nén/Mã Hóa Cao' : 'Bình Thường'"></span>
+                        </div>
+                        <div class="overflow-hidden h-2 rounded-full bg-white/5 border border-white/5">
+                            <div :style="'width: ' + ((result.file_metadata?.entropy || 0) / 8.0 * 100) + '%'"
+                                 :class="(result.file_metadata?.entropy > 7.2) ? 'bg-red-500' : 'bg-cyan-400'" class="h-full"></div>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-white/5 space-y-1.5 text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-white/50">ClamAV Engine:</span>
+                            <span class="text-emerald-400 font-semibold" x-text="result.clamav?.available ? (result.clamav?.infected ? 'Phát hiện độc hại' : 'Đã quét (Sạch)') : 'Sẵn sàng'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-white/50">Docker Sandbox:</span>
+                            <span class="text-cyan-400 font-semibold">Zero-Trust Capped</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Actions -->
-            <div class="flex flex-wrap gap-4">
-                <button @click="reset()" class="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-3 rounded-xl text-white font-bold transition-all">Thử file khác</button>
-                <a :href="'/report/?scammer_name=' + encodeURIComponent(file.name) + '&target_type=file'" class="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 px-8 py-3 rounded-xl text-red-500 font-bold transition-all flex items-center gap-2">
-                    <i class="bi bi-exclamation-triangle"></i> Báo cáo file này
+            <div class="flex flex-wrap gap-4 pt-4">
+                <button @click="reset()" class="bg-white/5 hover:bg-white/10 border border-white/10 px-8 py-3.5 rounded-xl text-white font-bold transition-all">
+                    <i class="bi bi-arrow-repeat mr-1"></i> Quét File Khác
+                </button>
+                <a :href="'/report/?scammer_name=' + encodeURIComponent(file ? file.name : '') + '&target_type=file'" 
+                   class="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 px-8 py-3.5 rounded-xl text-red-400 font-bold transition-all flex items-center gap-2">
+                    <i class="bi bi-exclamation-triangle"></i> Báo Cáo Mã Độc Này
                 </a>
             </div>
         </div>
@@ -151,16 +274,31 @@ function fileScanHandler() {
         result: null,
         scanId: null,
         statusInterval: null,
+        aiStreaming: false,
+        aiExplanation: '',
+        copied: false,
 
         handleFileSelect(e) {
-            this.file = e.target.files[0];
+            const selected = e.target.files[0];
+            if (selected && selected.size > 500 * 1024 * 1024) {
+                window.showToast('Tệp quá lớn. Dung lượng tối đa là 500 MB.', 'error');
+                return;
+            }
+            this.file = selected;
             this.result = null;
+            this.aiExplanation = '';
         },
 
         handleDrop(e) {
             this.dragging = false;
-            this.file = e.dataTransfer.files[0];
+            const dropped = e.dataTransfer.files[0];
+            if (dropped && dropped.size > 500 * 1024 * 1024) {
+                window.showToast('Tệp quá lớn. Dung lượng tối đa là 500 MB.', 'error');
+                return;
+            }
+            this.file = dropped;
             this.result = null;
+            this.aiExplanation = '';
         },
 
         reset() {
@@ -169,22 +307,66 @@ function fileScanHandler() {
             this.loading = false;
             this.scanning = false;
             this.progress = 0;
+            this.aiStreaming = false;
+            this.aiExplanation = '';
+            this.copied = false;
             if (this.statusInterval) clearInterval(this.statusInterval);
+        },
+
+        getFileIcon(name) {
+            if (!name) return 'bi-file-earmark';
+            const ext = name.split('.').pop().toLowerCase();
+            if (['exe', 'msi', 'bat', 'cmd', 'ps1', 'vbs', 'sh', 'bin'].includes(ext)) return 'bi-file-earmark-binary text-red-400';
+            if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'bi-file-earmark-zip text-yellow-400';
+            if (['pdf'].includes(ext)) return 'bi-file-earmark-pdf text-red-400';
+            if (['docx', 'xlsx', 'pptx', 'doc', 'xls'].includes(ext)) return 'bi-file-earmark-word text-blue-400';
+            if (['apk'].includes(ext)) return 'bi-phone text-emerald-400';
+            return 'bi-file-earmark-medical text-pink-400';
+        },
+
+        formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        },
+
+        renderMarkdown(text) {
+            if (!text) return '';
+            if (typeof marked !== 'undefined' && marked.parse) {
+                return marked.parse(text);
+            }
+            // Basic fallback formatter
+            return text
+                .replace(/^### (.*$)/gim, '<h4 class="text-base font-bold text-pink-300 mt-4 mb-2">$1</h4>')
+                .replace(/^## (.*$)/gim, '<h3 class="text-lg font-black text-white mt-5 mb-2">$1</h3>')
+                .replace(/^# (.*$)/gim, '<h2 class="text-xl font-black text-white mt-6 mb-3">$1</h2>')
+                .replace(/\*\*(.*?)\*\*/gim, '<strong class="font-bold text-white">$1</strong>')
+                .replace(/^\- (.*$)/gim, '<li class="ml-4 list-disc text-white/80">$1</li>')
+                .replace(/\n\n/gim, '<br/><br/>');
+        },
+
+        copyAIReport() {
+            if (!this.aiExplanation) return;
+            navigator.clipboard.writeText(this.aiExplanation);
+            this.copied = true;
+            setTimeout(() => { this.copied = false; }, 2000);
         },
 
         async startScan() {
             if (!this.file) return;
             this.loading = true;
-            this.progress = 10;
-            this.statusMsg = 'Đang tải file lên hệ thống...';
+            this.progress = 15;
+            this.statusMsg = 'Đang tải file lên Sandbox...';
 
             const formData = new FormData();
             formData.append('file', this.file);
             
-            // Get Turnstile token
             const turnstileResponse = document.querySelector('[name="cf-turnstile-response"]')?.value;
             if (!turnstileResponse) {
                 window.showToast('Vui lòng hoàn thành xác minh anti-spam.', 'warning');
+                this.loading = false;
                 return;
             }
             formData.append('cf-turnstile-response', turnstileResponse);
@@ -201,10 +383,10 @@ function fileScanHandler() {
                     this.scanId = data.scan_id;
                     this.loading = false;
                     this.scanning = true;
-                    this.statusMsg = 'VirusTotal đang phân tích file...';
+                    this.statusMsg = 'Docker Sandbox đang phân tích...';
                     this.startPolling();
                 } else {
-                    window.showToast(data.error || 'Lỗi khi upload file.', 'error');
+                    window.showToast(data.error || 'Lỗi khi tải file lên.', 'error');
                     this.reset();
                 }
             } catch (e) {
@@ -225,54 +407,85 @@ function fileScanHandler() {
                         this.result = data.result;
                         this.scanning = false;
                         clearInterval(this.statusInterval);
+                        
+                        // Auto-start AI Deep Analysis streaming for user
+                        this.startAIAnalysis();
                     } else if (data.status === 'failed') {
                         window.showToast('Hệ thống gặp lỗi khi phân tích file.', 'error');
                         this.reset();
                     } else {
-                        // Smooth progress simulation
-                        if (this.progress < 90) this.progress += 2;
+                        if (this.progress < 90) this.progress += 3;
                         dots = (dots + 1) % 4;
-                        this.statusMsg = 'VirusTotal đang phân tích' + '.'.repeat(dots);
+                        this.statusMsg = 'Zero-Trust Sandbox đang phân tích' + '.'.repeat(dots);
                     }
                 } catch (e) {
                     console.error('Polling error', e);
                 }
-            }, 2000);
+            }, 1500);
         },
 
-        getFileIcon(name) {
-            const ext = name.split('.').pop().toLowerCase();
-            const map = {
-                'pdf': 'bi-file-earmark-pdf',
-                'zip': 'bi-file-earmark-zip',
-                'rar': 'bi-file-earmark-zip',
-                'doc': 'bi-file-earmark-word',
-                'docx': 'bi-file-earmark-word',
-                'exe': 'bi-file-earmark-play',
-                'msi': 'bi-file-earmark-play',
-                'apk': 'bi-file-earmark-code',
-                'png': 'bi-file-earmark-image',
-                'jpg': 'bi-file-earmark-image',
-                'jpeg': 'bi-file-earmark-image',
-            };
-            return map[ext] || 'bi-file-earmark-binary';
-        },
+        async startAIAnalysis() {
+            if (!this.result) return;
+            this.aiStreaming = true;
+            this.aiExplanation = '';
 
-        formatBytes(bytes, decimals = 2) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const dm = decimals < 0 ? 0 : decimals;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+            try {
+                const resp = await fetch('/api/v1/scan/analyze/stream/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        scan_id: this.scanId,
+                        scan_type: 'file',
+                        scan_data: this.result,
+                        raw_input: this.file ? this.file.name : (this.result.file_name || 'Tệp tin')
+                    })
+                });
+
+                if (!resp.ok) {
+                    this.aiStreaming = false;
+                    this.aiExplanation = this.result.ai_explanation || this.result.summary || 'Không thể tạo báo cáo AI vào lúc này.';
+                    return;
+                }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // keep last incomplete line
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const parsed = JSON.parse(line.substring(6));
+                                if (parsed.chunk) {
+                                    this.aiExplanation += parsed.chunk;
+                                }
+                                if (parsed.done) {
+                                    this.aiStreaming = false;
+                                }
+                            } catch (err) {
+                                console.error('SSE parse error:', err);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('AI streaming error:', err);
+                this.aiExplanation = this.result.ai_explanation || 'Lỗi kết nối tới mô hình AI.';
+            } finally {
+                this.aiStreaming = false;
+            }
         }
-    }
-}
-
-function getCSRFToken() {
-    return document.cookie.split('; ')
-        .find(row => row.startsWith('csrftoken='))
-        ?.split('=')[1];
+    };
 }
 </script>
 {% endblock %}

@@ -1,11 +1,11 @@
-const { launchBrowser } = require('./manager');
+const { launchBrowser, incrementRenderCount } = require('./manager');
 const { getRandomUA, applyHumanizedPageSetup } = require('./utils');
 
 let activePage = null;
 const sessionUA = getRandomUA();
-const pageActivity = new Map();
+const pageActivity = new WeakMap();
 
-const IDLE_TAB_TIMEOUT_MS = Number(process.env.PUPPETEER_IDLE_TAB_TIMEOUT_MS || 15 * 60 * 1000);
+const IDLE_TAB_TIMEOUT_MS = Number(process.env.PUPPETEER_IDLE_TAB_TIMEOUT_MS || 10 * 60 * 1000);
 const TAB_CLEANUP_INTERVAL_MS = Number(process.env.PUPPETEER_TAB_CLEANUP_INTERVAL_MS || 60 * 1000);
 
 let tabCleanupTimer = null;
@@ -26,7 +26,6 @@ function bindPageActivity(page) {
   page.on('domcontentloaded', onActivity);
   page.on('load', onActivity);
   page.on('close', () => {
-    pageActivity.delete(page);
     if (activePage === page) {
       activePage = null;
     }
@@ -36,33 +35,26 @@ function bindPageActivity(page) {
 }
 
 async function cleanupIdleTabs() {
-  const now = Date.now();
-
-  for (const [page, lastActiveAt] of pageActivity.entries()) {
-    if (page.isClosed()) {
-      pageActivity.delete(page);
-      continue;
-    }
-
-    if (page === activePage) continue;
-
-    const idleMs = now - lastActiveAt;
-    if (idleMs >= IDLE_TAB_TIMEOUT_MS) {
-      try {
-        await page.close();
-      } catch {
-      } finally {
-        pageActivity.delete(page);
+  // Gracefully close inactive pages
+  try {
+    const browser = await launchBrowser();
+    const pages = await browser.pages();
+    for (const page of pages) {
+      if (page === activePage) continue;
+      const lastActive = pageActivity.get(page) || 0;
+      if (Date.now() - lastActive >= IDLE_TAB_TIMEOUT_MS) {
+        if (!page.isClosed()) {
+          await page.close().catch(() => {});
+        }
       }
     }
-  }
+  } catch {}
 }
 
 function startTabAutoCleanup() {
   if (tabCleanupTimer) return;
   tabCleanupTimer = setInterval(() => {
-    cleanupIdleTabs().catch(() => {
-    });
+    cleanupIdleTabs().catch(() => {});
   }, TAB_CLEANUP_INTERVAL_MS);
 
   if (typeof tabCleanupTimer.unref === 'function') {
@@ -87,7 +79,7 @@ async function openPage(url) {
   }
 
   touchPage(activePage);
-  await activePage.goto(url, { waitUntil: 'domcontentloaded' });
+  await activePage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   touchPage(activePage);
 
   return activePage.url();
@@ -101,14 +93,14 @@ async function ensureActivePage(url = 'about:blank') {
     activePage = await browser.newPage();
     await applyHumanizedPageSetup(activePage, sessionUA);
     bindPageActivity(activePage);
-    await activePage.goto(url, { waitUntil: 'domcontentloaded' });
+    await activePage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   }
 
   touchPage(activePage);
   return activePage.url();
 }
 
-async function renderPage(url, timeout = 20000) {
+async function renderPage(url, timeout = 25000) {
   startTabAutoCleanup();
 
   const browser = await launchBrowser();
@@ -118,18 +110,34 @@ async function renderPage(url, timeout = 20000) {
 
   try {
     await applyHumanizedPageSetup(page, sessionUA);
+
+    // Optimize memory & bandwidth: Block heavy media / audio / video / fonts
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const resourceType = req.resourceType();
+      if (['media', 'font', 'websocket'].includes(resourceType)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+
     await page.goto(url, { timeout, waitUntil: 'domcontentloaded' });
+
+    // Wait slightly for dynamic JS rendering if body is still sparse
+    await new Promise(r => setTimeout(r, 800));
 
     const title = await page.title();
     const content = await page.evaluate(() => document.body?.innerText || '');
     const html = await page.content();
 
+    await incrementRenderCount();
+
     return { title, content, html };
   } finally {
     if (!page.isClosed()) {
-      await page.close();
+      await page.close().catch(() => {});
     }
-    pageActivity.delete(page);
   }
 }
 
