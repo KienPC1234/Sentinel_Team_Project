@@ -18,6 +18,10 @@
     --body-bg: linear-gradient(135deg, var(--gradient-1), var(--gradient-2), var(--gradient-3));
 }
 
+[x-cloak], [x-cloak] * {
+    display: none !important;
+}
+
 * {
     font-family: 'Inter', sans-serif;
 }
@@ -308,12 +312,12 @@ select.liquid-select {
     min-width: 100%;
     width: max-content;
     max-width: min(90vw, 560px);
-    background: rgba(13, 13, 31, 0.95);
+    background: #0d111e !important;
     backdrop-filter: blur(32px) saturate(2);
     -webkit-backdrop-filter: blur(32px) saturate(2);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
     border-radius: 1.25rem;
-    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.06);
     z-index: 999999;
     overflow: hidden;
     max-height: min(320px, 60vh);
@@ -478,10 +482,10 @@ select.liquid-select {
 }
 
 .nav-scan-menu {
-    background: rgba(13, 13, 31, 0.92);
+    background: #0d111e !important;
     backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
 }
 
 .nav-scan-item {
@@ -771,11 +775,11 @@ select.liquid-input {
 }
 
 .dropdown-blur {
-    background: rgba(13, 13, 31, 0.85) !important;
+    background: #0d111e !important;
     backdrop-filter: blur(40px) saturate(1.8) !important;
     -webkit-backdrop-filter: blur(40px) saturate(1.8) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
 }
 
 .forum-grid {

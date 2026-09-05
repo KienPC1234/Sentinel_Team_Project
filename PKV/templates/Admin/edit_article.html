@@ -132,7 +132,7 @@
                             <span x-text="label" class="truncate"></span>
                             <i class="bi bi-chevron-down liquid-select-arrow"></i>
                         </div>
-                        <div x-show="open" x-transition:enter="liquid-select-dropdown entering" x-transition:enter-end="liquid-select-dropdown entered" x-transition:leave="liquid-select-dropdown entering" class="liquid-select-dropdown">
+                        <div x-show="open" x-cloak style="display: none;" x-transition:enter="liquid-select-dropdown entering" x-transition:enter-end="liquid-select-dropdown entered" x-transition:leave="liquid-select-dropdown entering" class="liquid-select-dropdown">
                             <template x-for="option in options" :key="option.value">
                                 <div class="liquid-select-option" :class="{ 'selected': value === option.value }" @click="select(option)">
                                     <span x-text="option.label"></span>

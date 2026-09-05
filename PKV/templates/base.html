@@ -171,9 +171,22 @@
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
-    <!-- Animate.css & AOS -->
+    <!-- Animate.css -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+    {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'root' or enable_aos %}
+    <!-- AOS Animation (Homepage only) -->
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    {% else %}
+    <!-- Disable AOS on non-home pages for performance and eliminate layout flicker -->
+    <style>
+        [data-aos] {
+            opacity: 1 !important;
+            transform: none !important;
+            transition: none !important;
+            visibility: visible !important;
+        }
+    </style>
+    {% endif %}
 
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -828,7 +841,9 @@
     </script>
 
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'root' or enable_aos %}
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    {% endif %}
 
     <script>
         // Global utility for phone normalization
@@ -896,15 +911,26 @@
             }));
         });
 
+        {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'root' or enable_aos %}
         document.addEventListener('DOMContentLoaded', () => {
-            AOS.init({
-                duration: 1000,
-                easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
-                once: true,
-                offset: 50
-            });
+            if (typeof AOS !== 'undefined') {
+                AOS.init({
+                    duration: 800,
+                    easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                    once: true,
+                    offset: 40,
+                    disable: 'mobile'
+                });
+            }
         });
+        {% endif %}
     </script>
+
+    <style>
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
 
     {% block extra_css %}{% endblock %}
 </head>
@@ -954,11 +980,11 @@
 
                     <!-- Desktop Links -->
                     <div class="hidden lg:flex items-center gap-2">
-                        <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
-                            <button class="nav-link px-4 py-2 rounded-xl flex items-center gap-2" :class="open ? 'bg-white/5 text-cyan-400' : 'text-white/60'">
+                        <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false" @click.outside="open = false">
+                            <button @click="open = !open" class="nav-link px-4 py-2 rounded-xl flex items-center gap-2" :class="open ? 'bg-white/5 text-cyan-400' : 'text-white/60'">
                                 <i class="bi bi-search"></i> Kiểm tra <i class="bi bi-chevron-down text-[10px] opacity-50"></i>
                             </button>
-                            <div x-show="open" x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl">
+                            <div x-show="open" x-cloak x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl" style="display: none;">
                                 <a href="/scan/phone/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl">
                                     <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center"><i class="bi bi-phone"></i></div>
                                     <div>
@@ -1017,11 +1043,11 @@
                                 </a>
                             </div>
                         </div>
-                        <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
-                            <button class="nav-link px-4 py-2 rounded-xl flex items-center gap-2" :class="open ? 'bg-white/5 text-cyan-400' : 'text-white/60'">
+                        <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false" @click.outside="open = false">
+                            <button @click="open = !open" class="nav-link px-4 py-2 rounded-xl flex items-center gap-2" :class="open ? 'bg-white/5 text-cyan-400' : 'text-white/60'">
                                 <i class="bi bi-flag"></i> Báo cáo <i class="bi bi-chevron-down text-[10px] opacity-50"></i>
                             </button>
-                            <div x-show="open" x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl">
+                            <div x-show="open" x-cloak x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl" style="display: none;">
                                 <a href="/report/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-red-400">
                                     <div class="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center"><i class="bi bi-flag-fill"></i></div>
                                     <div>
@@ -1072,7 +1098,7 @@
                         </button>
                         
                         <!-- Notification Dropdown -->
-                        <div x-show="panelOpen" @mouseleave="hidePanel()" @mouseenter="cancelHide()"
+                        <div x-show="panelOpen" x-cloak @mouseleave="hidePanel()" @mouseenter="cancelHide()"
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 translate-y-2 scale-95"
                              x-transition:enter-end="opacity-100 translate-y-0 scale-100"
@@ -1163,7 +1189,7 @@
                             </div>
                         </button>
                         
-                        <div x-show="open" 
+                        <div x-show="open" x-cloak
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 translate-y-2 scale-95"
                              x-transition:enter-end="opacity-100 translate-y-0 scale-100"
@@ -1246,16 +1272,16 @@
         </div>
 
         <!-- Mobile Nav -->
-        <div x-show="mobileMenu" x-transition:enter="transition ease-out duration-200"
+        <div x-show="mobileMenu" x-cloak x-transition:enter="transition ease-out duration-200"
             x-transition:enter-start="opacity-0 -translate-y-4" x-transition:enter-end="opacity-100 translate-y-0"
-            style="background:rgba(13,13,31,0.95);backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.06);padding:0.75rem 1rem 1.5rem;" class="lg:hidden flex flex-col gap-0.5">
+            style="display: none; background: #0d111e; border-top: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.9); padding: 0.75rem 1rem 1.5rem;" class="lg:hidden flex flex-col gap-0.5">
             <a href="/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-house-door-fill text-cyan-400"></i> Trang chủ</a>
             <div x-data="{ open: false }">
                 <button @click="open = !open" class="w-full flex items-center justify-between p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
                     <span class="flex items-center gap-3"><i class="bi bi-search"></i> Kiểm tra</span>
                     <i class="bi bi-chevron-down transition-transform" :class="open ? 'rotate-180' : ''"></i>
                 </button>
-                <div x-show="open" x-transition class="pl-11 flex flex-col gap-0.5 py-1">
+                <div x-show="open" x-cloak x-transition class="pl-11 flex flex-col gap-0.5 py-1" style="display: none;">
                     <a href="/scan/phone/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#18ffff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-phone-fill mr-2 text-cyan-400"></i>Số điện thoại</a>
                     <a href="/scan/message/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#b388ff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-chat-left-dots-fill mr-2 text-purple-400"></i>Văn bản / Tin nhắn</a>
                     <a href="/scan/website/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#64b5f6'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-globe2 mr-2 text-blue-400"></i>Website</a>
@@ -1269,7 +1295,7 @@
                     <span class="flex items-center gap-3"><i class="bi bi-flag-fill text-red-400"></i> Báo cáo</span>
                     <i class="bi bi-chevron-down transition-transform" :class="open ? 'rotate-180' : ''"></i>
                 </button>
-                <div x-show="open" x-transition class="pl-11 flex flex-col gap-0.5 py-1">
+                <div x-show="open" x-cloak x-transition class="pl-11 flex flex-col gap-0.5 py-1" style="display: none;">
                     <a href="/report/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-flag-fill mr-2 text-red-400"></i>Gửi báo cáo lừa đảo</a>
                     <a href="/reports/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#fbbf24'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-shield-exclamation mr-2 text-amber-400"></i>Tra cứu báo cáo cộng đồng</a>
                     {% if user.is_authenticated %}
@@ -1372,8 +1398,8 @@
                             <span>Chọn ngôn ngữ</span>
                             <i class="bi bi-chevron-up" style="font-size:10px;opacity:0.5;"></i>
                         </button>
-                        <div x-show="open" @click.away="open = false" 
-                            style="position:absolute;bottom:100%;left:0;margin-bottom:0.5rem;width:12rem;background:#161235;border:1px solid rgba(255,255,255,0.1);border-radius:1rem;padding:0.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);z-index:100;">
+                        <div x-show="open" x-cloak @click.away="open = false" 
+                            style="display: none; position:absolute;bottom:100%;left:0;margin-bottom:0.5rem;width:12rem;background:#0d111e;border:1px solid rgba(255,255,255,0.12);border-radius:1rem;padding:0.5rem;box-shadow:0 20px 25px -5px rgba(0,0,0,0.8);z-index:100;">
                             <button onclick="changeLanguage('vi')" style="width:100%;text-align:left;padding:0.6rem 0.75rem;border-radius:0.75rem;background:transparent;color:#fff;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:0.75rem;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
                                 <span style="width:1.5rem;height:1.5rem;border-radius:0.25rem;background:rgba(239,68,68,0.1);display:flex;align-items:center;justify-content:center;font-size:9px;">VN</span> Tiếng Việt
                             </button>
