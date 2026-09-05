@@ -161,7 +161,11 @@ class ScamVectorDB:
                 })
 
         if not documents:
-            logger.warning("No documents found to index.")
+            logger.warning("No documents found to index. Initializing empty vector index.")
+            dimension = getattr(self._model, 'get_embedding_dimension', getattr(self._model, 'get_sentence_embedding_dimension', lambda: 768))()
+            self.index = faiss.IndexFlatIP(dimension)
+            self.metadata = []
+            self.save_index()
             return
 
         logger.info(f"Embedding {len(documents)} total documents...")
@@ -183,8 +187,7 @@ class ScamVectorDB:
     def search(self, query, k=3):
         if self._model is None:
             self._load_model()
-        if self.index is None:
-            logger.warning("Search called but index is none.")
+        if self.index is None or getattr(self.index, 'ntotal', 0) == 0:
             return []
 
         if self.index.d != self._model.get_sentence_embedding_dimension():
