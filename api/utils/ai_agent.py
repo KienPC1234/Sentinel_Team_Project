@@ -67,12 +67,23 @@ class AIAgent:
                     logger.warning(f"Session {session_id} not found, creating new one for user {user}")
                     self.session = ChatSession.objects.create(user=user)
                     self.session_id = self.session.id
+                elif user:
+                    if self.session.user is None:
+                        self.session.user = user
+                        self.session.save(update_fields=['user'])
+                    elif self.session.user != user:
+                        logger.warning(f"Session {session_id} belongs to another user, creating new one for {user}")
+                        self.session = ChatSession.objects.create(user=user)
+                        self.session_id = self.session.id
             except (ValidationError, ValueError) as e:
                 logger.error(f"Invalid session ID {session_id}: {e}")
                 self.session = ChatSession.objects.create(user=user)
                 self.session_id = self.session.id
         elif user:
             self.session = ChatSession.objects.create(user=user)
+            self.session_id = self.session.id
+        else:
+            self.session = ChatSession.objects.create(user=None)
             self.session_id = self.session.id
 
     def _get_history(self, limit=10) -> List[Dict]:

@@ -62,7 +62,7 @@ class ChatFolderDetailView(APIView):
 
 class ChatSessionListView(APIView):
     """
-    GET: List all chat sessions for the current user.
+    GET: List all chat sessions for the current user or guest.
     POST: Create a new chat session (supports authenticated and guest users).
     """
     permission_classes = [permissions.AllowAny]
@@ -70,7 +70,18 @@ class ChatSessionListView(APIView):
     @extend_schema(responses={200: ChatSessionSerializer(many=True)})
     def get(self, request):
         if request.user.is_authenticated:
-            sessions = ChatSession.objects.filter(user=request.user)
+            guest_ids = request.session.get('guest_chat_sessions', [])
+            if guest_ids:
+                ChatSession.objects.filter(id__in=guest_ids, user__isnull=True).update(user=request.user)
+                request.session['guest_chat_sessions'] = []
+                request.session.modified = True
+            sessions = ChatSession.objects.filter(user=request.user).order_by('-updated_at')
+            serializer = ChatSessionSerializer(sessions, many=True)
+            return Response(serializer.data)
+
+        guest_ids = request.session.get('guest_chat_sessions', [])
+        if guest_ids:
+            sessions = ChatSession.objects.filter(id__in=guest_ids, user__isnull=True).order_by('-updated_at')
             serializer = ChatSessionSerializer(sessions, many=True)
             return Response(serializer.data)
         return Response([])
@@ -84,6 +95,14 @@ class ChatSessionListView(APIView):
             folder = get_object_or_404(ChatFolder, id=folder_id, user=user)
         
         session = ChatSession.objects.create(user=user, folder=folder)
+        if not user:
+            guest_sessions = request.session.get('guest_chat_sessions', [])
+            sess_id_str = str(session.id)
+            if sess_id_str not in guest_sessions:
+                guest_sessions.insert(0, sess_id_str)
+                request.session['guest_chat_sessions'] = guest_sessions
+                request.session.modified = True
+
         return Response({
             'id': str(session.id),
             'title': session.title,
@@ -113,6 +132,13 @@ class ChatSessionDetailView(APIView):
             if request.user.is_authenticated:
                 session.user = request.user
                 session.save(update_fields=['user'])
+            else:
+                guest_sessions = request.session.get('guest_chat_sessions', [])
+                sess_id_str = str(session.id)
+                if sess_id_str not in guest_sessions:
+                    guest_sessions.insert(0, sess_id_str)
+                    request.session['guest_chat_sessions'] = guest_sessions
+                    request.session.modified = True
             
         messages = session.messages.all().order_by('created_at')
         data = [{
@@ -165,18 +191,32 @@ class ChatSessionDetailView(APIView):
         if session.user:
             if not request.user.is_authenticated or session.user != request.user:
                 return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            guest_sessions = request.session.get('guest_chat_sessions', [])
+            sess_id_str = str(session.id)
+            if sess_id_str in guest_sessions:
+                guest_sessions.remove(sess_id_str)
+                request.session['guest_chat_sessions'] = guest_sessions
+                request.session.modified = True
         session.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class ChatSessionClearAllView(APIView):
     """
-    DELETE: Remove all chat sessions for the current user.
+    DELETE: Remove all chat sessions for the current user or guest.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     @extend_schema(responses={204: None})
     def delete(self, request):
-        ChatSession.objects.filter(user=request.user).delete()
+        if request.user.is_authenticated:
+            ChatSession.objects.filter(user=request.user).delete()
+        else:
+            guest_ids = request.session.get('guest_chat_sessions', [])
+            if guest_ids:
+                ChatSession.objects.filter(id__in=guest_ids, user__isnull=True).delete()
+                request.session['guest_chat_sessions'] = []
+                request.session.modified = True
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class ChatMessageDeleteAfterView(APIView):
@@ -233,6 +273,14 @@ class ChatAIStreamView(APIView):
         agent = get_agent(session_id=session_id, user=user, safe_mode=safe_mode, branding=branding, branding_full=branding_full)
         if scan_context:
             agent._scan_context = scan_context
+
+        if not user and agent.session:
+            guest_sessions = request.session.get('guest_chat_sessions', [])
+            sess_id_str = str(agent.session.id)
+            if sess_id_str not in guest_sessions:
+                guest_sessions.insert(0, sess_id_str)
+                request.session['guest_chat_sessions'] = guest_sessions
+                request.session.modified = True
 
         async def event_stream():
             from asgiref.sync import sync_to_async

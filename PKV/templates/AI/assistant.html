@@ -1316,7 +1316,13 @@
             }
             
             if (contentDiv && fullContent) {
-                contentDiv.innerHTML = marked.parse(fullContent);
+                try {
+                    const html = typeof window.renderMd === 'function' ? window.renderMd(fullContent) : (typeof marked !== 'undefined' ? marked.parse(fullContent) : fullContent);
+                    contentDiv.innerHTML = html;
+                } catch (err) {
+                    console.warn("Markdown render error", err);
+                    contentDiv.innerText = fullContent;
+                }
                 processToolInText(assistantMsgDiv, fullContent);
                 // Update raw text for copying
                 const actions = assistantMsgDiv.querySelector('.msg-actions');
@@ -1441,7 +1447,10 @@
             return div;
         }
 
+        let isLoadingSessions = false;
         async function loadSessions() {
+            if (isLoadingSessions) return;
+            isLoadingSessions = true;
             try {
                 const sessPromise = fetch('/api/v1/chat/sessions/', { credentials: 'include' });
                 const foldPromise = IS_AUTHENTICATED
@@ -1463,7 +1472,7 @@
                             <div class="flex items-center gap-2 overflow-hidden">
                                 <i class="bi bi-chevron-right text-[10px] transition-transform"></i>
                                 <i class="bi bi-folder2 text-sm text-cyan-500/50"></i>
-                                <span class="text-xs font-bold truncate">${f.name}</span>
+                                <span class="text-xs font-bold truncate">${escapeHtml(f.name)}</span>
                             </div>
                             <button onclick="event.stopPropagation(); deleteFolder(${f.id})" class="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400"><i class="bi bi-x"></i></button>
                         </div>
@@ -1489,29 +1498,57 @@
                     ungrouped.forEach(s => {
                         historyContainer.appendChild(createSessionElement(s));
                     });
+                } else if (folders.length === 0) {
+                    historyContainer.innerHTML = `
+                        <div class="text-center py-8 text-white/20">
+                            <i class="bi bi-chat-square-dots text-2xl block mb-1"></i>
+                            <p class="text-[11px] font-medium">Chưa có hội thoại nào</p>
+                        </div>
+                    `;
                 }
                 
-                document.getElementById('session-count').innerText = sessions.length;
-            } catch (err) { console.error(err); }
+                const sessionCountEl = document.getElementById('session-count');
+                if (sessionCountEl) sessionCountEl.innerText = sessions.length;
+            } catch (err) { 
+                console.error(err); 
+            } finally {
+                isLoadingSessions = false;
+            }
         }
 
         function createSessionElement(s) {
             const d = document.createElement('div');
-            d.className = `group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${currentSessionId === s.id ? 'bg-cyan-500/10 border-cyan-500/30' : 'hover:bg-white/5 border-transparent'}`;
+            const isActive = currentSessionId === s.id;
+            d.className = `group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${isActive ? 'bg-cyan-500/10 border-cyan-500/30' : 'hover:bg-white/5 border-transparent'}`;
             d.draggable = true;
             d.ondragstart = (e) => { e.dataTransfer.setData('sessionId', s.id); d.classList.add('opacity-50'); };
             d.ondragend = () => d.classList.remove('opacity-50');
-            d.onclick = (e) => { if (!e.target.closest('button')) loadSessionDetail(s.id); };
+            d.onclick = (e) => { 
+                if (!e.target.closest('button')) {
+                    if (currentSessionId !== s.id) {
+                        loadSessionDetail(s.id);
+                    }
+                }
+            };
+            const escapedTitle = escapeHtml(s.title || 'Cuộc trò chuyện mới');
             d.innerHTML = `
                 <div class="flex items-center gap-3 overflow-hidden flex-1">
-                    <i class="bi bi-chat-left-text text-[10px] ${currentSessionId === s.id ? 'text-cyan-400' : 'text-slate-500'}"></i>
-                    <span class="text-[11px] font-semibold truncate ${currentSessionId === s.id ? 'text-cyan-100' : 'text-slate-400'}">${s.title}</span>
+                    <i class="bi bi-chat-left-text text-[10px] ${isActive ? 'text-cyan-400' : 'text-slate-500'}"></i>
+                    <span class="text-[11px] font-semibold truncate ${isActive ? 'text-cyan-100' : 'text-slate-400'}">${escapedTitle}</span>
                 </div>
                 <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                    <button onclick="event.stopPropagation(); renameSession('${s.id}', \`${s.title.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="p-1 text-slate-500 hover:text-cyan-400"><i class="bi bi-pencil text-[10px]"></i></button>
-                    <button onclick="event.stopPropagation(); deleteSession('${s.id}')" class="p-1 text-slate-500 hover:text-red-400"><i class="bi bi-trash text-[10px]"></i></button>
+                    <button class="p-1 text-slate-500 hover:text-cyan-400 btn-rename" title="Đổi tên"><i class="bi bi-pencil text-[10px]"></i></button>
+                    <button class="p-1 text-slate-500 hover:text-red-400 btn-delete" title="Xóa"><i class="bi bi-trash text-[10px]"></i></button>
                 </div>
             `;
+            d.querySelector('.btn-rename').onclick = (e) => {
+                e.stopPropagation();
+                renameSession(s.id, s.title || '');
+            };
+            d.querySelector('.btn-delete').onclick = (e) => {
+                e.stopPropagation();
+                deleteSession(s.id);
+            };
             return d;
         }
 
@@ -1667,6 +1704,54 @@
             loadSessions();
             userInput.focus();
         }
+
+        async function clearHistory() {
+            const { isConfirmed } = await Swal.fire({
+                title: 'Xóa toàn bộ lịch sử?',
+                text: 'Hành động này sẽ xóa vĩnh viễn tất cả cuộc trò chuyện của bạn.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#334155',
+                confirmButtonText: 'Xóa tất cả',
+                cancelButtonText: 'Hủy',
+                background: '#0f172a',
+                color: '#f1f5f9'
+            });
+            if (isConfirmed) {
+                try {
+                    const resp = await fetch('/api/v1/chat/sessions/clear_all/', {
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                        credentials: 'include'
+                    });
+                    if (resp.ok) {
+                        resetAssistantHome(true, null);
+                        await loadSessions();
+                        showToast('Đã xóa toàn bộ lịch sử', 'success');
+                    } else {
+                        showToast('Không thể xóa lịch sử', 'error');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('Lỗi kết nối khi xóa lịch sử', 'error');
+                }
+            }
+        }
+
+        window.addEventListener('popstate', () => {
+            const match = window.location.pathname.match(/\/ai-assistant\/([0-9a-fA-F-]{36})\/?/);
+            if (match && match[1]) {
+                const sessId = normalizeSessionId(match[1]);
+                if (sessId && sessId !== currentSessionId) {
+                    loadSessionDetail(sessId);
+                }
+            } else {
+                if (currentSessionId) {
+                    resetAssistantHome(false, null);
+                }
+            }
+        });
 
         function clearEditMode() {
             editModeMessageId = null;
