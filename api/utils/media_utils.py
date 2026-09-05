@@ -17,11 +17,10 @@ from api.utils.ollama_client import analyze_text_for_scam, generate_response
 logger = logging.getLogger(__name__)
 
 # ─── EasyOCR Configuration ──────────────────────────────────────────
-try:
-    import easyocr
-    EASYOCR_AVAILABLE = True
-except ImportError:
-    EASYOCR_AVAILABLE = False
+import importlib.util
+
+EASYOCR_AVAILABLE = importlib.util.find_spec('easyocr') is not None
+if not EASYOCR_AVAILABLE:
     logger.warning("easyocr not installed. OCR will be disabled.")
 
 _EASYOCR_READER = None
@@ -39,6 +38,7 @@ def get_easyocr_reader():
     if _EASYOCR_READER is None:
         import os
         import multiprocessing
+        import easyocr
         from django.conf import settings
 
         gpu = getattr(settings, 'EASYOCR_GPU', False)

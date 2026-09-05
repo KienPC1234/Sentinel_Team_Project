@@ -98,6 +98,12 @@ SITE_ID = 1
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+}
+
 # Allauth
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
@@ -111,6 +117,8 @@ LLM_MODEL = 'test'
 SMALL_MODEL = 'test'
 LLM_TEMPERATURE = 0.3
 LLM_MAX_TOKENS = 4096
+SEARXNG_URL = 'https://search.fptoj.com'
+SEARXNG_API_KEY = ''
 EASYOCR_GPU = False
 VT_API_KEY = ''
 WEBPUSH_VAPID_PUBLIC_KEY = ''

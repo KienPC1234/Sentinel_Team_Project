@@ -67,6 +67,94 @@ class LocalSandboxAnalyzer:
                 continue
         return None
 
+    _BINARY_MAGIC = [
+        b'\x7fELF', b'MZ', b'PK\x03\x04', b'\x1f\x8b', b'BZh',
+        b'\xfd7zXZ', b'Rar!', b'\xca\xfe\xba\xbe', b'\xce\xfa\xed\xfe',
+        b'\xcf\xfa\xed\xfe', b'\x89PNG', b'\xff\xd8\xff', b'GIF8',
+        b'%PDF', b'\xd0\xcf\x11\xe0', b'RIFF', b'\x00\x00\x00',
+    ]
+    _ENT_NORMAL = 6.2
+    _ENT_WARN   = 7.5
+
+    def _probe_entropy(self, probe: bytes) -> float:
+        if not probe:
+            return 0.0
+        freq = [0] * 256
+        for b in probe:
+            freq[b] += 1
+        n, ent = len(probe), 0.0
+        for c in freq:
+            if c:
+                p = c / n
+                ent -= p * math.log2(p)
+        return ent
+
+    def _classify_content(self, head: bytes, sample_size: int = 8192):
+        """
+        Returns ('binary', None), ('text', None), or ('text_high_entropy', float).
+        - binary: do not read.
+        - text: plain readable, no warnings.
+        - text_high_entropy: readable but entropy in [6.2, 7.5] -- warn AI.
+        """
+        if not head:
+            return 'binary', None
+        probe = head[:sample_size]
+        for magic in self._BINARY_MAGIC:
+            if probe[:len(magic)] == magic:
+                return 'binary', None
+        if len(probe) >= 8 and probe[4:8] == b'ftyp':
+            return 'binary', None
+        if b'\x00' in probe:
+            return 'binary', None
+        printable = sum(
+            1 for b in probe
+            if b in (0x09, 0x0a, 0x0d) or 0x20 <= b <= 0x7e or b >= 0x80
+        )
+        if not probe or printable / len(probe) < 0.90:
+            return 'binary', None
+        ent = self._probe_entropy(probe) if len(probe) >= 64 else 0.0
+        if ent > self._ENT_WARN:
+            return 'binary', None
+        elif ent > self._ENT_NORMAL:
+            return 'text_high_entropy', round(ent, 3)
+        return 'text', None
+
+    def _extract_script_snippet(self, file_path: str, head_bytes: bytes) -> str:
+        """
+        Return first 150 lines of any text-readable file (<= 500 KB).
+        Entropy 6.2-7.5: readable with AI warning header.
+        Entropy > 7.5 or binary magic/null bytes: rejected.
+        Control characters stripped to prevent prompt injection.
+        """
+        try:
+            if os.path.getsize(file_path) > 512_000:
+                return ''
+            kind, ent_val = self._classify_content(head_bytes)
+            if kind == 'binary':
+                return ''
+            lines = []
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                for i, line in enumerate(f):
+                    if i >= 150:
+                        break
+                    clean = ''.join(
+                        ch for ch in line.rstrip('\n\r')
+                        if ch == '\t' or (' ' <= ch <= '~') or ord(ch) > 127
+                    )
+                    lines.append(clean)
+            body = '\n'.join(lines)
+            if kind == 'text_high_entropy':
+                header = (
+                    f"[CANH BAO PHAN TICH]: File nay co Shannon entropy cao ({ent_val}/8.0), "
+                    f"co the la ma nguon bi obfuscate, encode (base64/hex/XOR), hoac chua "
+                    f"payload nhung van doc duoc. Kiem tra ky tung dong lenh.\n"
+                    f"{'=' * 60}\n"
+                )
+                return header + body
+            return body
+        except Exception:
+            return ''
+
     def scan_file(self, file_path: str, timeout: int = 60) -> Dict[str, Any]:
         """
         Execute comprehensive local static analysis + ClamAV scan + Docker sandbox isolation on a file.
@@ -92,6 +180,7 @@ class LocalSandboxAnalyzer:
             md5 = hashlib.md5(file_bytes).hexdigest()
 
         entropy = calculate_entropy(head_bytes)
+        script_snippet = self._extract_script_snippet(file_path, head_bytes)
         # 1. PRIMARY: Execute full analysis inside Docker Sandbox Container (Daemon or Ephemeral)
         docker_sandbox_result = self._run_docker_sandbox_probe(file_path) if self.has_docker else None
 
@@ -135,6 +224,8 @@ class LocalSandboxAnalyzer:
                     'entropy': entropy,
                 }),
                 'forensic_evidence': forensic_proofs,
+                'engines': c_data.get('engines', {'clamav': clamav_info}),
+                'script_snippet': c_data.get('script_snippet') or script_snippet,
                 'docker_sandbox': docker_sandbox_result,
                 'clamav': clamav_info,
                 'ai_explanation': ai_explanation,
@@ -214,6 +305,13 @@ class LocalSandboxAnalyzer:
                 'entropy': entropy,
             },
             'forensic_evidence': forensic_proofs,
+            'engines': {
+                'clamav': clamav_result,
+                'pefile': {'is_pe': heuristics.get('is_pe', False)},
+                'oletools': {'has_macros': heuristics.get('has_macros', False)},
+                'yara': {'matches': len(heuristics.get('high_risk_indicators', []))},
+            },
+            'script_snippet': script_snippet,
             'docker_sandbox': docker_sandbox_result,
             'clamav': clamav_result,
             'ai_explanation': ai_explanation,

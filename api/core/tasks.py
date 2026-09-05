@@ -417,6 +417,10 @@ def cleanup_webpush_subscriptions():
     }
 
 
+# Task alias to support both task names
+shared_task(name='api.core.tasks.cleanup_webpush_subscriptions')(cleanup_webpush_subscriptions.run)
+
+
 def _notify_scan_complete(scan_event, title_suffix=''):
     """
     Send push notification (WebSocket + WebPush) when a scan completes.
@@ -2191,6 +2195,8 @@ def perform_file_scan_task(self, scan_event_id, file_path):
             docker_sandbox = vt_result.get('docker_sandbox', {})
             ai_explanation = vt_result.get('ai_explanation', '')
             threat_family = vt_result.get('threat_family')
+            engines = vt_result.get('engines', {})
+            script_snippet = vt_result.get('script_snippet', '')
 
             # Determine risk level
             if malicious >= 1 or risk_score >= 70:
@@ -2222,6 +2228,8 @@ def perform_file_scan_task(self, scan_event_id, file_path):
                 'threat_family': threat_family,
                 'forensic_evidence': forensic_evidence,
                 'file_metadata': file_metadata,
+                'engines': engines,
+                'script_snippet': script_snippet,
                 'clamav': clamav,
                 'docker_sandbox': docker_sandbox,
                 'ai_explanation': ai_explanation,

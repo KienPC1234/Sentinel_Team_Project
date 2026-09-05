@@ -49,6 +49,152 @@ except ImportError:
     PYPDF_AVAILABLE = False
 
 
+MAX_SNIPPET_BYTES = 512_000  # 500 KB -- files larger than this are not read
+MAX_SNIPPET_LINES = 150
+
+# Binary-format magic bytes: reject immediately, no content reading
+_BINARY_MAGIC = [
+    b'\x7fELF',          # ELF executable
+    b'MZ',               # PE / DOS executable
+    b'PK\x03\x04',      # ZIP / DOCX / XLSX / JAR etc.
+    b'\x1f\x8b',        # GZIP
+    b'BZh',              # BZIP2
+    b'\xfd7zXZ',        # XZ
+    b'Rar!',             # RAR
+    b'\xca\xfe\xba\xbe', # Mach-O
+    b'\xce\xfa\xed\xfe', # Mach-O 32-bit
+    b'\xcf\xfa\xed\xfe', # Mach-O 64-bit
+    b'\x89PNG',          # PNG
+    b'\xff\xd8\xff',     # JPEG
+    b'GIF8',             # GIF
+    b'%PDF',             # PDF
+    b'\xd0\xcf\x11\xe0', # OLE2 (Office 97-2003 .doc/.xls)
+    b'RIFF',             # WAV / AVI
+    b'\x00\x00\x00',     # generic null-prefix binary
+]
+
+# Entropy thresholds
+_ENT_NORMAL    = 6.2   # <= 6.2: plain text, no warning
+_ENT_WARN      = 7.5   # 6.2 - 7.5: possibly obfuscated/encoded, read + warn AI
+                       # > 7.5: indistinguishable from encrypted/compressed random, reject
+
+
+def _probe_entropy(probe: bytes) -> float:
+    """Compute Shannon entropy of a byte sequence."""
+    if not probe:
+        return 0.0
+    freq = [0] * 256
+    for b in probe:
+        freq[b] += 1
+    n = len(probe)
+    ent = 0.0
+    for c in freq:
+        if c:
+            p = c / n
+            ent -= p * math.log2(p)
+    return ent
+
+
+def _classify_content(head: bytes, sample_size: int = 8192):
+    """
+    Classify file content as: 'binary', 'text', or 'text_high_entropy'.
+
+    Returns:
+        ('binary', None)             -- should not be read
+        ('text', None)               -- safe to read, no warnings
+        ('text_high_entropy', float) -- readable but entropy is suspicious
+    """
+    if not head:
+        return 'binary', None
+
+    probe = head[:sample_size]
+
+    # 1. Structural binary magic (hard reject)
+    for magic in _BINARY_MAGIC:
+        if probe[:len(magic)] == magic:
+            return 'binary', None
+    if len(probe) >= 8 and probe[4:8] == b'ftyp':   # MP4
+        return 'binary', None
+
+    # 2. Null byte -- reliable binary indicator
+    if b'\x00' in probe:
+        return 'binary', None
+
+    # 3. Printable-char ratio (tab + LF + CR + ASCII printable + UTF-8 multibyte)
+    printable = sum(
+        1 for b in probe
+        if b in (0x09, 0x0a, 0x0d) or 0x20 <= b <= 0x7e or b >= 0x80
+    )
+    if len(probe) == 0 or printable / len(probe) < 0.90:
+        return 'binary', None
+
+    # 4. Entropy analysis -- only run if sample is large enough to be meaningful
+    ent = _probe_entropy(probe) if len(probe) >= 64 else 0.0
+
+    if ent > _ENT_WARN:
+        # Too close to random/compressed bytes -- reject
+        return 'binary', None
+    elif ent > _ENT_NORMAL:
+        # Possibly obfuscated/base64/encoded -- read but flag
+        return 'text_high_entropy', round(ent, 3)
+    else:
+        return 'text', None
+
+
+def extract_script_snippet(file_path: str, head_bytes: bytes) -> str:
+    """
+    Return up to MAX_SNIPPET_LINES lines of a text-readable file.
+
+    Behavior by file size and content:
+      - > 500 KB: rejected entirely (return '').
+      - Binary (magic / null bytes / low printable ratio / entropy > 7.5): return ''.
+      - Entropy 6.2-7.5: include snippet prepended with an AI warning about
+        possible obfuscation/encoding.
+      - Normal text: include snippet as-is.
+
+    Decoding: UTF-8 with replacement for invalid bytes.
+    Control characters other than tab are stripped (prompt injection guard).
+    """
+    try:
+        size = os.path.getsize(file_path)
+        if size > MAX_SNIPPET_BYTES:
+            return ''
+
+        kind, ent_val = _classify_content(head_bytes)
+        if kind == 'binary':
+            return ''
+
+        lines = []
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+            for i, line in enumerate(f):
+                if i >= MAX_SNIPPET_LINES:
+                    break
+                clean = ''.join(
+                    ch for ch in line.rstrip('\n\r')
+                    if ch == '\t' or (' ' <= ch <= '~') or ord(ch) > 127
+                )
+                lines.append(clean)
+
+        body = '\n'.join(lines)
+
+        if kind == 'text_high_entropy':
+            header = (
+                f"[CANH BAO PHAN TICH]: File nay co Shannon entropy cao ({ent_val}/8.0), "
+                f"co the la ma nguon bi obfuscate, encode (base64/hex/XOR), hoac chua "
+                f"payload nhung van doc duoc. Kiem tra ky tung dong lenh.\n"
+                f"{'=' * 60}\n"
+            )
+            return header + body
+
+        return body
+    except Exception:
+        return ''
+
+
+
+
+
+
 def calculate_entropy(data: bytes) -> float:
     """Calculate Shannon entropy (0.0 - 8.0)."""
     if not data:
@@ -254,6 +400,7 @@ def run_full_sandbox_analysis_dict(file_path: str) -> dict:
     ole_results = analyze_with_oletools(file_path, head)
     pe_results = analyze_with_pefile(file_path, head)
     clamav_results = analyze_with_clamav(file_path)
+    script_snippet = extract_script_snippet(file_path, head)
 
     forensic_evidence = []
     is_malicious = False
@@ -348,6 +495,7 @@ def run_full_sandbox_analysis_dict(file_path: str) -> dict:
             'imphash': pe_results.get('imphash'),
         },
         'forensic_evidence': forensic_evidence,
+        'script_snippet': script_snippet,
         'engines': {
             'yara': {'available': YARA_AVAILABLE, 'matches': len(yara_matches)},
             'oletools': {'available': OLETOOLS_AVAILABLE, 'has_macros': ole_results.get('has_macros')},

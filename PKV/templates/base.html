@@ -190,9 +190,9 @@
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-    <link rel="stylesheet" href="https://cdn.ckeditor.com/ckeditor5/47.5.0/ckeditor5.css" crossorigin>
+    <link rel="stylesheet" href="{% static 'vendor/ckeditor5/ckeditor5.css' %}">
     <link rel="stylesheet" href="{% static 'css/ckeditor5.css' %}">
-    <script src="https://cdn.ckeditor.com/ckeditor5/47.5.0/ckeditor5.umd.js" crossorigin></script>
+    <script src="{% static 'vendor/ckeditor5/ckeditor5.umd.js' %}"></script>
 
     {% block head_extra %}{% endblock %}
     <script>
@@ -503,14 +503,12 @@
                 toolbarItems.push('|', 'scanReference');
             }
 
-            const LICENSE_KEY = '{{ CKEDITOR_LICENSE_KEY|escapejs }}';
-            
             const editorConfig = {
-                licenseKey: LICENSE_KEY || 'GPL', // Fallback to GPL if no key
+                licenseKey: 'GPL', // Standard open-source Community license
                 placeholder,
                 plugins: [
                     Alignment, AutoImage, AutoLink, Autosave, BlockQuote, Bold,
-                    CloudServices, CodeBlock, Essentials, GeneralHtmlSupport, Heading,
+                    CodeBlock, Essentials, GeneralHtmlSupport, Heading,
                     Highlight, HorizontalLine, ImageBlock, ImageCaption, ImageEditing,
                     ImageInline, ImageInsertViaUrl, ImageStyle, ImageTextAlternative,
                     ImageToolbar, ImageUpload, ImageUtils, Indent, IndentBlock, Italic,
@@ -519,7 +517,7 @@
                     TodoList, Underline, ShieldCallUploadAdapterPlugin, ShieldCallMediaManagerPlugin,
                     ...extraCkPlugins,
                     ...(enableScanReferenceButton ? [ScanReferenceToolbarPlugin] : [])
-                ],
+                ].filter(Boolean),
                 toolbar: {
                     items: toolbarItems,
                     shouldNotGroupWhenFull: false
@@ -661,20 +659,25 @@
 
         window.renderMd = function(text) {
             if (!text) return '';
-            let cleanText = String(text).trim();
+            let cleanText = String(text);
             // Strip LLM thinking tags <think>...</think>
             cleanText = cleanText.replace(/<think>[\s\S]*?<\/think>/gi, '');
-            // Strip partial/unclosed <think> tag at the end (during streaming)
             cleanText = cleanText.replace(/<think>[\s\S]*$/gi, '');
-            // Strip __STATUS__:xxx markers from stream
-            cleanText = cleanText.replace(/__STATUS__:\w+/g, '');
+            // Strip __STATUS__:... and __THINK__:... markers
+            cleanText = cleanText.replace(/__STATUS__:[^\n]*/gi, '');
+            cleanText = cleanText.replace(/__THINK__:[^\n]*/gi, '');
+            cleanText = cleanText.replace(/STATUS:thinking/gi, '');
+            cleanText = cleanText.replace(/__STATUS__/gi, '');
             cleanText = cleanText.trim();
             if (!cleanText) return '';
             try { 
-                return marked.parse(cleanText, { 
-                    breaks: true, 
-                    gfm: true
-                }); 
+                if (typeof marked !== 'undefined' && marked.parse) {
+                    return marked.parse(cleanText, { 
+                        breaks: true, 
+                        gfm: true
+                    }); 
+                }
+                return cleanText;
             } catch(e) { 
                 console.error('Markdown rendering error:', e);
                 return cleanText; 
@@ -1014,7 +1017,36 @@
                                 </a>
                             </div>
                         </div>
-                        <a href="/report/" class="nav-link px-4 py-2 rounded-xl text-white/60">Báo cáo</a>
+                        <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
+                            <button class="nav-link px-4 py-2 rounded-xl flex items-center gap-2" :class="open ? 'bg-white/5 text-cyan-400' : 'text-white/60'">
+                                <i class="bi bi-flag"></i> Báo cáo <i class="bi bi-chevron-down text-[10px] opacity-50"></i>
+                            </button>
+                            <div x-show="open" x-transition class="absolute top-full left-0 mt-1 w-64 nav-scan-menu p-2 rounded-2xl">
+                                <a href="/report/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-red-400">
+                                    <div class="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center"><i class="bi bi-flag-fill"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Gửi báo cáo</div>
+                                        <div class="text-[9px] text-white/40">Khai báo hành vi lừa đảo</div>
+                                    </div>
+                                </a>
+                                <a href="/reports/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-amber-400">
+                                    <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center"><i class="bi bi-shield-exclamation"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Tra cứu báo cáo</div>
+                                        <div class="text-[9px] text-white/40">Danh sách báo cáo cộng đồng</div>
+                                    </div>
+                                </a>
+                                {% if user.is_authenticated %}
+                                <a href="/my-reports/" class="nav-scan-item flex items-center gap-3 p-3 rounded-xl text-cyan-400">
+                                    <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center"><i class="bi bi-journal-text"></i></div>
+                                    <div>
+                                        <div class="text-xs font-black text-white">Báo cáo của tôi</div>
+                                        <div class="text-[9px] text-white/40">Theo dõi tiến độ xử lý</div>
+                                    </div>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
                         <a href="/scam-radar/" class="nav-link px-4 py-2 rounded-xl text-white/60">Radar</a>
                         <a href="/forum/" class="nav-link px-4 py-2 rounded-xl text-white/60">Diễn đàn</a>
                         <a href="/learn/" class="nav-link px-4 py-2 rounded-xl text-white/60">Kiến thức</a>
@@ -1232,7 +1264,19 @@
                     <a href="/scan/qr/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#00e676'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-qr-code-scan mr-2 text-green-400"></i>QR / Ảnh</a>
                 </div>
             </div>
-            <a href="/report/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-flag-fill text-red-400"></i> Báo cáo</a>
+            <div x-data="{ open: false }">
+                <button @click="open = !open" class="w-full flex items-center justify-between p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                    <span class="flex items-center gap-3"><i class="bi bi-flag-fill text-red-400"></i> Báo cáo</span>
+                    <i class="bi bi-chevron-down transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                </button>
+                <div x-show="open" x-transition class="pl-11 flex flex-col gap-0.5 py-1">
+                    <a href="/report/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-flag-fill mr-2 text-red-400"></i>Gửi báo cáo lừa đảo</a>
+                    <a href="/reports/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#fbbf24'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-shield-exclamation mr-2 text-amber-400"></i>Tra cứu báo cáo cộng đồng</a>
+                    {% if user.is_authenticated %}
+                    <a href="/my-reports/" class="p-2 text-sm" style="color:rgba(255,255,255,0.6);transition:color 0.2s;" onmouseover="this.style.color='#18ffff'" onmouseout="this.style.color='rgba(255,255,255,0.6)'"><i class="bi bi-journal-text mr-2 text-cyan-400"></i>Báo cáo của tôi</a>
+                    {% endif %}
+                </div>
+            </div>
             <a href="/scam-radar/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-broadcast text-purple-400"></i> Radar</a>
             <a href="/forum/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-chat-dots-fill text-blue-400"></i> Diễn đàn</a>
             <a href="/learn/" class="flex items-center gap-3 p-3 rounded-xl" style="transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'"><i class="bi bi-book-half text-yellow-400"></i> Cẩm nang</a>

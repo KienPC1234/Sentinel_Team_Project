@@ -482,9 +482,6 @@ class ForumCategory(models.TextChoices):
     DISCUSSION = 'discussion', 'Thảo luận'
     EXPERIENCE = 'experience', 'Kinh nghiệm'
     QUESTION = 'question', 'Hỏi đáp'
-    LGBTQ_SAFETY = 'lgbtq_safety', 'An toàn LGBTQ+'
-    WOMEN_SECURITY = 'women_security', 'Phụ nữ & An ninh số'
-    HEALING_STORIES = 'healing_stories', 'Chữa lành & Chia sẻ'
 
 
 class ForumPost(models.Model):

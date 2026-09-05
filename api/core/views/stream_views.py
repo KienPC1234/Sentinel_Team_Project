@@ -62,22 +62,43 @@ class ScanAnalyzeSSEView(APIView):
                 if scan_type == 'file':
                     proofs = scan_data.get('forensic_evidence', [])
                     proofs_str = '\n'.join([
-                        f"- [{p.get('severity', 'INFO')}] {p.get('description', '')} (Bằng chứng: {p.get('evidence', '')})"
+                        f"- [{p.get('severity', 'INFO')}] {p.get('description', '')} | Evidence: {p.get('evidence', '')}"
                         for p in proofs
-                    ]) if proofs else 'Không phát hiện chữ ký độc hại rõ ràng'
-                    
+                    ]) if proofs else 'No malicious signatures detected.'
+
                     file_meta = scan_data.get('file_metadata', {})
-                    meta_str = f"Entropy: {file_meta.get('entropy', 'N/A')}/8.0, SHA256: {file_meta.get('sha256', 'N/A')}"
-                    
+                    meta_str = (
+                        f"Size: {file_meta.get('size_bytes', 'N/A')} bytes | "
+                        f"Entropy: {file_meta.get('entropy', 'N/A')}/8.0 | "
+                        f"MD5: {file_meta.get('md5', 'N/A')} | "
+                        f"SHA256: {file_meta.get('sha256', 'N/A')}"
+                    )
+
+                    engines = scan_data.get('engines', {})
+                    engines_str = (
+                        f"YARA: {engines.get('yara', {}).get('matches', 0)} rules matched | "
+                        f"OLETools macros: {engines.get('oletools', {}).get('has_macros', False)} | "
+                        f"PEFile: {'PE executable' if engines.get('pefile', {}).get('is_pe') else 'Non-PE'} | "
+                        f"ClamAV: {'INFECTED' if engines.get('clamav', {}).get('infected') else 'CLEAN'}"
+                    )
+
+                    raw_snippet = scan_data.get('script_snippet', '')
+                    snippet_section = (
+                        f"\n\n## NOI DUNG FILE (150 dong dau)\n```\n{raw_snippet[:3500]}\n```"
+                        if raw_snippet else ''
+                    )
+
                     prompt = SCAN_FILE_PROMPT.format(
-                        file_name=scan_data.get('file_name', raw_input or 'Tệp đã tải lên'),
-                        file_size=f"{round(scan_data.get('file_size', 0) / (1024*1024), 2)} MB" if scan_data.get('file_size') else 'N/A',
-                        risk_level=scan_data.get('risk_level', 'SAFE'),
+                        file_name=scan_data.get('file_name', raw_input or 'Uploaded file'),
+                        file_size=f"{round(scan_data.get('file_size', file_meta.get('size_bytes', 0)) / 1024, 1)} KB",
+                        risk_level=scan_data.get('risk_level', scan_data.get('verdict', 'SAFE')),
                         risk_score=scan_data.get('risk_score', 0),
                         verdict=scan_data.get('verdict', 'SAFE'),
-                        threat_family=scan_data.get('threat_family') or 'Chưa phân loại cụ thể',
+                        threat_family=scan_data.get('threat_family') or 'Unclassified',
                         forensic_evidence=proofs_str,
                         file_metadata=meta_str,
+                        engines=engines_str,
+                        script_snippet=snippet_section,
                     )
                 elif scan_type == 'phone':
                     prompt = SCAN_PHONE_PROMPT.format(
@@ -118,6 +139,8 @@ class ScanAnalyzeSSEView(APIView):
                     prompt = f"Hãy phân tích rủi ro an ninh mạng cho {scan_type} sau bằng tiếng Việt: {raw_input}. Dữ liệu kèm theo: {json.dumps(scan_data, ensure_ascii=False)}"
 
                 for chunk in stream_response(prompt, system_prompt=CHAT_SYSTEM_PROMPT):
+                    if not chunk or '__STATUS__:' in chunk or '__THINK__:' in chunk:
+                        continue
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
                 yield f"data: {json.dumps({'done': True})}\n\n"
             except Exception as e:

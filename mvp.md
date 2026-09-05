@@ -1,424 +1,300 @@
-# ShieldCall VN – Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo & các hình thức lừa đảo số
-> Tech stack thực tế: **Django (ASGI) + DRF**, **MySQL**, **Redis**, **Celery**, **TailwindCSS (Liquid Glass)**, **Ollama (Local LLM)**  
-> Mục tiêu: mô tả **đầy đủ tính năng + kiến trúc hiện tại** (data, pipeline, DB, session, queue, OCR, AI) để team dev duy trì và phát triển.
+# ShieldCall VN -- MVP & Kiến trúc Kỹ thuật
 
+> Tech stack: **Django 5.x (ASGI) + DRF**, **MySQL 8.0**, **Redis**, **Celery**, **Tailwind CSS v4 (Liquid Glass)**, **Alpine.js**, **Ollama (Local LLM)**, **Docker Sandbox**
+>
+> Tài liệu này mô tả đầy đủ tính năng, kiến trúc, DB schema, API và pipeline AI để team dev duy trì và phát triển.
 
 ---
 
-## 1) Kiến trúc hệ thống (Thực tế)
+## 1. Kiến trúc Hệ thống
+
 ### 1.1 Tổng quan
-- **Django (ASGI/Daphne)**: Xử lý cả HTTP API và WebSockets (Real-time scans).
-- **MySQL**: Lưu trữ dữ liệu quan hệ (Users, Reports, Phones, Domains).
-- **Redis**: Làm Channel Layer cho WebSockets, Cache kết quả scan, và Broker cho Celery.
-- **Celery Workers**: Xử lý các tác vụ nặng (Deep Scan, OCR, AI Analysis, Aggregating Trends).
-- **Ollama (Local AI)**: Sử dụng các mô hình như `neural-chat`, `ministral` để phân tích nội dung lừa đảo, trích xuất thực thể và gán nhãn dữ liệu.
 
-### 1.2 Luồng scan hiện tại (Phone/Message/URL/QR)
-1) User gửi request (Hỗ trợ cả Scan nhanh qua HTTP và Deep Scan qua WebSocket).
-2) Django Channels/Celery khởi tạo tiến trình scan.
-3) **Metadata Phase**: Trích xuất thông tin cơ bản (Carrier, Country, SSL, Whois) sử dụng `phonenumbers` và `ipwhois`.
-4) **AI/Analysis Phase**: 
-   - Với Text/Image: Sử dụng `EasyOCR` và `Ollama` để phân tích ngữ cảnh.
-   - Với Website: Kiểm tra redirect chains, SSL age, và Levenshtein distance cho "lookalike" domains.
-5) **Risk Scoring**: Tính toán điểm rủi ro theo công thức weighted sum (Reports, Recency, AI Confidence, Trust Score).
-6) **Real-time Feedback**: Cập nhật trạng thái từng bước (OCR -> Analysis -> Finalizing) qua WebSocket với cơ chế tự động reconnect và polling fallback.
-7) **Result**: Lưu kết quả vào MySQL và Cache Redis, trả về UI Liquid Glass.
+- **Django (ASGI/Daphne)**: HTTP API + SSE streaming + WebSockets
+- **MySQL 8.0**: Lưu trữ quan hệ (Users, Reports, Phones, Domains, ScanEvents)
+- **Redis**: Cache kết quả scan, Celery broker, rate-limit counters
+- **Celery Workers**: Tác vụ nặng (File Scan, OCR, AI Analysis, Trend Aggregation)
+- **Ollama (Local LLM)**: Reasoning model chạy on-premise, không cloud
+- **Docker Zero-Trust Sandbox**: Phân tích mã độc isolated (YARA + OLETools + PEFile + ClamAV)
+- **PM2**: Process manager cho web server, celery, celery-beat, puppeteer
+
+### 1.2 Luồng Scan File (Zero-Trust)
+
+```
+[User Upload] (max 500MB)
+    |
+    v
+[Cloudflare Turnstile Verify] --> 400 nếu fail
+    |
+    v
+[ScanEvent PENDING] --> [Celery: perform_file_scan_task]
+    |
+    v
+[LocalSandboxAnalyzer.scan_file()]
+    |-- [Docker Daemon Sandbox] (ưu tiên, daemon mode ~20ms)
+    |       |-- YARA ruleset scan
+    |       |-- OLETools (VBA macro forensics)
+    |       |-- PEFile (PE section entropy, dangerous API imports)
+    |       |-- ClamAV antivirus
+    |       |-- extract_script_snippet() [content-based text detection]
+    |
+    |-- [Fallback: Local host] nếu Docker không có
+            |-- ClamAV local
+            |-- Heuristics (entropy, PE magic, PDF exploit patterns)
+    |
+    v
+[ForensicEvidence[] + script_snippet + engines_status]
+    |
+    v
+[ScanEvent COMPLETED] --> [SSE /api/v1/scan/analyze/stream/]
+    |
+    v
+[Ollama LLM] phân tích forensic evidence + nội dung file (nếu text-readable)
+    --> stream response to UI
+```
+
+### 1.3 Luồng Scan Khác (Phone/Message/Domain/Email)
+
+1. User gửi request + Turnstile token
+2. Serialize + validate (DRF)
+3. Metadata extraction (carrier, WHOIS, DNS, SSL)
+4. Risk scoring (weighted sum + time decay)
+5. ScanEvent lưu DB + cache Redis
+6. SSE stream AI analysis về UI
 
 ---
 
-## 2) Navigation & Site Map (Glassmorphism UI)
-### 2.1 Public Nav
-- Home
-- Scan (dropdown)
-  - Scan Phone
-  - Scan Message
-  - Scan Website
-  - Scan Bank Account
-  - Scan QR / Image
+## 2. Sitemap
+
+### Public
+- Home (quick scan + trend banner)
+- Scan: Phone, Message, Website, Bank Account, QR/Image, File, Audio, Email
 - Report
-- Scam Radar (Live)
-- Learn Hub
+- Scam Radar
+- Learn Hub + Bài học + Quiz
+- Scam IQ Exam
+- Forum
 - Emergency
 - Login / Register
 
-### 2.2 User Nav
-- Scan
-- Report
-- Alerts (Saved)
-- Dashboard
-- Profile & Security
-- Logout
+### User (authenticated)
+- Dashboard (scan history, reports, alerts)
+- AI Assistant (trang chat đầy đủ)
+- Profile & Security (2FA, device management)
 
-### 2.3 Admin Nav
-- Overview
+### Admin
+- Dashboard tổng quan
 - Moderation Queue
-- Phone/Account/Domain DB
-- AI Logs & Model Manager
+- Entity Manager (Phone/Domain/Account DB)
+- Magic Create (AI-powered content creation)
+- AI Logs
 - Fraud Graph
 - Analytics & Trends
-- Users & Roles
 
 ---
 
-## 3) Data Strategy – Lấy dữ liệu ở đâu để làm được (quan trọng)
-### 3.1 Data nguồn (không cần nhạy cảm cá nhân)
-- **Crowdsourcing**: người dùng report số điện thoại / nội dung / link
-- **Public sources**: danh sách cảnh báo từ báo chí, diễn đàn (lọc/verify), nguồn mở
-- **Synthetic data**: tạo mẫu kịch bản lừa đảo (prompt) để bootstrap model
-- **Admin curation**: đội kiểm duyệt gán nhãn (scam type, severity, verified)
+## 3. Database Schema (MySQL)
 
-> Lưu ý: Không cần thu âm cuộc gọi thật từ người dùng ở MVP. Nếu làm voice detection, chỉ cần cho phép upload audio tự nguyện + ẩn danh.
+### 3.1 Users & Auth
 
-### 3.2 Labeling (gán nhãn)
-- Scam types (enum): giả danh công an, ngân hàng, tuyển dụng, đầu tư, giao hàng, vay tiền người thân, OTP/2FA, phishing link, v.v.
-- Severity: low/medium/high/critical
-- Evidence types: screenshot, chat log, url, bank account, qr
-
-### 3.3 Anti-abuse data
-- Reputation score của reporter
-- Duplicate detection (hash nội dung, similarity)
-- Rate limit & spam detection
-
----
-
-## 4) Cơ sở dữ liệu MySQL (bảng & index để dev)
-### 4.1 Users & Security
 **users**
-- id (uuid)
-- email (unique, indexed)
-- password_hash
-- role (user/mod/admin)
-- is_verified
-- created_at, updated_at
+- id (uuid), email (unique), password_hash, role (user/mod/admin)
+- is_verified, totp_secret (2FA), created_at, updated_at
 
-**sessions / tokens**
+**tokens / sessions**
 - refresh_tokens: id, user_id, token_hash, expires_at, revoked_at
 - login_logs: id, user_id, ip, user_agent, created_at
 
-### 4.2 Entities bị lừa đảo
-**phones**
-- id, phone_number (unique, indexed)
-- risk_score (0-100, indexed)
-- scam_type (enum)
-- report_count
-- verified_level (0..3)
-- last_seen_at
-- created_at, updated_at
+### 3.2 Scan Entities
 
-**domains**
-- id, domain_name (unique, indexed)
-- risk_score (indexed)
-- domain_age_days
-- ssl_valid
-- whois_snapshot_json
-- created_at
+**phones** -- id, phone_number (unique), risk_score, scam_type, report_count, verified_level, last_seen_at
 
-**bank_accounts**
-- id, bank_name (indexed)
-- account_number_hash (indexed)  *(không lưu plain nếu không cần)*
-- risk_score
-- report_count
-- created_at
+**domains** -- id, domain_name (unique), risk_score, domain_age_days, ssl_valid, whois_snapshot_json
 
-### 4.3 Reports & Scans
+**bank_accounts** -- id, bank_name, account_number_hash, risk_score, report_count
+
+### 3.3 Reports & Scans
+
 **reports**
-- id
-- reporter_id (FK users)
-- target_type (phone/domain/account/message/qr)
-- target_value (normalized string)
-- scam_type, severity
-- description
-- evidence_file_url
-- status (pending/approved/rejected)
-- moderator_id, moderation_note
-- created_at
+- id, reporter_id (FK), target_type, target_value, scam_type, severity
+- description, evidence_file_url, status (pending/approved/rejected)
+- moderator_id, moderation_note, created_at
 
 **scan_events**
-- id
-- user_id (nullable nếu guest)
-- scan_type (phone/message/domain/account/qr)
-- raw_input (text) *(có thể mã hoá)*
-- normalized_input (indexed where applicable)
-- result_json
-- risk_score (indexed)
+- id, user_id (nullable), scan_type (phone/message/domain/account/qr/file/audio/email/image)
+- raw_input, normalized_input, result_json, risk_score
+- status (PENDING/PROCESSING/COMPLETED/FAILED)
 - created_at
 
-### 4.4 Graph/Linking (để làm Fraud Network)
-**entity_links**
-- id
-- from_type (phone/domain/account)
-- from_id
-- to_type (phone/domain/account)
-- to_id
-- link_reason (shared_text/shared_report/shared_url/ocr_match/manual)
-- confidence (0..1)
-- created_at
-Indexes: (from_type, from_id), (to_type, to_id)
+### 3.4 Graph / Linking
 
-### 4.5 Trends (precompute)
-**trend_daily**
-- id
-- date (indexed)
-- region
-- scam_type
-- count
-- created_at
+**entity_links** -- id, from_type, from_id, to_type, to_id, link_reason, confidence
+
+### 3.5 Content & Learning
+
+**learn_posts** -- id, title, content (rich text), author_id, published_at
+
+**quizzes** -- id, post_id, questions_json, passing_score
+
+**trend_daily** -- id, date, region, scam_type, count
 
 ---
 
-## 5) Redis – dùng cụ thể như nào (để dev)
-### 5.1 Cache
-- `cache:phone:{number}` -> JSON scan result (TTL 10–30 phút)
-- `cache:domain:{domain}` -> JSON result (TTL 1–6 giờ)
-- `cache:account:{bank}:{hash}` -> JSON result
+## 4. Redis
 
-### 5.2 Rate limiting (theo IP + user)
-- key: `rl:{ip}:{endpoint}:{minute}` counter
-- limit gợi ý: 30 req/min guest, 120 req/min user
-
-### 5.3 Session/Token blacklist
-- key: `jwt:blacklist:{jti}` TTL = token exp
-
-### 5.4 Celery broker + result backend
-- Redis làm broker
-- result backend để tracking job status
+| Key pattern | Nội dung | TTL |
+| :--- | :--- | :--- |
+| `cache:phone:{number}` | JSON scan result | 10--30 phút |
+| `cache:domain:{domain}` | JSON result | 1--6 giờ |
+| `cache:account:{bank}:{hash}` | JSON result | 30 phút |
+| `rl:{ip}:{endpoint}:{minute}` | Rate limit counter | 1 phút |
+| `jwt:blacklist:{jti}` | Revoked token | token exp |
 
 ---
 
-## 6) AI & Risk Features (Cập nhật cơ chế thực tế)
-### 6.1 AI Text Analyzer (Ollama)
-**Mục tiêu:** Nhận diện hội thoại, kịch bản lừa đảo qua tin nhắn.
+## 5. AI Pipeline
 
-**Cơ chế hiện tại:**
-- **Local Engine**: `Ollama` chạy `neural-chat` hoặc các mô hình tinh chỉnh (Ministral).
-- **Phân loại**: Scam types (mạo danh, đe dọa, mời gọi đầu tư) kèm độ tin cậy.
-- **Trích xuất**: Tự động bóc tách số tài khoản ngân hàng, liên kết độc hại, số điện thoại từ đoạn chat.
-- **Khuyến nghị**: Đưa ra các bước hành động cụ thể dựa trên mức độ rủi ro $R_{text}$.
+### 5.1 File Content Extraction (text-readable detection)
 
-### 6.2 Phone Reputation Engine (Weighted & Time Decay)
-**Mục tiêu:** Tính điểm uy tín của số điện thoại.
+Không phụ thuộc extension file. Phân loại bằng content analysis:
 
-**Công thức hiện tại:**
-- **Risk Score** $S = \sum (w_i \times v_i) \times e^{-\lambda t}$
-- **Yếu tố**: Số lần bị report (đã duyệt), độ tin cậy của reporter (Trust Score), tần suất bị report trong 24h qua.
-- **Carrier/Geocoding**: Sử dụng `phonenumbers` để định danh Nhà mạng/Quốc gia (hỗ trợ toàn cầu, ưu tiên bản địa hóa VN).
-- **Disposable Check**: Kiểm tra các đầu số điện thoại ảo (VOIP/Virtual numbers) qua metadata.
+| Kiểm tra | Logic |
+| :--- | :--- |
+| Magic bytes | Reject ELF, MZ/PE, ZIP, GZIP, RAR, PNG, JPEG, GIF, PDF, OLE2, v.v. |
+| Null bytes | `b'\x00'` trong 8 KB đầu → binary |
+| Printable ratio | < 90% printable chars → binary |
+| Shannon entropy ≤ 6.2 | Plain text, đọc bình thường |
+| Entropy 6.2--7.5 | Đọc + prepend cảnh báo cho AI (có thể obfuscate/base64/XOR) |
+| Entropy > 7.5 | Reject (không thể phân biệt với encrypted random data) |
+| File > 500 KB | Reject (không đọc nội dung) |
 
-### 6.3 Phishing Website Analysis (Deep Scan)
-**Mục tiêu:** Phát hiện trang web giả mạo, lừa đảo hoặc chứa mã độc.
+Output: tối đa 150 dòng đầu, strip control chars (chống prompt injection).
 
-**Cơ chế hiện tại:**
-- **Network Check**: Phân tích SSL certificate (Tuổi đời SSL < 3 ngày được gán nhãn rủi ro cao), IP Reputation, Redirect Chains.
-- **Brand Protection**: Thuật toán Levenshtein distance so sánh domain với whitelist các thương hiệu ngân hàng/ví điện tử Việt Nam.
-- **Third-party Integration**: Kết hợp kết quả từ VirusTotal API và `ScamAdviser` (quét HTML động để lấy chỉ số trust).
-- **Screenshot Analysis**: (Phase đang thực hiện) Chụp màn hình để OCR logo/text so khớp với whitelist.
+### 5.2 Ollama LLM Integration
 
-### 6.4 OCR & QR Analysis (EasyOCR)
-**Mục tiêu:** Phân tích hình ảnh chụp màn hình, biên lai chuyển khoản hoặc mã QR.
+- **Endpoint**: HTTP streaming tới Ollama server nội bộ
+- **Thinking block**: Tách `__THINK__:` token, hiển thị accordion riêng
+- **Status tokens**: `__STATUS__:thinking` / `__STATUS__:answering` để cập nhật UI
+- **Chat Widget**: Hỗ trợ ảnh (base64), thinking accordion tự động mở/thu
+- **File Scan**: Lọc sạch thinking tokens, chỉ stream phần analysis
 
-**Cơ chế hiện tại:**
-- **OCR Engine**: `EasyOCR` xử lý đa ngôn ngữ (Tiếng Việt/Anh).
-- **QR Decoding**: `pyzbar` để bóc tách URL/Payload.
-- **Bounding Boxes**: Hiển thị trực quan cho người dùng vị trí phát hiện nội dung nhạy cảm.
-- **Pipeline**: Text sau khi OCR được đẩy vào `AI Text Analyzer` để đánh giá risk toàn diện.
+### 5.3 AI Prompts (prompts.py)
 
-### 6.5 WebSocket Resilience (Real-time Scan)
-**Mục tiêu:** Đảm bảo trải nghiệm quét không bị gián đoạn.
+Tất cả prompt theo nguyên tắc:
+- Không spam emoji (chỉ dùng khi thực sự cần nhấn mạnh)
+- Báo cáo nghiêm túc, dễ hiểu cho người dùng phổ thông
+- `SCAN_FILE_PROMPT` nhận: `forensic_evidence`, `engines`, `file_metadata`, `script_snippet`
+- AI được yêu cầu giải thích cụ thể từng đoạn lệnh đáng ngờ bằng ngôn ngữ đơn giản
 
-**Cơ chế:**
-- **State Machine**: Theo dõi trạng thái `Connecting`, `Connected`, `Reconnecting`, `Disconnected`.
-- **Exponential Backoff**: Tự động thử lại kết nối khi bị ngắt quãng với thời gian chờ tăng dần.
-- **HTTP Polling Fallback**: Nếu WebSocket không thể khôi phục, client sẽ tự động chuyển sang cơ chế Poll API `/api/v1/scan/status/` liên tục để lấy kết quả từ Celery worker.
+### 5.4 AI Agent (Multi-Tool)
+
+Agent có thể tự gọi:
+- Web search (Google/Bing/DuckDuckGo)
+- DB lookup (phone/domain/account)
+- URL/domain analysis
+- Image OCR
 
 ---
 
-## 7) Tính năng theo trang (đủ chi tiết để dev)
+## 6. API Endpoints
 
-### 7.1 Home
-- Quick scan phone
-- Banner cảnh báo mới nhất (từ trend_daily)
-- Top scam types 7 ngày
-- CTA Emergency
-
-### 7.2 Scan Phone
-- Input + normalize + validate
-- Kết quả:
-  - risk badge + score
-  - scam_type + confidence
-  - report_count + last_seen
-  - reasons (top 3)
-- Actions:
-  - “Report số này”
-  - “Save alert”
-  - “Share cảnh báo”
-
-### 7.3 Scan Message
-- Text area + upload screenshot
-- Nếu upload -> OCR -> show extracted text (editable)
-- Output:
-  - risk_score + explanation
-  - highlight câu nguy hiểm
-  - recommended action checklist
-
-### 7.4 Scan Website
-- Input URL + preview domain
-- Output:
-  - phishing risk
-  - similarity suggestion: “có thể bạn muốn vào …”
-  - technical details: domain age, ssl status
-
-### 7.5 Scan Bank Account
-- Bank select + account input
-- Hash & store safely
-- Output:
-  - risk_score
-  - linked entities (phone/domain) nếu có
-  - recommended action (không chuyển)
-
-### 7.6 Scan QR / Image
-- Upload image -> QR decode + OCR
-- Trả về:
-  - detected: url/account/phone
-  - link tới các scan tương ứng
-  - tổng risk_score
-
-### 7.7 Report
-- Form có:
-  - target type
-  - target value
-  - scam_type, severity
-  - description
-  - evidence upload
-- Anti-spam:
-  - captcha
-  - rate limit
-  - duplicate warning (similarity)
-
-### 7.8 Scam Radar (Live)
-- Heatmap (trend_daily)
-- Filter: scam_type, time range
-- “hot numbers” list (top risk increase)
-
-### 7.9 Learn Hub
-- Bài học theo chủ đề
-- Quiz “phân biệt lừa đảo” (gamification)
-- Bộ mẫu: “kịch bản lừa đảo phổ biến”
-- Chatbot tư vấn
-
-### 7.10 Emergency
-- Nút “Tôi đang bị lừa”
-- Flow:
-  1) dừng chuyển tiền
-  2) khóa tài khoản ngân hàng (hướng dẫn)
-  3) lưu bằng chứng (ảnh, chat, số)
-  4) tạo report tự động (prefill)
-  5) xuất PDF checklist + timeline sự kiện
-
-### 7.11 User Dashboard
-- Scan history (lọc theo type)
-- My reports (status)
-- Saved alerts
-- Security settings:
-  - 2FA (phase 2)
-  - device management
-  - revoke refresh tokens
-
-### 7.12 Admin Panel
-- Moderation queue:
-  - approve/reject
-  - merge duplicates
-  - label correction
-- Entity manager:
-  - phones/domains/accounts
-  - adjust verified_level
-- AI logs:
-  - latency, model version, error rate
-- Analytics:
-  - daily reports, top scams
-- Fraud graph viewer:
-  - cluster list
-  - drill-down entity links
-
----
-
-## 8) API Spec (tối thiểu để dev)
 ### Auth
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `POST /api/auth/logout` (revoke token)
-- `GET  /api/me`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET  /api/v1/me`
 
 ### Scan
-- `POST /api/scan/phone`
-- `POST /api/scan/message`
-- `POST /api/scan/domain`
-- `POST /api/scan/account`
-- `POST /api/scan/image` (OCR + QR)
+- `POST /api/v1/scan/phone/`
+- `POST /api/v1/scan/message/`
+- `POST /api/v1/scan/domain/`
+- `POST /api/v1/scan/account/`
+- `POST /api/v1/scan/image/`
+- `POST /api/v1/scan/email/`
+- `POST /api/v1/scan/file/`         -- multipart, Celery async
+- `POST /api/v1/scan/audio/`
+- `GET  /api/v1/scan/status/{id}/`  -- poll scan_event status
+- `POST /api/v1/scan/analyze/stream/` -- SSE AI analysis
 
 ### Reports & Trends
-- `POST /api/report`
-- `GET  /api/trends/daily`
-- `GET  /api/trends/hot`
+- `POST /api/v1/report/`
+- `GET  /api/v1/trends/daily/`
+- `GET  /api/v1/trends/hot/`
 
 ### User
-- `GET /api/user/scans`
-- `GET /api/user/reports`
-- `POST /api/user/alerts`
+- `GET  /api/v1/user/scans/`
+- `GET  /api/v1/user/reports/`
 
 ### Admin
-- `GET  /api/admin/reports?status=pending`
-- `POST /api/admin/reports/{id}/approve`
-- `POST /api/admin/reports/{id}/reject`
-- `GET  /api/admin/entities/phones`
-- `GET  /api/admin/ai/logs`
+- `GET  /api/v1/admin/reports/?status=pending`
+- `POST /api/v1/admin/reports/{id}/approve/`
+- `POST /api/v1/admin/reports/{id}/reject/`
+- `GET  /api/v1/admin/entities/phones/`
+
+### AI Chat
+- `POST /api/v1/ai/chat/stream/`     -- SSE stream
+- `POST /api/v1/ai/agent/stream/`    -- Agent với tools
+
+### Utilities
+- `POST /api/v1/utils/upload-image/` -- CKEditor image upload
+- `GET  /api/v1/utils/vietqr-banks/` -- Danh sách ngân hàng
 
 ---
 
-## 9) Celery Jobs (async tasks làm cho “ra sản phẩm”)
-- `scan_message_ocr_job(image_id)`
-- `scan_domain_job(url)`
-- `recompute_phone_risk_job(phone_id)`
-- `daily_trend_aggregation_job(date)`
-- `fraud_graph_cluster_job()`
-- `deduplicate_reports_job()`
+## 7. Celery Tasks
+
+| Task | Mô tả |
+| :--- | :--- |
+| `perform_file_scan_task(scan_id, file_path)` | Chạy sandbox phân tích file |
+| `scan_domain_job(url)` | Deep scan website |
+| `recompute_phone_risk_job(phone_id)` | Tính lại risk score |
+| `daily_trend_aggregation_job(date)` | Tổng hợp xu hướng |
+| `fraud_graph_cluster_job()` | Cập nhật entity links |
+| `deduplicate_reports_job()` | Loại bỏ báo cáo trùng |
 
 ---
 
-## 10) Bảo mật & vận hành (điểm kỹ thuật)
-- Redis rate limit theo IP/user
-- Validate input (DRF serializers)
-- File upload: size limit + content-type + virus scan (phase 2)
-- Encrypt sensitive fields (account number hash)
-- Audit logs (admin actions)
-- Monitoring: Sentry + Prometheus (optional)
+## 8. Bảo mật
+
+| Lớp | Cơ chế |
+| :--- | :--- |
+| Anti-spam | Cloudflare Turnstile (single-use token, auto-refresh khi expired) |
+| Rate limiting | Redis counter, 30 req/min guest, 120 req/min user |
+| File sandbox | Docker no-network, read-only, cap-dropped |
+| SSRF | IP private/loopback block trước outbound HTTP |
+| Filename | Path traversal + null byte sanitization |
+| Input | DRF serializer validation toàn bộ |
+| Auth | Token-based + 2FA TOTP |
+| Script injection | Control char strip trong file snippet |
 
 ---
 
-## 11) UI – Tailwind Glassmorphism (guideline)
-- Background: gradient dark
-- Card:
-  - `bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-lg`
-- Risk badge:
-  - green/yellow/red glow (class utilities)
-- Animated risk meter (progress bar + pulse)
+## 9. UI Guidelines
+
+- Background: gradient dark (slate/zinc tones)
+- Cards: `bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl`
+- Risk badge: green/yellow/red với glow effect
+- Animated progress bar + pulse indicator khi scan
+- SSE stream text rendering: `window.renderMd()` toàn cục, sanitize trước khi hiển thị
+- Thinking accordion: auto-open khi AI đang suy luận, auto-collapse khi xong
 - Mobile-first responsive
 
 ---
 
-## 12) Gợi ý cách bootstrap AI nhanh (để có demo)
-- V1: Rule-based scoring + keyword patterns + regex entity extraction (OTP, link, số TK)
-- V2: Train text classifier bằng dữ liệu report đã duyệt + data tổng hợp
-- V3: Add OCR + domain features + graph clusters
+## 10. Deliverables
+
+- [x] ERD + DB migrations (Django ORM)
+- [x] API docs (drf-spectacular / OpenAPI)
+- [x] Zero-Trust Docker Sandbox engine
+- [x] Multi-engine file analysis (YARA + OLETools + PEFile + ClamAV)
+- [x] Content-based text/binary classifier (entropy + magic bytes)
+- [x] SSE AI streaming với thinking display
+- [x] Cloudflare Turnstile anti-spam (token refresh flow)
+- [x] CKEditor 5 Community (GPL, không license fee)
+- [ ] Video demo end-to-end
+- [ ] Model card (mô tả AI + hạn chế + privacy policy)
 
 ---
 
-## 13) Deliverables (để nộp dự án/thi)
-- ERD + DB migration
-- API docs (OpenAPI/Swagger)
-- Demo dataset (ẩn danh)
-- UI prototype (Glassmorphism)
-- Model card (mô tả AI + hạn chế)
-- Video demo “scan -> cảnh báo -> report -> admin duyệt -> trend”
-
----
+*Cập nhật: 2026-09-02*

@@ -1,7 +1,6 @@
 from celery import shared_task
 from django.utils import timezone
 from .models import RAGIndexLog
-from api.utils.vector_db import vector_db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,6 +17,7 @@ def rebuild_vector_index(self, trigger='MANUAL'):
     push_service.send_rag_status_update('RUNNING', 'Bắt đầu xây dựng lại chỉ mục RAG...')
     
     try:
+        from api.utils.vector_db import vector_db
         # Get count before rebuilding for the log
         from django.db.models import Q
         from api.core.models import Article, LearnLesson, LearnQuiz, LearnScenario

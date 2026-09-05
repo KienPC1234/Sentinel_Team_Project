@@ -25,6 +25,8 @@ logger.setLevel(logging.INFO)
 # Read from Django settings with sensible defaults
 OLLAMA_BASE_URL = getattr(settings, 'OLLAMA_BASE_URL', 'http://localhost:11434')
 OLLAMA_API_KEY = getattr(settings, 'OLLAMA_API_KEY', None)
+SEARXNG_URL = getattr(settings, 'SEARXNG_URL', os.getenv('SEARXNG_URL', 'https://search.fptoj.com'))
+SEARXNG_API_KEY = getattr(settings, 'SEARXNG_API_KEY', os.getenv('SEARXNG_API_KEY', ''))
 
 # Mirror OLLAMA_API_KEY into the environment for any ollama library internals
 # that may read it (e.g. the search_agent client.chat call).
@@ -114,8 +116,7 @@ def _tool_lookup_trustpilot(domain: str):
     Args:
         domain: The domain name to check (e.g. 'example.com').
     """
-    clean = re.sub(r'^https?://', '', domain).split('/')[0].strip()
-    return web_fetch_url(f"https://www.trustpilot.com/review/{clean}")
+    return lookup_trustpilot(domain)
 
 
 def _tool_lookup_sitejabber(domain: str):
@@ -127,8 +128,7 @@ def _tool_lookup_sitejabber(domain: str):
     Args:
         domain: The domain name to check (e.g. 'example.com').
     """
-    clean = re.sub(r'^https?://', '', domain).split('/')[0].strip()
-    return web_fetch_url(f"https://www.sitejabber.com/reviews/{clean}")
+    return lookup_sitejabber(domain)
 
 
 def _tool_lookup_tranco(domain: str):
@@ -175,11 +175,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "scan_phone",
-            "description": "Scan a phone number for scam/risk reports.",
+            "description": "Kiểm tra toàn diện số điện thoại: đối chiếu CSDL cảnh báo lừa đảo nội bộ Sentinel/ShieldCall, thông tin nhà mạng, lịch sử tố cáo của cộng đồng, ScamWave và tin tức an ninh mạng.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "phone": {"type": "string", "description": "The phone number to scan"}
+                    "phone": {"type": "string", "description": "Số điện thoại cần kiểm tra (ví dụ: 0987654321 hoặc +84...)"}
                 },
                 "required": ["phone"]
             }
@@ -189,11 +189,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "scan_url",
-            "description": "Scan a domain or URL for phishing/malware risk.",
+            "description": "Quét và phân tích URL/Website: truy vấn CSDL tên miền độc hại ShieldCall, kích hoạt Chromium Headless Stealth Browser để bóc tách DOM và form đăng nhập giả mạo, kiểm tra xếp hạng Tranco, ScamAdviser, Trustpilot và các nguồn cảnh báo.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "The domain or URL to scan"}
+                    "url": {"type": "string", "description": "Tên miền hoặc đường link URL cần quét"}
                 },
                 "required": ["url"]
             }
@@ -203,12 +203,12 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "scan_bank_account",
-            "description": "Scan a bank account number for fraud reports.",
+            "description": "Tra cứu tài khoản ngân hàng lừa đảo: truy vấn CSDL tài khoản gian lận nội bộ ShieldCall, danh sách tố cáo cộng đồng, ScamWave và tra cứu trên Internet.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "account_number": {"type": "string", "description": "The bank account number"},
-                    "bank_name": {"type": "string", "description": "Optional bank name (e.g. MB, VCB)"}
+                    "account_number": {"type": "string", "description": "Số tài khoản ngân hàng"},
+                    "bank_name": {"type": "string", "description": "Tên ngân hàng (ví dụ: Vietcombank, MB, Techcombank, VPBank...)"}
                 },
                 "required": ["account_number"]
             }
@@ -217,13 +217,43 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "web_search",
-            "description": "Search the internet for real-time information and news.",
+            "name": "stealth_browse",
+            "description": "Kích hoạt Agent trình duyệt ẩn danh (Stealth Headless Chromium với bypass anti-bot) để truy cập trực tiếp website, bóc tách JavaScript động, cấu trúc DOM, phát hiện bẫy OTP/thông tin cá nhân và giải mã đường dẫn chuyển hướng.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The search query"},
-                    "max_results": {"type": "integer", "description": "Max results (1-10)"}
+                    "url": {"type": "string", "description": "Địa chỉ trang web cần mở và bóc tách"},
+                    "inspect_security": {"type": "boolean", "description": "Bật chế độ phát hiện form đánh cắp mật khẩu, OTP, mã ngân hàng"}
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_threat_database",
+            "description": "Tra cứu cơ sở dữ liệu cảnh báo lừa đảo cộng đồng của Sentinel / ShieldCall VN theo từ khóa, số tài khoản, số điện thoại, link giả mạo hoặc thủ đoạn lừa đảo.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Từ khóa tìm kiếm (SĐT, số tài khoản, tên đối tượng, thủ đoạn...)"},
+                    "target_type": {"type": "string", "description": "Loại đối tượng (phone, bank_account, website, all)", "enum": ["phone", "bank_account", "website", "all"]}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Tìm kiếm trên Internet qua đa nguồn về các thủ đoạn lừa đảo mới, tin tức cảnh báo an ninh mạng.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Nội dung truy vấn tìm kiếm"},
+                    "max_results": {"type": "integer", "description": "Số lượng kết quả tối đa (1-10)"}
                 },
                 "required": ["query"]
             }
@@ -233,11 +263,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "web_fetch",
-            "description": "Fetch and read the content of a specific web page.",
+            "description": "Tải và bóc tách nội dung chi tiết của trang web bất kỳ sử dụng cơ chế rendered headless.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "The URL to fetch"}
+                    "url": {"type": "string", "description": "URL trang web cần đọc nội dung"}
                 },
                 "required": ["url"]
             }
@@ -891,21 +921,22 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None, m
             if not msg:
                 continue
 
-            # Thinking tokens — skip, just signal status
+            # Thinking tokens — skip silently
             thinking = getattr(msg, 'thinking', '') or ''
             if not thinking and isinstance(msg, dict):
                 thinking = msg.get('thinking', '') or ''
             if thinking:
-                if not full_response:
-                    yield "__STATUS__:thinking"
                 continue
 
-            # Content tokens — yield immediately
+            # Content tokens — yield immediately (filter internal markers)
             content = getattr(msg, 'content', '') or ''
             if not content and isinstance(msg, dict):
                 content = msg.get('content', '') or ''
 
             if content:
+                # Remove stray think tags or status markers if any
+                if '__STATUS__:' in content or '__THINK__:' in content:
+                    continue
                 yield content
                 full_response.append(content)
 
@@ -920,48 +951,434 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None, m
 # AI Assistant tool wrappers (parameter names match TOOLS definitions)
 # ---------------------------------------------------------------------------
 
-def _assistant_scan_phone(phone: str):
-    """Scan a phone number: check ScamWave then web search for reports."""
-    results = {}
-    sw = _tool_lookup_scamwave(query=phone)
-    if sw and sw.get('content'):
-        results['scamwave'] = sw['content'][:2000]
-    ws = web_search_query(f"lừa đảo số điện thoại {phone} scam report", max_results=3)
-    if ws:
-        results['web_results'] = ws
-    return results or f"Không tìm thấy báo cáo lừa đảo về số {phone}."
+def _assistant_scan_phone(phone: str) -> Dict[str, Any]:
+    """
+    Comprehensive multi-layer phone number security analysis:
+    - Internal Database (PhoneNumber, PhoneReport, Report, ScanEvent, EntityLink)
+    - External Scam Intelligence (ScamWave)
+    - Open-source Intelligence & Community Web Search
+    """
+    cleaned = re.sub(r'[\s\.\-\(\)]', '', phone.strip())
+    if cleaned.startswith('+84'):
+        cleaned = '0' + cleaned[3:]
+    elif cleaned.startswith('84') and len(cleaned) >= 10:
+        cleaned = '0' + cleaned[2:]
+
+    report_payload = {
+        'target_phone': cleaned,
+        'internal_database': {
+            'found': False,
+            'risk_level': 'UNKNOWN',
+            'trust_score': None,
+            'carrier': None,
+            'line_type': None,
+            'is_virtual': False,
+            'community_reports_count': 0,
+            'risk_label': '',
+            'recent_complaints': [],
+        },
+        'sentinel_reports': [],
+        'scamwave_intel': None,
+        'web_intelligence': [],
+    }
+
+    # 1. Query Internal PhoneNumber & PhoneReport
+    try:
+        from api.phone_security.models import PhoneNumber, PhoneReport
+        phone_obj = PhoneNumber.objects.filter(phone_number=cleaned).first()
+        if phone_obj:
+            report_payload['internal_database']['found'] = True
+            report_payload['internal_database']['risk_level'] = phone_obj.risk_level
+            report_payload['internal_database']['trust_score'] = phone_obj.trust_score
+            report_payload['internal_database']['carrier'] = phone_obj.carrier
+            report_payload['internal_database']['line_type'] = phone_obj.line_type
+            report_payload['internal_database']['is_virtual'] = phone_obj.is_virtual
+            report_payload['internal_database']['community_reports_count'] = phone_obj.reports_count
+            report_payload['internal_database']['risk_label'] = phone_obj.risk_label
+            
+            reports = PhoneReport.objects.filter(phone_number=phone_obj).order_by('-created_at')[:5]
+            report_payload['internal_database']['recent_complaints'] = [
+                {
+                    'report_type': r.report_type,
+                    'description': r.description,
+                    'date': r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else ''
+                } for r in reports
+            ]
+    except Exception as e:
+        logger.warning(f"_assistant_scan_phone DB query error: {e}")
+
+    # 2. Query Sentinel Community Reports
+    try:
+        from api.core.models import Report
+        from django.db.models import Q
+        phone_filter = Q(target_type='phone', target_value__icontains=cleaned) | Q(scammer_phone__icontains=cleaned)
+        sentinel_reps = Report.objects.filter(phone_filter).order_by('-created_at')[:5]
+        for sr in sentinel_reps:
+            report_payload['sentinel_reports'].append({
+                'scam_type': sr.scam_type,
+                'severity': sr.severity,
+                'status': sr.status,
+                'description': sr.description[:500] if sr.description else '',
+                'scammer_name': sr.scammer_name,
+                'date': sr.created_at.strftime('%d/%m/%Y') if sr.created_at else '',
+            })
+    except Exception as e:
+        logger.warning(f"_assistant_scan_phone Sentinel Reports query error: {e}")
+
+    # 3. Query External ScamWave
+    try:
+        sw = _tool_lookup_scamwave(query=cleaned)
+        if sw and sw.get('content'):
+            report_payload['scamwave_intel'] = sw['content'][:2500]
+    except Exception as e:
+        logger.warning(f"_assistant_scan_phone ScamWave query error: {e}")
+
+    # 4. Open-source Web Search
+    try:
+        ws = web_search_query(f"lừa đảo số điện thoại {cleaned} scam phản ánh", max_results=3)
+        if ws:
+            report_payload['web_intelligence'] = ws
+    except Exception as e:
+        logger.warning(f"_assistant_scan_phone Web search error: {e}")
+
+    return report_payload
 
 
-def _assistant_scan_url(url: str):
-    """Scan a URL/domain: check ScamAdviser, Trustpilot, Tranco and web search."""
-    clean = re.sub(r'^https?://', '', url).split('/')[0].strip()
-    results = {}
-    sa = lookup_scamadviser(clean)
-    if sa and sa.get('content'):
-        results['scamadviser'] = sa['content'][:2000]
-    tp = _tool_lookup_trustpilot(domain=clean)
-    if tp and tp.get('content'):
-        results['trustpilot'] = tp['content'][:2000]
-    tr = lookup_tranco(clean)
-    if tr:
-        results['tranco'] = tr
-    ws = web_search_query(f"{clean} scam lừa đảo review", max_results=3)
-    if ws:
-        results['web_results'] = ws
-    return results or f"Không tìm thấy thông tin rủi ro về {url}."
+def _assistant_scan_url(url: str) -> Dict[str, Any]:
+    """
+    Comprehensive multi-layer website / URL threat analysis:
+    - Internal Database (Domain, Report, ScanEvent)
+    - Stealth Headless Chromium Browser (Puppeteer DOM & Phishing form detection)
+    - Global Threat Intelligence (Tranco 1M rank, ScamAdviser, Trustpilot)
+    - Open-source Intelligence & Search
+    """
+    clean_domain = re.sub(r'^https?://', '', url).split('/')[0].strip().lower()
+    full_url = url.strip()
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', full_url):
+        full_url = f"https://{full_url}"
+
+    report_payload = {
+        'url': full_url,
+        'domain': clean_domain,
+        'internal_database': {
+            'found': False,
+            'is_scam': False,
+            'risk_score': 0,
+            'category': None,
+            'threat_types': [],
+        },
+        'sentinel_reports': [],
+        'stealth_browser_inspection': {
+            'accessible': False,
+            'final_url': full_url,
+            'title': '',
+            'captcha_detected': False,
+            'security_indicators': [],
+            'rendered_preview': '',
+        },
+        'threat_intel': {
+            'tranco_top_rank': None,
+            'scamadviser': None,
+            'trustpilot': None,
+        },
+        'web_intelligence': [],
+    }
+
+    # 1. Query Internal Database (Domain & Reports)
+    try:
+        from api.core.models import Domain, Report
+        from django.db.models import Q
+        dom_obj = Domain.objects.filter(domain_name=clean_domain).first()
+        if dom_obj:
+            report_payload['internal_database']['found'] = True
+            report_payload['internal_database']['is_scam'] = (dom_obj.risk_score >= 60)
+            report_payload['internal_database']['risk_score'] = dom_obj.risk_score
+            report_payload['internal_database']['domain_age_days'] = dom_obj.domain_age_days
+            report_payload['internal_database']['ssl_valid'] = dom_obj.ssl_valid
+            report_payload['internal_database']['report_count'] = dom_obj.report_count
+            report_payload['internal_database']['scam_type'] = dom_obj.scam_type
+
+        reps = Report.objects.filter(
+            Q(target_type='domain', target_value__icontains=clean_domain) |
+            Q(target_value__icontains=clean_domain)
+        ).order_by('-created_at')[:5]
+        for r in reps:
+            report_payload['sentinel_reports'].append({
+                'scam_type': r.scam_type,
+                'severity': r.severity,
+                'status': r.status,
+                'description': r.description[:500] if r.description else '',
+                'date': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
+            })
+    except Exception as e:
+        logger.warning(f"_assistant_scan_url DB query error: {e}")
+
+    # 2. Stealth Headless Chromium Browser Inspection
+    try:
+        from api.utils.puppeteer_host_client import fetch_with_puppeteer_host
+        pup_res = fetch_with_puppeteer_host(full_url, timeout_ms=15000)
+        if pup_res.get('ok'):
+            report_payload['stealth_browser_inspection']['accessible'] = True
+            report_payload['stealth_browser_inspection']['final_url'] = pup_res.get('final_url', full_url)
+            report_payload['stealth_browser_inspection']['title'] = pup_res.get('title', '')
+            report_payload['stealth_browser_inspection']['captcha_detected'] = pup_res.get('captcha_detected', False)
+            content = pup_res.get('content', '')
+            report_payload['stealth_browser_inspection']['rendered_preview'] = content[:3000]
+
+            content_lower = content.lower()
+            indicators = []
+            if any(k in content_lower for k in ('nhập mật khẩu', 'password', 'mã otp', 'nhập otp', 'internet banking', 'smartbanking')):
+                indicators.append('Phát hiện trường yêu cầu nhập mật khẩu / mã OTP hoặc thông tin ngân hàng')
+            if any(k in content_lower for k in ('tài khoản bị khóa', 'xác minh danh tính khẩn cấp', 'nhận quà tri ân', 'trúng thưởng')):
+                indicators.append('Dấu hiệu thúc giục / giả mạo cơ quan chức năng hoặc quà tặng bất thường')
+            if 't.me/' in content_lower or 'zalo.me/' in content_lower:
+                indicators.append('Chứa liên kết điều hướng sang nhóm chat ẩn danh Telegram/Zalo')
+
+            final_domain = re.sub(r'^https?://', '', pup_res.get('final_url', '')).split('/')[0].strip().lower()
+            if final_domain and final_domain != clean_domain:
+                indicators.append(f'Chuyển hướng bí mật sang tên miền khác: {final_domain}')
+
+            report_payload['stealth_browser_inspection']['security_indicators'] = indicators
+    except Exception as e:
+        logger.warning(f"_assistant_scan_url Puppeteer error: {e}")
+
+    # 3. Global Threat Intelligence
+    try:
+        tr = lookup_tranco(clean_domain)
+        if tr:
+            report_payload['threat_intel']['tranco_top_rank'] = tr
+        sa = lookup_scamadviser(clean_domain)
+        if sa and sa.get('content'):
+            report_payload['threat_intel']['scamadviser'] = sa['content'][:1500]
+        tp = _tool_lookup_trustpilot(domain=clean_domain)
+        if tp and tp.get('content'):
+            report_payload['threat_intel']['trustpilot'] = tp['content'][:1500]
+    except Exception as e:
+        logger.warning(f"_assistant_scan_url threat intel error: {e}")
+
+    # 4. Open-source Web Search
+    try:
+        ws = web_search_query(f"{clean_domain} scam lừa đảo giả mạo review", max_results=3)
+        if ws:
+            report_payload['web_intelligence'] = ws
+    except Exception as e:
+        logger.warning(f"_assistant_scan_url web search error: {e}")
+
+    return report_payload
 
 
-def _assistant_scan_bank_account(account_number: str, bank_name: str = ""):
-    """Scan a bank account number for fraud reports on ScamWave + web."""
-    query = f"{account_number} {bank_name}".strip()
-    results = {}
-    sw = _tool_lookup_scamwave(query=query)
-    if sw and sw.get('content'):
-        results['scamwave'] = sw['content'][:2000]
-    ws = web_search_query(f"lừa đảo tài khoản ngân hàng {query} scam", max_results=3)
-    if ws:
-        results['web_results'] = ws
-    return results or f"Không tìm thấy báo cáo lừa đảo về tài khoản {account_number}."
+def _assistant_scan_bank_account(account_number: str, bank_name: str = "") -> Dict[str, Any]:
+    """
+    Comprehensive multi-layer bank account fraud analysis:
+    - Internal Database (BankAccount, Report, EntityLink)
+    - External Scam Intelligence (ScamWave)
+    - Open-source Intelligence & Community Web Search
+    """
+    cleaned = re.sub(r'\D', '', account_number.strip())
+    query = f"{cleaned} {bank_name}".strip()
+
+    report_payload = {
+        'account_number': cleaned,
+        'bank_name': bank_name,
+        'internal_database': {
+            'found': False,
+            'bank_name': bank_name,
+            'masked_account': None,
+            'is_scam': False,
+            'risk_score': 0,
+            'report_count': 0,
+            'scam_type': None,
+        },
+        'sentinel_reports': [],
+        'scamwave_intel': None,
+        'web_intelligence': [],
+    }
+
+    # 1. Query Internal BankAccount
+    try:
+        import hashlib
+        from api.core.models import BankAccount
+        acc_hash = hashlib.sha256(cleaned.encode()).hexdigest()
+        bank_obj = BankAccount.objects.filter(account_number_hash=acc_hash).first()
+        if bank_obj:
+            report_payload['internal_database']['found'] = True
+            report_payload['internal_database']['bank_name'] = bank_obj.bank_name or bank_name
+            report_payload['internal_database']['masked_account'] = bank_obj.account_number_masked
+            report_payload['internal_database']['is_scam'] = (bank_obj.risk_score >= 60 or bank_obj.report_count > 0)
+            report_payload['internal_database']['risk_score'] = bank_obj.risk_score
+            report_payload['internal_database']['report_count'] = bank_obj.report_count
+            report_payload['internal_database']['scam_type'] = bank_obj.scam_type
+    except Exception as e:
+        logger.warning(f"_assistant_scan_bank_account DB query error: {e}")
+
+    # 2. Query Sentinel Community Reports
+    try:
+        from api.core.models import Report
+        from django.db.models import Q
+        bank_filter = (
+            Q(target_type='account', target_value__icontains=cleaned) |
+            Q(scammer_bank_account__icontains=cleaned)
+        )
+        if bank_name:
+            bank_filter |= Q(scammer_bank_name__icontains=bank_name, scammer_bank_account__icontains=cleaned)
+        sentinel_reps = Report.objects.filter(bank_filter).order_by('-created_at')[:5]
+        for sr in sentinel_reps:
+            report_payload['sentinel_reports'].append({
+                'scam_type': sr.scam_type,
+                'severity': sr.severity,
+                'status': sr.status,
+                'description': sr.description[:500] if sr.description else '',
+                'scammer_name': sr.scammer_name,
+                'scammer_bank': sr.scammer_bank_name,
+                'date': sr.created_at.strftime('%d/%m/%Y') if sr.created_at else '',
+            })
+    except Exception as e:
+        logger.warning(f"_assistant_scan_bank_account Sentinel Reports query error: {e}")
+
+    # 3. Query External ScamWave
+    try:
+        sw = _tool_lookup_scamwave(query=query)
+        if sw and sw.get('content'):
+            report_payload['scamwave_intel'] = sw['content'][:2500]
+    except Exception as e:
+        logger.warning(f"_assistant_scan_bank_account ScamWave query error: {e}")
+
+    # 4. Open-source Web Search
+    try:
+        ws = web_search_query(f"lừa đảo số tài khoản {query} tố cáo", max_results=3)
+        if ws:
+            report_payload['web_intelligence'] = ws
+    except Exception as e:
+        logger.warning(f"_assistant_scan_bank_account Web search error: {e}")
+
+    return report_payload
+
+
+def _assistant_stealth_browse(url: str, inspect_security: bool = True) -> Dict[str, Any]:
+    """
+    Direct Stealth Headless Chromium Browser tool:
+    Executes a real Chromium browser instance with anti-detection stealth plugin
+    to bypass bot protection, render full JavaScript Single-Page Applications (SPAs),
+    and extract live page structure, rendered text, final redirects, and security indicators.
+    """
+    from api.utils.puppeteer_host_client import fetch_with_puppeteer_host
+    full_url = url.strip()
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', full_url):
+        full_url = f"https://{full_url}"
+
+    pup_res = fetch_with_puppeteer_host(full_url, timeout_ms=20000)
+    if not pup_res.get('ok'):
+        fallback = web_fetch_url(full_url)
+        if fallback:
+            return {
+                'engine': 'fallback_http',
+                'url': full_url,
+                'title': fallback.get('title', ''),
+                'content': fallback.get('content', '')[:6000],
+                'note': f"Trình duyệt Stealth gặp trục trặc ({pup_res.get('error')}), chuyển sang HTTP parser.",
+            }
+        return {
+            'engine': 'stealth_chromium',
+            'url': full_url,
+            'ok': False,
+            'error': pup_res.get('error', 'Không thể kết nối đến trang web đích.'),
+        }
+
+    content = pup_res.get('content', '')
+    content_lower = content.lower()
+    security_flags = []
+    if inspect_security:
+        if any(k in content_lower for k in ('nhập mật khẩu', 'password', 'mã otp', 'otp', 'đăng nhập')):
+            security_flags.append('Trang có form đăng nhập hoặc yêu cầu xác thực bảo mật.')
+        if any(k in content_lower for k in ('số tài khoản', 'mã pin', 'cvv', 'thẻ tín dụng', 'smartbanking')):
+            security_flags.append('Trang yêu cầu cung cấp thông tin tài chính / ngân hàng.')
+        if 't.me/' in content_lower or 'zalo.me/' in content_lower:
+            security_flags.append('Phát hiện liên kết chuyển hướng sang Telegram / Zalo.')
+
+    return {
+        'engine': 'stealth_headless_chromium',
+        'status_code': pup_res.get('status_code'),
+        'initial_url': full_url,
+        'final_url': pup_res.get('final_url', full_url),
+        'title': pup_res.get('title', ''),
+        'captcha_detected': pup_res.get('captcha_detected', False),
+        'security_flags': security_flags,
+        'rendered_content': content[:8000],
+    }
+
+
+def _assistant_query_threat_database(query: str, target_type: str = "all") -> Dict[str, Any]:
+    """
+    Search Sentinel / ShieldCall VN community threat database for reports,
+    known scam targets, loss amounts, and fraud tactics.
+    """
+    from api.core.models import Report, ScanEvent
+    from django.db.models import Q
+
+    cleaned = query.strip()
+    result = {
+        'query': cleaned,
+        'matched_reports_count': 0,
+        'reports': [],
+        'related_scans': [],
+    }
+
+    try:
+        type_map = {
+            'phone': 'phone',
+            'bank': 'account',
+            'bank_account': 'account',
+            'account': 'account',
+            'website': 'domain',
+            'web': 'domain',
+            'url': 'domain',
+            'domain': 'domain',
+            'email': 'email',
+            'qr': 'qr',
+            'message': 'message',
+        }
+        report_filter = (
+            Q(target_value__icontains=cleaned) |
+            Q(description__icontains=cleaned) |
+            Q(scammer_name__icontains=cleaned) |
+            Q(scammer_phone__icontains=cleaned) |
+            Q(scammer_bank_account__icontains=cleaned) |
+            Q(scammer_bank_name__icontains=cleaned)
+        )
+        if target_type and target_type != 'all':
+            resolved_type = type_map.get(target_type.lower(), target_type)
+            report_filter &= Q(target_type=resolved_type)
+
+        matched = Report.objects.filter(report_filter).order_by('-created_at')[:10]
+        result['matched_reports_count'] = matched.count()
+        for r in matched:
+            result['reports'].append({
+                'id': r.id,
+                'target_type': r.target_type,
+                'target_value': r.target_value,
+                'scam_type': r.scam_type,
+                'severity': r.severity,
+                'status': r.status,
+                'scammer_name': r.scammer_name,
+                'scammer_phone': r.scammer_phone,
+                'scammer_bank': f"{r.scammer_bank_name} {r.scammer_bank_account}".strip(),
+                'description': r.description[:600] if r.description else '',
+                'created_at': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
+            })
+
+        scans = ScanEvent.objects.filter(raw_input__icontains=cleaned).order_by('-created_at')[:5]
+        for s in scans:
+            result['related_scans'].append({
+                'id': s.id,
+                'scan_type': s.scan_type,
+                'risk_level': s.risk_level,
+                'risk_score': s.risk_score,
+                'date': s.created_at.strftime('%d/%m/%Y %H:%M') if s.created_at else '',
+            })
+    except Exception as e:
+        logger.warning(f"_assistant_query_threat_database error: {e}")
+
+    return result
 
 
 def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None, debug: bool = False) -> Generator[str, None, None]:
@@ -971,17 +1388,17 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
     """
     if debug or DEBUG_LLM:
         yield f"__DEBUG_MODEL__:{model or DEFAULT_MODEL}"
-        # Small summary of history
         yield f"__DEBUG_HISTORY_COUNT__:{len(messages)}"
     model = model or DEFAULT_MODEL
     tool_dispatch = tool_dispatch or {}
-    # Combine with standard tools
     all_dispatch = {
         'web_search': web_search_query,
         'web_fetch': web_fetch_url,
         'scan_phone': _assistant_scan_phone,
         'scan_url': _assistant_scan_url,
         'scan_bank_account': _assistant_scan_bank_account,
+        'stealth_browse': _assistant_stealth_browse,
+        'query_threat_database': _assistant_query_threat_database,
     }
     all_dispatch.update(tool_dispatch)
 
@@ -1028,6 +1445,9 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         thinking = msg.get('thinking', "")
                     
                     if thinking:
+                        if not is_thinking:
+                            is_thinking = True
+                            yield "__STATUS__:thinking"
                         yield f"__THINK__:{thinking}"
                     
                     # Handle Content
@@ -1036,6 +1456,9 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         content = msg.get('content', "")
                     
                     if content:
+                        if is_thinking:
+                            is_thinking = False
+                            yield "__STATUS__:answering"
                         yield content
                         current_content.append(content)
 
@@ -1102,6 +1525,8 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         'content': result_str,
                         'tool_name': tool_name
                     })
+
+                    yield f"__TOOL_RESULT__:{json.dumps({'tool': tool_name, 'status': 'done', 'summary': result_str[:250]})}"
 
                 yield f"__TOOL_CALLS__:{json.dumps(serializable_calls)}"
                 iteration += 1
@@ -1209,27 +1634,117 @@ def _web_api_headers() -> Dict[str, str]:
 
 def web_search_query(query: str, max_results: int = 5) -> Optional[List[Dict]]:
     """
-    Perform a web search via Ollama's web search REST API.
-    (https://ollama.com/api/web_search)
-    Requires OLLAMA_API_KEY in Django settings.
+    Perform a web search using SearXNG (search.fptoj.com) or Ollama search fallback.
 
-    Returns a list of result dicts with keys: title, url, content.
+    Returns a list of result dicts with keys: title, url, content, engine, score.
     """
+    if not query or not query.strip():
+        return []
+
+    cleaned_query = query.strip()
     import requests as _requests
+
+    # 1. Primary: SearXNG (custom meta-search engine e.g. search.fptoj.com)
+    searxng_base = SEARXNG_URL or getattr(settings, 'SEARXNG_URL', os.getenv('SEARXNG_URL', 'https://search.fptoj.com'))
+    if searxng_base:
+        try:
+            url = f"{searxng_base.rstrip('/')}/search"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+                'Accept': 'application/json',
+            }
+            api_key = SEARXNG_API_KEY or getattr(settings, 'SEARXNG_API_KEY', os.getenv('SEARXNG_API_KEY', ''))
+            if api_key:
+                headers['Authorization'] = f"Bearer {api_key}"
+
+            params = {
+                'q': cleaned_query,
+                'format': 'json',
+                'language': 'auto',
+            }
+            resp = _requests.get(url, params=params, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_results = data.get('results', [])
+                if raw_results:
+                    parsed_results = []
+                    for r in raw_results[:max_results]:
+                        title = (r.get('title') or '').strip()
+                        link = (r.get('url') or '').strip()
+                        content = (r.get('content') or r.get('snippet') or '').strip()
+                        if title or content:
+                            parsed_results.append({
+                                'title': title,
+                                'url': link,
+                                'content': content,
+                                'engine': r.get('engine', 'searxng'),
+                                'score': r.get('score', 0.0),
+                            })
+                    if parsed_results:
+                        return parsed_results
+        except Exception as e:
+            logger.warning(f"SearXNG web_search_query error ({searxng_base}): {e}")
+
+    # 2. Fallback: Ollama web search REST API (https://ollama.com/api/web_search)
+    key = OLLAMA_API_KEY or os.environ.get('OLLAMA_API_KEY', '')
+    if key:
+        try:
+            resp = _requests.post(
+                f"{_OLLAMA_WEB_API_BASE}/web_search",
+                headers=_web_api_headers(),
+                json={"query": cleaned_query, "max_results": max_results},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                results = data.get('results', [])
+                if results:
+                    return results
+        except Exception as e:
+            logger.warning(f"Ollama web_search error: {e}")
+
+    # 3. Fallback: DuckDuckGo HTML Search
     try:
-        resp = _requests.post(
-            f"{_OLLAMA_WEB_API_BASE}/web_search",
-            headers=_web_api_headers(),
-            json={"query": query, "max_results": max_results},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        results = data.get('results', [])
-        return results
+        ddg_url = 'https://html.duckduckgo.com/html/'
+        ddg_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        }
+        ddg_resp = _requests.post(ddg_url, data={'q': cleaned_query}, headers=ddg_headers, timeout=6)
+        if ddg_resp.status_code == 200:
+            import urllib.parse
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(ddg_resp.text, 'html.parser')
+            ddg_results = []
+            for r in soup.select('.result'):
+                title_el = r.select_one('.result__title a')
+                snippet_el = r.select_one('.result__snippet')
+                if not title_el:
+                    continue
+                title_text = title_el.get_text(strip=True)
+                raw_href = title_el.get('href', '')
+                if 'uddg=' in raw_href:
+                    try:
+                        raw_href = urllib.parse.unquote(raw_href.split('uddg=')[1].split('&')[0])
+                    except Exception:
+                        pass
+                snippet_text = snippet_el.get_text(strip=True) if snippet_el else ''
+                if title_text or snippet_text:
+                    ddg_results.append({
+                        'title': title_text,
+                        'url': raw_href,
+                        'content': snippet_text,
+                        'engine': 'duckduckgo',
+                        'score': 0.8,
+                    })
+                if len(ddg_results) >= max_results:
+                    break
+            if ddg_results:
+                return ddg_results
     except Exception as e:
-        logger.error(f"web_search_query error: {e}")
-        return None
+        logger.warning(f"DuckDuckGo web_search fallback error: {e}")
+
+    return []
 
 
 def web_fetch_url(url: str) -> Optional[Dict]:
@@ -1274,6 +1789,22 @@ def web_fetch_url(url: str) -> Optional[Dict]:
         logger.warning(f"web_fetch_url SSRF validation failed for {target_url}: {ssrf_err}")
         return None
     
+    # 1. Primary Engine: Stealth Headless Chromium Browser (SPA / anti-bot capable)
+    try:
+        from api.utils.puppeteer_host_client import fetch_with_puppeteer_host
+        pup_res = fetch_with_puppeteer_host(target_url, timeout_ms=15000)
+        if pup_res.get('ok') and pup_res.get('content'):
+            return {
+                'title': pup_res.get('title', ''),
+                'content': pup_res.get('content', '')[:12000],
+                'final_url': pup_res.get('final_url', target_url),
+                'links': [],
+                'engine': 'stealth_puppeteer',
+            }
+    except Exception as pup_err:
+        logger.warning(f"web_fetch_url Puppeteer attempt failed: {pup_err}")
+
+    # 2. Fallback Engine: Requests + BeautifulSoup
     browser_headers = {
         'User-Agent': (
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -1588,7 +2119,7 @@ def lookup_scamwave(query: str) -> Optional[Dict]:
 
 def lookup_trustpilot(domain: str) -> Optional[Dict]:
     """
-    Look up a domain's reviews on Trustpilot.
+    Look up a domain's reviews on Trustpilot with fallback to web search.
 
     Args:
         domain: Domain name (e.g. 'example.com').
@@ -1602,15 +2133,28 @@ def lookup_trustpilot(domain: str) -> Optional[Dict]:
         return None
     url = f"{SCAM_DB_URLS['trustpilot']}{clean}"
     result = web_fetch_url(url)
-    if result:
+    if result and result.get('content') and len(result['content']) > 100:
         result['source'] = 'trustpilot'
         result['query_url'] = url
-    return result
+        return result
+
+    # Fallback to search query
+    search_hits = web_search_query(f"site:trustpilot.com/review/{clean} OR Trustpilot {clean} reviews", max_results=3)
+    if search_hits:
+        combined = "\n".join([f"- {h.get('title')}: {h.get('content')}" for h in search_hits])
+        return {
+            'source': 'trustpilot',
+            'query_url': url,
+            'title': f"Trustpilot reviews for {clean}",
+            'content': combined,
+            'links': [h.get('url') for h in search_hits if h.get('url')],
+        }
+    return result or {'source': 'trustpilot', 'query_url': url, 'title': f'Trustpilot {clean}', 'content': f'Không tìm thấy đánh giá cụ thể trên Trustpilot cho {clean}.', 'links': []}
 
 
 def lookup_sitejabber(domain: str) -> Optional[Dict]:
     """
-    Look up a domain's reviews on sitejabber.
+    Look up a domain's reviews on sitejabber with fallback to web search.
 
     Args:
         domain: Domain name (e.g. 'example.com').
@@ -1624,10 +2168,23 @@ def lookup_sitejabber(domain: str) -> Optional[Dict]:
         return None
     url = f"{SCAM_DB_URLS['sitejabber']}{clean}"
     result = web_fetch_url(url)
-    if result:
+    if result and result.get('content') and len(result['content']) > 100:
         result['source'] = 'sitejabber'
         result['query_url'] = url
-    return result
+        return result
+
+    # Fallback to search query
+    search_hits = web_search_query(f"site:sitejabber.com/reviews/{clean} OR Sitejabber {clean} reviews", max_results=3)
+    if search_hits:
+        combined = "\n".join([f"- {h.get('title')}: {h.get('content')}" for h in search_hits])
+        return {
+            'source': 'sitejabber',
+            'query_url': url,
+            'title': f"Sitejabber reviews for {clean}",
+            'content': combined,
+            'links': [h.get('url') for h in search_hits if h.get('url')],
+        }
+    return result or {'source': 'sitejabber', 'query_url': url, 'title': f'Sitejabber {clean}', 'content': f'Không tìm thấy đánh giá cụ thể trên Sitejabber cho {clean}.', 'links': []}
 
 
 def lookup_tranco(domain: str) -> Optional[Dict]:
@@ -2145,7 +2702,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
     db_context_parts: List[str] = []
     db_sources_consulted: List[str] = []
 
-    if use_web_search and OLLAMA_API_KEY:
+    if use_web_search and (OLLAMA_API_KEY or SEARXNG_URL):
         # ------------------------------------------------------------------
         # Step 1: Direct scam-database lookups (ScamAdviser + ScamWave)
         # ------------------------------------------------------------------

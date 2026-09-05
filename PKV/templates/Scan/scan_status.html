@@ -244,7 +244,8 @@ function scanStatusApp() {
 
         renderMd(text) {
             if (!text) return '';
-            if (window.marked && window.marked.parse) return window.marked.parse(text);
+            if (typeof window.renderMd === 'function') return window.renderMd(text);
+            if (window.marked && window.marked.parse) return window.marked.parse(text, { breaks: true, gfm: true });
             return text.replace(/\n/g, '<br>');
         },
 

@@ -6,6 +6,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
+from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from api.ai_chat.views import AssistantPageView
 from api.utils import openapi
@@ -23,7 +24,7 @@ from .views import (
     forum_create_view, forum_edit_view, public_profile_view, scan_file_view, scan_audio_view,
     article_detail_view, scam_radar_list_view, demo_video_view,
     lesson_detail_view, scan_lookup_view, scam_iq_exam_view,
-    my_reports_view,
+    my_reports_view, community_reports_view,
     announcements_view, tickets_view, inbox_view, admin_tickets_view,
 )
 from .views.admin_views import (
@@ -111,6 +112,8 @@ urlpatterns = [
     
     # Community pages
     path("report/", report_view, name="report"),
+    path("reports/", community_reports_view, name="report-list"),
+    path("report/lookup/", community_reports_view, name="report-lookup"),
     path("my-reports/", my_reports_view, name="my-reports"),
     path("scam-radar/", scam_radar_view, name="scam-radar"),
     path("scam-radar/list/<str:list_type>/", scam_radar_list_view, name="scam-radar-list"),
@@ -201,6 +204,7 @@ urlpatterns = [
 
     # Allauth (Google OAuth)
     path('accounts/password/reset/', TurnstilePasswordResetView.as_view(), name='account_reset_password'),
+    path('accounts/profile/', RedirectView.as_view(url='/profile/', permanent=False), name='account_profile_redirect'),
     path('accounts/', include('allauth.urls')),
 ]
 

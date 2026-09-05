@@ -4,15 +4,7 @@ import numpy as np
 import pickle
 import logging
 import warnings
-import transformers.utils.logging
-from sentence_transformers import SentenceTransformer
-import torch
 from django.conf import settings
-
-# Suppress transformers/sentence-transformers warnings
-transformers.utils.logging.set_verbosity_error()
-logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
-warnings.filterwarnings("ignore", message=".*embeddings.position_ids.*")
 
 # Set HF_TOKEN if available in settings to avoid hub warnings
 HF_TOKEN = getattr(settings, 'HF_TOKEN', None)
@@ -40,6 +32,15 @@ class ScamVectorDB:
 
     def _load_model(self, force_cpu=False):
         if self._model is None:
+            import torch
+            import transformers.utils.logging
+            from sentence_transformers import SentenceTransformer
+
+            # Suppress transformers/sentence-transformers warnings
+            transformers.utils.logging.set_verbosity_error()
+            logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+            warnings.filterwarnings("ignore", message=".*embeddings.position_ids.*")
+
             # For background tasks (like rebuild), sometimes CPU is safer to avoid CUDA fork issues
             use_cuda = USE_GPU and torch.cuda.is_available() and not force_cpu
             device = "cuda" if use_cuda else "cpu"

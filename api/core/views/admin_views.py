@@ -26,7 +26,6 @@ from api.core.models import (
     EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
     Article, LearnLesson
 )
-from api.utils.vector_db import vector_db
 from django.shortcuts import render
 from api.core.serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,

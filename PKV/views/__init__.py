@@ -33,6 +33,7 @@ from .page_views import (
     lesson_detail_view,
     scan_lookup_view,
     my_reports_view,
+    community_reports_view,
     announcements_view,
     tickets_view,
     inbox_view,

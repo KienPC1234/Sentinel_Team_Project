@@ -34,6 +34,9 @@ Expects Alpine.js 'result' variable to be available in outer x-data scope.
             },
 
             renderMarkdown(text) {
+                if (typeof window.renderMd === 'function') {
+                    return window.renderMd(text);
+                }
                 if (window.marked && window.marked.parse) {
                     return window.marked.parse(text);
                 }

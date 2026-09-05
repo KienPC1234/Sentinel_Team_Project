@@ -38,7 +38,8 @@
                 const data = await r.json();
                 if (r.ok) {
                     showToast('Đăng nhập thành công!', 'success');
-                    window.location.href = '/dashboard/';
+                    const nextUrl = (new URLSearchParams(window.location.search)).get('next') || '/dashboard/';
+                    window.location.href = (nextUrl.startsWith('/') && !nextUrl.startsWith('//')) ? nextUrl : '/dashboard/';
                 } else {
                     this.mfaError = data.error || 'Mã xác nhận không đúng';
                     this.loading = false;
@@ -103,7 +104,8 @@
                     showToast('Yêu cầu mã xác thực 2 lớp', 'info');
                 } else {
                     showToast('Đăng nhập thành công!', 'success');
-                    window.location.href = '/dashboard/';
+                    const nextUrl = (new URLSearchParams(window.location.search)).get('next') || '/dashboard/';
+                    window.location.href = (nextUrl.startsWith('/') && !nextUrl.startsWith('//')) ? nextUrl : '/dashboard/';
                 }
             } catch (e) {
                 this.error = e.error || 'Email hoặc mật khẩu không đúng';
@@ -136,7 +138,7 @@
             <div class="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Captcha + MFA Ready</div>
         </div>
         <!-- Google Login -->
-        <a href="/accounts/google/login/?process=login" 
+        <a href="/accounts/google/login/?process=login{% if request.GET.next %}&next={{ request.GET.next|urlencode }}{% endif %}" 
            class="liquid-btn w-full flex items-center justify-center gap-3 py-4 mb-8 bg-white/5 border-white/10 hover:bg-white/10 text-sm font-bold tracking-wide transition-all group">
             <svg class="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 48 48">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />

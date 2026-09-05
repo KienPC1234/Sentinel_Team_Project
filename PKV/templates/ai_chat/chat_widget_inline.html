@@ -495,6 +495,10 @@
                                     this.messages[lastIdx].status = statusMap[data.status] || data.status;
                                     if (data.status === 'thinking' || data.status === 'reasoning') {
                                         this.messages[lastIdx].isThinking = true;
+                                        this.messages[lastIdx].thinkingCollapsed = false;
+                                    } else if (data.status === 'answering') {
+                                        this.messages[lastIdx].isThinking = false;
+                                        this.messages[lastIdx].thinkingCollapsed = true;
                                     }
                                 }
 
@@ -513,10 +517,15 @@
                                         this.messages[lastIdx].status = statusMap[statusVal] || statusVal;
                                         if (statusVal === 'thinking' || statusVal === 'reasoning') {
                                             this.messages[lastIdx].isThinking = true;
+                                            this.messages[lastIdx].thinkingCollapsed = false;
+                                        } else if (statusVal === 'answering') {
+                                            this.messages[lastIdx].isThinking = false;
+                                            this.messages[lastIdx].thinkingCollapsed = true;
                                         }
                                     } else if (chunk.startsWith('__THINK__:')) {
                                         const thinkPart = chunk.substring(10);
                                         this.messages[lastIdx].isThinking = true;
+                                        this.messages[lastIdx].thinkingCollapsed = false;
                                         this.messages[lastIdx].thinkingContent += thinkPart;
                                     } else if (chunk.startsWith('__SEARCH_RESULTS__:') || chunk.startsWith('__METADATA__:')) {
                                         const marker = chunk.startsWith('__METADATA__:') ? '__METADATA__:' : '__SEARCH_RESULTS__:';

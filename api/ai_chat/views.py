@@ -21,7 +21,6 @@ from api.utils.ai_agent import get_agent
 from api.utils.ollama_client import classify_message
 from api.utils.media_utils import extract_ocr_text, extract_ocr_with_boxes
 import concurrent.futures
-from api.utils.vector_db import vector_db
 
 class ChatFolderListView(APIView):
     """
@@ -64,24 +63,27 @@ class ChatFolderDetailView(APIView):
 class ChatSessionListView(APIView):
     """
     GET: List all chat sessions for the current user.
-    POST: Create a new chat session.
+    POST: Create a new chat session (supports authenticated and guest users).
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     @extend_schema(responses={200: ChatSessionSerializer(many=True)})
     def get(self, request):
-        sessions = ChatSession.objects.filter(user=request.user)
-        serializer = ChatSessionSerializer(sessions, many=True)
-        return Response(serializer.data)
+        if request.user.is_authenticated:
+            sessions = ChatSession.objects.filter(user=request.user)
+            serializer = ChatSessionSerializer(sessions, many=True)
+            return Response(serializer.data)
+        return Response([])
 
     @extend_schema(request={'application/json': {'type': 'object', 'properties': {'folder_id': {'type': 'string'}}}}, responses={201: serializers.DictField()})
     def post(self, request):
         folder_id = request.data.get('folder_id')
         folder = None
-        if folder_id:
-            folder = get_object_or_404(ChatFolder, id=folder_id, user=request.user)
+        user = request.user if request.user.is_authenticated else None
+        if folder_id and user:
+            folder = get_object_or_404(ChatFolder, id=folder_id, user=user)
         
-        session = ChatSession.objects.create(user=request.user, folder=folder)
+        session = ChatSession.objects.create(user=user, folder=folder)
         return Response({
             'id': str(session.id),
             'title': session.title,
@@ -93,11 +95,25 @@ class ChatSessionDetailView(APIView):
     GET: Retrieve message history for a session.
     DELETE: Remove a chat session.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     @extend_schema(responses={200: serializers.DictField()})
     def get(self, request, session_id):
-        session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+        session = ChatSession.objects.filter(id=session_id).first()
+        if not session:
+            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        if session.user:
+            if not request.user.is_authenticated:
+                return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+            if session.user != request.user:
+                return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            # If session was created by a guest and user is now authenticated, claim it
+            if request.user.is_authenticated:
+                session.user = request.user
+                session.save(update_fields=['user'])
+            
         messages = session.messages.all().order_by('created_at')
         data = [{
             'id': msg.id,
@@ -114,13 +130,21 @@ class ChatSessionDetailView(APIView):
         })
 
     def patch(self, request, session_id):
-        session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+        session = ChatSession.objects.filter(id=session_id).first()
+        if not session:
+            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+        if session.user:
+            if not request.user.is_authenticated or session.user != request.user:
+                return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        elif request.user.is_authenticated:
+            session.user = request.user
+            
         title = request.data.get('title')
         folder_id = request.data.get('folder_id')
         
         if title:
             session.title = title
-        if folder_id is not None:
+        if folder_id is not None and request.user.is_authenticated:
             if folder_id == "": # Move out of folder
                 session.folder = None
             else:
@@ -135,7 +159,12 @@ class ChatSessionDetailView(APIView):
         })
 
     def delete(self, request, session_id):
-        session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+        session = ChatSession.objects.filter(id=session_id).first()
+        if not session:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        if session.user:
+            if not request.user.is_authenticated or session.user != request.user:
+                return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
         session.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -454,12 +483,9 @@ class SavedMessageDetailView(APIView):
 class AssistantPageView(View):
     """
     Renders the dedicated AI Assistant page.
+    Supports both authenticated and guest users.
     """
     def get(self, request, session_id=None):
-        if not request.user.is_authenticated:
-            from django.shortcuts import redirect
-            return redirect('login')
-
         context = {
             'initial_session_id': str(session_id) if session_id else ''
         }

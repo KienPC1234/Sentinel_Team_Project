@@ -2,6 +2,84 @@
 {% load static %}
 
 {% block content %}
+<!-- Include marked.js for perfect Markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+/* Custom styling for AI markdown output */
+.ai-markdown {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.925rem;
+    line-height: 1.65;
+}
+.ai-markdown h1, .ai-markdown h2, .ai-markdown h3, .ai-markdown h4 {
+    color: #ffffff;
+    font-weight: 800;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
+}
+.ai-markdown h2 { font-size: 1.15rem; color: #f472b6; }
+.ai-markdown h3 { font-size: 1.05rem; color: #38bdf8; }
+.ai-markdown h4 { font-size: 0.95rem; color: #a78bfa; }
+.ai-markdown p {
+    margin-bottom: 0.75rem;
+}
+.ai-markdown ul {
+    list-style-type: disc;
+    padding-left: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+.ai-markdown ol {
+    list-style-type: decimal;
+    padding-left: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+.ai-markdown li {
+    margin-bottom: 0.35rem;
+}
+.ai-markdown strong {
+    color: #ffffff;
+    font-weight: 700;
+}
+.ai-markdown hr {
+    border-color: rgba(255, 255, 255, 0.1);
+    margin: 1rem 0;
+}
+.ai-markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.825rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ai-markdown th, .ai-markdown td {
+    padding: 0.6rem 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+}
+.ai-markdown th {
+    background: rgba(244, 114, 182, 0.1);
+    color: #f472b6;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+}
+.ai-markdown blockquote {
+    border-left: 3px solid #f472b6;
+    padding-left: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0.75rem 0;
+    background: rgba(244, 114, 182, 0.05);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0 0.5rem 0.5rem 0;
+}
+</style>
+
 <div class="min-h-screen py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto" x-data="fileScanHandler()">
     <!-- Header -->
     <div class="text-center mb-10" data-aos="fade-down">
@@ -50,8 +128,16 @@
             </template>
 
             <div class="mt-8 flex flex-col items-center gap-6" x-show="file && !loading && !scanning">
-                <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITEKEY }}" :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'" data-size="flexible"></div>
-                
+                <div id="file-turnstile-widget"
+                     class="cf-turnstile"
+                     data-sitekey="{{ TURNSTILE_SITEKEY }}"
+                     :data-theme="document.documentElement.getAttribute('data-theme') || 'dark'"
+                     data-size="flexible"
+                     data-callback="onFileTurnstileSuccess"
+                     data-expired-callback="onFileTurnstileExpired"
+                     data-error-callback="onFileTurnstileError">
+                </div>
+
                 <button @click="startScan()" class="liquid-button bg-pink-500 hover:bg-pink-400 text-white px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-pink-500/25 flex items-center gap-3">
                     <i class="bi bi-shield-check"></i> Bắt Đầu Kiểm Tra
                 </button>
@@ -130,10 +216,10 @@
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
-                                <h3 class="text-lg font-black text-white">AI Giải Thích & Hướng Dẫn Chi Tiết</h3>
+                                <h3 class="text-lg font-black text-white">AI Đánh Giá & Hướng Dẫn Chi Tiết</h3>
                                 <span class="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 text-[10px] font-black uppercase">Dễ Hiểu</span>
                             </div>
-                            <p class="text-xs text-white/50">Giải thích file này dùng làm gì, kẻ xấu có thể làm gì và bạn nên xử lý ra sao</p>
+                            <p class="text-xs text-white/50">Phân tích bản chất tệp tin, nguy cơ tiềm ẩn và cách xử lý an toàn</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
@@ -150,14 +236,14 @@
                 <!-- Streaming Content Body -->
                 <div class="pt-6">
                     <template x-if="aiStreaming && !aiExplanation">
-                        <div class="flex items-center gap-3 py-8 text-pink-400 text-sm font-medium">
+                        <div class="flex items-center gap-3 py-6 text-pink-400 text-sm font-medium">
                             <div class="w-5 h-5 rounded-full border-2 border-pink-400/20 border-t-pink-400 animate-spin"></div>
-                            <span>AI đang soạn báo cáo dễ hiểu cho bạn...</span>
+                            <span>AI đang phân tích và chuẩn bị báo cáo dễ hiểu...</span>
                         </div>
                     </template>
 
                     <template x-if="aiExplanation">
-                        <div class="prose prose-invert max-w-none text-white/80 text-sm leading-relaxed space-y-4" x-html="renderMarkdown(aiExplanation)"></div>
+                        <div class="ai-markdown" x-html="renderMarkdown(aiExplanation)"></div>
                     </template>
 
                     <template x-if="aiStreaming && aiExplanation">
@@ -226,11 +312,11 @@
                     <div>
                         <div class="flex justify-between text-xs font-bold mb-1">
                             <span class="text-white">Độ phức tạp tệp: <span class="text-pink-400" x-text="result.file_metadata?.entropy || '0.0'"></span> / 8.0</span>
-                            <span class="text-white/40" x-text="(result.file_metadata?.entropy > 7.2) ? 'Dấu hiệu ẩn giấu mã' : 'Bình thường'"></span>
+                            <span class="text-white/40" x-text="getEntropyLabel(result.file_metadata, result.file_name, result.risk_level)"></span>
                         </div>
                         <div class="overflow-hidden h-2 rounded-full bg-white/5 border border-white/5">
                             <div :style="'width: ' + ((result.file_metadata?.entropy || 0) / 8.0 * 100) + '%'"
-                                 :class="(result.file_metadata?.entropy > 7.2) ? 'bg-red-500' : 'bg-cyan-400'" class="h-full"></div>
+                                 :class="getEntropyBarColor(result.file_metadata, result.file_name)" class="h-full"></div>
                         </div>
                     </div>
                     <div class="pt-2 border-t border-white/5 space-y-1.5 text-xs">
@@ -263,6 +349,21 @@
 </div>
 
 <script>
+// Global Turnstile callbacks for the file scan page
+window._fileTurnstileToken = null;
+
+window.onFileTurnstileSuccess = function(token) {
+    window._fileTurnstileToken = token;
+};
+window.onFileTurnstileExpired = function() {
+    window._fileTurnstileToken = null;
+    if (window.showToast) window.showToast('Xác minh anti-spam đã hết hạn. Vui lòng xác minh lại.', 'warning');
+};
+window.onFileTurnstileError = function() {
+    window._fileTurnstileToken = null;
+    if (window.showToast) window.showToast('Lỗi xác minh. Vui lòng thử lại.', 'error');
+};
+
 function fileScanHandler() {
     return {
         file: null,
@@ -277,6 +378,25 @@ function fileScanHandler() {
         aiStreaming: false,
         aiExplanation: '',
         copied: false,
+
+        getEntropyLabel(meta, fileName, riskLevel) {
+            if (!meta || meta.entropy === undefined) return 'Bình thường';
+            const ext = (fileName || '').split('.').pop().toLowerCase();
+            const isExec = ['exe', 'dll', 'sys', 'bat', 'cmd', 'ps1', 'vbs', 'bin', 'msi'].includes(ext);
+            if (isExec && meta.entropy > 7.2) {
+                return 'Nén/Mã hóa cao (Đáng ngờ)';
+            }
+            if (['pdf', 'zip', 'docx', 'xlsx', 'pptx', 'apk', 'rar', '7z', 'gz', 'tar'].includes(ext)) {
+                return 'Nén tài liệu tiêu chuẩn (Bình thường)';
+            }
+            return meta.entropy > 7.4 ? 'Độ phức tạp cao' : 'Bình thường';
+        },
+
+        getEntropyBarColor(meta, fileName) {
+            const ext = (fileName || '').split('.').pop().toLowerCase();
+            const isExec = ['exe', 'dll', 'sys', 'bat', 'cmd', 'ps1', 'vbs', 'bin', 'msi'].includes(ext);
+            return (isExec && meta && meta.entropy > 7.2) ? 'bg-red-500' : 'bg-cyan-400';
+        },
 
         handleFileSelect(e) {
             const selected = e.target.files[0];
@@ -334,11 +454,19 @@ function fileScanHandler() {
 
         renderMarkdown(text) {
             if (!text) return '';
+            // Sanitize text first
+            const clean = text
+                .replace(/__STATUS__:[^\n]*/g, '')
+                .replace(/__THINK__:[^\n]*/g, '')
+                .replace(/<think>[\s\S]*?<\/think>/gi, '')
+                .replace(/<think>[\s\S]*/gi, '')
+                .trim();
+
             if (typeof marked !== 'undefined' && marked.parse) {
-                return marked.parse(text);
+                return marked.parse(clean, { breaks: true, gfm: true });
             }
-            // Basic fallback formatter
-            return text
+            // Fallback
+            return clean
                 .replace(/^### (.*$)/gim, '<h4 class="text-base font-bold text-pink-300 mt-4 mb-2">$1</h4>')
                 .replace(/^## (.*$)/gim, '<h3 class="text-lg font-black text-white mt-5 mb-2">$1</h3>')
                 .replace(/^# (.*$)/gim, '<h2 class="text-xl font-black text-white mt-6 mb-3">$1</h2>')
@@ -349,27 +477,41 @@ function fileScanHandler() {
 
         copyAIReport() {
             if (!this.aiExplanation) return;
-            navigator.clipboard.writeText(this.aiExplanation);
+            const clean = this.aiExplanation
+                .replace(/__STATUS__:[^\n]*/g, '')
+                .replace(/__THINK__:[^\n]*/g, '')
+                .replace(/<think>[\s\S]*?<\/think>/gi, '')
+                .replace(/<think>[\s\S]*/gi, '')
+                .trim();
+            navigator.clipboard.writeText(clean);
             this.copied = true;
             setTimeout(() => { this.copied = false; }, 2000);
         },
 
         async startScan() {
             if (!this.file) return;
+
+            // Always use the freshest token stored by the Turnstile callback.
+            // If the token is missing or expired, reset the widget and wait for a new one.
+            const token = window._fileTurnstileToken;
+            if (!token) {
+                window.showToast('Vui lòng hoàn thành xác minh anti-spam.', 'warning');
+                if (window.turnstile && document.getElementById('file-turnstile-widget')) {
+                    window.turnstile.reset('#file-turnstile-widget');
+                }
+                return;
+            }
+
             this.loading = true;
             this.progress = 15;
             this.statusMsg = 'Đang tải file lên kiểm tra...';
 
             const formData = new FormData();
             formData.append('file', this.file);
-            
-            const turnstileResponse = document.querySelector('[name="cf-turnstile-response"]')?.value;
-            if (!turnstileResponse) {
-                window.showToast('Vui lòng hoàn thành xác minh anti-spam.', 'warning');
-                this.loading = false;
-                return;
-            }
-            formData.append('cf-turnstile-response', turnstileResponse);
+            formData.append('cf-turnstile-response', token);
+
+            // Invalidate token immediately so it cannot be reused
+            window._fileTurnstileToken = null;
 
             try {
                 const resp = await fetch('/api/v1/scan/file/', {
@@ -386,7 +528,13 @@ function fileScanHandler() {
                     this.statusMsg = 'Hệ thống đang phân tích mã độc...';
                     this.startPolling();
                 } else {
-                    window.showToast(data.error || 'Lỗi khi tải file lên.', 'error');
+                    // If turnstile failed server-side (race condition), reset and ask user to retry
+                    if (data.error && data.error.includes('anti-spam')) {
+                        window.showToast('Phiên xác minh đã hết hạn. Vui lòng xác minh lại.', 'warning');
+                        if (window.turnstile) window.turnstile.reset('#file-turnstile-widget');
+                    } else {
+                        window.showToast(data.error || 'Lỗi khi tải file lên.', 'error');
+                    }
                     this.reset();
                 }
             } catch (e) {
@@ -467,7 +615,11 @@ function fileScanHandler() {
                             try {
                                 const parsed = JSON.parse(line.substring(6));
                                 if (parsed.chunk) {
-                                    this.aiExplanation += parsed.chunk;
+                                    const chunk = parsed.chunk;
+                                    // Skip internal markers
+                                    if (!chunk.includes('__STATUS__:') && !chunk.includes('__THINK__:')) {
+                                        this.aiExplanation += chunk;
+                                    }
                                 }
                                 if (parsed.done) {
                                     this.aiStreaming = false;

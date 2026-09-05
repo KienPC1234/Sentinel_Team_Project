@@ -261,6 +261,7 @@ class AIAgent:
              messages.append({"role": "user", "content": user_message})
 
         full_response = ""
+        self._think_buffer = ""
         try:
             # 3. Use the improved stream_chat_ai from ollama_client
             for chunk in stream_chat_ai(messages, debug=debug):
@@ -293,10 +294,9 @@ class AIAgent:
                 
                 # Normal Yield (content, thinking, status, search_results)
                 if chunk.startswith("__THINK__:"):
-                    # Limit the total thinking yielded to user to save bandwidth/UI noise
                     think_content = chunk[10:]
-                    if len(getattr(self, '_think_buffer', '')) < 1000:
-                        self._think_buffer = getattr(self, '_think_buffer', '') + think_content
+                    if len(self._think_buffer) < 8000:
+                        self._think_buffer += think_content
                         yield chunk
                     continue
 

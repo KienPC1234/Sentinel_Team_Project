@@ -167,7 +167,6 @@ def _lookup_phone_online_free_services(phone_number: str) -> dict:
         return cached
 
     query = f'"{phone_number}" "free sms" OR "temporary number" OR "online number" OR "receive sms"'
-    search_url = "https://duckduckgo.com/html/"
     suspicious_keywords = [
         'free sms', 'temporary', 'temp number', 'online number', 'receive sms',
         'sms-online', 'sms online', 'virtual number', 'disposable',
@@ -187,44 +186,16 @@ def _lookup_phone_online_free_services(phone_number: str) -> dict:
     }
 
     try:
-        resp = requests.get(
-            search_url,
-            params={'q': query},
-            headers={
-                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
-                              '(KHTML, like Gecko) Chrome/124.0 Safari/537.36'
-            },
-            timeout=5,
-        )
-        if resp.status_code != 200:
-            cache.set(cache_key, result, 60 * 10)
-            return result
-
-        html = resp.text
-        link_pattern = re.compile(
-            r'<a[^>]*class="result__a"[^>]*href="(?P<href>[^"]+)"[^>]*>(?P<title>.*?)</a>',
-            re.IGNORECASE | re.DOTALL,
-        )
-        snippet_pattern = re.compile(
-            r'<a[^>]*class="result__snippet"[^>]*>(?P<snippet>.*?)</a>|'
-            r'<div[^>]*class="result__snippet"[^>]*>(?P<snippet2>.*?)</div>',
-            re.IGNORECASE | re.DOTALL,
-        )
-
-        links = list(link_pattern.finditer(html))[:8]
-        snippets = list(snippet_pattern.finditer(html))[:8]
+        from api.utils.ollama_client import web_search_query
+        search_hits = web_search_query(query, max_results=8) or []
 
         suspicious_hits = 0
         high_risk_hits = 0
 
-        for idx, m in enumerate(links):
-            href = re.sub(r'\s+', ' ', m.group('href')).strip()
-            title_raw = re.sub(r'<.*?>', '', m.group('title') or '')
-            title = re.sub(r'\s+', ' ', title_raw).strip()
-            snippet = ''
-            if idx < len(snippets):
-                snippet_raw = snippets[idx].group('snippet') or snippets[idx].group('snippet2') or ''
-                snippet = re.sub(r'\s+', ' ', re.sub(r'<.*?>', '', snippet_raw)).strip()
+        for item in search_hits:
+            href = str(item.get('url') or '').strip()
+            title = str(item.get('title') or '').strip()
+            snippet = str(item.get('content') or '').strip()
 
             combined = f"{title} {snippet} {href}".lower()
             kw_count = sum(1 for kw in suspicious_keywords if kw in combined)

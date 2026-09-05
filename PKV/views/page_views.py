@@ -245,6 +245,75 @@ def my_reports_view(request):
     })
 
 
+def community_reports_view(request):
+    """Community scam reports public lookup and search page."""
+    from django.core.paginator import Paginator
+    from django.db.models import Q
+    from api.core.models import TargetType, ScamType, Severity
+
+    q = request.GET.get('q', '').strip()
+    target_type = request.GET.get('type', '').strip()
+    scam_type = request.GET.get('scam_type', '').strip()
+    severity = request.GET.get('severity', '').strip()
+    status_filter = request.GET.get('status', 'approved').strip()
+
+    queryset = Report.objects.all().select_related('reporter', 'reporter__profile', 'scan_event').prefetch_related('evidence_images')
+
+    if status_filter and status_filter != 'all':
+        queryset = queryset.filter(status=status_filter)
+
+    if q:
+        queryset = queryset.filter(
+            Q(target_value__icontains=q) |
+            Q(description__icontains=q) |
+            Q(scammer_phone__icontains=q) |
+            Q(scammer_bank_account__icontains=q) |
+            Q(scammer_bank_name__icontains=q) |
+            Q(scammer_name__icontains=q)
+        )
+
+    if target_type and target_type != 'all':
+        queryset = queryset.filter(target_type=target_type)
+
+    if scam_type and scam_type != 'all':
+        queryset = queryset.filter(scam_type=scam_type)
+
+    if severity and severity != 'all':
+        queryset = queryset.filter(severity=severity)
+
+    queryset = queryset.order_by('-created_at')
+
+    total_approved = Report.objects.filter(status='approved').count()
+    phone_reports = Report.objects.filter(status='approved', target_type='phone').count()
+    domain_reports = Report.objects.filter(status='approved', target_type='domain').count()
+    bank_reports = Report.objects.filter(status='approved', target_type='account').count()
+
+    paginator = Paginator(queryset, 12)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "Report/report_list.html", {
+        "title": "Tra cứu danh sách báo cáo lừa đảo",
+        "page_obj": page_obj,
+        "reports": page_obj.object_list,
+        "q": q,
+        "selected_type": target_type or 'all',
+        "selected_scam_type": scam_type or 'all',
+        "selected_severity": severity or 'all',
+        "selected_status": status_filter,
+        "target_types": TargetType.choices,
+        "scam_types": ScamType.choices,
+        "severities": Severity.choices,
+        "stats": {
+            "total_approved": total_approved,
+            "phone_reports": phone_reports,
+            "domain_reports": domain_reports,
+            "bank_reports": bank_reports,
+            "matched_count": queryset.count(),
+        }
+    })
+
+
 def scam_radar_view(request):
     """Scam Radar page with real stats and chart data."""
     try:

@@ -5,7 +5,6 @@ from .views import (
     ChatFolderListView, ChatFolderDetailView,
     ChatSearchView, ChatbotConfigView, SavedMessageListView, SavedMessageDetailView
 )
-from .faireditor_views import FairEditorAnalyzeView
 
 urlpatterns = [
     path('stream/', ChatAIStreamView.as_view(), name='chat-stream'),
@@ -19,5 +18,4 @@ urlpatterns = [
     path('config/', ChatbotConfigView.as_view(), name='chatbot-config'),
     path('saved/', SavedMessageListView.as_view(), name='saved-messages'),
     path('saved/<int:saved_id>/', SavedMessageDetailView.as_view(), name='saved-message-detail'),
-    path('faireditor/analyze/', FairEditorAnalyzeView.as_view(), name='faireditor-analyze'),
 ]
