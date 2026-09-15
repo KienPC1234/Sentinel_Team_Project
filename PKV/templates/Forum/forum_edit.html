@@ -65,7 +65,7 @@ document.addEventListener('alpine:init', () => {
                         this.content = forumEditorInstance.getData();
                     });
                 } else {
-                    console.warn('CKEditor returned null — falling back to textarea');
+                    console.warn('CKEditor returned null: falling back to textarea');
                 }
             } catch (e) {
                 console.error('CKEditor init failed:', e);

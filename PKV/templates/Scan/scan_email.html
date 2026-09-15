@@ -149,7 +149,7 @@
             ].join(' ');
             if (this.scanId) {
                 this.connectWebSocket(this.scanId);
-                // Start polling immediately as fallback — task may finish before WS connects
+                // Start polling immediately as fallback: task may finish before WS connects
                 this.startStatusPolling();
             }
         },
@@ -234,7 +234,7 @@
                 this.wsState = 'connected';
                 this.reconnectAttempts = 0;
                 this.stopReconnect();
-                // Don't stop polling on connect — only stop when WS receives real data
+                // Don't stop polling on connect: only stop when WS receives real data
                 // this.stopStatusPolling();
                 if (isReconnect) {
                     this.progress.push({ message: 'Đã kết nối lại thành công.', step: 'reconnected' });
@@ -246,7 +246,7 @@
             this.ws.onmessage = (e) => {
                 const data = JSON.parse(e.data);
                 if (data.step !== 'ping') {
-                    // Got real data from WS — stop polling fallback
+                    // Got real data from WS: stop polling fallback
                     this.stopStatusPolling();
                     this.progress.push({ message: data.message, step: data.step });
                     this.deepStatusMessage = data.message;

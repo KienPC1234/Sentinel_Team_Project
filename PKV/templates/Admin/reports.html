@@ -74,9 +74,9 @@
                 placeholder: '-- Trạng thái --',
                 options: [
                     { value: '', label: '-- Trạng thái --' },
-                    { value: 'pending', label: '🕐 Chờ duyệt' },
-                    { value: 'approved', label: '✅ Đã duyệt' },
-                    { value: 'rejected', label: '❌ Từ chối' }
+                    { value: 'pending', label: 'Chờ duyệt' },
+                    { value: 'approved', label: 'Đã duyệt' },
+                    { value: 'rejected', label: 'Từ chối' }
                 ]
             })" class="liquid-custom-select" @change="$refs.statusInput.value = $event.detail; $nextTick(() => document.getElementById('report-filter-form').submit())">
                 <input type="hidden" name="status" x-ref="statusInput" value="{{ status_filter|default:'' }}">
@@ -99,11 +99,11 @@
                 placeholder: '-- Loại --',
                 options: [
                     { value: '', label: '-- Loại --' },
-                    { value: 'phone', label: '📞 SĐT' },
-                    { value: 'domain', label: '🌐 Website' },
-                    { value: 'account', label: '🏦 Tài khoản' },
-                    { value: 'email', label: '📧 Email' },
-                    { value: 'message', label: '💬 Tin nhắn' }
+                    { value: 'phone', label: 'SĐT' },
+                    { value: 'domain', label: 'Website' },
+                    { value: 'account', label: 'Tài khoản' },
+                    { value: 'email', label: 'Email' },
+                    { value: 'message', label: 'Tin nhắn' }
                 ]
             })" class="liquid-custom-select" @change="$refs.typeInput.value = $event.detail; $nextTick(() => document.getElementById('report-filter-form').submit())">
                 <input type="hidden" name="type" x-ref="typeInput" value="{{ type_filter|default:'' }}">
@@ -126,10 +126,10 @@
                 placeholder: '-- Mức độ --',
                 options: [
                     { value: '', label: '-- Mức độ --' },
-                    { value: 'low', label: '🟢 Thấp' },
-                    { value: 'medium', label: '🟡 Trung bình' },
-                    { value: 'high', label: '🔴 Cao' },
-                    { value: 'critical', label: '💀 Nghiêm trọng' }
+                    { value: 'low', label: 'Thấp' },
+                    { value: 'medium', label: 'Trung bình' },
+                    { value: 'high', label: 'Cao' },
+                    { value: 'critical', label: 'Nghiêm trọng' }
                 ]
             })" class="liquid-custom-select" @change="$refs.sevInput.value = $event.detail; $nextTick(() => document.getElementById('report-filter-form').submit())">
                 <input type="hidden" name="severity" x-ref="sevInput" value="{{ severity_filter|default:'' }}">
@@ -208,7 +208,7 @@
                             <div class="space-y-1">
                                 <div class="flex items-center gap-1.5">
                                     <span class="px-1.5 py-0.5 rounded bg-white/5 text-white/30 text-[7px] font-black uppercase tracking-wider border border-white/10">
-                                        {% if report.target_type == 'phone' %}📞{% elif report.target_type == 'domain' %}🌐{% elif report.target_type == 'account' %}🏦{% elif report.target_type == 'email' %}📧{% else %}💬{% endif %}
+                                        {% if report.target_type == 'phone' %}<i class="bi bi-telephone"></i>{% elif report.target_type == 'domain' %}<i class="bi bi-globe"></i>{% elif report.target_type == 'account' %}<i class="bi bi-bank"></i>{% elif report.target_type == 'email' %}<i class="bi bi-envelope"></i>{% else %}<i class="bi bi-chat-dots"></i>{% endif %}
                                         {{ report.target_type }}
                                     </span>
                                     <span class="text-[8px] font-bold text-cyan-500/40 uppercase">{{ report.get_scam_type_display|default:report.scam_type }}</span>
@@ -238,7 +238,7 @@
                                 {% endif %}
                                 {% endwith %}
                                 {% if not report.evidence_file and not report.evidence_images.count %}
-                                <span class="text-[9px] text-white/15">—</span>
+                                <span class="text-[9px] text-white/15">-</span>
                                 {% endif %}
                             </div>
                         </td>
@@ -257,7 +257,7 @@
                                 <i class="bi bi-robot text-purple-400 text-xs"></i>
                             </div>
                             {% else %}
-                            <span class="text-[9px] text-white/15">—</span>
+                            <span class="text-[9px] text-white/15">-</span>
                             {% endif %}
                         </td>
                         <td class="px-5 py-5">
@@ -445,7 +445,7 @@
                             <div class="flex items-center justify-between border-b border-purple-500/10 pb-3">
                                 <div>
                                     <p class="text-[9px] font-black text-purple-400/40 uppercase tracking-widest">Đánh giá</p>
-                                    <p class="text-sm font-bold text-white">${ai.is_scam ? '⚠️ CÓ DẤU HIỆU LỪA ĐẢO' : '✅ BÌNH THƯỜNG'}</p>
+                                    <p class="text-sm font-bold text-white">${ai.is_scam ? '[CANH BAO] CO DAU HIEU LUA DAO' : '[AN TOAN] BINH THUONG'}</p>
                                 </div>
                                 <div class="text-right">
                                     <p class="text-[9px] font-black text-purple-400/40 uppercase tracking-widest">Điểm rủi ro</p>

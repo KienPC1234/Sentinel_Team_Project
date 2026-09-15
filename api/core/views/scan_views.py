@@ -29,7 +29,7 @@ from api.utils.ollama_client import analyze_text_for_scam, generate_response, st
 
 from api.core.models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
+    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, APIKey,
 )
 from api.core.serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
@@ -44,6 +44,23 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 AUTO_ADMIN_REPORT_THRESHOLD = 85
+
+
+def _verify_turnstile_or_api_key(request):
+    """
+    Validates anti-spam protection.
+    If the request is authenticated via an active ShieldCall API Key or authenticated user session,
+    Turnstile is bypassed. Otherwise, Turnstile token is enforced.
+    """
+    if getattr(request, 'is_api_key_auth', False) or isinstance(getattr(request, 'auth', None), APIKey):
+        return None
+    if getattr(request, 'user', None) and request.user.is_authenticated:
+        return None
+    cf_token = request.data.get('cf-turnstile-response')
+    if not verify_turnstile_token(cf_token):
+        return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+    return None
+
 
 
 def _scan_to_target_type(scan_type: str) -> str:
@@ -543,10 +560,10 @@ class ScanPhoneView(APIView):
         serializer = ScanPhoneSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Turnstile Verification (before expensive work)
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+        # Turnstile Verification (bypassed if valid API Key present)
+        ts_err = _verify_turnstile_or_api_key(request)
+        if ts_err:
+            return ts_err
 
         # Already validated as E.164 by serializer (requires country flag).
         phone = serializer.validated_data['phone']
@@ -578,13 +595,13 @@ class ScanEmailView(APIView):
 
     def post(self, request):
         # Turnstile Verification
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+        ts_err = _verify_turnstile_or_api_key(request)
+        if ts_err:
+            return ts_err
 
         file_obj = request.FILES.get('file')
-        content_text = request.data.get('content', '')
-        sender_input = request.data.get('email', '')
+        content_text = request.data.get('content') or request.data.get('email_content', '')
+        sender_input = request.data.get('email') or request.data.get('sender_email', '')
         
         email_data = {
             'subject': '',
@@ -683,11 +700,58 @@ class ScanEmailView(APIView):
             detected_urls=email_data['urls']
         )
         
-        # 6. Trigger Deep Analysis Task (Async)
+        # 6. Check if caller wants synchronous response (API Key or sync=true)
+        is_api_key = getattr(request, 'is_api_key_auth', False) or isinstance(getattr(request, 'auth', None), APIKey)
+        sync_requested = request.query_params.get('sync') == 'true' or request.data.get('sync') is True
+
+        if not file_obj and (is_api_key or sync_requested):
+            from api.core.models import ScanStatus, RiskLevel
+            content_risk = 0
+            if content_text and len(content_text.strip()) > 10:
+                msg_analysis = _analyze_message_text(content_text.strip())
+                content_risk = int(msg_analysis.get('risk_score', 0))
+                if msg_analysis.get('patterns_found'):
+                    security_details.extend([f"Dấu hiệu nội dung: {p}" for p in msg_analysis['patterns_found']])
+                if msg_analysis.get('explanation'):
+                    security_details.append(f"AI nhận định: {msg_analysis['explanation']}")
+
+            final_score = min(100, max(base_risk_score, content_risk))
+            if final_score >= 70:
+                level = RiskLevel.RED
+            elif final_score >= 40:
+                level = RiskLevel.YELLOW
+            elif final_score >= 10:
+                level = RiskLevel.GREEN
+            else:
+                level = RiskLevel.SAFE
+
+            res_data = {
+                'scan_id': scan_event.id,
+                'email': clean_email,
+                'risk_score': final_score,
+                'risk_level': str(level),
+                'security_checks': security_details,
+                'status': 'completed',
+                'extracted_info': {
+                    'subject': email_data['subject'],
+                    'from': email_data['from'],
+                    'url_count': len(email_data['urls']),
+                    'attachment_count': len(email_data['attachments'])
+                }
+            }
+            scan_event.status = ScanStatus.COMPLETED
+            scan_event.risk_score = final_score
+            scan_event.risk_level = level
+            scan_event.result_json = res_data
+            scan_event.save(update_fields=['status', 'risk_score', 'risk_level', 'result_json'])
+            _document_scan_for_admin(scan_event)
+            return Response(res_data)
+
+        # 7. Trigger Deep Analysis Task (Async) for web interface
         from api.core.tasks import perform_email_deep_scan
         perform_email_deep_scan.delay(scan_event.id, email_data)
 
-        # 7. Return Preliminary Result
+        # 8. Return Preliminary Result
         return Response({
             'scan_id': scan_event.id,
             'status': 'processing',
@@ -703,7 +767,26 @@ class ScanEmailView(APIView):
         })
 
 
-
+FALLBACK_BANKS = [
+    {"name": "Ngân hàng TMCP Ngoại Thương Việt Nam", "code": "VCB", "shortName": "Vietcombank", "bin": "970436"},
+    {"name": "Ngân hàng TMCP Quân Đội", "code": "MB", "shortName": "MBBank", "bin": "970422"},
+    {"name": "Ngân hàng TMCP Kỹ Thương Việt Nam", "code": "TCB", "shortName": "Techcombank", "bin": "970407"},
+    {"name": "Ngân hàng TMCP Đầu tư và Phát triển Việt Nam", "code": "BIDV", "shortName": "BIDV", "bin": "970418"},
+    {"name": "Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam", "code": "VBA", "shortName": "Agribank", "bin": "970405"},
+    {"name": "Ngân hàng TMCP Công Thương Việt Nam", "code": "CTG", "shortName": "VietinBank", "bin": "970415"},
+    {"name": "Ngân hàng TMCP Á Châu", "code": "ACB", "shortName": "ACB", "bin": "970416"},
+    {"name": "Ngân hàng TMCP Việt Nam Thịnh Vượng", "code": "VPB", "shortName": "VPBank", "bin": "970432"},
+    {"name": "Ngân hàng TMCP Tiên Phong", "code": "TPB", "shortName": "TPBank", "bin": "970423"},
+    {"name": "Ngân hàng TMCP Sài Gòn Thương Tín", "code": "STB", "shortName": "Sacombank", "bin": "970403"},
+    {"name": "Ngân hàng TMCP Phát triển Thành phố Hồ Chí Minh", "code": "HDB", "shortName": "HDBank", "bin": "970437"},
+    {"name": "Ngân hàng TMCP Quốc tế Việt Nam", "code": "VIB", "shortName": "VIB", "bin": "970441"},
+    {"name": "Ngân hàng TMCP Sài Gòn - Hà Nội", "code": "SHB", "shortName": "SHB", "bin": "970443"},
+    {"name": "Ngân hàng TMCP Hàng Hải Việt Nam", "code": "MSB", "shortName": "MSB", "bin": "970426"},
+    {"name": "Ngân hàng TMCP Đông Nam Á", "code": "SSB", "shortName": "SeABank", "bin": "970440"},
+    {"name": "Ngân hàng TMCP Phương Đông", "code": "OCB", "shortName": "OCB", "bin": "970448"},
+    {"name": "Ngân hàng TMCP Lộc Phát Việt Nam", "code": "LPB", "shortName": "LPBank", "bin": "970449"},
+    {"name": "Ngân hàng Chính sách xã hội", "code": "VBSP", "shortName": "VBSP", "bin": "999888"},
+]
 
 
 class ScanBanksView(APIView):
@@ -731,10 +814,10 @@ class ScanBanksView(APIView):
                     banks = data.get('data', [])
                     cache.set('vietqr_banks', banks, cache_timeout)
                     return Response(banks)
-            return Response({'error': 'Không thể lấy danh sách ngân hàng.'}, status=500)
+            return Response(FALLBACK_BANKS)
         except Exception as e:
             logger.error(f"Error fetching banks from VietQR: {str(e)}")
-            return Response({'error': 'Lỗi kết nối đến dịch vụ ngân hàng.'}, status=500)
+            return Response(FALLBACK_BANKS)
 
 
 def _analyze_message_text(text: str) -> dict:
@@ -747,14 +830,15 @@ def _analyze_message_text(text: str) -> dict:
     ai_score = 0
     ai_explanation = ''
     ai_available = True
+    ai_result = None
     try:
         ai_result = analyze_text_for_scam(text)
-        if ai_result:
+        if ai_result and not ai_result.get('ai_notice'):
             ai_score = ai_result.get('risk_score', 0) or 0
             ai_explanation = ai_result.get('explanation') or ai_result.get('reason') or ''
         else:
             ai_available = False
-            logger.warning("_analyze_message_text: AI returned None, falling back to rule-based scoring.")
+            logger.warning("_analyze_message_text: AI returned fallback or notice, relying on heuristic rules.")
     except Exception as exc:
         ai_available = False
         logger.warning(f"_analyze_message_text: AI error ({exc}), falling back to rule-based scoring.")
@@ -775,29 +859,28 @@ def _analyze_message_text(text: str) -> dict:
                 if score > 0:
                     domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
 
-    # 3. Heuristic Patterns
+    # 3. Heuristic Patterns (supporting both accented and unaccented Vietnamese)
     patterns_found = []
     scam_keywords = {
-        r'otp|mã xác': 'Yêu cầu OTP',
-        r'chuyển khoản|chuyển tiền': 'Giao dịch tài chính',
-        r'công an|viện kiểm sát': 'Mạo danh cơ quan chức năng',
-        r'trúng thưởng|quà tặng': 'Dụ dỗ trúng thưởng',
-        r'khóa tài khoản|phong tỏa': 'Đe dọa tài khoản',
+        r'otp|ma xac|mã xác': 'Yêu cầu OTP',
+        r'chuyen khoan|chuyen tien|chuyển khoản|chuyển tiền': 'Giao dịch tài chính',
+        r'cong an|vien kiem sat|công an|viện kiểm sát': 'Mạo danh cơ quan chức năng',
+        r'trung thuong|qua tang|trúng thưởng|quà tặng': 'Dụ dỗ trúng thưởng',
+        r'khoa tai khoan|phong toa|khóa tài khoản|phong tỏa': 'Đe dọa tài khoản',
+        r'viec nhe luong cao|tuyen dung|việc nhẹ lương cao|tuyển dụng': 'Tuyển dụng lừa đảo',
     }
     for pattern, label in scam_keywords.items():
         if re.search(pattern, text.lower()):
             patterns_found.append(label)
 
-    # Rule-based score (used as sole score when AI is unavailable)
-    rule_score = min(100, len(patterns_found) * 15 + max_domain_score)
+    # Rule-based score
+    rule_score = min(100, len(patterns_found) * 20 + max_domain_score)
 
     # 4. Final Ensemble
-    if ai_available:
-        # Combine AI judgement with domain signals; AI takes precedence
-        final_score = max(ai_score, max_domain_score)
+    if ai_available and ai_score > 0:
+        final_score = max(ai_score, rule_score, max_domain_score)
     else:
-        # AI offline — fall back entirely to heuristics + domain risk
-        final_score = rule_score
+        final_score = max(rule_score, max_domain_score)
 
     level = RiskLevel.SAFE
     if final_score >= 70: level = RiskLevel.RED
@@ -806,14 +889,16 @@ def _analyze_message_text(text: str) -> dict:
 
     # Determine scam type from detected patterns
     scam_type = 'other'
-    if any('công an' in p for p in patterns_found):
+    if any('công an' in p.lower() or 'cơ quan' in p.lower() for p in patterns_found):
         scam_type = 'police_impersonation'
     elif any('OTP' in p for p in patterns_found):
         scam_type = 'otp_steal'
-    elif any('chuyển khoản' in p for p in patterns_found):
+    elif any('tài chính' in p.lower() or 'chuyển khoản' in p.lower() for p in patterns_found):
         scam_type = 'investment_scam'
     elif any('trúng thưởng' in p.lower() for p in patterns_found):
         scam_type = 'prize_scam'
+    elif any('tuyển dụng' in p.lower() for p in patterns_found):
+        scam_type = 'recruitment_scam'
     elif domain_risks:
         scam_type = 'phishing'
 
@@ -828,10 +913,10 @@ def _analyze_message_text(text: str) -> dict:
         actions = ['✅ Tin nhắn có vẻ an toàn', '🔍 Vẫn nên cẩn thận với link lạ']
 
     # Build explanation — prefer AI's if available, else use rule summary
-    if ai_available and ai_explanation:
+    if ai_available and ai_explanation and (not ai_result or not ai_result.get('ai_notice')):
         explanation = ai_explanation
     elif patterns_found or domain_risks:
-        explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu đáng ngờ (phân tích quy tắc).'
+        explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu đáng ngờ (phân tích quy tắc: {", ".join(patterns_found)}).'
     else:
         explanation = 'Không phát hiện dấu hiệu lừa đảo rõ ràng.'
 
@@ -860,9 +945,9 @@ class ScanMessageView(APIView):
         text = serializer.validated_data.get('message', '')
 
         # Turnstile Verification (before any processing)
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+        ts_err = _verify_turnstile_or_api_key(request)
+        if ts_err:
+            return ts_err
 
         # Multiple images support
         images = request.FILES.getlist('image') or request.FILES.getlist('images')
@@ -871,14 +956,37 @@ class ScanMessageView(APIView):
             return Response({'error': 'Vui lòng nhập tin nhắn hoặc tải ảnh.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        # Check if caller wants synchronous response (API Key auth or sync=true)
+        is_api_key = getattr(request, 'is_api_key_auth', False) or isinstance(getattr(request, 'auth', None), APIKey)
+        sync_requested = request.query_params.get('sync') == 'true' or request.data.get('sync') is True
+
         # Create PENDING scan event
-        from api.core.models import ScanStatus
+        from api.core.models import ScanStatus, RiskLevel
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='message',
             raw_input=(text or '')[:2000],
             status=ScanStatus.PENDING
         )
+
+        if not images and (is_api_key or sync_requested):
+            analysis = _analyze_message_text(text.strip())
+            final_score = int(analysis.get('risk_score', 0))
+            level = str(analysis.get('risk_level', RiskLevel.SAFE))
+
+            scan_event.status = ScanStatus.COMPLETED
+            scan_event.risk_score = final_score
+            scan_event.risk_level = level
+            scan_event.result_json = analysis
+            scan_event.save(update_fields=['status', 'risk_score', 'risk_level', 'result_json'])
+
+            _document_scan_for_admin(scan_event)
+
+            return Response({
+                'scan_id': scan_event.id,
+                'status': 'completed',
+                **analysis
+            })
 
         # Convert images to base64 for Celery task
         import base64
@@ -1298,9 +1406,9 @@ class ScanDomainView(APIView):
         deep_scan = serializer.validated_data.get('deep_scan', False)
 
         # Turnstile Verification (before any processing)
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+        ts_err = _verify_turnstile_or_api_key(request)
+        if ts_err:
+            return ts_err
 
         if deep_scan:
             from api.core.models import ScanStatus
@@ -1313,37 +1421,91 @@ class ScanDomainView(APIView):
                 status=ScanStatus.PENDING
             )
             
-            perform_web_scrapping_task.delay(scan_event.id, url)
+            task = perform_web_scrapping_task.delay(scan_event.id, url)
+            scan_event.job_id = task.id
+            scan_event.save(update_fields=['job_id'])
             
             return Response({
                 'scan_id': scan_event.id,
-                'status': scan_event.status,
-                'message': 'Đang tiến hành quét sâu nội dung website...'
-            })
+                'status': 'pending',
+                'message': 'Đang cào dữ liệu và phân tích chuyên sâu...',
+                'task_id': task.id
+            }, status=status.HTTP_202_ACCEPTED)
 
-        # Standard scan with error handling
-        try:
-            result = _analyze_domain(url)
-        except Exception as e:
-            logger.error(f"[ScanDomain] _analyze_domain failed for {url}: {e}")
-            return Response({
-                'error': 'Không thể phân tích tên miền. Vui lòng thử lại sau.',
-                'url': url,
-            }, status=502)
+        # Standard synchronous scan
+        result = _analyze_domain(url)
 
+        # Log scan event
+        from api.core.models import ScanStatus
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='domain',
             raw_input=url,
-            normalized_input=result['domain'],
+            normalized_input=result.get('domain', url),
             result_json=result,
             risk_score=result['risk_score'],
             risk_level=result['risk_level'],
+            status=ScanStatus.COMPLETED
         )
 
         _document_scan_for_admin(scan_event)
 
         return Response(result)
+
+
+def normalize_bank_name(raw_bank: str) -> str:
+    """Normalize user or chatbot supplied bank name to canonical BANK_CHOICES."""
+    if not raw_bank:
+        return 'Other'
+    b_clean = re.sub(r'[^a-zA-Z0-9]', '', raw_bank).lower()
+    mapping = {
+        'mb': 'MBBank',
+        'mbbank': 'MBBank',
+        'quandoi': 'MBBank',
+        'vcb': 'Vietcombank',
+        'vietcombank': 'Vietcombank',
+        'ngoaithuong': 'Vietcombank',
+        'tcb': 'Techcombank',
+        'techcombank': 'Techcombank',
+        'kythuong': 'Techcombank',
+        'bidv': 'BIDV',
+        'dautuvaphattrien': 'BIDV',
+        'ctg': 'VietinBank',
+        'vietinbank': 'VietinBank',
+        'congthuong': 'VietinBank',
+        'vba': 'Agribank',
+        'agribank': 'Agribank',
+        'nongnghiep': 'Agribank',
+        'acb': 'ACB',
+        'achau': 'ACB',
+        'vpb': 'VPBank',
+        'vpbank': 'VPBank',
+        'thinhvuong': 'VPBank',
+        'tpb': 'TPBank',
+        'tpbank': 'TPBank',
+        'tienphong': 'TPBank',
+        'stb': 'Sacombank',
+        'sacombank': 'Sacombank',
+        'hdb': 'HDBank',
+        'hdbank': 'HDBank',
+        'shb': 'SHB',
+        'msb': 'MSB',
+        'vib': 'VIB',
+        'ocb': 'OCB',
+        'momo': 'Momo',
+        'zalopay': 'ZaloPay',
+        'vnpay': 'VNPay',
+    }
+    if b_clean in mapping:
+        return mapping[b_clean]
+    for key, val in mapping.items():
+        if key in b_clean:
+            return val
+    valid_choices = dict(BankAccount.BANK_CHOICES)
+    for choice in valid_choices:
+        if choice.lower() == b_clean:
+            return choice
+    return raw_bank.strip()
 
 
 class ScanAccountView(APIView):
@@ -1355,30 +1517,35 @@ class ScanAccountView(APIView):
         serializer.is_valid(raise_exception=True)
 
         # Turnstile Verification (before DB access)
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+        ts_err = _verify_turnstile_or_api_key(request)
+        if ts_err:
+            return ts_err
 
         bank = serializer.validated_data['bank'].strip()
         account = serializer.validated_data['account'].strip()
         account_hash = BankAccount.hash_account(account)
         account_masked = BankAccount.mask_account(account)
+        canonical_bank = normalize_bank_name(bank)
 
-        # Look up database
+        # Look up database with flexible bank matching
+        ba = BankAccount.objects.filter(account_number_hash=account_hash).filter(
+            Q(bank_name__iexact=bank) |
+            Q(bank_name__iexact=canonical_bank) |
+            Q(bank_name__icontains=bank) |
+            Q(bank_name__iexact=bank.replace(' ', ''))
+        ).first()
+
         score = 0
         scam_type = 'other'
         report_count = 0
         details = []
 
-        try:
-            ba = BankAccount.objects.get(bank_name=bank, account_number_hash=account_hash)
+        if ba:
             score = ba.risk_score
             scam_type = ba.scam_type
             report_count = ba.report_count
             if report_count > 0:
                 details.append(f'{report_count} báo cáo từ cộng đồng')
-        except BankAccount.DoesNotExist:
-            pass
 
         # Check reports specifically targeting this bank account
         reports_for_account = Report.objects.filter(
@@ -1386,7 +1553,10 @@ class ScanAccountView(APIView):
         ).filter(
             Q(target_value__iexact=account) |
             Q(target_value__iexact=f"{bank}:{account}") |
-            Q(scammer_bank_account__iexact=account, scammer_bank_name__iexact=bank)
+            Q(target_value__iexact=f"{canonical_bank}:{account}") |
+            Q(scammer_bank_account__iexact=account, scammer_bank_name__iexact=bank) |
+            Q(scammer_bank_account__iexact=account, scammer_bank_name__iexact=canonical_bank) |
+            Q(scammer_bank_account__iexact=account, scammer_bank_name__icontains=bank)
         ).count()
         if reports_for_account > 0:
             score = max(score, min(100, reports_for_account * 25))
@@ -1406,7 +1576,7 @@ class ScanAccountView(APIView):
             details.append('Không tìm thấy cảnh báo nào cho tài khoản này')
 
         result = {
-            'bank': bank,
+            'bank': canonical_bank if canonical_bank in dict(BankAccount.BANK_CHOICES) else bank,
             'account_masked': account_masked,
             'risk_score': score,
             'risk_level': level,
@@ -1415,21 +1585,29 @@ class ScanAccountView(APIView):
             'details': details,
         }
 
-        # Save/update in DB
-        BankAccount.objects.update_or_create(
-            bank_name=bank,
-            account_number_hash=account_hash,
-            defaults={
-                'account_number_masked': account_masked,
-                'risk_score': score,
-            }
-        )
+        # Save/update in DB with canonical bank name
+        valid_bank_choices = dict(BankAccount.BANK_CHOICES)
+        bank_to_store = canonical_bank if canonical_bank in valid_bank_choices else (bank if bank in valid_bank_choices else 'Other')
+
+        if ba:
+            ba.account_number_masked = account_masked
+            ba.risk_score = score
+            ba.save(update_fields=['account_number_masked', 'risk_score'])
+        else:
+            BankAccount.objects.update_or_create(
+                bank_name=bank_to_store,
+                account_number_hash=account_hash,
+                defaults={
+                    'account_number_masked': account_masked,
+                    'risk_score': score,
+                }
+            )
 
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='account',
             raw_input=f'{bank}:{account_masked}',
-            normalized_input=f'{bank}:{account_hash[:16]}',
+            normalized_input=f'{bank_to_store}:{account_hash[:16]}',
             result_json=result,
             risk_score=score,
             risk_level=level,
@@ -1469,9 +1647,9 @@ class ScanImageView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
         # Turnstile Verification
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+        ts_err = _verify_turnstile_or_api_key(request)
+        if ts_err:
+            return ts_err
 
         # Create PENDING event
         scan_event = ScanEvent.objects.create(
@@ -1484,53 +1662,52 @@ class ScanImageView(APIView):
         # Convert images to b64 for task
         images_data = []
         for img in images:
-            logger.info(f"Processing image: {img.name} ({img.size} bytes)")
             img.seek(0)
-            images_data.append(base64.b64encode(img.read()).decode('utf-8'))
+            images_data.append({
+                'name': img.name,
+                'content': base64.b64encode(img.read()).decode('utf-8'),
+                'content_type': img.content_type
+            })
 
-        # Start task
+        # Offload to Celery
         from api.core.tasks import perform_image_scan_task
         try:
-            logger.info(f"Dispatching perform_image_scan_task for event {scan_event.id}")
             perform_image_scan_task.delay(scan_event.id, images_data)
-            logger.info(f"Task successfully dispatched for event {scan_event.id}")
+            return Response({
+                'scan_id': scan_event.id,
+                'status': scan_event.status,
+                'message': 'Đang tải lên và phân tích hình ảnh...'
+            })
         except Exception as e:
-            logger.error(f"Failed to dispatch task: {e}")
+            logger.error(f"Failed to dispatch image scan task: {e}")
             scan_event.status = ScanStatus.FAILED
-            scan_event.result_json = {'error': f'Task dispatch failed: {str(e)}'}
             scan_event.save()
-            return Response({'error': 'Lỗi hệ thống khi bắt đầu quét.'}, status=500)
-
-        return Response({
-            'scan_id': scan_event.id,
-            'status': scan_event.status,
-            'message': 'Đang xử lý hình ảnh...'
-        })
+            return Response({'error': 'Lỗi hệ thống khi bắt đầu quét ảnh.'}, status=500)
 
 
 class ScanFileView(APIView):
     """
-    POST /api/scan/file — Zero-Trust Isolated Sandbox File Analysis (Up to 500MB)
+    POST /api/scan/file — Zero-Trust Docker Sandbox file analysis.
+    Accepts any file up to 500 MB, stores temporarily, offloads to Celery.
     """
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
+
     MAX_SIZE = 500 * 1024 * 1024  # 500 MB
 
     def post(self, request):
-        from api.core.serializers import ScanFileSerializer
-        serializer = ScanFileSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        uploaded_file = request.FILES['file']
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return Response({'error': 'Vui lòng cung cấp tệp tin.'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Check maximum file size (500MB)
         if uploaded_file.size > self.MAX_SIZE:
             return Response({'error': 'Tệp quá lớn. Dung lượng tối đa là 500 MB.'}, status=400)
 
         # Turnstile Verification
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+        ts_err = _verify_turnstile_or_api_key(request)
+        if ts_err:
+            return ts_err
 
         # Create PENDING event
         scan_event = ScanEvent.objects.create(
@@ -1605,12 +1782,9 @@ class ScanAudioView(APIView):
             )
 
         # Turnstile verification
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response(
-                {'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'},
-                status=400,
-            )
+        ts_err = _verify_turnstile_or_api_key(request)
+        if ts_err:
+            return ts_err
 
         # Create PENDING scan event
         from api.core.models import ScanEvent, ScanStatus

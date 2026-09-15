@@ -74,7 +74,7 @@
                 <i class="bi bi-hourglass-split text-4xl"></i>
             </div>
             <div class="text-[10px] font-black text-amber-500/50 uppercase tracking-widest mb-2">Job kế tiếp</div>
-            <div class="text-2xl font-black text-white tabular-nums" x-text="countdown">—</div>
+            <div class="text-2xl font-black text-white tabular-nums" x-text="countdown">-</div>
             <div class="mt-4 text-[10px] font-bold text-white/20 uppercase tracking-widest">
                 Mỗi <span x-text="Math.round(beat_interval / 60)">60</span> phút
             </div>
@@ -141,7 +141,7 @@
                 },
                 updateCountdown() {
                     if (!this.last_sync) {
-                        // No last sync — show time until next scheduled beat from now
+                        // No last sync: show time until next scheduled beat from now
                         this.countdown = 'Theo lịch trình';
                         return;
                     }
@@ -155,7 +155,7 @@
                         const m = Math.floor((diff % 3600) / 60);
                         const s = diff % 60;
                         this.countdown = (h > 0 ? h + 'h ' : '') + m.toString().padStart(2, '0') + 'm ' + s.toString().padStart(2, '0') + 's';
-                    } catch(e) { this.countdown = '—'; }
+                    } catch(e) { this.countdown = '-'; }
                 },
                 countUp(val) {
                     return val;

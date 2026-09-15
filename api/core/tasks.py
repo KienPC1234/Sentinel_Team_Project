@@ -436,15 +436,15 @@ def _notify_scan_complete(scan_event, title_suffix=''):
         risk_score = getattr(scan_event, 'risk_score', 0)
 
         level_labels = {
-            'RED': '🔴 Nguy hiểm',
-            'YELLOW': '🟡 Cẩn thận',
-            'GREEN': '🟢 An toàn',
-            'SAFE': '🟢 An toàn',
+            'RED': '[Nguy hiem] Cao',
+            'YELLOW': '[Canh bao] Trung binh',
+            'GREEN': '[An toan] Thap',
+            'SAFE': '[An toan] Thap',
         }
-        level_text = level_labels.get(risk_level, '🟢 An toàn')
+        level_text = level_labels.get(risk_level, '[An toan] Thap')
 
-        title = f"Kết quả quét: {level_text}"
-        message = f"{title_suffix} — Điểm rủi ro: {risk_score}/100"
+        title = f"Ket qua quet: {level_text}"
+        message = f"{title_suffix} - Diem rui ro: {risk_score}/100"
         url = f"/scan/status/{scan_event.id}/" if hasattr(scan_event, 'id') else None
 
         push_service.send_push(

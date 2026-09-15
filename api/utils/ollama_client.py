@@ -8,6 +8,7 @@ Settings are read from django.conf.settings:
   - LLM_MAX_TOKENS
 """
 
+import inspect
 import json
 import logging
 import os
@@ -23,19 +24,22 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Read from Django settings with sensible defaults
+LLM_PROVIDER = getattr(settings, 'LLM_PROVIDER', os.getenv('LLM_PROVIDER', 'openai')).lower()
+OPENAI_BASE_URL = getattr(settings, 'OPENAI_BASE_URL', os.getenv('OPENAI_BASE_URL', getattr(settings, 'DEEPSEEK_BASE_URL', 'https://api.deepseek.com'))).rstrip('/')
+OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', os.getenv('OPENAI_API_KEY', getattr(settings, 'DEEPSEEK_API_KEY', '')))
+
 OLLAMA_BASE_URL = getattr(settings, 'OLLAMA_BASE_URL', 'http://localhost:11434')
 OLLAMA_API_KEY = getattr(settings, 'OLLAMA_API_KEY', None)
 SEARXNG_URL = getattr(settings, 'SEARXNG_URL', os.getenv('SEARXNG_URL', 'https://search.fptoj.com'))
 SEARXNG_API_KEY = getattr(settings, 'SEARXNG_API_KEY', os.getenv('SEARXNG_API_KEY', ''))
 
 # Mirror OLLAMA_API_KEY into the environment for any ollama library internals
-# that may read it (e.g. the search_agent client.chat call).
 if OLLAMA_API_KEY:
     os.environ.setdefault('OLLAMA_API_KEY', OLLAMA_API_KEY)
-DEFAULT_MODEL = getattr(settings, 'LLM_MODEL', 'neural-chat')
+DEFAULT_MODEL = getattr(settings, 'LLM_MODEL', 'deepseek-flash' if LLM_PROVIDER == 'openai' else 'neural-chat')
 SMALL_MODEL = getattr(settings, 'SMALL_MODEL', DEFAULT_MODEL)
 LLM_TEMPERATURE = getattr(settings, 'LLM_TEMPERATURE', 0.3)
-LLM_MAX_TOKENS = getattr(settings, 'LLM_MAX_TOKENS', 1800)
+LLM_MAX_TOKENS = getattr(settings, 'LLM_MAX_TOKENS', 16384)
 DEBUG_LLM = getattr(settings, 'DEBUG_LLM', True)  # Default True for ShieldCall Debugging
 
 # ---------------------------------------------------------------------------
@@ -352,12 +356,285 @@ if OLLAMA_API_KEY:
 client = ollama.Client(**client_kwargs)
 
 # ---------------------------------------------------------------------------
-# Retry helper — wraps client.chat() with automatic retries on 503 / network
-# errors.  Max 3 attempts with exponential backoff (2s, 4s).
+# Retry helper & Multi-backend Dispatch (OpenAI / DeepSeek / Ollama)
 # ---------------------------------------------------------------------------
 import time as _time
 
-def _chat_with_retry(max_retries: int = 4, **chat_kwargs):
+_openai_client = None
+
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        try:
+            from openai import OpenAI
+            _openai_client = OpenAI(
+                api_key=OPENAI_API_KEY or "sk-placeholder-key",
+                base_url=OPENAI_BASE_URL,
+                timeout=60.0,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to initialize OpenAI client: {e}")
+            _openai_client = None
+    return _openai_client
+
+
+class OpenAIResponseAdapter:
+    def __init__(self, raw_choice, usage=None):
+        self.message = OpenAIMessageAdapter(raw_choice.message)
+        self.done_reason = getattr(raw_choice, 'finish_reason', 'stop')
+        self.eval_count = getattr(usage, 'completion_tokens', None) if usage else None
+        self.prompt_eval_count = getattr(usage, 'prompt_tokens', None) if usage else None
+
+
+class OpenAIMessageAdapter:
+    def __init__(self, raw_msg):
+        self.role = getattr(raw_msg, 'role', 'assistant')
+        self.content = getattr(raw_msg, 'content', '') or ''
+        self.thinking = getattr(raw_msg, 'reasoning_content', '') or getattr(raw_msg, 'thinking', '') or ''
+        raw_tcs = getattr(raw_msg, 'tool_calls', None) or []
+        self.tool_calls = []
+        for tc in raw_tcs:
+            fn = getattr(tc, 'function', None)
+            name = getattr(fn, 'name', '') if fn else ''
+            raw_args = getattr(fn, 'arguments', '{}') if fn else '{}'
+            if isinstance(raw_args, str):
+                try:
+                    args = json.loads(raw_args)
+                except Exception:
+                    args = {}
+            else:
+                args = dict(raw_args or {})
+            tool_obj = type('ToolCall', (), {
+                'id': getattr(tc, 'id', ''),
+                'function': type('Function', (), {'name': name, 'arguments': args})()
+            })()
+            self.tool_calls.append(tool_obj)
+
+
+class OpenAIStreamChunkAdapter:
+    def __init__(self, content="", thinking="", tool_calls=None):
+        self.message = type('StreamMessage', (), {
+            'role': 'assistant',
+            'content': content,
+            'thinking': thinking,
+            'tool_calls': tool_calls or []
+        })()
+
+
+def _format_openai_messages(messages):
+    formatted = []
+    last_tool_id = None
+    for m in messages:
+        role = m.get('role', 'user')
+        content = m.get('content', '') or ''
+        if role == 'tool':
+            tid = m.get('tool_call_id') or last_tool_id or f"call_{m.get('tool_name', 'tool')}_{int(_time.time())}"
+            formatted.append({
+                'role': 'tool',
+                'tool_call_id': str(tid),
+                'content': str(content)
+            })
+        elif role == 'assistant':
+            item = {'role': 'assistant', 'content': content}
+            reasoning = m.get('reasoning_content') or m.get('thinking')
+            if reasoning:
+                item['reasoning_content'] = str(reasoning)
+            tool_calls = m.get('tool_calls')
+            if tool_calls:
+                formatted_tcs = []
+                for idx, tc in enumerate(tool_calls):
+                    tc_id = tc.get('id') or f"call_{idx}_{int(_time.time())}"
+                    last_tool_id = tc_id
+                    fn = tc.get('function', {})
+                    args = fn.get('arguments', {})
+                    arg_str = json.dumps(args, ensure_ascii=False) if isinstance(args, dict) else str(args)
+                    formatted_tcs.append({
+                        'id': tc_id,
+                        'type': 'function',
+                        'function': {
+                            'name': fn.get('name', ''),
+                            'arguments': arg_str
+                        }
+                    })
+                item['tool_calls'] = formatted_tcs
+            formatted.append(item)
+        else:
+            formatted.append({
+                'role': role,
+                'content': str(content)
+            })
+    return formatted
+
+
+def _format_openai_tools(tools):
+    if not tools:
+        return None
+    formatted = []
+    for t in tools:
+        if isinstance(t, dict):
+            formatted.append(t)
+        elif callable(t):
+            sig = inspect.signature(t)
+            doc = inspect.getdoc(t) or f"Tool {t.__name__}"
+            props = {}
+            reqs = []
+            for p_name, p in sig.parameters.items():
+                if p_name in ('self', 'cls'):
+                    continue
+                p_type = 'string'
+                if p.annotation == int:
+                    p_type = 'integer'
+                elif p.annotation == bool:
+                    p_type = 'boolean'
+                elif p.annotation == float:
+                    p_type = 'number'
+                elif p.annotation in (list, List):
+                    p_type = 'array'
+                elif p.annotation in (dict, Dict):
+                    p_type = 'object'
+                props[p_name] = {'type': p_type}
+                if p.default == inspect.Parameter.empty:
+                    reqs.append(p_name)
+            first_line_doc = doc.strip().split('\n')[0]
+            formatted.append({
+                'type': 'function',
+                'function': {
+                    'name': t.__name__,
+                    'description': first_line_doc,
+                    'parameters': {
+                        'type': 'object',
+                        'properties': props,
+                        'required': reqs
+                    }
+                }
+            })
+    return formatted if formatted else None
+
+
+def _openai_chat_with_retry(max_retries: int = 3, **chat_kwargs):
+    cli = get_openai_client()
+    if not cli:
+        raise RuntimeError("OpenAI client is not initialized.")
+
+    model = chat_kwargs.get('model') or DEFAULT_MODEL
+    options = chat_kwargs.get('options', {})
+    temperature = options.get('temperature', LLM_TEMPERATURE)
+    max_tokens = options.get('num_predict', LLM_MAX_TOKENS)
+
+    params = {
+        'model': model,
+        'messages': _format_openai_messages(chat_kwargs.get('messages', [])),
+        'temperature': temperature,
+        'max_tokens': max_tokens,
+    }
+    tools = _format_openai_tools(chat_kwargs.get('tools'))
+    if tools:
+        params['tools'] = tools
+        params['tool_choice'] = 'auto'
+
+    format_schema = chat_kwargs.get('format')
+    if format_schema:
+        params['response_format'] = {'type': 'json_object'}
+
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            raw_res = cli.chat.completions.create(**params)
+            choice = raw_res.choices[0]
+            return OpenAIResponseAdapter(choice, getattr(raw_res, 'usage', None))
+        except Exception as e:
+            last_exc = e
+            err_str = str(e)
+            is_retryable = any(tok in err_str.lower() for tok in ['503', '502', '504', '429', 'rate limit', 'timeout', 'connection'])
+            if is_retryable and attempt < max_retries:
+                wait = 2 ** attempt
+                logger.warning(f"[OpenAI/DeepSeek] Attempt {attempt}/{max_retries} failed ({err_str[:120]}), retrying in {wait}s...")
+                _time.sleep(wait)
+                continue
+            raise last_exc
+
+
+def _openai_chat_stream_with_retry(max_retries: int = 3, **chat_kwargs):
+    cli = get_openai_client()
+    if not cli:
+        raise RuntimeError("OpenAI client is not initialized.")
+
+    model = chat_kwargs.get('model') or DEFAULT_MODEL
+    options = chat_kwargs.get('options', {})
+    temperature = options.get('temperature', LLM_TEMPERATURE)
+    max_tokens = options.get('num_predict', LLM_MAX_TOKENS)
+
+    params = {
+        'model': model,
+        'messages': _format_openai_messages(chat_kwargs.get('messages', [])),
+        'temperature': temperature,
+        'max_tokens': max_tokens,
+        'stream': True,
+    }
+    tools = _format_openai_tools(chat_kwargs.get('tools'))
+    if tools:
+        params['tools'] = tools
+        params['tool_choice'] = 'auto'
+
+    raw_stream = cli.chat.completions.create(**params)
+
+    def _stream_gen():
+        tool_calls_accumulator = {}
+        for chunk in raw_stream:
+            choices = getattr(chunk, 'choices', [])
+            if not choices:
+                continue
+            delta = getattr(choices[0], 'delta', None)
+            if not delta:
+                continue
+
+            reasoning = getattr(delta, 'reasoning_content', None)
+            if reasoning:
+                yield OpenAIStreamChunkAdapter(thinking=reasoning)
+
+            content = getattr(delta, 'content', None)
+            if content:
+                yield OpenAIStreamChunkAdapter(content=content)
+
+            delta_tool_calls = getattr(delta, 'tool_calls', None)
+            if delta_tool_calls:
+                for dtc in delta_tool_calls:
+                    idx = getattr(dtc, 'index', 0)
+                    if idx not in tool_calls_accumulator:
+                        tool_calls_accumulator[idx] = {
+                            'id': getattr(dtc, 'id', '') or f"call_{idx}_{int(_time.time())}",
+                            'function': {'name': '', 'arguments': ''}
+                        }
+                    if getattr(dtc, 'id', None):
+                        tool_calls_accumulator[idx]['id'] = dtc.id
+                    fn = getattr(dtc, 'function', None)
+                    if fn:
+                        if getattr(fn, 'name', None):
+                            tool_calls_accumulator[idx]['function']['name'] += fn.name
+                        if getattr(fn, 'arguments', None):
+                            tool_calls_accumulator[idx]['function']['arguments'] += fn.arguments
+
+        if tool_calls_accumulator:
+            assembled = []
+            for idx in sorted(tool_calls_accumulator.keys()):
+                tc_data = tool_calls_accumulator[idx]
+                name = tc_data['function']['name']
+                raw_args = tc_data['function']['arguments']
+                try:
+                    args = json.loads(raw_args) if raw_args else {}
+                except Exception:
+                    args = {}
+                assembled.append(type('ToolCall', (), {
+                    'id': tc_data['id'],
+                    'function': type('Function', (), {'name': name, 'arguments': args})()
+                })())
+            yield OpenAIStreamChunkAdapter(tool_calls=assembled)
+
+    return _stream_gen()
+
+
+def _ollama_chat_with_retry(max_retries: int = 4, **chat_kwargs):
     """Call client.chat() with retry on 503 / transient errors."""
     last_exc = None
     for attempt in range(1, max_retries + 1):
@@ -366,24 +643,21 @@ def _chat_with_retry(max_retries: int = 4, **chat_kwargs):
         except Exception as e:
             last_exc = e
             err_str = str(e)
-            # Match 503, 502, 504 (timeout), 429 (rate limit)
             is_retryable = any(tok in err_str for tok in ['503', '502', '504', '429', 'Service Unavailable',
                                                            'temporarily unavailable', 'overloaded',
                                                            'Connection', 'Timeout', 'remote end closed'])
             if is_retryable and attempt < max_retries:
-                wait = 2 ** attempt  # 2s, 4s, 8s
+                wait = 2 ** attempt
                 logger.warning(f"[Ollama] Attempt {attempt}/{max_retries} failed ({err_str[:120]}), "
                                f"retrying in {wait}s...")
                 _time.sleep(wait)
                 continue
-            
             logger.error(f"[Ollama] Final attempt {attempt} failed: {err_str}")
             raise last_exc
 
 
-def _chat_stream_with_retry(max_retries: int = 4, **chat_kwargs):
-    """Call client.chat(stream=True) with retry on 503 / transient errors.
-    Returns the streaming iterator."""
+def _ollama_chat_stream_with_retry(max_retries: int = 4, **chat_kwargs):
+    """Call client.chat(stream=True) with retry on 503 / transient errors."""
     chat_kwargs['stream'] = True
     last_exc = None
     for attempt in range(1, max_retries + 1):
@@ -401,9 +675,34 @@ def _chat_stream_with_retry(max_retries: int = 4, **chat_kwargs):
                                f"retrying in {wait}s...")
                 _time.sleep(wait)
                 continue
-            
             logger.error(f"[Ollama] Final stream attempt {attempt} failed: {err_str}")
             raise last_exc
+
+
+def _chat_with_retry(max_retries: int = 4, **chat_kwargs):
+    """Unified chat completion entry point with automatic provider selection and fallback."""
+    if LLM_PROVIDER == 'openai':
+        if OPENAI_API_KEY:
+            try:
+                return _openai_chat_with_retry(max_retries=max_retries, **chat_kwargs)
+            except Exception as e:
+                logger.warning(f"[OpenAI/DeepSeek] Chat error ({e}), attempting Ollama fallback...")
+        else:
+            logger.debug("[LLM] OPENAI_API_KEY is not configured yet. Set OPENAI_API_KEY in .env to enable.")
+    return _ollama_chat_with_retry(max_retries=max_retries, **chat_kwargs)
+
+
+def _chat_stream_with_retry(max_retries: int = 4, **chat_kwargs):
+    """Unified streaming chat entry point with automatic provider selection and fallback."""
+    if LLM_PROVIDER == 'openai':
+        if OPENAI_API_KEY:
+            try:
+                return _openai_chat_stream_with_retry(max_retries=max_retries, **chat_kwargs)
+            except Exception as e:
+                logger.warning(f"[OpenAI/DeepSeek] Stream error ({e}), attempting Ollama fallback...")
+        else:
+            logger.debug("[LLM] OPENAI_API_KEY is not configured yet. Set OPENAI_API_KEY in .env to enable.")
+    return _ollama_chat_stream_with_retry(max_retries=max_retries, **chat_kwargs)
 
 
 # Specialized logger for LLM traffic
@@ -722,9 +1021,10 @@ def message_to_dict(msg) -> Dict[str, Any]:
     if content:
         d['content'] = content
 
-    thinking = getattr(msg, 'thinking', None)
+    thinking = getattr(msg, 'thinking', None) or getattr(msg, 'reasoning_content', None)
     if thinking:
         d['thinking'] = thinking
+        d['reasoning_content'] = thinking
 
     tool_name = getattr(msg, 'tool_name', None)
     if tool_name:
@@ -737,14 +1037,18 @@ def message_to_dict(msg) -> Dict[str, Any]:
             if isinstance(tc, dict):
                 serialised.append(tc)
             else:
-                # ollama ToolCall object
-                fn = tc.function
-                serialised.append({
+                # ollama or adapter ToolCall object
+                fn = getattr(tc, 'function', None)
+                tc_item = {
                     'function': {
-                        'name': fn.name,
-                        'arguments': dict(fn.arguments) if fn.arguments else {},
+                        'name': getattr(fn, 'name', '') if fn else '',
+                        'arguments': dict(getattr(fn, 'arguments', {}) or {}) if fn else {},
                     }
-                })
+                }
+                tc_id = getattr(tc, 'id', None)
+                if tc_id:
+                    tc_item['id'] = tc_id
+                serialised.append(tc_item)
         d['tool_calls'] = serialised
 
     images = getattr(msg, 'images', None)
@@ -755,13 +1059,29 @@ def message_to_dict(msg) -> Dict[str, Any]:
 
 
 def is_ollama_available() -> bool:
-    """Check if Ollama service is running."""
+    """Check if AI service (OpenAI/DeepSeek or Ollama) is running."""
+    if LLM_PROVIDER == 'openai':
+        if OPENAI_API_KEY:
+            try:
+                cli = get_openai_client()
+                if cli:
+                    cli.models.list()
+                    return True
+            except Exception as e:
+                logger.warning(f"OpenAI/DeepSeek check failed: {e}")
+                return False
+        return False
     try:
         client.list()
         return True
     except Exception as e:
         logger.warning(f"Ollama not available: {e}")
         return False
+
+
+def is_ai_available() -> bool:
+    """Check if any configured AI service is currently reachable."""
+    return is_ollama_available()
 
 def get_available_models() -> list:
     """Get list of available models in Ollama."""
@@ -875,9 +1195,11 @@ def generate_response(
                     args = tool_call.function.arguments or {}
                     logger.info(f"[generate_response iter={iteration}] 🔧 tool call: {tool_name}({list(args.keys())})")
                     tool_func = tool_dispatch.get(tool_name)
-                    result_str = tool_func(**args) if tool_func else f"Tool '{tool_name}' not available."
-                    logger.info(f"[generate_response iter={iteration}] 🔧 tool result len={len(str(result_str))}")
-                    messages.append({'role': 'tool', 'content': result_str, 'tool_name': tool_name})
+                    tool_id = getattr(tool_call, 'id', None)
+                    tool_dict = {'role': 'tool', 'content': result_str, 'tool_name': tool_name}
+                    if tool_id:
+                        tool_dict['tool_call_id'] = tool_id
+                    messages.append(tool_dict)
                 iteration += 1
                 continue
             elif part:
@@ -1746,6 +2068,7 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                 
                 current_tool_calls = []
                 current_content = []
+                current_thinking = []
                 is_thinking = False
 
                 for chunk in stream:
@@ -1760,6 +2083,7 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         thinking = msg.get('thinking', "")
                     
                     if thinking:
+                        current_thinking.append(thinking)
                         if not is_thinking:
                             is_thinking = True
                             yield "__STATUS__:thinking"
@@ -1804,18 +2128,26 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                     else:
                         fn = getattr(tc, 'function', None)
                         if fn:
-                            serializable_calls.append({
+                            call_item = {
                                 'function': {
                                     'name': getattr(fn, 'name', ''),
                                     'arguments': dict(getattr(fn, 'arguments', {}) or {}),
                                 }
-                            })
+                            }
+                            call_id = getattr(tc, 'id', None)
+                            if call_id:
+                                call_item['id'] = call_id
+                            serializable_calls.append(call_item)
 
-                messages.append({
+                asst_msg = {
                     'role': 'assistant',
                     'content': "".join(current_content),
                     'tool_calls': serializable_calls
-                })
+                }
+                if current_thinking:
+                    asst_msg['reasoning_content'] = "".join(current_thinking)
+                    asst_msg['thinking'] = "".join(current_thinking)
+                messages.append(asst_msg)
 
                 yield f"__TOOL_CALLS__:{json.dumps(serializable_calls, ensure_ascii=False)}"
 
@@ -1823,6 +2155,7 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                     fn_data = call_dict.get('function', {})
                     tool_name = fn_data.get('name', '')
                     args = fn_data.get('arguments', {}) or {}
+                    call_id = call_dict.get('id')
 
                     # Yield marker for UI
                     yield f"__STATUS__:executing_tool:{tool_name}"
@@ -1853,11 +2186,14 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         result = {'error': f"Tool '{tool_name}' not found."}
                         result_str = f"Tool '{tool_name}' not found."
 
-                    messages.append({
+                    tool_msg = {
                         'role': 'tool',
                         'content': result_str,
                         'tool_name': tool_name
-                    })
+                    }
+                    if call_id:
+                        tool_msg['tool_call_id'] = call_id
+                    messages.append(tool_msg)
 
                     yield f"__TOOL_RESULT__:{json.dumps({'tool': tool_name, 'status': 'done', 'args': args, 'result': result}, ensure_ascii=False)}"
 
@@ -2795,12 +3131,15 @@ def search_agent(
                             logger.error(f"[search_agent iter={iteration}]   ✗ {result_str}")
                     else:
                         result_str = f"Tool '{tool_name}' not found."
-                        logger.warning(f"[search_agent iter={iteration}]   ✗ {result_str}")
-                    messages.append({
+                    tool_id = getattr(tool_call, 'id', None)
+                    tool_dict = {
                         'role': 'tool',
                         'content': result_str,
                         'tool_name': tool_name,
-                    })
+                    }
+                    if tool_id:
+                        tool_dict['tool_call_id'] = tool_id
+                    messages.append(tool_dict)
                 # Continue loop so the model can read the tool results
                 continue
 

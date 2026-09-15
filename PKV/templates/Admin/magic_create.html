@@ -140,7 +140,7 @@
             </a>
             <div>
                 <h1 class="text-2xl font-black text-white tracking-tight flex items-center gap-3">
-                    <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-purple-500/20">⚡</span>
+                    <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-purple-500/20"><i class="bi bi-lightning-charge-fill text-white text-base"></i></span>
                     Magic Create
                 </h1>
                 <p class="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">AI tạo bài học · quiz/kịch bản tùy chỉnh</p>
@@ -427,7 +427,7 @@
                                 <template x-for="(step, si) in scenarioSteps" :key="si">
                                     <div class="mc-chat-bubble mc-fade" :style="'animation-delay:' + (si * 0.05) + 's'">
                                         <div class="mc-chat-avatar" :class="step.speaker">
-                                            <span x-text="step.speaker === 'scammer' ? '🦹' : step.speaker === 'victim' ? '👤' : '📖'"></span>
+                                            <i :class="step.speaker === 'scammer' ? 'bi bi-person-x-fill text-red-400' : (step.speaker === 'victim' ? 'bi bi-person-fill text-blue-400' : 'bi bi-book-half text-purple-400')"></i>
                                         </div>
                                         <div class="flex-1 min-w-0">
                                             <div class="flex items-center gap-2 mb-1">
@@ -584,7 +584,7 @@ function magicCreate() {
         ],
 
         startTimer() {
-            /* NOP on load — activated when streaming starts */
+            /* NOP on load: activated when streaming starts */
         },
 
         _startElapsed() {
@@ -715,7 +715,7 @@ function magicCreate() {
 
             this.ws.onclose = (ev) => {
                 this.stopPing();
-                this._log('WS closed — code=' + ev.code + ' reason=' + ev.reason + ' clean=' + ev.wasClean);
+                this._log('WS closed: code=' + ev.code + ' reason=' + ev.reason + ' clean=' + ev.wasClean);
                 if (this.creating && this.stage === 'streaming' && this.reconnectAttempts < this.maxReconnects) {
                     this.reconnectAttempts++;
                     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 15000);

@@ -42,3 +42,4 @@ sentence-transformers
 transformers
 torch
 martor
+mcp>=2.2.0

@@ -36,8 +36,11 @@ INSTALLED_APPS = [
     'api.media_analysis',
     'api.maintenance',
     'api.core',
+    'theme',
+    'tailwind',
     'PKV',
 ]
+
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -69,7 +72,7 @@ TEMPLATES = [
     },
 ]
 
-# SQLite for CI — no MySQL needed
+# SQLite for CI: no MySQL needed
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -77,7 +80,7 @@ DATABASES = {
     }
 }
 
-# Disable Redis cache — use local memory
+# Disable Redis cache: use local memory
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -101,6 +104,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'api.core.authentication.APIKeyAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
@@ -113,6 +117,9 @@ ACCOUNT_EMAIL_VERIFICATION = 'none'
 LOGIN_REDIRECT_URL = '/dashboard/'
 
 # Dummy values for external services
+LLM_PROVIDER = 'ollama'
+OPENAI_BASE_URL = 'https://api.deepseek.com'
+OPENAI_API_KEY = ''
 OLLAMA_BASE_URL = 'http://localhost:11434'
 OLLAMA_API_KEY = ''
 LLM_MODEL = 'test'

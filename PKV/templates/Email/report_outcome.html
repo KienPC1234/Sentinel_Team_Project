@@ -22,11 +22,11 @@
               <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#94a3b8;">Báo cáo của bạn cho mục <strong style="color:#e2e8f0;">{{ report_type }}</strong> với đối tượng <strong style="color:#e2e8f0;">{{ target }}</strong> đã được cập nhật trạng thái.</p>
 
               {% if status == 'approved' %}
-              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);color:#a7f3d0;font-size:13px;font-weight:700;">✅ Trạng thái: ĐÃ CHẤP THUẬN</div>
+              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);color:#a7f3d0;font-size:13px;font-weight:700;">[DA CHAP THUAN] Trạng thái: ĐÃ CHẤP THUẬN</div>
               {% elif status == 'ai_flagged' %}
-              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#fde68a;font-size:13px;font-weight:700;">🟡 Trạng thái: AI GẮN CỜ · CHỜ ADMIN XÁC MINH</div>
+              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#fde68a;font-size:13px;font-weight:700;">[AI GAN CO] Trạng thái: AI GẮN CỜ - CHỜ ADMIN XÁC MINH</div>
               {% else %}
-              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#fecaca;font-size:13px;font-weight:700;">⚠️ Trạng thái: TỪ CHỐI</div>
+              <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#fecaca;font-size:13px;font-weight:700;">[TU CHOI] Trạng thái: TỪ CHỐI</div>
               {% endif %}
 
               {% if reason %}

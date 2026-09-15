@@ -245,7 +245,7 @@
                                 </td>
                                 <td class="px-5 py-4 max-w-xs">
                                     <div class="text-xs font-bold text-white/80 mb-1" x-text="r.post_title"></div>
-                                    <div class="text-[10px] text-white/30 italic" x-text="'Lý do: ' + (r.reason || '—')"></div>
+                                    <div class="text-[10px] text-white/30 italic" x-text="'Lý do: ' + (r.reason || '-')"></div>
                                 </td>
                                 <td class="px-5 py-4">
                                     <template x-if="r.ai_status === 'analyzing'">
@@ -254,7 +254,7 @@
                                     <template x-if="r.ai_violation === true">
                                         <div>
                                             <span class="text-rose-500 text-[10px] font-black"><i class="bi bi-exclamation-triangle-fill"></i> Vi phạm</span>
-                                            <div class="text-[8px] text-white/20" x-text="'Conf: ' + (r.ai_confidence || '—')"></div>
+                                            <div class="text-[8px] text-white/20" x-text="'Conf: ' + (r.ai_confidence || '-')"></div>
                                         </div>
                                     </template>
                                     <template x-if="r.ai_violation === false">
@@ -314,7 +314,7 @@
                                 <td class="px-5 py-4"><span class="text-xs font-bold text-white/70" x-text="r.reporter_name"></span></td>
                                 <td class="px-5 py-4 max-w-sm">
                                     <div class="text-[11px] text-white/50 italic line-clamp-2" x-text="r.comment_content"></div>
-                                    <div class="text-[9px] text-white/20 mt-1" x-text="'Lý do: ' + (r.reason || '—')"></div>
+                                    <div class="text-[9px] text-white/20 mt-1" x-text="'Lý do: ' + (r.reason || '-')"></div>
                                 </td>
                                 <td class="px-5 py-4">
                                     <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase border"
@@ -781,7 +781,7 @@ function forumAdmin() {
             if (status === 'approved') return 'Vi phạm';
             if (status === 'rejected') return 'Không vi phạm';
             if (status === 'ai_flagged') return 'AI gắn cờ';
-            return status || '—';
+            return status || '-';
         },
 
         statusBadgeClass(status) {

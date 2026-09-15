@@ -539,6 +539,42 @@ def _build_type_distribution(since):
     }
 
 
+def _normalize_quiz(q):
+    """Normalize quiz options into uniform [{'id': 'A', 'text': '...'}] structure."""
+    raw_options = q.options
+    if isinstance(raw_options, str):
+        try:
+            raw_options = json.loads(raw_options)
+        except Exception:
+            raw_options = []
+    normalized_options = []
+    if isinstance(raw_options, list):
+        for idx, opt in enumerate(raw_options):
+            if isinstance(opt, dict):
+                opt_id = str(opt.get('id') or chr(65 + idx)).strip()
+                opt_text = str(opt.get('text') or opt.get('label') or '').strip()
+            else:
+                opt_id = chr(65 + idx)
+                opt_text = str(opt).strip()
+            normalized_options.append({'id': opt_id, 'text': opt_text})
+
+    correct = str(q.correct_answer or '').strip()
+    for opt in normalized_options:
+        if correct.lower() == opt['text'].strip().lower() or correct.upper() == opt['id'].upper():
+            correct = opt['id']
+            break
+
+    return {
+        'id': q.id,
+        'question': q.question,
+        'options': normalized_options,
+        'correct_answer': correct,
+        'explanation': q.explanation,
+        'lesson': getattr(q, 'lesson', None),
+        'article': getattr(q, 'article', None),
+    }
+
+
 def learn_hub_view(request):
     """Learn Hub with real articles and lessons."""
     articles = (
@@ -555,7 +591,8 @@ def learn_hub_view(request):
     )
 
     # All quizzes (from both lessons and articles)
-    all_quizzes = LearnQuiz.objects.select_related('lesson', 'article').order_by('-id')
+    raw_quizzes = LearnQuiz.objects.select_related('lesson', 'article').order_by('-id')
+    all_quizzes = [_normalize_quiz(q) for q in raw_quizzes]
     # All scenarios
     all_scenarios = LearnScenario.objects.order_by('-created_at')
 
@@ -607,19 +644,21 @@ def article_detail_view(request, slug):
             .first()
         )
     comments_count = ArticleComment.objects.filter(article=article, is_hidden=False).count()
+    quizzes = [_normalize_quiz(q) for q in article.quizzes.all()]
     return render(request, "Learning/article_detail.html", {
         "title": article.title,
         "article": article,
         "reaction_counts": reaction_counts,
         "my_reaction": my_reaction,
         "comments_count": comments_count,
+        "quizzes": quizzes,
     })
 
 
 def lesson_detail_view(request, slug):
     """Lesson detail page with quizzes and scenario."""
     lesson = get_object_or_404(LearnLesson, slug=slug, is_published=True)
-    quizzes = list(lesson.quizzes.all().values('id', 'question', 'options', 'correct_answer', 'explanation'))
+    quizzes = [_normalize_quiz(q) for q in lesson.quizzes.all()]
     scenario = lesson.scenarios.first()
     scenario_steps = []
     if scenario:
@@ -1128,3 +1167,57 @@ def scam_radar_list_view(request, list_type):
         "list_type": list_type,
         "rows": rows,
     })
+
+
+def mcp_guide_view(request):
+    """
+    Dedicated documentation and integration portal for ShieldCall MCP Server.
+    Provides setup guides for Claude Desktop, Cursor, Windsurf, Claude Code, Cline, ChatGPT,
+    pre-configured initial prompts, and live user API Key selector.
+    """
+    user_api_keys = []
+    if request.user.is_authenticated:
+        from api.core.models import APIKey
+        user_api_keys = list(
+            APIKey.objects.filter(user=request.user, is_active=True).values(
+                'id', 'name', 'prefix', 'tier', 'daily_quota', 'requests_today'
+            )
+        )
+
+    site_url = getattr(settings, 'SITE_URL', 'http://127.0.0.1:8001').rstrip('/')
+    api_url = f"{site_url}/api/v1"
+
+    return render(request, "MCP/mcp_guide.html", {
+        "title": "ShieldCall MCP Server | Tích Hợp Chatbot & AI IDEs",
+        "user_api_keys": user_api_keys,
+        "user_api_keys_json": json.dumps(user_api_keys),
+        "site_url": site_url,
+        "api_url": api_url,
+    })
+
+
+def mcp_download_script_view(request):
+    """
+    Direct download endpoint for the standalone ShieldCall MCP python script.
+    Users can download this single file (or fetch via curl/wget) and run it without
+    needing to clone the entire project repository.
+    """
+    import os
+    from django.http import HttpResponse, Http404
+
+    script_path = os.path.join(settings.BASE_DIR, 'scripts', 'shieldcall_mcp.py')
+    if not os.path.isfile(script_path):
+        script_path = os.path.join(settings.BASE_DIR, 'static', 'downloads', 'shieldcall_mcp.py')
+
+    if not os.path.isfile(script_path):
+        raise Http404("MCP script not found.")
+
+    with open(script_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    response = HttpResponse(content, content_type='text/x-python; charset=utf-8')
+    if request.GET.get('raw') != '1':
+        response['Content-Disposition'] = 'attachment; filename="shieldcall_mcp.py"'
+    response['Cache-Control'] = 'no-cache, must-revalidate'
+    return response
+

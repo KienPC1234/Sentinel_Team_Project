@@ -47,7 +47,7 @@ class ScanProgressConsumer(AsyncWebsocketConsumer):
             event = ScanEvent.objects.get(id=self.scan_id)
             if event.status == ScanStatus.COMPLETED:
                 return {
-                    'message': 'Hoàn tất — kết quả khôi phục từ máy chủ.',
+                    'message': 'Hoàn tất: kết quả khôi phục từ máy chủ.',
                     'status': 'completed',
                     'step': 'completed',
                     'data': event.result_json,

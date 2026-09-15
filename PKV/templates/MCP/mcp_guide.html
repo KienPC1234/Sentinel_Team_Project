@@ -1,0 +1,1388 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}ShieldCall MCP Server | Tích Hợp Chatbot & AI IDEs{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-12 py-6 pb-28 px-4 sm:px-6 lg:px-8" x-data="mcpGuideApp()">
+    
+    <!-- Hero Banner -->
+    <div class="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-cyan-500/10 via-white/[0.02] to-transparent p-8 md:p-12" data-aos="fade-down">
+        <div class="absolute -top-24 -right-24 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-purple-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        
+        <div class="relative z-10 max-w-4xl space-y-6">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-400/10 border border-cyan-400/25 text-cyan-300 text-xs font-black uppercase tracking-widest">
+                <i class="bi bi-cpu-fill"></i> Model Context Protocol • Chuẩn Mở Toàn Cầu
+            </div>
+            <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
+                Biến Mọi Chatbot Thành <span class="glow-text text-cyan-400">Chuyên Gia An Ninh Số</span> ShieldCall
+            </h1>
+            <p class="text-white/70 text-base sm:text-lg leading-relaxed">
+                Kết nối trực tiếp toàn bộ kho dữ liệu lừa đảo, công cụ kiểm tra số điện thoại rủi ro, đối soát tài khoản ngân hàng gian lận và phát hiện website giả mạo của <strong>ShieldCall VN</strong> vào bất kỳ AI nào: <strong>Claude Desktop, Cursor, Windsurf, Claude Code, Cline, ChatGPT</strong>.
+            </p>
+            
+            <div class="flex flex-wrap items-center gap-3 pt-2">
+                <a href="#quick-config" class="liquid-btn py-3 px-5 text-xs font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-widest shadow-lg shadow-cyan-400/20">
+                    <i class="bi bi-gear-wide-connected mr-1.5"></i> Cấu Hình Ngay
+                </a>
+                <a href="/mcp/download/" download="shieldcall_mcp.py" class="liquid-btn py-3 px-5 text-xs font-black bg-white/10 text-cyan-300 hover:bg-white/15 border border-cyan-400/30 uppercase tracking-widest">
+                    <i class="bi bi-download mr-1.5"></i> Tải Script Python
+                </a>
+                <a href="#live-playground" class="liquid-btn py-3 px-5 text-xs font-black bg-white/10 text-white hover:bg-white/15 border border-white/10 uppercase tracking-widest">
+                    <i class="bi bi-play-circle-fill mr-1.5"></i> Thử Nghiệm Live
+                </a>
+                <a href="#starter-prompts" class="liquid-btn py-3 px-5 text-xs font-black bg-white/5 text-white/70 hover:text-white border border-white/10 uppercase tracking-widest">
+                    <i class="bi bi-chat-square-quote mr-1.5"></i> Mẫu Prompt
+                </a>
+                <a href="#tools-reference" class="liquid-btn py-3 px-5 text-xs font-black bg-white/5 text-white/70 hover:text-white border border-white/10 uppercase tracking-widest">
+                    <i class="bi bi-tools mr-1.5"></i> 10 Công Cụ
+                </a>
+                <a href="#troubleshooting" class="liquid-btn py-3 px-5 text-xs font-black bg-white/5 text-white/70 hover:text-white border border-white/10 uppercase tracking-widest">
+                    <i class="bi bi-question-circle mr-1.5"></i> FAQ & Khắc Phục Lỗi
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Active Selector Bar -->
+    <div class="liquid-card p-6 border border-cyan-500/25 bg-cyan-500/[0.03] rounded-3xl">
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div class="space-y-1 max-w-xl">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <h3 class="text-sm font-black text-white uppercase tracking-wider">Khóa API Tích Hợp Của Bạn</h3>
+                </div>
+                <p class="text-xs text-white/60 leading-relaxed">
+                    Mã khóa được nhúng trực tiếp vào các file cấu hình bên dưới để bạn chỉ việc sao chép và kích hoạt.
+                </p>
+            </div>
+
+            <div class="w-full lg:w-auto">
+                {% if user.is_authenticated %}
+                    {% if user_api_keys %}
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-white/70 whitespace-nowrap">Chọn khóa:</span>
+                                <select x-model="selectedKey" @change="updateConfigSnippets()" class="bg-black/80 border border-cyan-400/30 rounded-xl px-3.5 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                                    <template x-for="k in userKeys" :key="k.id">
+                                        <option :value="k.prefix" x-text="k.name + ' (' + k.prefix + '...)'"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <a href="/dashboard/?tab=api_keys" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 text-white hover:bg-white/20 border border-white/15 transition-all flex items-center gap-1.5 whitespace-nowrap">
+                                <i class="bi bi-gear"></i> Quản lý khóa
+                            </a>
+                        </div>
+                    {% else %}
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                            <span class="text-xs text-yellow-300 flex items-center gap-1.5 whitespace-nowrap">
+                                <i class="bi bi-exclamation-triangle-fill"></i> Bạn chưa tạo API Key nào
+                            </span>
+                            <a href="/dashboard/?tab=api_keys" class="px-4 py-2 rounded-xl text-xs font-black bg-cyan-400 text-black hover:bg-cyan-300 transition-all uppercase tracking-wider shadow-lg shadow-cyan-400/20 whitespace-nowrap">
+                                Tạo API Key (500 req/ngày)
+                            </a>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3.5">
+                        <span class="text-xs text-white/70 whitespace-nowrap">Đăng nhập để tự động điền API Key thực của bạn:</span>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <a href="/login/?next=/mcp/" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all text-center">
+                                Đăng nhập
+                            </a>
+                            <a href="/register/?next=/mcp/" class="px-4 py-2 rounded-xl text-xs font-black bg-cyan-400 hover:bg-cyan-300 text-black transition-all uppercase tracking-wider shadow-lg shadow-cyan-400/20 text-center">
+                                Đăng ký miễn phí
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Architecture Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="liquid-card p-6 space-y-3 bg-white/[0.02]">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-lg">
+                <i class="bi bi-robot"></i>
+            </div>
+            <h3 class="text-base font-bold text-white">1. Mọi Chatbot Thương Mại</h3>
+            <p class="text-xs text-white/60 leading-relaxed">
+                Người dùng trò chuyện bình thường với Claude, Cursor, ChatGPT. Khi người dùng đề cập đến SĐT, STK, link hoặc tin nhắn lạ, AI sẽ nhận diện ngữ cảnh.
+            </p>
+        </div>
+
+        <div class="liquid-card p-6 space-y-3 bg-white/[0.02] border-cyan-500/20">
+            <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-lg">
+                <i class="bi bi-arrow-left-right"></i>
+            </div>
+            <h3 class="text-base font-bold text-white">2. Giao Thức Chuẩn MCP</h3>
+            <p class="text-xs text-white/60 leading-relaxed">
+                Chatbot tự động gọi các tool chuẩn hóa qua giao thức Model Context Protocol (Stdio / SSE), chuyển tiếp tham số tới ShieldCall MCP Server an toàn.
+            </p>
+        </div>
+
+        <div class="liquid-card p-6 space-y-3 bg-white/[0.02]">
+            <div class="w-10 h-10 rounded-xl bg-green-500/10 text-green-400 flex items-center justify-center text-lg">
+                <i class="bi bi-shield-check"></i>
+            </div>
+            <h3 class="text-base font-bold text-white">3. Cơ Sở Dữ Liệu An Ninh Số</h3>
+            <p class="text-xs text-white/60 leading-relaxed">
+                ShieldCall đối soát danh sách đen, điểm tín nhiệm rủi ro, phân tích tên miền nhái, và trả về kết quả thời gian thực để AI cảnh báo người dùng.
+            </p>
+        </div>
+    </div>
+
+    <!-- Integration Setup Guide Tabs -->
+    <div id="quick-config" class="space-y-6 pt-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+                <h2 class="text-2xl font-black text-white tracking-tight">Hướng Dẫn Cấu Hình Từng Nền Tảng</h2>
+                <p class="text-xs text-white/50">Chọn ứng dụng bạn đang sử dụng để xem hướng dẫn chi tiết và file cấu hình 1-click copy.</p>
+            </div>
+
+            <!-- Platform Tabs -->
+            <div class="flex flex-wrap gap-2 p-1 bg-black/40 border border-white/10 rounded-2xl">
+                <button @click="activePlatform = 'claude'" :class="activePlatform === 'claude' ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20' : 'text-white/60 hover:text-white'"
+                    class="px-4 py-2 rounded-xl text-xs font-black transition-all">
+                    Claude Desktop
+                </button>
+                <button @click="activePlatform = 'cursor'" :class="activePlatform === 'cursor' ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20' : 'text-white/60 hover:text-white'"
+                    class="px-4 py-2 rounded-xl text-xs font-black transition-all">
+                    Cursor IDE
+                </button>
+                <button @click="activePlatform = 'windsurf'" :class="activePlatform === 'windsurf' ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20' : 'text-white/60 hover:text-white'"
+                    class="px-4 py-2 rounded-xl text-xs font-black transition-all">
+                    Windsurf
+                </button>
+                <button @click="activePlatform = 'claude_code'" :class="activePlatform === 'claude_code' ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20' : 'text-white/60 hover:text-white'"
+                    class="px-4 py-2 rounded-xl text-xs font-black transition-all">
+                    Claude Code CLI
+                </button>
+                <button @click="activePlatform = 'cline'" :class="activePlatform === 'cline' ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20' : 'text-white/60 hover:text-white'"
+                    class="px-4 py-2 rounded-xl text-xs font-black transition-all">
+                    Cline / Roo Code
+                </button>
+                <button @click="activePlatform = 'chatgpt'" :class="activePlatform === 'chatgpt' ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20' : 'text-white/60 hover:text-white'"
+                    class="px-4 py-2 rounded-xl text-xs font-black transition-all">
+                    ChatGPT Actions
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab 1: Claude Desktop -->
+        <div x-show="activePlatform === 'claude'" x-transition class="space-y-6">
+            <div class="liquid-card p-6 space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="bi bi-laptop text-cyan-400"></i> Cấu hình Claude Desktop
+                        </h3>
+                        <p class="text-xs text-white/50">Mở ứng dụng Claude Desktop trên máy tính và cập nhật file cấu hình MCP.</p>
+                    </div>
+                    <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">claude_desktop_config.json</span>
+                </div>
+
+                <!-- Prerequisite: Download Script -->
+                <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
+                    <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+                        Chuẩn bị: Tải script & cài thư viện
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Tải file script (1 file duy nhất):</p>
+                            <div class="flex items-center gap-2">
+                                <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">curl -O https://shieldcall.vn/mcp/download/</code>
+                                <a href="/mcp/download/" download="shieldcall_mcp.py" class="shrink-0 px-3 py-2 rounded-xl text-[10px] font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+                                    <i class="bi bi-download"></i> Tải ngay
+                                </a>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP (1 lần duy nhất):</p>
+                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install mcp httpx</code>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-white/50">Sau khi tải xong, ghi nhớ đường dẫn file <code class="text-cyan-300">shieldcall_mcp.py</code> và cập nhật vào ô <strong class="text-white">scriptPath</strong> bên dưới nếu cần.</p>
+                </div>
+
+                <div class="space-y-2">
+                    <p class="text-xs font-bold text-white/80">Vị trí file cấu hình:</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                        <div class="p-3 bg-black/50 border border-white/10 rounded-xl">
+                            <span class="text-cyan-400 font-bold block mb-1">macOS:</span>
+                            <span class="text-white/70 select-all">~/Library/Application Support/Claude/claude_desktop_config.json</span>
+                        </div>
+                        <div class="p-3 bg-black/50 border border-white/10 rounded-xl">
+                            <span class="text-cyan-400 font-bold block mb-1">Windows:</span>
+                            <span class="text-white/70 select-all">%APPDATA%\Claude\claude_desktop_config.json</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-bold text-white/80">Nội dung cấu hình JSON:</p>
+                        <button @click="copyText(getClaudeConfig(), 'claude-btn')" id="claude-btn"
+                            class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                            <i class="bi bi-clipboard"></i> Sao chép JSON
+                        </button>
+                    </div>
+                    <pre class="bg-[#050814] p-4 rounded-2xl border border-white/10 font-mono text-xs text-cyan-300 overflow-x-auto select-all" x-text="getClaudeConfig()"></pre>
+                </div>
+
+                <div class="p-4 rounded-xl bg-cyan-400/5 border border-cyan-400/20 text-xs text-white/70 space-y-1">
+                    <p class="font-bold text-cyan-300"><i class="bi bi-info-circle mr-1"></i> Lưu ý sau khi cấu hình:</p>
+                    <p>Khởi động lại ứng dụng Claude Desktop. Bạn sẽ thấy biểu tượng chiếc búa (Hammer icon) xuất hiện ở góc soạn thảo tin nhắn, hiển thị 7 công cụ bảo mật của ShieldCall.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Cursor IDE -->
+        <div x-show="activePlatform === 'cursor'" x-transition class="space-y-6">
+            <div class="liquid-card p-6 space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="bi bi-code-slash text-cyan-400"></i> Cấu hình Cursor IDE
+                        </h3>
+                        <p class="text-xs text-white/50">Tích hợp vào Cursor để kiểm tra an toàn link, sđt, tài khoản ngân hàng ngay trong trình soạn thảo code.</p>
+                    </div>
+                    <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">.cursor/mcp.json</span>
+                </div>
+
+                <div class="space-y-2">
+                    <p class="text-xs font-bold text-white/80">Cách 1: Thêm trực tiếp file <code>.cursor/mcp.json</code> vào thư mục dự án:</p>
+                    <div class="flex items-center justify-between pt-1">
+                        <span class="text-xs text-white/50">File cấu hình trong workspace:</span>
+                        <button @click="copyText(getCursorConfig(), 'cursor-btn')" id="cursor-btn"
+                            class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                            <i class="bi bi-clipboard"></i> Sao chép .cursor/mcp.json
+                        </button>
+                    </div>
+                    <pre class="bg-[#050814] p-4 rounded-2xl border border-white/10 font-mono text-xs text-cyan-300 overflow-x-auto select-all" x-text="getCursorConfig()"></pre>
+                </div>
+
+                <div class="space-y-2">
+                    <p class="text-xs font-bold text-white/80">Cách 2: Cấu hình qua Giao diện Cursor Settings:</p>
+                    <ol class="list-decimal list-inside space-y-1 text-xs text-white/70 pl-2">
+                        <li>Mở <strong>Cursor Settings</strong> (Ctrl+, hoặc Cmd+,) &rarr; chọn tab <strong>Features</strong> &rarr; <strong>MCP Servers</strong>.</li>
+                        <li>Bấm <strong>Add New MCP Server</strong>.</li>
+                        <li>Điền Name: <code>shieldcall</code>, Type: <code>command</code>, Command: <code>python /đường_dẫn_tới/scripts/shieldcall_mcp.py</code></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: Windsurf -->
+        <div x-show="activePlatform === 'windsurf'" x-transition class="space-y-6">
+            <div class="liquid-card p-6 space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="bi bi-water text-cyan-400"></i> Cấu hình Windsurf (Codeium)
+                        </h3>
+                        <p class="text-xs text-white/50">Cấu hình file MCP cho trợ lý AI Cascade trong Windsurf.</p>
+                    </div>
+                    <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">~/.codeium/windsurf/mcp_config.json</span>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-bold text-white/80">Nội dung cấu hình:</p>
+                        <button @click="copyText(getWindsurfConfig(), 'windsurf-btn')" id="windsurf-btn"
+                            class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                            <i class="bi bi-clipboard"></i> Sao chép mcp_config.json
+                        </button>
+                    </div>
+                    <pre class="bg-[#050814] p-4 rounded-2xl border border-white/10 font-mono text-xs text-cyan-300 overflow-x-auto select-all" x-text="getWindsurfConfig()"></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 4: Claude Code CLI -->
+        <div x-show="activePlatform === 'claude_code'" x-transition class="space-y-6">
+            <div class="liquid-card p-6 space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="bi bi-terminal text-cyan-400"></i> Claude Code CLI
+                        </h3>
+                        <p class="text-xs text-white/50">Lệnh 1 dòng duy nhất để thêm ShieldCall MCP vào công cụ dòng lệnh Claude Code.</p>
+                    </div>
+                    <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">claude mcp add</span>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-bold text-white/80">Lệnh Terminal:</p>
+                        <button @click="copyText(getClaudeCodeCommand(), 'claudecode-btn')" id="claudecode-btn"
+                            class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                            <i class="bi bi-clipboard"></i> Sao chép lệnh
+                        </button>
+                    </div>
+                    <pre class="bg-[#050814] p-4 rounded-2xl border border-white/10 font-mono text-xs text-cyan-300 overflow-x-auto select-all" x-text="getClaudeCodeCommand()"></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 5: Cline / Roo Code -->
+        <div x-show="activePlatform === 'cline'" x-transition class="space-y-6">
+            <div class="liquid-card p-6 space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="bi bi-plugin text-cyan-400"></i> VS Code Extensions (Cline / Roo Code)
+                        </h3>
+                        <p class="text-xs text-white/50">Thêm cấu hình vào file cài đặt MCP của extension Cline hoặc Roo Code.</p>
+                    </div>
+                    <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">cline_mcp_settings.json</span>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-bold text-white/80">Cấu hình JSON:</p>
+                        <button @click="copyText(getClineConfig(), 'cline-btn')" id="cline-btn"
+                            class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                            <i class="bi bi-clipboard"></i> Sao chép JSON
+                        </button>
+                    </div>
+                    <pre class="bg-[#050814] p-4 rounded-2xl border border-white/10 font-mono text-xs text-cyan-300 overflow-x-auto select-all" x-text="getClineConfig()"></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 6: ChatGPT Actions -->
+        <div x-show="activePlatform === 'chatgpt'" x-transition class="space-y-6">
+            <div class="liquid-card p-6 md:p-8 space-y-6 rounded-3xl border border-white/10 bg-[#070b18]/80">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="bi bi-chat-dots-fill text-cyan-400"></i> ChatGPT (Custom GPT / Actions)
+                        </h3>
+                        <p class="text-xs text-white/60">Tạo Custom GPT trên OpenAI ChatGPT Plus/Enterprise kết nối thẳng với ShieldCall API.</p>
+                    </div>
+                    <span class="text-[11px] font-mono bg-cyan-400/10 text-cyan-300 border border-cyan-400/20 px-3 py-1 rounded-full w-fit">OpenAPI 3.1 Schema</span>
+                </div>
+
+                <div class="space-y-3">
+                    <p class="text-xs font-bold text-white uppercase tracking-wider">Quy trình 6 bước thiết lập Custom GPT:</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-white/80">
+                        <div class="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/10">
+                            <span class="w-6 h-6 rounded-full bg-cyan-400/15 text-cyan-300 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">1</span>
+                            <div>
+                                <p class="font-bold text-white">Khởi tạo GPT</p>
+                                <p class="text-[11px] text-white/60">Truy cập <strong>ChatGPT &rarr; Explore GPTs &rarr; Create</strong>.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/10">
+                            <span class="w-6 h-6 rounded-full bg-cyan-400/15 text-cyan-300 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">2</span>
+                            <div>
+                                <p class="font-bold text-white">Đặt tên trợ lý</p>
+                                <p class="text-[11px] text-white/60">Tại tab <strong>Configure</strong>, đặt tên <em>"ShieldCall VN - Trợ Lý An Toàn Số"</em>.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/10">
+                            <span class="w-6 h-6 rounded-full bg-cyan-400/15 text-cyan-300 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">3</span>
+                            <div>
+                                <p class="font-bold text-white">Cấu hình Instructions</p>
+                                <p class="text-[11px] text-white/60">Dán <strong>Mẫu Prompt 1 (ShieldCall Cyber Sentry)</strong> bên dưới vào ô <strong>Instructions</strong>.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/10">
+                            <span class="w-6 h-6 rounded-full bg-cyan-400/15 text-cyan-300 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">4</span>
+                            <div>
+                                <p class="font-bold text-white">Thêm Action mới</p>
+                                <p class="text-[11px] text-white/60">Cuộn xuống mục <strong>Actions &rarr; Create new action</strong>.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/10">
+                            <span class="w-6 h-6 rounded-full bg-cyan-400/15 text-cyan-300 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">5</span>
+                            <div>
+                                <p class="font-bold text-white">Xác thực API Key</p>
+                                <p class="text-[11px] text-white/60">Chọn Auth type là <strong>API Key</strong> (Auth Type: <code>Custom</code>, Header Name: <code>X-API-Key</code>).</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/10">
+                            <span class="w-6 h-6 rounded-full bg-cyan-400/15 text-cyan-300 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">6</span>
+                            <div>
+                                <p class="font-bold text-white">Nhúng Schema</p>
+                                <p class="text-[11px] text-white/60">Dán toàn bộ lược đồ OpenAPI Schema bên dưới vào ô <strong>Schema</strong>.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2.5">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                            <p class="text-xs font-bold text-white uppercase tracking-wider">Lược đồ OpenAPI 3.1 Chuẩn Hóa:</p>
+                        </div>
+                        <button @click="copyText(getChatGPTSchema(), 'chatgpt-btn')" id="chatgpt-btn"
+                            class="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-300 border border-cyan-400/30 flex items-center gap-1.5 transition-all cursor-pointer">
+                            <i class="bi bi-clipboard"></i> Sao chép OpenAPI Schema
+                        </button>
+                    </div>
+                    <pre class="bg-[#030712] p-4 rounded-2xl border border-white/15 font-mono text-xs text-cyan-300 overflow-x-auto select-all max-h-[380px] leading-relaxed" x-text="getChatGPTSchema()"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ready-to-Copy Starter Prompts Section -->
+    <div id="starter-prompts" class="space-y-6 pt-6">
+        <div class="border-b border-white/10 pb-4">
+            <h2 class="text-2xl font-black text-white tracking-tight">Mẫu System Prompt Khởi Đầu (Ready to Copy)</h2>
+            <p class="text-xs text-white/50">
+                Sao chép các mẫu prompt này dán vào <strong>System Prompt</strong> (Claude Projects, Cursor Rules, Custom GPT Instructions) để biến chatbot thành trợ lý chuyên sâu.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Prompt 1: Cyber Sentry -->
+            <div class="liquid-card p-6 space-y-4 flex flex-col justify-between border-cyan-500/30 bg-cyan-500/[0.02]">
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded-full bg-cyan-400/15 text-cyan-300 text-[10px] font-black uppercase tracking-wider">
+                            Phổ biến nhất • Khuyên dùng
+                        </span>
+                        <i class="bi bi-shield-lock-fill text-cyan-400 text-lg"></i>
+                    </div>
+                    <h3 class="text-base font-black text-white">1. Vệ Binh Không Gian Mạng (ShieldCall Sentry)</h3>
+                    <p class="text-xs text-white/60">
+                        Thường trực ngầm, tự động gọi công cụ tra cứu ngay khi người dùng vô tình nhắc đến bất kỳ số điện thoại, tài khoản ngân hàng hoặc link website nào.
+                    </p>
+                    <div class="bg-black/50 p-3 rounded-xl border border-white/10 text-xs font-mono text-white/70 max-h-48 overflow-y-auto whitespace-pre-wrap select-all" x-text="promptSentry"></div>
+                </div>
+                <button @click="copyText(promptSentry, 'p1-btn')" id="p1-btn"
+                    class="w-full liquid-btn py-2.5 px-4 text-xs font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider shadow-lg shadow-cyan-400/20">
+                    <i class="bi bi-clipboard mr-1"></i> Sao chép Prompt Sentry
+                </button>
+            </div>
+
+            <!-- Prompt 2: Emergency Responder -->
+            <div class="liquid-card p-6 space-y-4 flex flex-col justify-between border-red-500/30 bg-red-500/[0.02]">
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded-full bg-red-400/15 text-red-400 text-[10px] font-black uppercase tracking-wider">
+                            Ứng cứu khẩn cấp
+                        </span>
+                        <i class="bi bi-exclamation-octagon-fill text-red-400 text-lg"></i>
+                    </div>
+                    <h3 class="text-base font-black text-white">2. Phản Ứng Sự Cố Khẩn Cấp (Emergency Responder)</h3>
+                    <p class="text-xs text-white/60">
+                        Chuyên xử lý khi người dùng vừa chuyển tiền cho kẻ gian, lỡ bấm link lạ tải file .APK hoặc bị lộ mã OTP. Hướng dẫn quy trình 4 bước chặn đứng thiệt hại.
+                    </p>
+                    <div class="bg-black/50 p-3 rounded-xl border border-white/10 text-xs font-mono text-white/70 max-h-48 overflow-y-auto whitespace-pre-wrap select-all" x-text="promptEmergency"></div>
+                </div>
+                <button @click="copyText(promptEmergency, 'p2-btn')" id="p2-btn"
+                    class="w-full liquid-btn py-2.5 px-4 text-xs font-black bg-red-500 text-white hover:bg-red-400 uppercase tracking-wider shadow-lg shadow-red-500/20">
+                    <i class="bi bi-clipboard mr-1"></i> Sao chép Prompt Ứng Cứu
+                </button>
+            </div>
+
+            <!-- Prompt 3: Forensic Investigator -->
+            <div class="liquid-card p-6 space-y-4 flex flex-col justify-between border-purple-500/30 bg-purple-500/[0.02]">
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded-full bg-purple-400/15 text-purple-300 text-[10px] font-black uppercase tracking-wider">
+                            Dành cho Kỹ thuật viên & OSINT
+                        </span>
+                        <i class="bi bi-search text-purple-400 text-lg"></i>
+                    </div>
+                    <h3 class="text-base font-black text-white">3. Giám Định Gian Lận Số (Forensic Investigator)</h3>
+                    <p class="text-xs text-white/60">
+                        Phân tích sâu kỹ thuật: WHOIS domain, khoảng cách Levenshtein nhận diện tên miền nhái, phân tích nhà mạng và cước số ảo VoIP.
+                    </p>
+                    <div class="bg-black/50 p-3 rounded-xl border border-white/10 text-xs font-mono text-white/70 max-h-48 overflow-y-auto whitespace-pre-wrap select-all" x-text="promptInvestigator"></div>
+                </div>
+                <button @click="copyText(promptInvestigator, 'p3-btn')" id="p3-btn"
+                    class="w-full liquid-btn py-2.5 px-4 text-xs font-black bg-purple-500 text-white hover:bg-purple-400 uppercase tracking-wider shadow-lg shadow-purple-500/20">
+                    <i class="bi bi-clipboard mr-1"></i> Sao chép Prompt Giám Định
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Tools & Parameter Reference Table -->
+    <div id="tools-reference" class="space-y-6 pt-6">
+        <div class="border-b border-white/10 pb-4">
+            <h2 class="text-2xl font-black text-white tracking-tight">Danh Mục Công Cụ MCP (Tools Reference)</h2>
+            <p class="text-xs text-white/50">Mọi công cụ mà ShieldCall MCP Server tự động cung cấp cho Chatbot của bạn.</p>
+        </div>
+
+        <div class="overflow-x-auto rounded-2xl border border-white/10">
+            <table class="w-full text-left text-xs border-collapse">
+                <thead class="bg-white/5 text-white/40 uppercase tracking-wider border-b border-white/10 text-[10px]">
+                    <tr>
+                        <th class="p-4">Tên Tool</th>
+                        <th class="p-4">Tham Số Đầu Vào</th>
+                        <th class="p-4">Mục Đích Sử Dụng</th>
+                        <th class="p-4">Dữ Liệu Trả Về</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5 font-mono text-white/80">
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">check_phone</td>
+                        <td class="p-4 text-white/60"><code>phone_number: str</code></td>
+                        <td class="p-4 font-sans text-white/80">Quét độ rủi ro SĐT, kiểm tra blacklist, số ảo/VoIP, lịch sử khiếu nại</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>risk_score, risk_level, carrier, line_type, suggested_action</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">check_bank_account</td>
+                        <td class="p-4 text-white/60"><code>bank_name: str</code><br><code>account_number: str</code></td>
+                        <td class="p-4 font-sans text-white/80">Tra cứu số tài khoản ngân hàng trong danh sách đen lừa đảo cộng đồng</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>risk_score, risk_level, report_count, details</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">check_url_or_domain</td>
+                        <td class="p-4 text-white/60"><code>url: str</code></td>
+                        <td class="p-4 font-sans text-white/80">Phát hiện tên miền giả mạo (lookalike), SSL, DNS, trang web phishing</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>risk_score, risk_level, is_lookalike, flags</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">analyze_message</td>
+                        <td class="p-4 text-white/60"><code>message_content: str</code></td>
+                        <td class="p-4 font-sans text-white/80">Phân tích kịch bản SMS lừa đảo mạo danh công an, ngân hàng, nạp tiền OTP</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>risk_score, risk_level, scam_type, analysis</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">lookup_scam_db</td>
+                        <td class="p-4 text-white/60"><code>query: str</code><br><code>entity_type: str = 'all'</code></td>
+                        <td class="p-4 font-sans text-white/80">Tìm kiếm đối tượng hoặc từ khóa bất kỳ trong cơ sở dữ liệu ShieldCall</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>matches, reports, entities</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">check_email_sender</td>
+                        <td class="p-4 text-white/60"><code>sender_email: str</code><br><code>email_content: str = ''</code><br><code>email_subject: str = ''</code></td>
+                        <td class="p-4 font-sans text-white/80">Kiểm tra SPF, DKIM, DMARC tên miền gửi thư và phát hiện nội dung email lừa đảo</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>risk_score, risk_level, security_checks, extracted_info</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">get_supported_banks</td>
+                        <td class="p-4 text-white/60"><em>(không tham số)</em></td>
+                        <td class="p-4 font-sans text-white/80">Lấy danh mục ngân hàng chuẩn Việt Nam kèm mã BIN để thẩm định tài khoản thụ hưởng</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>name, code, bin, shortName</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">scan_full_incident</td>
+                        <td class="p-4 text-white/60"><code>message_content: str = ''</code><br><code>phone_number: str = ''</code><br><code>bank_name: str = ''</code><br><code>account_number: str = ''</code><br><code>url: str = ''</code><br><code>sender_email: str = ''</code></td>
+                        <td class="p-4 font-sans text-white/80">Giám định tổng thể đa thực thể vụ việc nghi vấn lừa đảo trong một lần gọi duy nhất</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>overall_risk_score, overall_risk_level, entities_scanned, detected_threats, recommended_actions</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">get_scam_radar_trends</td>
+                        <td class="p-4 text-white/60"><em>(không tham số)</em></td>
+                        <td class="p-4 font-sans text-white/80">Lấy dữ liệu radar thủ đoạn lừa đảo và số liệu thống kê thời gian thực</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>top_scam_types, daily_trend, total_reports</code></td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="p-4 font-bold text-cyan-400">report_scam</td>
+                        <td class="p-4 text-white/60"><code>target_type: str</code><br><code>target_value: str</code><br><code>scam_type: str</code><br><code>description: str</code></td>
+                        <td class="p-4 font-sans text-white/80">Cho phép AI hỗ trợ người dùng gửi báo cáo lừa đảo về ban quản trị</td>
+                        <td class="p-4 text-[11px] text-white/60"><code>status, report_id</code></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Live Tool Playground Section -->
+    <div id="live-playground" class="space-y-6 pt-6">
+        <div class="border-b border-white/10 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-400/10 text-cyan-300 text-[10px] font-black uppercase tracking-wider mb-2">
+                    <i class="bi bi-broadcast"></i> Tương tác trực tiếp
+                </div>
+                <h2 class="text-2xl font-black text-white tracking-tight">Thử Nghiệm Trực Tiếp Công Cụ MCP (Live Playground)</h2>
+                <p class="text-xs text-white/50">Thử nghiệm phản hồi thực tế của các API an ninh số ngay trên giao diện web trước khi cấu hình vào Chatbot.</p>
+            </div>
+            <div class="text-xs text-white/60 flex items-center gap-2">
+                <span>Khóa kiểm thử:</span>
+                <span class="font-mono text-cyan-300 bg-black/50 px-2.5 py-1 rounded-lg border border-white/10" x-text="getCurrentApiKey().substring(0, 16) + '...'"></span>
+            </div>
+        </div>
+
+        <div class="liquid-card p-6 border-cyan-500/20 bg-gradient-to-b from-cyan-500/[0.03] to-transparent space-y-6">
+            <!-- Tool Selection & Presets -->
+            <div class="space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <label class="text-xs font-bold text-white uppercase tracking-wider">Chọn công cụ cần thử nghiệm:</label>
+                    <div class="flex items-center gap-2 flex-wrap text-xs">
+                        <span class="text-white/40 text-[11px]">Mẫu dữ liệu nhanh:</span>
+                        <button @click="setPreset('sms_otp')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px]">
+                            Mẫu SMS đòi OTP
+                        </button>
+                        <button @click="setPreset('bank_scam')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px]">
+                            Mẫu STK ngân hàng
+                        </button>
+                        <button @click="setPreset('phishing_link')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px]">
+                            Mẫu link ngân hàng giả
+                        </button>
+                        <button @click="setPreset('fake_email')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px]">
+                            Mẫu email lừa đảo
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                    <button @click="playgroundTool = 'check_phone'" :class="playgroundTool === 'check_phone' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
+                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
+                        check_phone
+                    </button>
+                    <button @click="playgroundTool = 'check_bank_account'" :class="playgroundTool === 'check_bank_account' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
+                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
+                        check_bank_account
+                    </button>
+                    <button @click="playgroundTool = 'check_url_or_domain'" :class="playgroundTool === 'check_url_or_domain' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
+                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
+                        check_url_or_domain
+                    </button>
+                    <button @click="playgroundTool = 'analyze_message'" :class="playgroundTool === 'analyze_message' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
+                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
+                        analyze_message
+                    </button>
+                    <button @click="playgroundTool = 'check_email_sender'" :class="playgroundTool === 'check_email_sender' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
+                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
+                        check_email_sender
+                    </button>
+                    <button @click="playgroundTool = 'get_supported_banks'" :class="playgroundTool === 'get_supported_banks' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
+                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
+                        get_supported_banks
+                    </button>
+                </div>
+            </div>
+
+            <!-- Input Fields for Selected Tool -->
+            <div class="flex flex-col lg:flex-row gap-6 items-start w-full">
+                <!-- Left Input Panel -->
+                <div class="w-full lg:w-5/12 space-y-4 shrink-0">
+                    <!-- check_phone inputs -->
+                    <div x-show="playgroundTool === 'check_phone'" class="space-y-2">
+                        <label class="text-xs font-bold text-white/80">Số điện thoại cần quét:</label>
+                        <input type="text" x-model="playgroundPhone" placeholder="Ví dụ: 0912345678 hoặc +84988776655"
+                            class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-3 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        <p class="text-[11px] text-white/50 leading-relaxed">Hệ thống sẽ tra cứu nhà mạng, dấu hiệu số ảo VoIP và danh sách đen viễn thông.</p>
+                    </div>
+
+                    <!-- check_bank_account inputs -->
+                    <div x-show="playgroundTool === 'check_bank_account'" class="space-y-3">
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-bold text-white/80">Tên ngân hàng (hoặc mã viết tắt):</label>
+                            <input type="text" x-model="playgroundBank" placeholder="Ví dụ: MB, Techcombank, VCB, ACB"
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-bold text-white/80">Số tài khoản ngân hàng:</label>
+                            <input type="text" x-model="playgroundAccount" placeholder="Ví dụ: 0987654321"
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        </div>
+                    </div>
+
+                    <!-- check_url_or_domain inputs -->
+                    <div x-show="playgroundTool === 'check_url_or_domain'" class="space-y-2">
+                        <label class="text-xs font-bold text-white/80">Đường link hoặc tên miền (URL):</label>
+                        <input type="text" x-model="playgroundUrl" placeholder="Ví dụ: http://phishing-vietcombank-login.xyz"
+                            class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-3 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        <p class="text-[11px] text-white/50 leading-relaxed">Hệ thống phân tích SSL, khoảng cách Levenshtein nhận diện tên miền nhái thương hiệu.</p>
+                    </div>
+
+                    <!-- analyze_message inputs -->
+                    <div x-show="playgroundTool === 'analyze_message'" class="space-y-2">
+                        <label class="text-xs font-bold text-white/80">Nội dung tin nhắn / SMS / đoạn chat:</label>
+                        <textarea x-model="playgroundMessage" rows="4" placeholder="Dán nội dung tin nhắn đáng ngờ vào đây..."
+                            class="w-full bg-[#030712] border border-white/15 rounded-xl p-3 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all"></textarea>
+                    </div>
+
+                    <!-- check_email_sender inputs -->
+                    <div x-show="playgroundTool === 'check_email_sender'" class="space-y-3">
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-bold text-white/80">Địa chỉ email người gửi:</label>
+                            <input type="text" x-model="playgroundEmail" placeholder="Ví dụ: fraud@phishing-fake-bank.top"
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-bold text-white/80">Nội dung thư điện tử (tùy chọn):</label>
+                            <textarea x-model="playgroundMessage" rows="2" placeholder="Nội dung thư..."
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl p-3 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- get_supported_banks inputs -->
+                    <div x-show="playgroundTool === 'get_supported_banks'" class="p-4 rounded-xl bg-white/[0.03] border border-white/10 text-xs text-white/70 space-y-1">
+                        <p class="font-bold text-white mb-1">Công cụ không cần tham số đầu vào.</p>
+                        <p>Hệ thống sẽ truy vấn danh mục 65+ ngân hàng thành viên VietQR tại Việt Nam kèm mã BIN, tên giao dịch chuẩn.</p>
+                    </div>
+
+                    <button @click="runPlayground()" :disabled="playgroundLoading"
+                        class="w-full py-3.5 px-6 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-cyan-400/25 transition-all cursor-pointer select-none active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
+                        <template x-if="playgroundLoading">
+                            <span class="inline-flex items-center gap-2"><i class="bi bi-arrow-repeat animate-spin text-sm"></i> Đang phân tích...</span>
+                        </template>
+                        <template x-if="!playgroundLoading">
+                            <span class="inline-flex items-center gap-2"><i class="bi bi-play-fill text-base"></i> Chạy Thử Nghiệm Ngay</span>
+                        </template>
+                    </button>
+                </div>
+
+                <!-- Right JSON Output Display Window -->
+                <div class="w-full lg:w-7/12 space-y-2 min-w-0 flex-1">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full" :class="playgroundLoading ? 'bg-yellow-400 animate-ping' : (playgroundResult ? 'bg-green-400' : 'bg-white/30')"></span>
+                            <span class="text-xs font-bold text-white/80">Phản hồi JSON từ MCP Server:</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-[11px] font-mono">
+                            <span x-show="playgroundLatency > 0" class="text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20" x-text="playgroundLatency + ' ms'"></span>
+                            <template x-if="playgroundResult && playgroundResult.risk_level">
+                                <span class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider"
+                                    :class="{
+                                        'bg-red-500/20 text-red-400 border border-red-500/30': playgroundResult.risk_level.toLowerCase() === 'red',
+                                        'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30': playgroundResult.risk_level.toLowerCase() === 'yellow',
+                                        'bg-green-500/20 text-green-300 border border-green-500/30': playgroundResult.risk_level.toLowerCase() === 'green',
+                                        'bg-blue-500/20 text-blue-300 border border-blue-500/30': playgroundResult.risk_level.toLowerCase() === 'safe'
+                                    }"
+                                    x-text="'RỦI RO: ' + playgroundResult.risk_level"></span>
+                            </template>
+                            <button @click="copyText(JSON.stringify(playgroundResult, null, 2), 'pg-copy-btn')" id="pg-copy-btn"
+                                x-show="playgroundResult && !playgroundLoading"
+                                class="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer">
+                                <i class="bi bi-clipboard"></i> Sao chép JSON
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="relative bg-[#030712] rounded-2xl border border-white/15 p-4 font-mono text-xs overflow-x-auto min-h-[300px] max-h-[440px]">
+                        <template x-if="!playgroundResult && !playgroundLoading && !playgroundError">
+                            <div class="h-full flex flex-col items-center justify-center text-white/35 space-y-3 py-16">
+                                <div class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/50 text-2xl">
+                                    <i class="bi bi-terminal"></i>
+                                </div>
+                                <p class="text-xs font-sans">Chọn công cụ và nhấn "Chạy Thử Nghiệm Ngay" để xem phản hồi thực tế.</p>
+                            </div>
+                        </template>
+
+                        <template x-if="playgroundLoading">
+                            <div class="h-full flex flex-col items-center justify-center text-cyan-300/80 space-y-3 py-16">
+                                <div class="w-10 h-10 border-2 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin"></div>
+                                <p class="text-xs font-sans">Hệ thống đang truy vấn cơ sở dữ liệu và phân tích an ninh...</p>
+                            </div>
+                        </template>
+
+                        <template x-if="playgroundError">
+                            <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs space-y-1">
+                                <p class="font-bold"><i class="bi bi-x-circle mr-1"></i> Lỗi thực thi:</p>
+                                <p x-text="playgroundError"></p>
+                            </div>
+                        </template>
+
+                        <template x-if="playgroundResult && !playgroundLoading">
+                            <pre class="text-cyan-300 select-all leading-relaxed whitespace-pre" x-text="JSON.stringify(playgroundResult, null, 2)"></pre>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-world Interaction Workflow Section -->
+    <div id="real-world-dialogue" class="space-y-6 pt-6">
+        <div class="border-b border-white/10 pb-4">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-400/10 text-purple-300 text-[10px] font-black uppercase tracking-wider mb-2">
+                <i class="bi bi-chat-heart-fill"></i> Kịch bản thực chiến
+            </div>
+            <h2 class="text-2xl font-black text-white tracking-tight">Kịch Bản Chatbot Sau Khi Tích Hợp ShieldCall MCP</h2>
+            <p class="text-xs text-white/50">Mô phỏng cách Chatbot tự động nhận diện mối nguy và kích hoạt công cụ bảo mật khi người dùng đặt câu hỏi.</p>
+        </div>
+
+        <div class="liquid-card overflow-hidden border border-white/10 bg-[#060914]/90 rounded-3xl shadow-2xl">
+            <!-- macOS Window Header Bar -->
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-white/10 bg-white/[0.03]">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-[#ff5f56] inline-block"></span>
+                    <span class="w-3 h-3 rounded-full bg-[#ffbd2e] inline-block"></span>
+                    <span class="w-3 h-3 rounded-full bg-[#27c93f] inline-block"></span>
+                    <span class="ml-3 text-xs font-mono text-white/50">ShieldCall Sentry Session #live-simulation</span>
+                </div>
+                <div class="flex items-center gap-2 text-[11px] font-mono text-cyan-400">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span>MCP Active</span>
+                </div>
+            </div>
+
+            <div class="p-6 md:p-8 space-y-4">
+                <!-- Message 1: User -->
+                <div class="flex items-start gap-3.5">
+                    <div class="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-white/80 shrink-0 text-xs font-bold border border-white/10">
+                        User
+                    </div>
+                    <div class="space-y-1.5 max-w-2xl">
+                        <p class="text-[11px] font-bold text-white/50">Người Dùng</p>
+                        <div class="p-4 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white/90 leading-relaxed">
+                            Tôi vừa nhận được tin nhắn từ số điện thoại <strong>0912345678</strong> xưng là cán bộ công an, bảo tôi cài app Dịch Vụ Công tại link <strong>dichvucong-vn.top</strong> rồi chuyển 2 triệu vào STK <strong>MBBank 0987654321</strong> để bảo lãnh tài khoản. Bạn kiểm tra giúp tôi có an toàn không?
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vertical Connector Line & Behind the Scenes: MCP Tool Call -->
+                <div class="ml-4 pl-7 border-l-2 border-cyan-500/30 py-2">
+                    <div class="p-4 rounded-2xl bg-[#030617] border border-cyan-500/40 text-xs font-mono space-y-2.5 max-w-3xl shadow-lg shadow-cyan-950/40">
+                        <div class="flex items-center justify-between text-[11px] text-cyan-300 border-b border-white/10 pb-2">
+                            <span class="font-bold flex items-center gap-1.5">
+                                <i class="bi bi-gear-fill animate-spin text-xs"></i> MCP Server Automatic Trigger:
+                            </span>
+                            <span class="text-white/40">Tool: scan_full_incident()</span>
+                        </div>
+                        <div class="text-white/75 text-[11px] space-y-1">
+                            <p><span class="text-cyan-400">phone:</span> "0912345678" &rarr; <span class="text-yellow-400">Đầu số dịch vụ / Nghi vấn số ảo</span></p>
+                            <p><span class="text-cyan-400">url:</span> "dichvucong-vn.top" &rarr; <span class="text-red-400">Tên miền giả mạo Cổng Dịch Vụ Công Quốc Gia (Không SSL)</span></p>
+                            <p><span class="text-cyan-400">bank:</span> "MBBank" - <span class="text-cyan-400">account:</span> "0987654321" &rarr; <span class="text-red-400">Tài khoản có dấu hiệu gian lận</span></p>
+                            <p class="text-red-400 font-bold pt-1 border-t border-white/5">&rarr; Overall Risk Score: 100/100 (CRITICAL / RED)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Message 2: Chatbot -->
+                <div class="flex items-start gap-3.5">
+                    <div class="w-8 h-8 rounded-xl bg-cyan-400 text-black flex items-center justify-center shrink-0 text-xs font-black shadow-lg shadow-cyan-400/20">
+                        AI
+                    </div>
+                    <div class="space-y-1.5 max-w-3xl">
+                        <p class="text-[11px] font-bold text-cyan-300">ShieldCall Sentry (Claude / Cursor / ChatGPT)</p>
+                        <div class="p-5 rounded-2xl bg-cyan-500/[0.04] border border-cyan-500/30 text-xs text-white/90 space-y-3 leading-relaxed">
+                            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/20 text-red-400 font-black text-[11px] border border-red-500/30">
+                                <i class="bi bi-shield-x"></i> CẢNH BÁO: ĐÂY LÀ HÀNH VI LỪA ĐẢO NGUY HIỂM (ĐIỂM RỦI RO: 100/100)
+                            </div>
+                            <p>
+                                Qua tra cứu trực tiếp trên hệ thống cơ sở dữ liệu ShieldCall VN, toàn bộ các dấu vết bạn vừa cung cấp đều là thủ đoạn mạo danh cơ quan chức năng:
+                            </p>
+                            <ul class="list-disc list-inside space-y-1 pl-1 text-white/80">
+                                <li><strong>Website giả mạo:</strong> Tên miền <code>dichvucong-vn.top</code> là trang nhái Cổng Dịch Vụ Công Quốc Gia (tên miền chính thống duy nhất của chính phủ là <code>dichvucong.gov.vn</code>). Trang này chứa mã độc đánh cắp tài khoản.</li>
+                                <li><strong>Số tài khoản rủi ro:</strong> STK MBBank được sử dụng để nhận tiền bảo lãnh giả. Cơ quan công an không bao giờ yêu cầu người dân chuyển tiền qua tài khoản cá nhân.</li>
+                                <li><strong>Số điện thoại:</strong> Thuộc diện đầu số ảo VoIP gọi qua Internet.</li>
+                            </ul>
+                            <div class="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-xs font-bold space-y-1">
+                                <p>Checklist hành động khẩn cấp:</p>
+                                <p>1. TUYỆT ĐỐI KHÔNG chuyển 2 triệu đồng và KHÔNG truy cập vào liên kết trên.</p>
+                                <p>2. Chặn ngay số điện thoại 0912345678.</p>
+                                <p>3. Trình báo cho Công an phường/xã gần nhất nếu đối tượng liên tục đe dọa.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Troubleshooting & FAQ Section -->
+    <div id="troubleshooting" class="space-y-6 pt-6">
+        <div class="border-b border-white/10 pb-4">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-yellow-400/10 text-yellow-300 text-[10px] font-black uppercase tracking-wider mb-2">
+                <i class="bi bi-wrench-adjustable-circle"></i> Trợ giúp kỹ thuật
+            </div>
+            <h2 class="text-2xl font-black text-white tracking-tight">Xử Lý Sự Cố & Câu Hỏi Thường Gặp (Troubleshooting)</h2>
+            <p class="text-xs text-white/50">Các vấn đề thường gặp khi tích hợp Model Context Protocol và giải pháp khắc phục.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="liquid-card p-6 space-y-3 bg-white/[0.02]">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-full bg-cyan-400/10 text-cyan-300 text-xs flex items-center justify-center font-bold">1</span>
+                    Lỗi "command not found: python" trong Claude / Cursor?
+                </h3>
+                <p class="text-xs text-white/70 leading-relaxed">
+                    Trên macOS hoặc Linux, lệnh <code>python</code> mặc định có thể không trỏ đến Python 3 hoặc môi trường ảo dự án. Khắc phục bằng cách thay chữ <code>python</code> trong file cấu hình bằng đường dẫn tuyệt đối:
+                </p>
+                <div class="p-2.5 rounded-xl bg-black/50 border border-white/10 font-mono text-[11px] text-cyan-300 select-all">
+                    /đường_dẫn_tuyệt_đối/Sentinel_Team_Project/.venv/bin/python
+                </div>
+            </div>
+
+            <div class="liquid-card p-6 space-y-3 bg-white/[0.02]">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-full bg-cyan-400/10 text-cyan-300 text-xs flex items-center justify-center font-bold">2</span>
+                    Làm sao biết Chatbot đã nhận diện thành công 10 công cụ?
+                </h3>
+                <p class="text-xs text-white/70 leading-relaxed">
+                    Sau khi cập nhật file cấu hình và khởi động lại phần mềm:
+                </p>
+                <ul class="text-xs text-white/70 list-disc list-inside space-y-1 pl-1">
+                    <li><strong>Claude Desktop:</strong> Biểu tượng chiếc búa (Hammer) hiển thị 10 công cụ kèm dấu kiểm xanh.</li>
+                    <li><strong>Cursor:</strong> Tab <em>Settings &rarr; Features &rarr; MCP Servers</em> hiển thị trạng thái <strong>Connected</strong> (chấm xanh lá).</li>
+                    <li><strong>Windsurf:</strong> Giao diện Cascade nhận diện server <code>shieldcall</code>.</li>
+                </ul>
+            </div>
+
+            <div class="liquid-card p-6 space-y-3 bg-white/[0.02]">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-full bg-cyan-400/10 text-cyan-300 text-xs flex items-center justify-center font-bold">3</span>
+                    Hạn mức gọi API được tính và làm mới (Reset) khi nào?
+                </h3>
+                <p class="text-xs text-white/70 leading-relaxed">
+                    Mỗi tài khoản miễn phí được cấp <strong>500 requests/ngày</strong> và <strong>60 requests/phút</strong>. Hạn mức ngày được làm mới tự động vào <strong>00:00 UTC</strong> (tức 07:00 sáng theo giờ Việt Nam). Bạn có thể theo dõi thanh dung lượng thời gian thực tại <a href="/dashboard/?tab=api_keys" class="text-cyan-300 underline font-bold">Dashboard cá nhân</a>.
+                </p>
+            </div>
+
+            <div class="liquid-card p-6 space-y-3 bg-white/[0.02]">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-full bg-cyan-400/10 text-cyan-300 text-xs flex items-center justify-center font-bold">4</span>
+                    Triển khai qua mạng từ xa (SSE Transport / Docker)?
+                </h3>
+                <p class="text-xs text-white/70 leading-relaxed">
+                    Nếu bạn muốn chạy MCP Server trên máy chủ Linux từ xa cho cả đội ngũ sử dụng mà không cần cài Python trên từng máy cá nhân, khởi chạy lệnh sau:
+                </p>
+                <div class="p-2.5 rounded-xl bg-black/50 border border-white/10 font-mono text-[11px] text-cyan-300 select-all">
+                    python scripts/shieldcall_mcp.py --transport sse --host 0.0.0.0 --port 8002
+                </div>
+                <p class="text-[11px] text-white/50">Khi đó phía Client chỉ cần khai báo: <code>"url": "http://ip-may-chu:8002/sse"</code>.</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Alpine.js Application Logic -->
+<script>
+function mcpGuideApp() {
+    return {
+        activePlatform: 'claude',
+        userKeys: {{ user_api_keys_json|default:"[]"|safe }},
+        selectedKey: '',
+        siteUrl: '{{ site_url }}',
+        apiUrl: '{{ api_url }}',
+        pythonPath: 'python',
+        scriptPath: '/path/to/Sentinel_Team_Project/scripts/shieldcall_mcp.py',
+
+        playgroundTool: 'check_phone',
+        playgroundPhone: '0912345678',
+        playgroundBank: 'MB',
+        playgroundAccount: '0987654321',
+        playgroundUrl: 'http://dichvucong-vn.top',
+        playgroundMessage: 'Ngan hang MBBank thong bao tai khoan cua quy khach bi phong toa. Vui long truy cap link http://dichvucong-vn.top hoac gui ma OTP de xac minh.',
+        playgroundEmail: 'support@dichvucong-vn.top',
+        playgroundLoading: false,
+        playgroundResult: null,
+        playgroundLatency: 0,
+        playgroundError: null,
+
+        promptSentry: `Bạn là ShieldCall Sentry - Trợ lý Giám sát An toàn Số và Phòng chống Lừa đảo hàng đầu Việt Nam, tích hợp cơ sở dữ liệu quốc gia từ hệ thống ShieldCall VN.
+
+NGUYÊN TẮC HOẠT ĐỘNG:
+1. Khi vụ việc liên quan nhiều thực thể (vừa có SĐT, vừa có link và STK), bạn PHẢI tự động gọi ngay công cụ 'scan_full_incident' để giám định tổng thể.
+2. Khi có từng thực thể riêng lẻ, tự động gọi công cụ ShieldCall MCP tương ứng (check_phone, check_bank_account, check_url_or_domain, analyze_message, check_email_sender, get_supported_banks) trước khi trả lời.
+3. Thang điểm rủi ro:
+   - 0-19: An toàn (SAFE)
+   - 20-49: Thận trọng (LOW/GREEN)
+   - 50-79: Cảnh báo nguy cơ cao (MEDIUM/YELLOW)
+   - 80-100: Nguy hiểm, lừa đảo chắc chắn (CRITICAL/RED)
+4. Luôn đưa ra checklist ứng phó: TUYỆT ĐỐI KHÔNG chuyển tiền, KHÔNG tải file APK lạ, KHÔNG nhập OTP vào bất kỳ website nào.`,
+
+        promptEmergency: `Bạn là Chuyên viên Ứng cứu Sự cố Lừa đảo Khẩn cấp (ShieldCall Emergency Incident Responder).
+Quy trình 4 bước lập tức khi người dùng vừa chuyển tiền hoặc bị lừa:
+1. KHÓA TÀI KHOẢN NGAY: Yêu cầu người dùng gọi hotline ngân hàng khóa thẻ và ngắt kết nối internet điện thoại nếu cài nhầm app lạ.
+2. XÁC MINH ĐỐI TƯỢNG: Dùng tool scan_full_incident hoặc check_bank_account, check_phone để đối soát danh tính kẻ gian.
+3. BẢO TOÀN CHỨNG CỨ: Chụp ảnh biên lai giao dịch, mã FT, đoạn chat và số điện thoại.
+4. BÁO CÁO: Hướng dẫn trình báo công an và gọi tool report_scam để cảnh báo toàn mạng lưới.`,
+
+        promptInvestigator: `Bạn là Chuyên gia Điều tra Kỹ thuật Gian lận Không gian Mạng (Forensic Scam Analyst) của ShieldCall VN.
+Phân tích chuyên sâu:
+- WHOIS domain, tuổi đời tên miền, khoảng cách Levenshtein phát hiện domain nhái (lookalike).
+- Kiểm tra tính xác thực email, SPF, DKIM, DMARC qua check_email_sender.
+- Phân loại đầu số điện thoại, phát hiện sim rác, số ảo VoIP.
+- Đối soát mã BIN ngân hàng và hồ sơ tài khoản lừa đảo qua get_supported_banks.
+- Tổng hợp giám định đa thực thể qua scan_full_incident và xuất bảng phân tích kỹ thuật chi tiết.`,
+
+        init() {
+            if (this.userKeys && this.userKeys.length > 0) {
+                this.selectedKey = this.userKeys[0].prefix + '_secret_key_here';
+            } else {
+                this.selectedKey = 'sc_live_your_api_key_here';
+            }
+        },
+
+        getCurrentApiKey() {
+            return this.selectedKey || 'sc_live_your_api_key_here';
+        },
+
+        updateConfigSnippets() {
+            // Trigger reactivity
+        },
+
+        setPreset(type) {
+            if (type === 'sms_otp') {
+                this.playgroundTool = 'analyze_message';
+                this.playgroundMessage = 'Ngan hang MB thong bao tai khoan cua quy khach bi phong toa do nghi ngo gian lan. Vui long gui ma OTP xac minh ngay hoac truy cap http://dichvucong-vn.top de mo khoa.';
+            } else if (type === 'bank_scam') {
+                this.playgroundTool = 'check_bank_account';
+                this.playgroundBank = 'MB';
+                this.playgroundAccount = '0987654321';
+            } else if (type === 'phishing_link') {
+                this.playgroundTool = 'check_url_or_domain';
+                this.playgroundUrl = 'http://dichvucong-vn.top/login';
+            } else if (type === 'fake_email') {
+                this.playgroundTool = 'check_email_sender';
+                this.playgroundEmail = 'support@dichvucong-vn.top';
+                this.playgroundMessage = 'Thong bao yeu cau nop tien bao lanh tai khoan ngan hang khan cap.';
+            }
+        },
+
+        async runPlayground() {
+            this.playgroundLoading = true;
+            this.playgroundResult = null;
+            this.playgroundError = null;
+            this.playgroundLatency = 0;
+            const startTime = performance.now();
+
+            let endpoint = '';
+            let method = 'POST';
+            let payload = {};
+
+            if (this.playgroundTool === 'check_phone') {
+                endpoint = '/api/v1/scan/phone/';
+                payload = { phone: (this.playgroundPhone || '').trim() };
+                if (!payload.phone) {
+                    this.playgroundError = 'Vui lòng nhập số điện thoại cần quét.';
+                    this.playgroundLoading = false;
+                    return;
+                }
+            } else if (this.playgroundTool === 'check_bank_account') {
+                endpoint = '/api/v1/scan/account/';
+                payload = {
+                    bank: (this.playgroundBank || '').trim(),
+                    account: (this.playgroundAccount || '').trim()
+                };
+                if (!payload.bank || !payload.account) {
+                    this.playgroundError = 'Vui lòng nhập tên ngân hàng và số tài khoản.';
+                    this.playgroundLoading = false;
+                    return;
+                }
+            } else if (this.playgroundTool === 'check_url_or_domain') {
+                endpoint = '/api/v1/scan/domain/';
+                payload = { url: (this.playgroundUrl || '').trim() };
+                if (!payload.url) {
+                    this.playgroundError = 'Vui lòng nhập URL hoặc tên miền.';
+                    this.playgroundLoading = false;
+                    return;
+                }
+            } else if (this.playgroundTool === 'analyze_message') {
+                endpoint = '/api/v1/scan/message/';
+                payload = {
+                    message: (this.playgroundMessage || '').trim(),
+                    sync: true
+                };
+                if (!payload.message) {
+                    this.playgroundError = 'Vui lòng nhập nội dung tin nhắn.';
+                    this.playgroundLoading = false;
+                    return;
+                }
+            } else if (this.playgroundTool === 'check_email_sender') {
+                endpoint = '/api/v1/scan/email/';
+                payload = {
+                    sender_email: (this.playgroundEmail || '').trim(),
+                    email_content: (this.playgroundMessage || '').trim(),
+                    sync: true
+                };
+                if (!payload.sender_email) {
+                    this.playgroundError = 'Vui lòng nhập địa chỉ email người gửi.';
+                    this.playgroundLoading = false;
+                    return;
+                }
+            } else if (this.playgroundTool === 'get_supported_banks') {
+                endpoint = '/api/v1/scan/banks/';
+                method = 'GET';
+            }
+
+            const headers = {
+                'Accept': 'application/json'
+            };
+            const apiKey = this.getCurrentApiKey();
+            if (apiKey && !apiKey.includes('_your_api_key_here') && !apiKey.endsWith('...')) {
+                headers['X-API-Key'] = apiKey;
+            }
+            const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+            if (csrfCookie) {
+                headers['X-CSRFToken'] = csrfCookie.split('=')[1];
+            }
+
+            try {
+                const options = {
+                    method: method,
+                    headers: headers
+                };
+                if (method === 'POST') {
+                    headers['Content-Type'] = 'application/json';
+                    options.body = JSON.stringify(payload);
+                }
+
+                const res = await fetch(endpoint, options);
+                const data = await res.json();
+                this.playgroundLatency = Math.round(performance.now() - startTime);
+
+                if (!res.ok) {
+                    this.playgroundError = data.error || data.detail || ('HTTP ' + res.status + ': Yêu cầu thất bại');
+                } else {
+                    this.playgroundResult = data;
+                }
+            } catch (err) {
+                this.playgroundLatency = Math.round(performance.now() - startTime);
+                this.playgroundError = err.message || 'Lỗi kết nối tới máy chủ ShieldCall.';
+            } finally {
+                this.playgroundLoading = false;
+            }
+        },
+
+        getClaudeConfig() {
+            const config = {
+                "mcpServers": {
+                    "shieldcall": {
+                        "command": "python",
+                        "args": [
+                            this.scriptPath
+                        ],
+                        "env": {
+                            "SHIELDCALL_API_KEY": this.getCurrentApiKey(),
+                            "SHIELDCALL_API_URL": this.apiUrl
+                        }
+                    }
+                }
+            };
+            return JSON.stringify(config, null, 2);
+        },
+
+        getCursorConfig() {
+            const config = {
+                "mcpServers": {
+                    "shieldcall": {
+                        "command": "python",
+                        "args": [
+                            this.scriptPath
+                        ],
+                        "env": {
+                            "SHIELDCALL_API_KEY": this.getCurrentApiKey(),
+                            "SHIELDCALL_API_URL": this.apiUrl
+                        }
+                    }
+                }
+            };
+            return JSON.stringify(config, null, 2);
+        },
+
+        getWindsurfConfig() {
+            const config = {
+                "mcpServers": {
+                    "shieldcall": {
+                        "command": "python",
+                        "args": [
+                            this.scriptPath
+                        ],
+                        "env": {
+                            "SHIELDCALL_API_KEY": this.getCurrentApiKey(),
+                            "SHIELDCALL_API_URL": this.apiUrl
+                        }
+                    }
+                }
+            };
+            return JSON.stringify(config, null, 2);
+        },
+
+        getClaudeCodeCommand() {
+            return `claude mcp add shieldcall python ${this.scriptPath} -e SHIELDCALL_API_KEY=${this.getCurrentApiKey()} -e SHIELDCALL_API_URL=${this.apiUrl}`;
+        },
+
+        getClineConfig() {
+            const config = {
+                "mcpServers": {
+                    "shieldcall": {
+                        "command": "python",
+                        "args": [this.scriptPath],
+                        "env": {
+                            "SHIELDCALL_API_KEY": this.getCurrentApiKey(),
+                            "SHIELDCALL_API_URL": this.apiUrl
+                        },
+                        "disabled": false,
+                        "autoApprove": [
+                            "check_phone",
+                            "check_bank_account",
+                            "check_url_or_domain",
+                            "analyze_message",
+                            "lookup_scam_db",
+                            "get_scam_radar_trends"
+                        ]
+                    }
+                }
+            };
+            return JSON.stringify(config, null, 2);
+        },
+
+        getChatGPTSchema() {
+            const schema = {
+                "openapi": "3.1.0",
+                "info": {
+                    "title": "ShieldCall VN Scam Detection API",
+                    "version": "1.0.0",
+                    "description": "API thẩm định lừa đảo trực tuyến tại Việt Nam."
+                },
+                "servers": [
+                    { "url": this.apiUrl }
+                ],
+                "paths": {
+                    "/scan/phone/": {
+                        "post": {
+                            "operationId": "check_phone",
+                            "summary": "Quét số điện thoại",
+                            "requestBody": {
+                                "required": true,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": { "phone": { "type": "string" } },
+                                            "required": ["phone"]
+                                        }
+                                    }
+                                }
+                            },
+                            "responses": { "200": { "description": "Kết quả rủi ro" } }
+                        }
+                    },
+                    "/scan/account/": {
+                        "post": {
+                            "operationId": "check_bank_account",
+                            "summary": "Kiểm tra số tài khoản ngân hàng",
+                            "requestBody": {
+                                "required": true,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "bank": { "type": "string" },
+                                                "account": { "type": "string" }
+                                            },
+                                            "required": ["bank", "account"]
+                                        }
+                                    }
+                                }
+                            },
+                            "responses": { "200": { "description": "Kết quả tài khoản" } }
+                        }
+                    },
+                    "/scan/domain/": {
+                        "post": {
+                            "operationId": "check_domain",
+                            "summary": "Kiểm tra tên miền hoặc URL",
+                            "requestBody": {
+                                "required": true,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": { "url": { "type": "string" } },
+                                            "required": ["url"]
+                                        }
+                                    }
+                                }
+                            },
+                            "responses": { "200": { "description": "Kết quả tên miền" } }
+                        }
+                    },
+                    "/scan/message/": {
+                        "post": {
+                            "operationId": "analyze_message",
+                            "summary": "Phân tích tin nhắn SMS lừa đảo",
+                            "requestBody": {
+                                "required": true,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "message": { "type": "string" },
+                                                "sync": { "type": "boolean", "default": true }
+                                            },
+                                            "required": ["message"]
+                                        }
+                                    }
+                                }
+                            },
+                            "responses": { "200": { "description": "Kết quả phân tích tin nhắn" } }
+                        }
+                    },
+                    "/scan/email/": {
+                        "post": {
+                            "operationId": "check_email_sender",
+                            "summary": "Kiểm tra email người gửi và nội dung thư",
+                            "requestBody": {
+                                "required": true,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "sender_email": { "type": "string" },
+                                                "email_content": { "type": "string" },
+                                                "sync": { "type": "boolean", "default": true }
+                                            },
+                                            "required": ["sender_email"]
+                                        }
+                                    }
+                                }
+                            },
+                            "responses": { "200": { "description": "Kết quả kiểm tra email" } }
+                        }
+                    },
+                    "/scan/banks/": {
+                        "get": {
+                            "operationId": "get_supported_banks",
+                            "summary": "Danh mục ngân hàng Việt Nam",
+                            "responses": { "200": { "description": "Danh sách ngân hàng" } }
+                        }
+                    },
+                    "/scan/lookup/": {
+                        "get": {
+                            "operationId": "lookup_scam_db",
+                            "summary": "Tra cứu cơ sở dữ liệu lừa đảo",
+                            "parameters": [
+                                {
+                                    "name": "q",
+                                    "in": "query",
+                                    "required": true,
+                                    "schema": { "type": "string" }
+                                },
+                                {
+                                    "name": "type",
+                                    "in": "query",
+                                    "required": false,
+                                    "schema": { "type": "string", "default": "all" }
+                                }
+                            ],
+                            "responses": { "200": { "description": "Kết quả tra cứu" } }
+                        }
+                    }
+                }
+            };
+            return JSON.stringify(schema, null, 2);
+        },
+
+        copyText(text, btnId) {
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    const origHtml = btn.innerHTML;
+                    btn.innerHTML = '<i class="bi bi-check2 mr-1"></i> Đã sao chép!';
+                    setTimeout(() => {
+                        btn.innerHTML = origHtml;
+                    }, 2000);
+                }
+            });
+        }
+    };
+}
+</script>
+{% endblock %}
+

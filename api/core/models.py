@@ -1032,3 +1032,96 @@ class SupportTicket(models.Model):
 
     def __str__(self):
         return f"[{self.status}] {self.title[:50]} by {self.author.username}"
+
+
+# ─── API Key Model for MCP & External Integrations ────────────────────────────
+
+class APIKey(models.Model):
+    """
+    API Keys with quotas and rate limits for MCP Server, Chatbot integrations,
+    and third-party developer access.
+    """
+    class Tier(models.TextChoices):
+        FREE = 'free', 'Cơ bản (Free - 500 req/ngày)'
+        DEVELOPER = 'developer', 'Lập trình viên (Developer - 2.000 req/ngày)'
+        UNLIMITED = 'unlimited', 'Không giới hạn (Unlimited/Admin)'
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='api_keys')
+    name = models.CharField(max_length=120, help_text="Tên định danh khóa (ví dụ: Claude Desktop, Cursor, Dev Bot)")
+    prefix = models.CharField(max_length=24, db_index=True, help_text="Tiền tố hiển thị (ví dụ: sc_live_abcd1234)")
+    hashed_key = models.CharField(max_length=128, unique=True, db_index=True, help_text="SHA-256 hash của API key bí mật")
+
+    tier = models.CharField(max_length=20, choices=Tier.choices, default=Tier.FREE)
+    rate_limit_per_minute = models.PositiveIntegerField(default=60)
+    daily_quota = models.PositiveIntegerField(default=500)
+    monthly_quota = models.PositiveIntegerField(default=15000)
+
+    # Usage counters
+    requests_today = models.PositiveIntegerField(default=0)
+    requests_this_month = models.PositiveIntegerField(default=0)
+    total_requests = models.PositiveIntegerField(default=0)
+    last_reset_date = models.DateField(default=timezone.now)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'API Key'
+        verbose_name_plural = 'API Keys'
+
+    def __str__(self):
+        return f"{self.name} ({self.prefix}...) - {self.user.username}"
+
+    @classmethod
+    def hash_token(cls, raw_token: str) -> str:
+        return hashlib.sha256(raw_token.strip().encode('utf-8')).hexdigest()
+
+    @classmethod
+    def generate(cls, user, name: str, tier: str = Tier.FREE):
+        """
+        Creates and returns (api_key_instance, raw_secret_token).
+        The raw_secret_token is returned only once at creation time.
+        """
+        import secrets
+        tier_limits = {
+            cls.Tier.FREE: {'rpm': 60, 'daily': 500, 'monthly': 15000},
+            cls.Tier.DEVELOPER: {'rpm': 120, 'daily': 2000, 'monthly': 50000},
+            cls.Tier.UNLIMITED: {'rpm': 1000, 'daily': 100000, 'monthly': 1000000},
+        }
+        limits = tier_limits.get(tier, tier_limits[cls.Tier.FREE])
+
+        token_prefix_part = secrets.token_hex(4)
+        token_secret_part = secrets.token_hex(20)
+        raw_token = f"sc_live_{token_prefix_part}_{token_secret_part}"
+        display_prefix = f"sc_live_{token_prefix_part}"
+
+        hashed = cls.hash_token(raw_token)
+
+        key_instance = cls.objects.create(
+            user=user,
+            name=name.strip() or "Default Key",
+            prefix=display_prefix,
+            hashed_key=hashed,
+            tier=tier,
+            rate_limit_per_minute=limits['rpm'],
+            daily_quota=limits['daily'],
+            monthly_quota=limits['monthly'],
+        )
+        return key_instance, raw_token
+
+    def regenerate(self) -> str:
+        """Regenerates the secret token and updates hash/prefix."""
+        import secrets
+        token_prefix_part = secrets.token_hex(4)
+        token_secret_part = secrets.token_hex(20)
+        raw_token = f"sc_live_{token_prefix_part}_{token_secret_part}"
+        display_prefix = f"sc_live_{token_prefix_part}"
+
+        self.prefix = display_prefix
+        self.hashed_key = self.hash_token(raw_token)
+        self.save(update_fields=['prefix', 'hashed_key', 'updated_at'])
+        return raw_token
+

@@ -19,7 +19,7 @@
             Quét <span class="glow-text text-violet-400">Âm Thanh</span>
         </h1>
         <p class="text-white/40 max-w-lg mx-auto text-sm leading-relaxed" data-aos="fade-up" data-aos-delay="300">
-            Tải lên cuộc gọi ghi âm hoặc ghi âm trực tiếp — AI sẽ chuyển đổi giọng nói thành văn bản và phân tích dấu hiệu lừa đảo trong hội thoại.
+            Tải lên cuộc gọi ghi âm hoặc ghi âm trực tiếp: AI sẽ chuyển đổi giọng nói thành văn bản và phân tích dấu hiệu lừa đảo trong hội thoại.
         </p>
     </div>
 
@@ -158,7 +158,7 @@
                         <div x-show="isRecording" class="space-y-3">
                             <p class="text-red-400 text-sm font-black animate-pulse flex items-center justify-center gap-2">
                                 <span class="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/50"></span>
-                                Đang ghi âm — <span x-text="formatTime(recordingDuration)"></span>
+                                Đang ghi âm: <span x-text="formatTime(recordingDuration)"></span>
                                 <span class="text-white/15 text-xs" x-text="'/ ' + formatTime(maxRecordingDuration)"></span>
                             </p>
                             <!-- Live Waveform -->
@@ -703,7 +703,7 @@ document.addEventListener('alpine:init', () => {
                     if (this.mediaRecorder.state === 'recording' || this.mediaRecorder.state === 'paused') {
                         this.mediaRecorder.stop();
                     } else {
-                        // MediaRecorder already inactive — manually build blob from collected chunks
+                        // MediaRecorder already inactive: manually build blob from collected chunks
                         if (this.audioChunks.length > 0 && !this.recordedBlob) {
                             this.recordedBlob = new Blob(this.audioChunks, { type: this.mediaRecorder.mimeType || 'audio/webm' });
                             this.processingRecording = false;

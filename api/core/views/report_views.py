@@ -25,7 +25,7 @@ from api.utils.ollama_client import analyze_text_for_scam, generate_response, st
 
 from api.core.models import (
     Domain, BankAccount, Report, ReportEvidence, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
+    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, APIKey,
 )
 from api.utils.media_utils import extract_ocr_text
 from api.core.serializers import (
@@ -48,17 +48,25 @@ class ReportCreateView(APIView):
 
     @extend_schema(request=ReportCreateSerializer, responses={201: serializers.DictField()})
     def post(self, request):
-        # Basic anti-spam throttle: 8 report submits / 10 minutes / IP
-        client_ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', 'unknown')
-        throttle_key = f"report_submit_ip:{client_ip}"
-        current_hits = int(cache.get(throttle_key, 0))
-        if current_hits >= 8:
-            return Response({'error': 'Bạn gửi quá nhanh. Vui lòng thử lại sau vài phút.'}, status=429)
+        is_api_client = bool(
+            getattr(request, 'is_api_key_auth', False) or
+            isinstance(getattr(request, 'auth', None), APIKey)
+        )
 
-        # Turnstile Verification
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-             return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+        # Anti-spam verification (bypassed for authenticated API Keys)
+        if not is_api_client:
+            # Basic anti-spam throttle: 8 report submits / 10 minutes / IP
+            client_ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', 'unknown')
+            throttle_key = f"report_submit_ip:{client_ip}"
+            current_hits = int(cache.get(throttle_key, 0))
+            if current_hits >= 8:
+                return Response({'error': 'Bạn gửi quá nhanh. Vui lòng thử lại sau vài phút.'}, status=429)
+
+            # Turnstile Verification
+            cf_token = request.data.get('cf-turnstile-response')
+            if not verify_turnstile_token(cf_token):
+                return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+
 
         evidence_files = request.FILES.getlist('evidence_images')
         if len(evidence_files) > 4:
@@ -104,7 +112,8 @@ class ReportCreateView(APIView):
         for ef in evidence_files:
             ReportEvidence.objects.create(report=report, image=ef)
 
-        cache.set(throttle_key, current_hits + 1, timeout=600)
+        if not is_api_client and 'throttle_key' in locals():
+            cache.set(throttle_key, current_hits + 1, timeout=600)
 
         # Update report counts on related entities
         target = report.target_value

@@ -38,4 +38,7 @@ from .page_views import (
     tickets_view,
     inbox_view,
     admin_tickets_view,
+    mcp_guide_view,
+    mcp_download_script_view,
 )
+

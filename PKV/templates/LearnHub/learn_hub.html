@@ -330,24 +330,24 @@
                 <!-- Card Body: Options -->
                 <div class="p-6 flex-1 space-y-3">
                     {% for opt in q.options %}
-                    <button @click="if(!submitted){selected='{{ opt|escapejs }}'}"
+                    <button @click="if(!submitted){selected='{{ opt.id|default:opt|escapejs }}'}"
                             :disabled="submitted"
                             :class="submitted 
-                                ? ('{{ opt|escapejs }}'==='{{ q.correct_answer|escapejs }}' ? 'border-green-500/40 bg-green-500/10 text-green-400' : (selected==='{{ opt|escapejs }}' ? 'border-red-500/40 bg-red-500/10 text-red-400' : 'border-white/5 text-white/20 opacity-50'))
-                                : (selected==='{{ opt|escapejs }}' ? 'border-cyan-400/50 bg-cyan-400/10 text-white translate-x-1' : 'border-white/5 text-white/60 hover:border-white/20 hover:bg-white/5 hover:text-white')"
+                                ? ('{{ opt.id|default:opt|escapejs }}'==='{{ q.correct_answer|escapejs }}' ? 'border-green-500/40 bg-green-500/10 text-green-400' : (selected==='{{ opt.id|default:opt|escapejs }}' ? 'border-red-500/40 bg-red-500/10 text-red-400' : 'border-white/5 text-white/20 opacity-50'))
+                                : (selected==='{{ opt.id|default:opt|escapejs }}' ? 'border-cyan-400/50 bg-cyan-400/10 text-white translate-x-1' : 'border-white/5 text-white/60 hover:border-white/20 hover:bg-white/5 hover:text-white')"
                             class="w-full text-left px-5 py-4 rounded-2xl border text-sm font-bold transition-all duration-300 flex items-center justify-between group/opt">
                         <div class="flex items-center gap-4">
                             <span class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-[10px] font-black text-white/40 group-hover/opt:bg-cyan-500/20 group-hover/opt:text-cyan-400"
-                                  :class="selected==='{{ opt|escapejs }}' ? 'bg-cyan-500/20 text-cyan-400' : ''"
-                                  x-text="String.fromCharCode(64 + {{ forloop.counter }})">
+                                  :class="selected==='{{ opt.id|default:opt|escapejs }}' ? 'bg-cyan-500/20 text-cyan-400' : ''">
+                                {{ opt.id|default:forloop.counter }}
                             </span>
-                            <span>{{ opt }}</span>
+                            <span>{{ opt.text|default:opt }}</span>
                         </div>
                         <div class="flex items-center">
-                            <template x-if="submitted && '{{ opt|escapejs }}'==='{{ q.correct_answer|escapejs }}'">
+                            <template x-if="submitted && '{{ opt.id|default:opt|escapejs }}'==='{{ q.correct_answer|escapejs }}'">
                                 <i class="bi bi-check2-circle text-xl text-green-400"></i>
                             </template>
-                            <template x-if="submitted && selected==='{{ opt|escapejs }}' && '{{ opt|escapejs }}'!=='{{ q.correct_answer|escapejs }}'">
+                            <template x-if="submitted && selected==='{{ opt.id|default:opt|escapejs }}' && '{{ opt.id|default:opt|escapejs }}'!=='{{ q.correct_answer|escapejs }}'">
                                 <i class="bi bi-x-circle text-xl text-red-400"></i>
                             </template>
                         </div>

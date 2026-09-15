@@ -216,10 +216,10 @@
                             value: ntype,
                             placeholder: 'Chọn loại',
                             options: [
-                                { value: 'info', label: 'ℹ️ Thông tin' },
-                                { value: 'success', label: '✅ Thành công' },
-                                { value: 'warning', label: '⚠️ Cảnh báo' },
-                                { value: 'error', label: '🚨 Khẩn cấp' }
+                                { value: 'info', label: 'Thông tin' },
+                                { value: 'success', label: 'Thành công' },
+                                { value: 'warning', label: 'Cảnh báo' },
+                                { value: 'error', label: 'Khẩn cấp' }
                             ]
                         })" class="liquid-custom-select w-full" @change="ntype = $event.detail">
                             <div class="liquid-select-trigger py-3 px-4 text-sm w-full min-w-0" :class="{ 'active': open }" @click="open = !open">

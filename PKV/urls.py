@@ -26,7 +26,9 @@ from .views import (
     lesson_detail_view, scan_lookup_view, scam_iq_exam_view,
     my_reports_view, community_reports_view,
     announcements_view, tickets_view, inbox_view, admin_tickets_view,
+    mcp_guide_view, mcp_download_script_view,
 )
+
 from .views.admin_views import (
     admin_dashboard, 
     admin_stats_api,
@@ -125,6 +127,9 @@ urlpatterns = [
     path("ai-assistant/", AssistantPageView.as_view(), name="ai-assistant"),
     path("ai-assistant/<uuid:session_id>/", AssistantPageView.as_view(), name="ai-assistant-session"),
     path("scam-iq-exam/", scam_iq_exam_view, name="scam-iq-exam"),
+    path("mcp/", mcp_guide_view, name="mcp-guide"),
+    path("mcp/download/", mcp_download_script_view, name="mcp-download-script"),
+    path("api/v1/mcp/download/", mcp_download_script_view, name="api-mcp-download-script"),
     
     # Auth pages
     path("login/", login_view, name="login"),

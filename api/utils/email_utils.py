@@ -358,9 +358,13 @@ def check_email_security(domain: str) -> dict:
     score_penalty = 0
     details = []
     
+    resolver = dns.resolver.Resolver()
+    resolver.timeout = 1.5
+    resolver.lifetime = 2.0
+    
     # 1. MX Check
     try:
-        mx_records = dns.resolver.resolve(domain, 'MX')
+        mx_records = resolver.resolve(domain, 'MX')
         mx_hosts = [str(r.exchange).lower() for r in mx_records]
         if not mx_hosts:
              score_penalty += 50
@@ -371,7 +375,7 @@ def check_email_security(domain: str) -> dict:
 
     # 2. DMARC Check
     try:
-        dmarc = dns.resolver.resolve(f'_dmarc.{domain}', 'TXT')
+        dmarc = resolver.resolve(f'_dmarc.{domain}', 'TXT')
         dmarc_txt = str(dmarc[0]).lower()
         if 'p=reject' in dmarc_txt or 'p=quarantine' in dmarc_txt:
             details.append("DMARC Policy: Strict (An toàn)")
@@ -387,7 +391,7 @@ def check_email_security(domain: str) -> dict:
 
     # 3. SPF Check existence
     try:
-        spf = dns.resolver.resolve(domain, 'TXT')
+        spf = resolver.resolve(domain, 'TXT')
         has_spf = False
         for r in spf:
             if 'v=spf1' in str(r):

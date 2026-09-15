@@ -67,9 +67,10 @@
 
     <!-- Lesson Content -->
     <div x-data="{content: ''}" 
-         x-init="content = window.renderRichText(`{{ lesson.content|escapejs }}`)"
-         class="prose prose-invert prose-cyan max-w-none text-white/80 leading-[1.8] font-medium text-lg sm:text-xl selection:bg-cyan-500/20 px-2" 
+         x-init="const el = document.getElementById('lesson-content-json'); content = window.renderRichText(el ? JSON.parse(el.textContent) : '')"
+         class="prose prose-invert prose-cyan max-w-none text-white/85 leading-[1.8] font-medium text-base sm:text-lg selection:bg-cyan-500/20 px-2" 
          data-aos="fade-up" data-aos-delay="300">
+        {{ lesson.content|json_script:"lesson-content-json" }}
         <div x-html="content" class="rich-text-content"></div>
     </div>
 
@@ -123,24 +124,24 @@
 
                 <div class="p-6 flex-1 space-y-3">
                     {% for opt in q.options %}
-                    <button @click="if(!submitted){selected='{{ opt|escapejs }}'}"
+                    <button @click="if(!submitted){selected='{{ opt.id|default:opt|escapejs }}'}"
                             :disabled="submitted"
                             :class="submitted 
-                                ? ('{{ opt|escapejs }}'==='{{ q.correct_answer|escapejs }}' ? 'border-green-500/40 bg-green-500/10 text-green-400' : (selected==='{{ opt|escapejs }}' ? 'border-red-500/40 bg-red-500/10 text-red-400' : 'border-white/5 text-white/20 opacity-50'))
-                                : (selected==='{{ opt|escapejs }}' ? 'border-cyan-400/50 bg-cyan-400/10 text-white translate-x-1' : 'border-white/5 text-white/60 hover:border-white/20 hover:bg-white/5 hover:text-white')"
+                                ? ('{{ opt.id|default:opt|escapejs }}'==='{{ q.correct_answer|escapejs }}' ? 'border-green-500/40 bg-green-500/10 text-green-400' : (selected==='{{ opt.id|default:opt|escapejs }}' ? 'border-red-500/40 bg-red-500/10 text-red-400' : 'border-white/5 text-white/20 opacity-50'))
+                                : (selected==='{{ opt.id|default:opt|escapejs }}' ? 'border-cyan-400/50 bg-cyan-400/10 text-white translate-x-1' : 'border-white/5 text-white/60 hover:border-white/20 hover:bg-white/5 hover:text-white')"
                             class="w-full text-left px-5 py-4 rounded-2xl border text-sm font-bold transition-all duration-300 flex items-center justify-between group/opt">
-                        <div class="flex items-center gap-4">
-                            <span class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-[10px] font-black text-white/40 group-hover/opt:bg-cyan-500/20 group-hover/opt:text-cyan-400"
-                                  :class="selected==='{{ opt|escapejs }}' ? 'bg-cyan-500/20 text-cyan-400' : ''"
-                                  x-text="String.fromCharCode(64 + {{ forloop.counter }})">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <span class="w-6 h-6 shrink-0 rounded-lg bg-white/5 flex items-center justify-center text-[10px] font-black text-white/40 group-hover/opt:bg-cyan-500/20 group-hover/opt:text-cyan-400"
+                                  :class="selected==='{{ opt.id|default:opt|escapejs }}' ? 'bg-cyan-500/20 text-cyan-400' : ''">
+                                {{ opt.id|default:forloop.counter }}
                             </span>
-                            <span>{{ opt }}</span>
+                            <span class="text-white/90 font-medium break-words">{{ opt.text|default:opt }}</span>
                         </div>
-                        <div class="flex items-center">
-                            <template x-if="submitted && '{{ opt|escapejs }}'==='{{ q.correct_answer|escapejs }}'">
+                        <div class="flex items-center shrink-0 ml-3">
+                            <template x-if="submitted && '{{ opt.id|default:opt|escapejs }}'==='{{ q.correct_answer|escapejs }}'">
                                 <i class="bi bi-check2-circle text-xl text-green-400"></i>
                             </template>
-                            <template x-if="submitted && selected==='{{ opt|escapejs }}' && '{{ opt|escapejs }}'!=='{{ q.correct_answer|escapejs }}'">
+                            <template x-if="submitted && selected==='{{ opt.id|default:opt|escapejs }}' && '{{ opt.id|default:opt|escapejs }}'!=='{{ q.correct_answer|escapejs }}'">
                                 <i class="bi bi-x-circle text-xl text-red-400"></i>
                             </template>
                         </div>

@@ -221,3 +221,9 @@ celerybeat-schedule.*
 scripts/puppeteer_host/node_modules/
 scripts/puppeteer_host/chrome/
 *.zip
+
+# Malware Sandbox downloaded databases & precompiled indexes
+sandbox/capa-rules/
+sandbox/rules/signature_base/
+sandbox/rules/*.yarc
+*.yarc

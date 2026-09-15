@@ -57,7 +57,7 @@
                                 <td class="py-2 pr-3 text-white/70" x-text="formatTime(h.created_at)"></td>
                                 <td class="py-2 pr-3 text-cyan-300 font-bold" x-text="`${h.score}/${h.max_score}`"></td>
                                 <td class="py-2 pr-3 text-white/70" x-text="`${h.correct_count}/${questions.length || 30} đúng`"></td>
-                                <td class="py-2 pr-3 text-purple-300" x-text="h.level_label || '—'"></td>
+                                <td class="py-2 pr-3 text-purple-300" x-text="h.level_label || '-'"></td>
                             </tr>
                         </template>
                     </tbody>
@@ -298,7 +298,7 @@
                         <div class="rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
                             <p class="text-[11px] font-black text-red-300 uppercase tracking-widest" x-text="`${m.question_id} • ${m.difficulty}`"></p>
                             <p class="text-sm text-white mt-2 scam-iq-wrap" x-text="cleanQuestionText(m.question)"></p>
-                            <p class="text-xs text-white/55 mt-2" x-text="`Bạn chọn: ${m.selected && m.selected.length ? m.selected.join(', ') : 'Chưa trả lời'} | Đáp án đúng: ${m.expected ? m.expected.join(', ') : '—'}`"></p>
+                            <p class="text-xs text-white/55 mt-2" x-text="`Bạn chọn: ${m.selected && m.selected.length ? m.selected.join(', ') : 'Chưa trả lời'} | Đáp án đúng: ${m.expected ? m.expected.join(', ') : '-'}`"></p>
                             <p class="text-xs text-white/65 mt-2" x-text="m.explanation"></p>
                         </div>
                     </template>
@@ -362,7 +362,7 @@ function scamIQExam() {
             return String(question || '').replace(/^\[[^\]]{1,140}\]\s*/, '').trim();
         },
 
-        simField(question, key, fallback = '—') {
+        simField(question, key, fallback = '-') {
             const derived = this.deriveSimulationFromQuestion(question);
             const value = derived?.[key];
             const normalized = String(value || '').trim();
