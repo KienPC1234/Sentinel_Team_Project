@@ -866,15 +866,7 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
         send_progress("Hoàn tất quét âm thanh!", step="completed", data=result)
         _notify_scan_complete(scan_event, 'Quét âm thanh hoàn tất')
 
-        # Cleanup temp file
-        try:
-            if os.path.exists(audio_file_path):
-                os.remove(audio_file_path)
-        except Exception:
-            pass
-
         return result
-
     except Exception as e:
         logger.error(f"Audio scan task {scan_event_id} failed: {e}")
         send_progress(f"Lỗi hệ thống: {str(e)}", step="error")
@@ -882,13 +874,15 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             status=ScanStatus.FAILED,
             result_json={'error': str(e)},
         )
-        # Cleanup temp file
+        return {'error': str(e)}
+    finally:
+        # Guaranteed cleanup of temp audio file
         try:
             if os.path.exists(audio_file_path):
                 os.remove(audio_file_path)
-        except Exception:
-            pass
-        return {'error': str(e)}
+                logger.info(f"[AudioScan] Cleaned up temp file: {audio_file_path}")
+        except Exception as cleanup_err:
+            logger.warning(f"[AudioScan] Failed to clean up temp file: {cleanup_err}")
 
 
 @shared_task(name='core.perform_web_scrapping_task', bind=True)
@@ -2959,312 +2953,13 @@ def _parse_json_safe(text):
 
 
 def _build_scam_iq_fallback_questions() -> list:
-    """Fallback 30-question bank when AI generation is unavailable."""
-    templates = [
-        {
-            "category": "Phishing đa kênh",
-            "scenario": "08:47 sáng, bạn nhận email mang tên thương hiệu ngân hàng nói tài khoản sẽ bị tạm ngưng do chưa cập nhật eKYC, kèm link rút gọn và yêu cầu hoàn tất trong 10 phút.",
-            "safe": "Mở app ngân hàng đã cài sẵn và gọi hotline in trên thẻ/app để xác minh độc lập.",
-            "risky": "Bấm link trong email và đăng nhập ngay để tránh bị khóa tài khoản.",
-        },
-        {
-            "category": "Lừa đảo tuyển dụng",
-            "scenario": "Sau vòng phỏng vấn nhanh qua Telegram, bên tuyển dụng gửi hợp đồng scan mờ và yêu cầu nộp phí hồ sơ 850.000đ trong 30 phút để giữ suất onboard.",
-            "safe": "Từ chối chuyển tiền, kiểm tra pháp nhân công ty qua website chính thức và kênh tuyển dụng công khai.",
-            "risky": "Chuyển trước một phần phí vì sợ mất cơ hội việc làm.",
-        },
-        {
-            "category": "Đầu tư giả mạo",
-            "scenario": "Bạn được mời vào nhóm đầu tư khoe ảnh lãi mỗi ngày, dashboard hiển thị tăng trưởng đều và quản trị viên thúc nạp thêm USDT để mở khóa rút tiền.",
-            "safe": "Dừng nạp ngay, đối chiếu giấy phép pháp lý và cảnh báo người thân/cộng đồng.",
-            "risky": "Nạp thêm để đạt ngưỡng rút vì thấy số dư trên dashboard vẫn tăng.",
-        },
-        {
-            "category": "Giả danh cơ quan chức năng",
-            "scenario": "Bạn nhận cuộc gọi video tự xưng điều tra viên, đọc đúng thông tin cá nhân và đe dọa liên quan vụ án rửa tiền, yêu cầu chuyển tiền vào ""tài khoản kiểm chứng"" trong ngày.",
-            "safe": "Ngắt liên lạc, tự gọi số công khai của cơ quan chức năng địa phương để xác minh hồ sơ.",
-            "risky": "Chuyển tiền ngay vì bên kia cung cấp ảnh lệnh có dấu đỏ.",
-        },
-        {
-            "category": "Chiếm quyền mạng xã hội",
-            "scenario": "Tài khoản người quen nhắn mượn số điện thoại để nhận mã xác thực chương trình quà tặng, hối thúc cần OTP trong 2 phút.",
-            "safe": "Không gửi OTP/mã khôi phục, gọi video xác minh trực tiếp người quen qua kênh khác.",
-            "risky": "Gửi mã OTP vì tài khoản chat là người bạn thường xuyên liên hệ.",
-        },
-        {
-            "category": "Gian lận thương mại điện tử",
-            "scenario": "Người bán gửi hóa đơn vận chuyển giả và yêu cầu chuyển khoản cọc 100% để giữ đơn ""flash sale"", cam kết hoàn tiền nếu không nhận hàng.",
-            "safe": "Chỉ thanh toán qua nền tảng có escrow/bảo vệ người mua và kiểm tra lịch sử shop.",
-            "risky": "Chuyển cọc vì được hứa hoàn tiền và giảm sâu nếu chốt ngay.",
-        },
-        {
-            "category": "Malvertising / SEO poisoning",
-            "scenario": "Bạn tìm ứng dụng kê khai thuế, kết quả quảng cáo đứng đầu dẫn tới tên miền gần giống cổng dịch vụ công và yêu cầu tải file .apk từ nguồn ngoài.",
-            "safe": "Truy cập cổng chính thức bằng bookmark đã lưu hoặc gõ thủ công tên miền chuẩn.",
-            "risky": "Cài app từ quảng cáo vì giao diện nhìn rất giống trang nhà nước.",
-        },
-        {
-            "category": "Deepfake voice/video",
-            "scenario": "Cuối ngày, ""sếp"" gọi video âm thanh rõ nhưng hình giật/mờ, yêu cầu kế toán chuyển gấp cho đối tác mới và cấm xác minh vì ""đang họp kín"".",
-            "safe": "Kích hoạt quy trình xác minh 2 lớp (duyệt nội bộ + callback số đã lưu) trước mọi lệnh chuyển tiền.",
-            "risky": "Bỏ qua quy trình vì giọng nói giống thật và lệnh được gắn mốc khẩn.",
-        },
-        {
-            "category": "Quishing (QR phishing)",
-            "scenario": "Mã QR tại bãi xe bị dán đè, sau khi quét mở trang thanh toán có tên miền lạ và yêu cầu nhập đầy đủ thông tin thẻ + OTP.",
-            "safe": "Dừng thao tác, đối chiếu URL chính chủ và xác thực với điểm thu phí trước khi thanh toán.",
-            "risky": "Điền ngay thông tin thẻ/OTP vì hóa đơn hiển thị đúng số tiền.",
-        },
-        {
-            "category": "Tấn công giả mạo phiên đăng nhập",
-            "scenario": "Bạn nhận cảnh báo ""phiên đăng nhập Microsoft hết hạn"" trong nhóm chat công việc, kèm link đăng nhập có giao diện giống hệt trang thật.",
-            "safe": "Mở trực tiếp ứng dụng/trang đã bookmark để kiểm tra session và đăng xuất thiết bị lạ.",
-            "risky": "Đăng nhập qua link trong chat vì trùng màu sắc và logo thương hiệu.",
-        },
-    ]
-
-    levels = [
-        ("easy", "Dễ"),
-        ("easy", "Dễ"),
-        ("medium", "Trung bình"),
-        ("medium", "Trung bình"),
-        ("hard", "Khó"),
-        ("hard", "Khó"),
-        ("hard", "Khó"),
-        ("extreme", "Cực khó"),
-        ("extreme", "Cực khó"),
-        ("extreme", "Cực khó"),
-    ]
-
-    simulation_sms = [
-        {
-            "from": "+84 9xx xxx xxx",
-            "sender_name": "Ngân hàng XXX",
-            "time": "08:12",
-            "body": "Tài khoản của quý khách có giao dịch bất thường. Vui lòng xác minh tại https://secure-verify-xxx.top trong 10 phút để tránh khóa tài khoản.",
-            "safe_reply": "Tôi sẽ tự liên hệ hotline chính thức của ngân hàng để xác minh, không thao tác qua link SMS.",
-            "trap_signals": ["link domain lạ", "hối thúc thời gian", "giả danh ngân hàng"],
-        },
-        {
-            "from": "Brand Support",
-            "sender_name": "Facebook Security",
-            "time": "22:41",
-            "body": "Tài khoản của bạn bị báo cáo vi phạm. Trả lời mã OTP bạn vừa nhận để giữ quyền truy cập.",
-            "safe_reply": "Tôi không chia sẻ OTP qua tin nhắn. Tôi sẽ kiểm tra cảnh báo trong ứng dụng chính thức.",
-            "trap_signals": ["xin OTP", "mạo danh hỗ trợ", "gây hoảng loạn"],
-        },
-        {
-            "from": "HR Remote",
-            "sender_name": "Tuyển dụng online",
-            "time": "13:26",
-            "body": "Chúc mừng bạn trúng tuyển. Vui lòng chuyển 1.200.000đ phí onboarding trong hôm nay để giữ suất.",
-            "safe_reply": "Công ty uy tín không thu phí tuyển dụng. Tôi từ chối chuyển tiền và sẽ xác minh qua website chính thức.",
-            "trap_signals": ["thu phí tuyển dụng", "hối thúc", "không có hợp đồng chính thức"],
-        },
-        {
-            "from": "Express Delivery",
-            "sender_name": "Đơn vị vận chuyển",
-            "time": "11:03",
-            "body": "Đơn hàng quốc tế của bạn bị treo tại hải quan. Thanh toán 34.000đ phí xử lý tại https://ship-fee-check.top trong 15 phút để tránh hoàn kho.",
-            "safe_reply": "Tôi không thanh toán qua link SMS. Tôi sẽ mở app vận chuyển chính thức để kiểm tra mã vận đơn.",
-            "trap_signals": ["phí nhỏ để dụ thao tác", "link lạ", "hối thúc thời hạn"],
-        },
-        {
-            "from": "Wallet Team",
-            "sender_name": "Ví điện tử",
-            "time": "19:47",
-            "body": "Thiết bị mới đang truy cập ví của bạn. Trả lời OTP và mã PIN xác minh để khóa giao dịch bất thường.",
-            "safe_reply": "Tôi không cung cấp OTP/PIN qua SMS. Tôi tự vào app ví để khóa đăng nhập và đổi mật khẩu.",
-            "trap_signals": ["xin OTP và PIN", "giả danh đội bảo mật", "tạo hoảng loạn"],
-        },
-    ]
-
-    simulation_email = [
-        {
-            "from": "security@paypa1-alert.com",
-            "subject": "Urgent: Account Suspension Notice",
-            "preview": "Your account will be suspended in 30 minutes unless verified.",
-            "body": "Please login and verify immediately at https://paypal-security-check.cc to prevent suspension.",
-            "safe_actions": ["không bấm link", "tự mở trang chính thức", "báo cáo phishing"],
-            "risk_clues": ["domain lookalike", "urgency", "đòi đăng nhập qua link"],
-        },
-        {
-            "from": "support@icloud-safeverify.net",
-            "subject": "Apple ID Locked - Action Required",
-            "preview": "Confirm your identity to unlock your Apple ID.",
-            "body": "Submit your recovery code and card details in this secure form now.",
-            "safe_actions": ["kiểm tra trung tâm thông báo Apple chính thức", "không cung cấp mã recovery/card", "đổi mật khẩu từ app chính thức"],
-            "risk_clues": ["đòi thông tin nhạy cảm", "đường dẫn không chính chủ", "ngôn ngữ đe dọa"],
-        },
-        {
-            "from": "finance@suppIier-vn.com",
-            "subject": "Cập nhật gấp tài khoản nhận thanh toán",
-            "preview": "Đề nghị chuyển công nợ tháng này sang tài khoản mới do kiểm toán.",
-            "body": "Từ kỳ này vui lòng thanh toán vào tài khoản mới đính kèm. Không cần xác nhận thêm để tránh chậm tiến độ đối soát.",
-            "safe_actions": ["gọi xác minh số đối tác đã lưu", "kiểm tra domain ký tự giả", "không đổi tài khoản nhận tiền khi chưa xác minh đa kênh"],
-            "risk_clues": ["đổi tài khoản thụ hưởng đột ngột", "domain lookalike chữ I/l", "ép xử lý gấp"],
-        },
-        {
-            "from": "docsign@hr-payroll-alerts.co",
-            "subject": "Ký lại phụ lục lương ngay hôm nay",
-            "preview": "Vui lòng đăng nhập và xác nhận thông tin ngân hàng nhận lương.",
-            "body": "Mẫu ký mới yêu cầu điền user, mật khẩu email công ty và mã MFA để hoàn tất đồng bộ payroll.",
-            "safe_actions": ["không nhập mật khẩu/MFA ở link email", "truy cập HR portal nội bộ", "báo SOC/IT nếu nghi phishing"],
-            "risk_clues": ["đòi MFA", "yêu cầu credentials email", "link không thuộc miền công ty"],
-        },
-    ]
-
-    questions = []
-    simulation_slots = {5, 8, 10, 12, 15, 18, 20, 22, 24, 26, 28, 29, 30}
-    multi_select_slots = {3, 6, 9, 13, 16, 19, 23, 25, 27}
-    true_false_slots = {7, 11, 14, 17, 21}
-    dynamic_wrong_actions = [
-        "Bật chia sẻ màn hình cho đối phương để họ hướng dẫn thao tác nhanh.",
-        "Gửi ảnh CCCD hai mặt để bên kia đối chiếu hồ sơ khẩn.",
-        "Nhập lại mã xác thực vào biểu mẫu được gửi qua chat để mở khóa tài khoản.",
-        "Tạm tắt cảnh báo bảo mật trên app để tránh gián đoạn giao dịch.",
-        "Cài ứng dụng điều khiển từ xa theo hướng dẫn để xử lý lỗi ngay.",
-        "Chuyển trước khoản xác minh nhỏ để hệ thống hoàn tiền tự động.",
-        "Đăng thông tin đăng nhập lên nhóm kín để nhờ mọi người kiểm tra giúp.",
-        "Cung cấp mã khôi phục vì bên hỗ trợ nói không cần mật khẩu.",
-        "Tin vào dấu tick xanh/tên thương hiệu mà bỏ qua bước xác minh độc lập.",
-        "Làm theo hướng dẫn nạp thêm tiền để mở khóa chức năng rút.",
-    ]
-    idx = 1
-    for round_idx in range(3):
-        for t_idx, template in enumerate(templates):
-            diff_code, diff_label = levels[t_idx]
-            q_type = "single_choice"
-            if idx in simulation_slots:
-                cycle = idx % 3
-                if cycle == 1:
-                    q_type = "simulation_sms"
-                elif cycle == 2:
-                    q_type = "simulation_email"
-                else:
-                    q_type = "incident_response"
-            elif idx in multi_select_slots:
-                q_type = "multi_select"
-            elif idx in true_false_slots:
-                q_type = "true_false"
-
-            simulation_payload = {}
-
-            if q_type == "simulation_sms":
-                sample = simulation_sms[(idx + round_idx) % len(simulation_sms)]
-                options = []
-                prompt = "Bạn sẽ phản hồi gì và thao tác gì tiếp theo với tin nhắn sau?"
-                simulation_payload = {
-                    "channel": "sms",
-                    "from": sample["from"],
-                    "sender_name": sample["sender_name"],
-                    "time": sample["time"],
-                    "body": sample["body"],
-                    "trap_signals": sample["trap_signals"],
-                    "expected_keywords": [
-                        "không bấm link", "xác minh", "hotline", "không cung cấp otp", "báo cáo"
-                    ],
-                }
-                correct = [
-                    "không bấm link",
-                    "liên hệ kênh chính thức",
-                    "không cung cấp thông tin nhạy cảm",
-                ]
-            elif q_type == "simulation_email":
-                sample = simulation_email[(idx + round_idx) % len(simulation_email)]
-                options = []
-                prompt = "Phân tích email sau và nêu hành động an toàn tiếp theo."
-                simulation_payload = {
-                    "channel": "email",
-                    "from": sample["from"],
-                    "subject": sample["subject"],
-                    "preview": sample["preview"],
-                    "body": sample["body"],
-                    "risk_clues": sample["risk_clues"],
-                    "expected_keywords": [
-                        "không click", "domain chính thức", "báo cáo phishing", "không nhập mật khẩu"
-                    ],
-                }
-                correct = [
-                    "xác minh domain",
-                    "không nhập tài khoản trên link lạ",
-                    "báo cáo phishing",
-                ]
-            elif q_type == "incident_response":
-                options = []
-                prompt = (
-                    f"Tình huống khẩn cấp: {template['scenario']} "
-                    "Hãy nêu kế hoạch 3 bước xử lý ngay trong 15 phút đầu để giảm thiệt hại."
-                )
-                simulation_payload = {
-                    "channel": "incident",
-                    "expected_keywords": [
-                        "ngừng giao dịch", "đổi mật khẩu", "bật 2fa", "liên hệ chính thức", "báo cáo"
-                    ],
-                }
-                correct = [
-                    "cô lập rủi ro ngay",
-                    "xác minh qua kênh chính thức",
-                    "báo cáo và lưu bằng chứng",
-                ]
-            elif q_type == "true_false":
-                options = [
-                    {"id": "A", "text": "An toàn"},
-                    {"id": "B", "text": "Không an toàn"},
-                ]
-                correct = ["B"] if "không" not in template["safe"].lower() else ["A"]
-                prompt = (
-                    f"{template['scenario']}\n"
-                    f"Hành động sau có an toàn không: {template['risky']}"
-                )
-            elif q_type == "multi_select":
-                wrong_1 = dynamic_wrong_actions[(idx + round_idx) % len(dynamic_wrong_actions)]
-                wrong_2 = dynamic_wrong_actions[(idx + round_idx + 4) % len(dynamic_wrong_actions)]
-                options = [
-                    {"id": "A", "text": template["safe"]},
-                    {"id": "B", "text": "Lưu bằng chứng (ảnh chụp, thời gian, URL) và báo cáo qua kênh chính thức."},
-                    {"id": "C", "text": wrong_1},
-                    {"id": "D", "text": wrong_2},
-                ]
-                correct = ["A", "B"]
-                prompt = f"Chọn các hành động đúng khi gặp tình huống: {template['scenario']}"
-            else:
-                if diff_code in {"hard", "extreme"}:
-                    options = [
-                        {"id": "A", "text": template["safe"]},
-                        {"id": "B", "text": "Xác minh bằng số hotline tìm trên chính tin nhắn/email vừa nhận."},
-                        {"id": "C", "text": "Kiểm tra tên miền, chứng chỉ và đăng nhập qua app/trang đã bookmark từ trước."},
-                        {"id": "D", "text": "Chuyển khoản thử số tiền nhỏ để đối chiếu danh tính bên nhận."},
-                    ]
-                    correct = ["A"]
-                else:
-                    options = [
-                        {"id": "A", "text": template["safe"]},
-                        {"id": "B", "text": template["risky"]},
-                        {"id": "C", "text": "Đăng thông tin đăng nhập lên nhóm để hỏi cộng đồng."},
-                        {"id": "D", "text": "Tắt 2FA để thao tác nhanh hơn trong trường hợp khẩn."},
-                    ]
-                    correct = ["A"]
-                prompt = f"Bạn nên làm gì đầu tiên khi: {template['scenario']}"
-
-            questions.append({
-                "id": f"Q{idx}",
-                "difficulty": diff_code,
-                "difficulty_label": diff_label,
-                "type": q_type,
-                "category": template["category"],
-                "question": prompt,
-                "options": options,
-                "correct_option_ids": correct,
-                "simulation": simulation_payload,
-                "explanation": (
-                    "Kỹ thuật lừa đảo mới thường dựa vào áp lực thời gian, giả mạo thương hiệu hoặc deepfake. "
-                    "Luôn xác minh qua kênh độc lập, không cung cấp OTP/mật khẩu và không chuyển tiền theo yêu cầu bất thường."
-                ),
-            })
-            idx += 1
-
-    return questions[:30]
+    """Curated 30-question bank fallback mapped to Bloom's taxonomy."""
+    try:
+        from api.core.data.scam_iq_bank import get_balanced_exam_questions
+        return get_balanced_exam_questions()
+    except Exception as e:
+        logger.error(f"Error loading scam_iq_bank: {e}")
+        return []
 
 
 def _rebalance_scam_iq_difficulty(questions: list) -> list:
@@ -3913,8 +3608,31 @@ def generate_scam_iq_exam_task(self, user_id=None):
         for token in stream_response(
             prompt=stream_prompt,
             system_prompt=(
-                "Bạn là chuyên gia an ninh mạng cho người dùng phổ thông. "
-                "Chỉ tạo nội dung huấn luyện an toàn, không cung cấp hướng dẫn tấn công."
+                "Bạn là chuyên gia an ninh mạng hàng đầu, chuyên gia tư vấn phòng chống lừa đảo trực tuyến tại Việt Nam, "
+                "với kiến thức sâu rộng về: social engineering, phishing đa kênh, vishing/smishing, quishing QR, "
+                "deepfake audio/video, SIM swap, account takeover, crypto/investment scam, fake job recruitment, "
+                "mạo danh cơ quan nhà nước (Công an, Thuế, BHXH, Tòa án), và các kỹ thuật tâm lý áp lực (urgency, authority, fear, scarcity). "
+                "\n\n"
+                "NGUYÊN TẮC TẠO ĐỀ (Bloom's Taxonomy + Pedagogical Design):\n"
+                "1. KNOWLEDGE (easy): Nhận diện dấu hiệu lừa đảo cơ bản, định nghĩa thuật ngữ, phân biệt kênh tấn công.\n"
+                "2. COMPREHENSION (medium): Giải thích cơ chế tấn công, phân tích tâm lý kẻ tấn công, nhận ra biến thể.\n"
+                "3. APPLICATION (hard): Xử lý tình huống thực tế đa bước, quyết định phản ứng đúng trong áp lực thời gian.\n"
+                "4. ANALYSIS/EVALUATION (extreme): Phân tích chuỗi tấn công phức tạp, phát hiện bẫy trong ngữ cảnh gần như thuyết phục, "
+                "đánh giá rủi ro khi thông tin thiếu hoặc mâu thuẫn.\n"
+                "\n"
+                "TIÊU CHUẨN CHẤT LƯỢNG CÂU HỎI:\n"
+                "- Mỗi câu phải kiểm tra một kỹ năng tư duy cụ thể, không phải ghi nhớ máy móc.\n"
+                "- Đáp án nhiễu phải 'gần đúng nhưng sai' ở một điểm then chốt — không được lộ đáp án bằng từ ngữ quá khác biệt.\n"
+                "- Câu simulation phải tái hiện kịch bản thực tế đủ chi tiết để người dùng phải suy luận, không chỉ nhận dạng mẫu quen.\n"
+                "- Explanation phải chỉ ra ĐÚNG DẤU HIỆU BỊ BỎ QUA, không chỉ tóm tắt đáp án.\n"
+                "- Tuyệt đối không tạo câu hỏi dạng 'Điều nào sau đây là đúng?' mà không có ngữ cảnh tình huống.\n"
+                "\n"
+                "TRI THỨC NỘI BỘ: Hãy tích cực sử dụng kiến thức chuyên sâu của bạn về các chiến thuật MITRE ATT&CK, "
+                "các modus operandi phổ biến tại Đông Nam Á (cụm tội phạm Myanmar, Cambodia scam compounds), "
+                "các lỗ hổng tâm lý theo Cialdini (reciprocity, commitment, social proof, authority, liking, scarcity), "
+                "và các xu hướng tấn công AI-assisted scam, voice cloning, và pig butchering.\n"
+                "\n"
+                "Chỉ tạo nội dung huấn luyện phòng thủ. Không cung cấp hướng dẫn tấn công hay kỹ thuật bypass."
             ),
             max_tokens=7800,
         ):
@@ -4023,7 +3741,8 @@ def generate_scam_iq_exam_task(self, user_id=None):
         'public_questions': public_questions,
         'created_at': timezone.now().isoformat(),
     }
-    cache.set(f"scam_iq_exam:{exam_id}", payload, timeout=60 * 60 * 4)
+    exam_timeout = getattr(settings, 'SCAM_IQ_CACHE_TIMEOUT', 14400)
+    cache.set(f"scam_iq_exam:{exam_id}", payload, timeout=exam_timeout)
 
     if task_progress_id:
         _send_task_progress(

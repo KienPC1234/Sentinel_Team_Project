@@ -213,10 +213,37 @@ WEBPUSH_VAPID_PUBLIC_KEY = os.getenv("WEBPUSH_VAPID_PUBLIC_KEY", "")
 WEBPUSH_VAPID_PRIVATE_KEY = os.getenv("WEBPUSH_VAPID_PRIVATE_KEY", "")
 WEBPUSH_VAPID_SUBJECT = os.getenv("WEBPUSH_VAPID_SUBJECT", "mailto:admin@yourdomain.com")
 
-# WebPush maintenance jobs
+# External Services & Data Feeds
+VIETQR_BANKS_API_URL = os.getenv('VIETQR_BANKS_API_URL', 'https://api.vietqr.io/v2/banks')
+VIETQR_CACHE_TIMEOUT = int(os.getenv('VIETQR_CACHE_TIMEOUT', '86400'))
+THREAT_FEED_USER_AGENT = os.getenv('THREAT_FEED_USER_AGENT', 'Sentinel-ThreatIntel/1.0 (+https://sc.fptoj.com)')
+THREAT_FEED_TIMEOUT_SECONDS = int(os.getenv('THREAT_FEED_TIMEOUT_SECONDS', '30'))
+SCAM_IQ_CACHE_TIMEOUT = int(os.getenv('SCAM_IQ_CACHE_TIMEOUT', '14400'))
+
+# Periodic maintenance jobs
 CELERY_BEAT_SCHEDULE = {
     'cleanup-webpush-subscriptions-nightly': {
         'task': 'core.cleanup_webpush_subscriptions',
+        'schedule': 60 * 60 * 24,
+    },
+    'sync-threat-intelligence-daily': {
+        'task': 'api.maintenance.tasks.sync_threat_intelligence',
+        'schedule': 60 * 60 * 24,
+        'kwargs': {
+            'limit_per_feed': 10000,
+            'batch_size': 2000,
+        },
+    },
+    'daily-trend-aggregation': {
+        'task': 'core.daily_trend_aggregation',
+        'schedule': 60 * 60 * 24,
+    },
+    'rebuild-scam-vector-index-weekly': {
+        'task': 'core.rebuild_scam_vector_index',
+        'schedule': 60 * 60 * 24 * 7,
+    },
+    'deduplicate-reports-daily': {
+        'task': 'core.deduplicate_reports',
         'schedule': 60 * 60 * 24,
     },
 }

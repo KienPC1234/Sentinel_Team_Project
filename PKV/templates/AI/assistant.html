@@ -229,6 +229,79 @@
             background: rgba(6, 182, 212, 0.03);
         }
 
+        /* Dark-mode callout boxes & alert tables in Markdown */
+        .markdown-content td[style*="background:#d4edda"],
+        .markdown-content td[style*="background: #d4edda"],
+        .markdown-content td[style*="background:#D4EDDA"],
+        .markdown-content td[style*="background: #D4EDDA"],
+        .markdown-content td[style*="212, 237, 218"],
+        .markdown-content td[style*="212,237,218"],
+        .markdown-content .callout-safe {
+            background: rgba(34, 197, 94, 0.14) !important;
+            border: 1px solid rgba(34, 197, 94, 0.35) !important;
+            border-radius: 10px !important;
+            color: #dcfce7 !important;
+        }
+        .markdown-content td[style*="background:#d4edda"] *,
+        .markdown-content td[style*="background: #d4edda"] *,
+        .markdown-content td[style*="212, 237, 218"] *,
+        .markdown-content .callout-safe * {
+            color: #dcfce7 !important;
+        }
+        .markdown-content td[style*="background:#d4edda"] strong,
+        .markdown-content td[style*="background: #d4edda"] strong,
+        .markdown-content .callout-safe strong {
+            color: #4ade80 !important;
+        }
+
+        .markdown-content td[style*="background:#f8d7da"],
+        .markdown-content td[style*="background: #f8d7da"],
+        .markdown-content td[style*="background:#F8D7DA"],
+        .markdown-content td[style*="background: #F8D7DA"],
+        .markdown-content td[style*="248, 215, 218"],
+        .markdown-content td[style*="248,215,218"],
+        .markdown-content .callout-danger {
+            background: rgba(239, 68, 68, 0.14) !important;
+            border: 1px solid rgba(239, 68, 68, 0.35) !important;
+            border-radius: 10px !important;
+            color: #fee2e2 !important;
+        }
+        .markdown-content td[style*="background:#f8d7da"] *,
+        .markdown-content td[style*="background: #f8d7da"] *,
+        .markdown-content td[style*="248, 215, 218"] *,
+        .markdown-content .callout-danger * {
+            color: #fee2e2 !important;
+        }
+        .markdown-content td[style*="background:#f8d7da"] strong,
+        .markdown-content td[style*="background: #f8d7da"] strong,
+        .markdown-content .callout-danger strong {
+            color: #f87171 !important;
+        }
+
+        .markdown-content td[style*="background:#fff3cd"],
+        .markdown-content td[style*="background: #fff3cd"],
+        .markdown-content td[style*="background:#FFF3CD"],
+        .markdown-content td[style*="background: #FFF3CD"],
+        .markdown-content td[style*="255, 243, 205"],
+        .markdown-content td[style*="255,243,205"],
+        .markdown-content .callout-warning {
+            background: rgba(234, 179, 8, 0.14) !important;
+            border: 1px solid rgba(234, 179, 8, 0.35) !important;
+            border-radius: 10px !important;
+            color: #fef9c3 !important;
+        }
+        .markdown-content td[style*="background:#fff3cd"] *,
+        .markdown-content td[style*="background: #fff3cd"] *,
+        .markdown-content td[style*="255, 243, 205"] *,
+        .markdown-content .callout-warning * {
+            color: #fef9c3 !important;
+        }
+        .markdown-content td[style*="background:#fff3cd"] strong,
+        .markdown-content td[style*="background: #fff3cd"] strong,
+        .markdown-content .callout-warning strong {
+            color: #facc15 !important;
+        }
+
         /* Action Widget */
         .tool-widget {
             background: linear-gradient(135deg, rgba(8, 145, 178, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
@@ -1232,6 +1305,14 @@
                                     }
                                     chatStatus.innerText = statusText;
                                 }
+                                if (data.tool_calls && Array.isArray(data.tool_calls)) {
+                                    data.tool_calls.forEach(tc => {
+                                        const fn = tc.function || {};
+                                        if (fn.name) {
+                                            addToolCard(assistantMsgDiv, fn.name, fn.arguments);
+                                        }
+                                    });
+                                }
                                 if (data.tool_result) {
                                     updateToolCardResult(assistantMsgDiv, data.tool_result);
                                 }
@@ -1900,6 +1981,8 @@
             'scan_bank_account': { icon: 'bi-bank2', label: 'Tra cứu tài khoản ngân hàng', color: 'violet' },
             'stealth_browse': { icon: 'bi-incognito', label: 'Trình duyệt Stealth quét mã độc', color: 'rose' },
             'query_threat_database': { icon: 'bi-database-fill-check', label: 'Tra cứu CSDL cảnh báo lừa đảo', color: 'purple' },
+            'lookup_company': { icon: 'bi-building-fill', label: 'Tra cứu pháp lý doanh nghiệp', color: 'amber' },
+            'get_latest_threat_trends': { icon: 'bi-graph-up-arrow', label: 'Cập nhật xu hướng lừa đảo', color: 'pink' },
             'web_search': { icon: 'bi-search', label: 'Tìm kiếm mạng diện rộng', color: 'emerald' },
             'web_fetch': { icon: 'bi-cloud-download', label: 'Tải & bóc tách trang web', color: 'amber' },
         };
@@ -1911,6 +1994,7 @@
             purple: { bg: 'rgba(168,85,247,0.15)', text: '#a855f7', border: 'rgba(168,85,247,0.3)' },
             emerald: { bg: 'rgba(16,185,129,0.15)', text: '#10b981', border: 'rgba(16,185,129,0.3)' },
             amber: { bg: 'rgba(245,158,11,0.15)', text: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
+            pink: { bg: 'rgba(236,72,153,0.15)', text: '#ec4899', border: 'rgba(236,72,153,0.3)' },
         };
 
         function getToolCard(bubble, toolName) {
@@ -1920,6 +2004,26 @@
         function addToolCard(assistantMsgDiv, toolName, args) {
             const bubble = assistantMsgDiv.querySelector('.msg-bubble');
             if (!bubble) return;
+
+            // If card already exists and is executing, update args
+            const existingCard = bubble.querySelector(`.tool-card.executing[data-tool="${toolName}"]`);
+            if (existingCard) {
+                if (args && typeof args === 'object') {
+                    const vals = Object.values(args).filter(v => v);
+                    if (vals.length) {
+                        const headerText = existingCard.querySelector('.tool-card-header .flex-1');
+                        if (headerText && !headerText.querySelector('.tool-args-tag')) {
+                            const argsSpan = document.createElement('span');
+                            argsSpan.className = 'tool-args-tag ml-1 text-[10px] text-slate-400 font-mono truncate max-w-[220px] inline-block align-bottom';
+                            argsSpan.textContent = vals.join(', ');
+                            const titleRow = headerText.querySelector('.flex.items-center');
+                            if (titleRow) titleRow.appendChild(argsSpan);
+                        }
+                    }
+                }
+                return;
+            }
+
             const meta = TOOL_META[toolName] || { icon: 'bi-gear', label: toolName, color: 'cyan' };
             const cm = COLOR_MAP[meta.color] || COLOR_MAP.cyan;
 
@@ -1928,7 +2032,7 @@
             if (args && typeof args === 'object') {
                 const vals = Object.values(args).filter(v => v);
                 if (vals.length) {
-                    argsHtml = `<span class="ml-1 text-[10px] text-slate-400 font-mono truncate max-w-[180px] inline-block align-bottom">${vals.join(', ')}</span>`;
+                    argsHtml = `<span class="tool-args-tag ml-1 text-[10px] text-slate-400 font-mono truncate max-w-[220px] inline-block align-bottom">${escapeHtml(vals.join(', '))}</span>`;
                 }
             }
 
@@ -1967,7 +2071,11 @@
             const bubble = assistantMsgDiv.querySelector('.msg-bubble');
             if (!bubble) return;
             const toolName = toolResult.tool;
-            const card = getToolCard(bubble, toolName);
+            let card = getToolCard(bubble, toolName);
+            if (!card) {
+                addToolCard(assistantMsgDiv, toolName, toolResult.args);
+                card = getToolCard(bubble, toolName);
+            }
             if (!card) return;
 
             // Mark as done
@@ -1983,9 +2091,9 @@
                 const vals = Object.values(toolResult.args).filter(v => v);
                 if (vals.length) {
                     const headerText = card.querySelector('.tool-card-header .flex-1');
-                    if (headerText && !headerText.querySelector('.tool-args')) {
+                    if (headerText && !headerText.querySelector('.tool-args-tag')) {
                         const argsSpan = document.createElement('span');
-                        argsSpan.className = 'tool-args text-[10px] text-slate-400 font-mono truncate block max-w-[260px] mt-0.5';
+                        argsSpan.className = 'tool-args-tag text-[10px] text-slate-400 font-mono truncate block max-w-[260px] mt-0.5';
                         argsSpan.textContent = vals.join(', ');
                         headerText.appendChild(argsSpan);
                     }
@@ -2004,7 +2112,7 @@
                 if (typeof resultData === 'object' && resultData !== null) {
                     html = renderToolResultObject(toolName, resultData);
                 } else {
-                    html = `<div class="tool-result-row"><div class="tool-result-val">${escapeHtml(String(resultData || 'Không có kết quả'))}</div></div>`;
+                    html = `<div class="tool-result-row"><div class="tool-result-val">${escapeHtml(String(resultData || toolResult.summary || 'Hoàn tất kiểm tra.'))}</div></div>`;
                 }
             } catch (e) {
                 html = `<div class="tool-result-row"><div class="tool-result-val text-slate-500 italic">Kết quả đã xử lý</div></div>`;
@@ -2016,7 +2124,6 @@
             const header = card.querySelector('.tool-card-header');
             header.style.cursor = 'pointer';
             header.onclick = () => body.classList.toggle('open');
-            // Auto-open
             body.classList.add('open');
             scrollToBottom();
         }
@@ -2024,18 +2131,64 @@
         function renderToolResultObject(toolName, data) {
             let rows = '';
             const LABEL_MAP = {
+                'summary': 'Tóm tắt an ninh',
+                'is_scam': 'Dấu hiệu lừa đảo',
+                'risk_level': 'Mức độ rủi ro',
+                'risk_score': 'Điểm rủi ro (0-100)',
+                'target_phone': 'Số điện thoại',
+                'account_number': 'Số tài khoản',
+                'bank_name': 'Ngân hàng',
+                'matched_bank': 'Thông tin VietQR',
+                'url': 'Địa chỉ URL',
+                'domain': 'Tên miền',
+                'apex_domain': 'Tên miền gốc',
+                'query': 'Từ khóa tra cứu',
+                'found': 'Trạng thái tìm thấy',
+                'internal_database': 'Cơ sở dữ liệu nội bộ',
+                'sentinel_reports': 'Tố cáo từ cộng đồng',
+                'fraud_network': 'Mạng lưới liên kết gian lận',
+                'stealth_browser_inspection': 'Kết quả duyệt Stealth Browser',
+                'threat_intel': 'Tình báo đe dọa toàn cầu',
+                'web_intelligence': 'Thông tin tìm kiếm trên Web',
+                'scamwave_intel': 'Dữ liệu ScamWave',
                 'scamwave': 'ScamWave',
                 'scamadviser': 'ScamAdviser',
                 'trustpilot': 'Trustpilot',
-                'tranco': 'Tranco Rank',
-                'web_results': 'Kết quả web',
+                'tranco': 'Xếp hạng Tranco',
+                'company_info': 'Hồ sơ doanh nghiệp',
                 'title': 'Tiêu đề',
-                'content': 'Nội dung',
-                'links': 'Liên kết',
-                'message': 'Thông báo',
+                'content': 'Chi tiết kết quả',
+                'links': 'Liên kết tham khảo',
+                'matched_reports_count': 'Số lượng báo cáo khớp',
+                'reports': 'Danh sách tố cáo',
+                'blacklist_matches': 'Khớp danh sách đen',
+                'trends': 'Xu hướng lừa đảo gần đây',
+                'recent_high_severity_reports': 'Cảnh báo mức độ cao'
             };
+
             for (const [key, val] of Object.entries(data)) {
                 const label = LABEL_MAP[key] || key;
+
+                // Special formatting for boolean scam indicator
+                if (key === 'is_scam') {
+                    const badge = val ? 
+                        `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">CẢNH BÁO LỪA ĐẢO</span>` :
+                        `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">AN TOÀN</span>`;
+                    rows += `<div class="tool-result-row"><div class="tool-result-label">${label}</div><div class="tool-result-val">${badge}</div></div>`;
+                    continue;
+                }
+
+                // Special formatting for risk_level
+                if (key === 'risk_level') {
+                    let levelColor = 'text-slate-400 bg-slate-500/20';
+                    if (val === 'RED') levelColor = 'text-red-400 bg-red-500/20 border-red-500/30';
+                    else if (val === 'YELLOW') levelColor = 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30';
+                    else if (val === 'GREEN' || val === 'SAFE') levelColor = 'text-green-400 bg-green-500/20 border-green-500/30';
+                    const badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold border ${levelColor}">${escapeHtml(String(val))}</span>`;
+                    rows += `<div class="tool-result-row"><div class="tool-result-label">${label}</div><div class="tool-result-val">${badge}</div></div>`;
+                    continue;
+                }
+
                 if (key === 'web_results' && Array.isArray(val)) {
                     let linksHtml = val.slice(0, 5).map(r => {
                         const t = r.title || r.url || '';
@@ -2048,13 +2201,31 @@
                         </a>`;
                     }).join('');
                     rows += `<div class="tool-result-row" style="flex-direction:column;gap:0.25rem"><div class="tool-result-label">${label}</div><div class="tool-result-val">${linksHtml}</div></div>`;
+                } else if (key === 'links' && Array.isArray(val) && val.length > 0) {
+                    let linksHtml = val.map(u => `<a href="${u}" target="_blank" class="text-xs text-cyan-400 underline block truncate">${escapeHtml(u)}</a>`).join('');
+                    rows += `<div class="tool-result-row"><div class="tool-result-label">${label}</div><div class="tool-result-val">${linksHtml}</div></div>`;
+                } else if (Array.isArray(val)) {
+                    if (val.length === 0) continue;
+                    const itemsHtml = val.slice(0, 5).map(item => {
+                        if (typeof item === 'object' && item !== null) {
+                            return `<div class="text-[10px] py-1 border-b border-white/[0.04] last:border-0">${Object.entries(item).map(([ik, iv]) => `<strong>${escapeHtml(ik)}:</strong> ${escapeHtml(String(iv || ''))}`).join(' · ')}</div>`;
+                        }
+                        return `<div class="text-[10px]">${escapeHtml(String(item))}</div>`;
+                    }).join('');
+                    rows += `<div class="tool-result-row" style="flex-direction:column;gap:0.25rem"><div class="tool-result-label">${label} (${val.length})</div><div class="tool-result-val">${itemsHtml}</div></div>`;
                 } else if (typeof val === 'object' && val !== null) {
-                    // Nested object (e.g. tranco {rank, domain})
-                    const summary = Object.entries(val).map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v).substring(0, 200))}`).join(' · ');
-                    rows += `<div class="tool-result-row"><div class="tool-result-label">${label}</div><div class="tool-result-val">${summary}</div></div>`;
+                    // Nested object
+                    const summary = Object.entries(val)
+                        .filter(([k, v]) => v !== null && v !== '' && (!Array.isArray(v) || v.length > 0))
+                        .map(([k, v]) => `<strong>${LABEL_MAP[k] || escapeHtml(k)}:</strong> ${escapeHtml(String(v).substring(0, 200))}`)
+                        .join(' · ');
+                    if (summary) {
+                        rows += `<div class="tool-result-row"><div class="tool-result-label">${label}</div><div class="tool-result-val">${summary}</div></div>`;
+                    }
                 } else {
-                    const strVal = String(val || '');
-                    const displayVal = strVal.length > 300 ? strVal.substring(0, 300) + '…' : strVal;
+                    const strVal = String(val !== null && val !== undefined ? val : '');
+                    if (!strVal.trim()) continue;
+                    const displayVal = strVal.length > 400 ? strVal.substring(0, 400) + '…' : strVal;
                     rows += `<div class="tool-result-row"><div class="tool-result-label">${label}</div><div class="tool-result-val">${escapeHtml(displayVal)}</div></div>`;
                 }
             }

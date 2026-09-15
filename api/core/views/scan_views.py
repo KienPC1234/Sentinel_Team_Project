@@ -9,7 +9,7 @@ import requests
 from urllib.parse import urlparse
 from django.core.cache import cache
 from api.utils.security import verify_turnstile_token
-
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Count, Sum, F, Q
 from django.utils import timezone
@@ -722,13 +722,14 @@ class ScanBanksView(APIView):
             return Response(cached_banks)
 
         try:
-            resp = requests.get('https://api.vietqr.io/v2/banks', timeout=10)
+            api_url = getattr(settings, 'VIETQR_BANKS_API_URL', 'https://api.vietqr.io/v2/banks')
+            cache_timeout = getattr(settings, 'VIETQR_CACHE_TIMEOUT', 86400)
+            resp = requests.get(api_url, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get('code') == '00':
                     banks = data.get('data', [])
-                    # Cache for 24 hours
-                    cache.set('vietqr_banks', banks, 86400)
+                    cache.set('vietqr_banks', banks, cache_timeout)
                     return Response(banks)
             return Response({'error': 'Không thể lấy danh sách ngân hàng.'}, status=500)
         except Exception as e:
@@ -1039,7 +1040,13 @@ def _get_trusted_domains() -> dict:
 def _analyze_domain(url: str) -> dict:
     """Domain/URL Risk Engine with VirusTotal integration and Network Analysis."""
     domain = normalize_domain(url)
-    
+
+    # Fast path: return cached full result for repeated identical scans (TTL 5 min)
+    _full_cache_key = f'domain_scan_result:{domain}'
+    _cached_result = cache.get(_full_cache_key)
+    if _cached_result is not None:
+        return _cached_result
+
     # Ensure URL has a scheme for VT scan
     if not re.match(r'^[a-z0-9]+://', url):
         full_url = 'https://' + url
@@ -1159,14 +1166,31 @@ def _analyze_domain(url: str) -> dict:
             similarity_warning = f'Có thể bạn muốn vào {trusted}'
             break
 
-    # Check existing database
-    try:
-        db_domain = Domain.objects.get(domain_name=domain)
-        score = max(score, db_domain.risk_score)
-        if db_domain.report_count > 0:
-            details.append(f'{db_domain.report_count} báo cáo từ cộng đồng')
-    except Domain.DoesNotExist:
-        pass
+    # Check existing database (1-hour Redis cache to avoid hot MySQL reads)
+    _db_cache_key = f'domain_risk_record:{domain}'
+    _DB_MISS = '__MISS__'
+    _cached_db = cache.get(_db_cache_key)
+    if _cached_db is None:
+        try:
+            db_domain = Domain.objects.get(domain_name=domain)
+            _cached_db = {
+                'risk_score': db_domain.risk_score,
+                'report_count': db_domain.report_count,
+                'whois_snapshot': db_domain.whois_snapshot or {},
+            }
+        except Domain.DoesNotExist:
+            _cached_db = _DB_MISS
+        cache.set(_db_cache_key, _cached_db, 3600)
+
+    if _cached_db != _DB_MISS and isinstance(_cached_db, dict):
+        score = max(score, _cached_db['risk_score'])
+        feed_source = _cached_db['whois_snapshot'].get('source')
+        threat_tag = _cached_db['whois_snapshot'].get('threat')
+        if feed_source:
+            tag_suffix = f" ({threat_tag})" if threat_tag else ""
+            details.append(f"Cảnh báo: Tên miền nằm trong danh sách đen toàn cầu {feed_source}{tag_suffix}")
+        if _cached_db['report_count'] > 0:
+            details.append(f"{_cached_db['report_count']} báo cáo từ cộng đồng")
 
     # IP-based URL
     if re.match(r'^\d+\.\d+\.\d+\.\d+$', domain):
@@ -1200,7 +1224,7 @@ def _analyze_domain(url: str) -> dict:
     if similarity_warning:
         result['similarity_warning'] = similarity_warning
 
-    # Save/update domain in DB
+    # Save/update domain in DB and invalidate the domain record cache
     Domain.objects.update_or_create(
         domain_name=domain,
         defaults={
@@ -1208,8 +1232,13 @@ def _analyze_domain(url: str) -> dict:
             'ssl_valid': network_info['ssl_valid'],
         }
     )
+    cache.delete(_db_cache_key)
+
+    # Cache the full scan result (5-minute TTL) to short-circuit duplicate rapid scans
+    cache.set(_full_cache_key, result, 300)
 
     return result
+
 
 
 def _is_lookalike(domain: str, trusted: str) -> bool:
@@ -1325,6 +1354,11 @@ class ScanAccountView(APIView):
         serializer = ScanAccountSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # Turnstile Verification (before DB access)
+        cf_token = request.data.get('cf-turnstile-response')
+        if not verify_turnstile_token(cf_token):
+            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
+
         bank = serializer.validated_data['bank'].strip()
         account = serializer.validated_data['account'].strip()
         account_hash = BankAccount.hash_account(account)
@@ -1346,14 +1380,17 @@ class ScanAccountView(APIView):
         except BankAccount.DoesNotExist:
             pass
 
-        # Check reports too
+        # Check reports specifically targeting this bank account
         reports_for_account = Report.objects.filter(
             target_type='account',
-            target_value__icontains=account[-4:]
+        ).filter(
+            Q(target_value__iexact=account) |
+            Q(target_value__iexact=f"{bank}:{account}") |
+            Q(scammer_bank_account__iexact=account, scammer_bank_name__iexact=bank)
         ).count()
         if reports_for_account > 0:
-            score = max(score, reports_for_account * 15)
-            details.append(f'{reports_for_account} báo cáo liên quan')
+            score = max(score, min(100, reports_for_account * 25))
+            details.append(f'{reports_for_account} báo cáo liên quan trực tiếp')
 
         score = min(100, score)
         if score >= 70:
@@ -1387,11 +1424,6 @@ class ScanAccountView(APIView):
                 'risk_score': score,
             }
         )
-
-        # Turnstile Verification
-        cf_token = request.data.get('cf-turnstile-response')
-        if not verify_turnstile_token(cf_token):
-            return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
 
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
@@ -1591,8 +1623,10 @@ class ScanAudioView(APIView):
 
         # Save audio to temp path for Celery worker
         import tempfile, os
+        from api.utils.security import sanitize_filename
+        clean_name = sanitize_filename(audio_file.name)
         temp_dir = tempfile.gettempdir()
-        file_path = os.path.join(temp_dir, f"audio_{scan_event.id}_{audio_file.name}")
+        file_path = os.path.join(temp_dir, f"audio_{scan_event.id}_{clean_name}")
         with open(file_path, 'wb+') as dest:
             for chunk in audio_file.chunks():
                 dest.write(chunk)

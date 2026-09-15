@@ -46,7 +46,8 @@ def calculate_reporter_trust(user) -> float:
     
     # 3. Penalty for recent rejections (Spam behavior)
     # Check last 5 reports
-    recent_rejected = reports.order_by('-id')[:5].filter(status=ReportStatus.REJECTED).count()
+    recent_reports = list(reports.order_by('-id')[:5])
+    recent_rejected = sum(1 for r in recent_reports if r.status == ReportStatus.REJECTED)
     penalty = 0.0
     if recent_rejected >= 3:
         penalty = 0.3

@@ -252,7 +252,7 @@ class ForumPostDetailView(APIView):
         if category:
             post.category = category
 
-        if lock_state is not None:
+        if lock_state is not None and request.user.is_staff:
             post.is_locked = bool(lock_state)
 
         # Handle image update
@@ -557,24 +557,27 @@ class ForumCommentReactionView(APIView):
             # Remove the reaction (toggle off)
             existing.delete()
             self._update_count(comment, reaction_type, -1)
+            if reaction_type == 'upvote':
+                ForumCommentLike.objects.filter(comment=comment, user=user).delete()
             action = 'removed'
             reacted = False
         else:
             # Mutual exclusivity: remove conflicting reactions
             if reaction_type == 'downvote':
                 # Remove upvote and helpful if exists
-                ForumCommentReaction.objects.filter(
+                up_deleted = ForumCommentReaction.objects.filter(
                     comment=comment, user=user, reaction_type='upvote'
-                ).delete()
-                ForumCommentReaction.objects.filter(
+                ).delete()[0]
+                help_deleted = ForumCommentReaction.objects.filter(
                     comment=comment, user=user, reaction_type='helpful'
-                ).delete()
-                # Also remove like
+                ).delete()[0]
                 like_deleted = ForumCommentLike.objects.filter(
                     comment=comment, user=user
                 ).delete()[0]
-                if like_deleted:
+                if up_deleted or like_deleted:
                     self._update_count(comment, 'upvote', -1)
+                if help_deleted:
+                    self._update_count(comment, 'helpful', -1)
                     
             elif reaction_type in ['upvote', 'helpful']:
                 # Remove downvote if exists

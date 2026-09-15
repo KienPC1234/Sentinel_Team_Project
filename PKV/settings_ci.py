@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'api.media_analysis',
     'api.maintenance',
     'api.core',
+    'PKV',
 ]
 
 MIDDLEWARE = [

@@ -247,6 +247,33 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "lookup_company",
+            "description": "Tra cứu thông tin pháp lý doanh nghiệp Việt Nam trên cơ sở dữ liệu đăng ký kinh doanh/thuế: mã số thuế (MST), tên pháp lý, đại diện pháp luật, địa chỉ và tình trạng hoạt động nhằm đối chiếu phát hiện công ty 'ma' hoặc mạo danh.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Mã số thuế (MST) hoặc tên công ty cần tra cứu (ví dụ: '0312345678' hoặc 'Công ty TNHH ABC')"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_latest_threat_trends",
+            "description": "Lấy danh sách các thủ đoạn lừa đảo phổ biến và cảnh báo xu hướng tấn công mạng mới nhất từ cơ sở dữ liệu Sentinel/ShieldCall VN.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Số lượng xu hướng tối đa cần lấy (1-10, mặc định 5)"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "web_search",
             "description": "Tìm kiếm trên Internet qua đa nguồn về các thủ đoạn lừa đảo mới, tin tức cảnh báo an ninh mạng.",
             "parameters": {
@@ -958,14 +985,16 @@ def _assistant_scan_phone(phone: str) -> Dict[str, Any]:
     - External Scam Intelligence (ScamWave)
     - Open-source Intelligence & Community Web Search
     """
-    cleaned = re.sub(r'[\s\.\-\(\)]', '', phone.strip())
-    if cleaned.startswith('+84'):
-        cleaned = '0' + cleaned[3:]
-    elif cleaned.startswith('84') and len(cleaned) >= 10:
-        cleaned = '0' + cleaned[2:]
+    from api.utils.normalization import normalize_phone
+    cleaned = normalize_phone(phone)
+    if not cleaned:
+        cleaned = re.sub(r'\D', '', str(phone).strip())
 
     report_payload = {
         'target_phone': cleaned,
+        'summary': 'Chưa phát hiện rủi ro nghiêm trọng trong cơ sở dữ liệu',
+        'is_scam': False,
+        'risk_level': 'SAFE',
         'internal_database': {
             'found': False,
             'risk_level': 'UNKNOWN',
@@ -978,6 +1007,7 @@ def _assistant_scan_phone(phone: str) -> Dict[str, Any]:
             'recent_complaints': [],
         },
         'sentinel_reports': [],
+        'fraud_network': [],
         'scamwave_intel': None,
         'web_intelligence': [],
     }
@@ -996,6 +1026,11 @@ def _assistant_scan_phone(phone: str) -> Dict[str, Any]:
             report_payload['internal_database']['community_reports_count'] = phone_obj.reports_count
             report_payload['internal_database']['risk_label'] = phone_obj.risk_label
             
+            if phone_obj.risk_level in ('RED', 'YELLOW'):
+                report_payload['is_scam'] = (phone_obj.risk_level == 'RED')
+                report_payload['risk_level'] = phone_obj.risk_level
+                report_payload['summary'] = f"Cảnh báo: Số điện thoại nằm trong danh sách rủi ro ({phone_obj.risk_level})"
+
             reports = PhoneReport.objects.filter(phone_number=phone_obj).order_by('-created_at')[:5]
             report_payload['internal_database']['recent_complaints'] = [
                 {
@@ -1013,6 +1048,11 @@ def _assistant_scan_phone(phone: str) -> Dict[str, Any]:
         from django.db.models import Q
         phone_filter = Q(target_type='phone', target_value__icontains=cleaned) | Q(scammer_phone__icontains=cleaned)
         sentinel_reps = Report.objects.filter(phone_filter).order_by('-created_at')[:5]
+        if sentinel_reps.exists():
+            report_payload['is_scam'] = True
+            report_payload['risk_level'] = 'RED'
+            report_payload['summary'] = f"Phát hiện {sentinel_reps.count()} đơn tố cáo lừa đảo trên hệ thống"
+
         for sr in sentinel_reps:
             report_payload['sentinel_reports'].append({
                 'scam_type': sr.scam_type,
@@ -1025,15 +1065,39 @@ def _assistant_scan_phone(phone: str) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"_assistant_scan_phone Sentinel Reports query error: {e}")
 
-    # 3. Query External ScamWave
+    # 3. Query Fraud Graph (EntityLink)
+    try:
+        from api.core.models import EntityLink
+        from django.db.models import Q
+        if 'phone_obj' in locals() and phone_obj:
+            links = EntityLink.objects.filter(
+                Q(from_type='phone', from_entity_id=phone_obj.id) |
+                Q(to_type='phone', to_entity_id=phone_obj.id)
+            )[:5]
+            for link in links:
+                other_type = link.to_type if link.from_type == 'phone' else link.from_type
+                other_id = link.to_entity_id if link.from_type == 'phone' else link.from_entity_id
+                report_payload['fraud_network'].append({
+                    'linked_entity_type': other_type,
+                    'linked_entity_id': other_id,
+                    'link_reason': link.link_reason,
+                    'confidence': link.confidence,
+                })
+    except Exception as e:
+        logger.warning(f"_assistant_scan_phone EntityLink query error: {e}")
+
+    # 4. Query External ScamWave
     try:
         sw = _tool_lookup_scamwave(query=cleaned)
         if sw and sw.get('content'):
             report_payload['scamwave_intel'] = sw['content'][:2500]
+            if 'lừa đảo' in sw['content'].lower() or 'cảnh báo' in sw['content'].lower():
+                report_payload['risk_level'] = 'RED'
+                report_payload['is_scam'] = True
     except Exception as e:
         logger.warning(f"_assistant_scan_phone ScamWave query error: {e}")
 
-    # 4. Open-source Web Search
+    # 5. Open-source Web Search
     try:
         ws = web_search_query(f"lừa đảo số điện thoại {cleaned} scam phản ánh", max_results=3)
         if ws:
@@ -1047,27 +1111,42 @@ def _assistant_scan_phone(phone: str) -> Dict[str, Any]:
 def _assistant_scan_url(url: str) -> Dict[str, Any]:
     """
     Comprehensive multi-layer website / URL threat analysis:
-    - Internal Database (Domain, Report, ScanEvent)
+    - Internal Database (Domain, Report, ScanEvent, EntityLink)
+    - Apex Domain resolution (phishing subdomains)
     - Stealth Headless Chromium Browser (Puppeteer DOM & Phishing form detection)
     - Global Threat Intelligence (Tranco 1M rank, ScamAdviser, Trustpilot)
     - Open-source Intelligence & Search
     """
-    clean_domain = re.sub(r'^https?://', '', url).split('/')[0].strip().lower()
+    clean_domain = re.sub(r'^https?://', '', url).split('/')[0].split(':')[0].strip().lower()
     full_url = url.strip()
     if not re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', full_url):
         full_url = f"https://{full_url}"
 
+    domain_parts = clean_domain.split('.')
+    apex_domain = clean_domain
+    if len(domain_parts) >= 2:
+        apex_domain = '.'.join(domain_parts[-2:])
+
     report_payload = {
         'url': full_url,
         'domain': clean_domain,
+        'apex_domain': apex_domain,
+        'summary': 'Đang phân tích độ an toàn trang web',
+        'is_scam': False,
+        'risk_score': 0,
         'internal_database': {
             'found': False,
             'is_scam': False,
             'risk_score': 0,
             'category': None,
-            'threat_types': [],
+            'scam_type': None,
+            'domain_age_days': None,
+            'ssl_valid': None,
+            'report_count': 0,
+            'matched_domain': None,
         },
         'sentinel_reports': [],
+        'fraud_network': [],
         'stealth_browser_inspection': {
             'accessible': False,
             'final_url': full_url,
@@ -1086,22 +1165,57 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
 
     # 1. Query Internal Database (Domain & Reports)
     try:
-        from api.core.models import Domain, Report
+        from api.core.models import Domain, Report, EntityLink
         from django.db.models import Q
-        dom_obj = Domain.objects.filter(domain_name=clean_domain).first()
+        dom_obj = Domain.objects.filter(Q(domain_name=clean_domain) | Q(domain_name=apex_domain)).first()
         if dom_obj:
             report_payload['internal_database']['found'] = True
+            report_payload['internal_database']['matched_domain'] = dom_obj.domain_name
             report_payload['internal_database']['is_scam'] = (dom_obj.risk_score >= 60)
             report_payload['internal_database']['risk_score'] = dom_obj.risk_score
             report_payload['internal_database']['domain_age_days'] = dom_obj.domain_age_days
             report_payload['internal_database']['ssl_valid'] = dom_obj.ssl_valid
             report_payload['internal_database']['report_count'] = dom_obj.report_count
             report_payload['internal_database']['scam_type'] = dom_obj.scam_type
+            report_payload['risk_score'] = dom_obj.risk_score
+            report_payload['is_scam'] = (dom_obj.risk_score >= 60)
+            if dom_obj.risk_score >= 60:
+                report_payload['summary'] = f"Cảnh báo: Tên miền nằm trong danh sách đen lừa đảo (Điểm rủi ro {dom_obj.risk_score}/100)"
+
+            if dom_obj.whois_snapshot and isinstance(dom_obj.whois_snapshot, dict):
+                feed_source = dom_obj.whois_snapshot.get('source')
+                if feed_source:
+                    report_payload['internal_database']['threat_intel_feed'] = {
+                        'source': feed_source,
+                        'threat': dom_obj.whois_snapshot.get('threat', 'phishing'),
+                        'tags': dom_obj.whois_snapshot.get('tags', ''),
+                        'ref_url': dom_obj.whois_snapshot.get('ref_url', ''),
+                    }
+
+            links = EntityLink.objects.filter(
+                Q(from_type='domain', from_entity_id=dom_obj.id) |
+                Q(to_type='domain', to_entity_id=dom_obj.id)
+            )[:5]
+            for link in links:
+                other_type = link.to_type if link.from_type == 'domain' else link.from_type
+                other_id = link.to_entity_id if link.from_type == 'domain' else link.from_entity_id
+                report_payload['fraud_network'].append({
+                    'linked_entity_type': other_type,
+                    'linked_entity_id': other_id,
+                    'link_reason': link.link_reason,
+                    'confidence': link.confidence,
+                })
 
         reps = Report.objects.filter(
             Q(target_type='domain', target_value__icontains=clean_domain) |
-            Q(target_value__icontains=clean_domain)
+            Q(target_value__icontains=clean_domain) |
+            Q(target_value__icontains=apex_domain)
         ).order_by('-created_at')[:5]
+        if reps.exists():
+            report_payload['is_scam'] = True
+            report_payload['risk_score'] = max(report_payload['risk_score'], 80)
+            report_payload['summary'] = f"Cảnh báo: Có {reps.count()} đơn tố cáo lừa đảo liên quan đến trang web này"
+
         for r in reps:
             report_payload['sentinel_reports'].append({
                 'scam_type': r.scam_type,
@@ -1129,6 +1243,8 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
             indicators = []
             if any(k in content_lower for k in ('nhập mật khẩu', 'password', 'mã otp', 'nhập otp', 'internet banking', 'smartbanking')):
                 indicators.append('Phát hiện trường yêu cầu nhập mật khẩu / mã OTP hoặc thông tin ngân hàng')
+                report_payload['risk_score'] = max(report_payload['risk_score'], 75)
+                report_payload['is_scam'] = True
             if any(k in content_lower for k in ('tài khoản bị khóa', 'xác minh danh tính khẩn cấp', 'nhận quà tri ân', 'trúng thưởng')):
                 indicators.append('Dấu hiệu thúc giục / giả mạo cơ quan chức năng hoặc quà tặng bất thường')
             if 't.me/' in content_lower or 'zalo.me/' in content_lower:
@@ -1164,22 +1280,64 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"_assistant_scan_url web search error: {e}")
 
+    if not report_payload['is_scam'] and report_payload['threat_intel']['tranco_top_rank']:
+        rank = report_payload['threat_intel']['tranco_top_rank'].get('rank')
+        if rank and isinstance(rank, int) and rank <= 50000:
+            report_payload['summary'] = f"Trang web thuộc Top {rank} phổ biến toàn cầu (Tranco), mức độ tin cậy cao"
+
     return report_payload
 
 
 def _assistant_scan_bank_account(account_number: str, bank_name: str = "") -> Dict[str, Any]:
     """
     Comprehensive multi-layer bank account fraud analysis:
+    - VietQR bank directory lookup
     - Internal Database (BankAccount, Report, EntityLink)
     - External Scam Intelligence (ScamWave)
     - Open-source Intelligence & Community Web Search
     """
-    cleaned = re.sub(r'\D', '', account_number.strip())
+    cleaned = re.sub(r'\D', '', str(account_number).strip())
+    
+    # VietQR Bank Lookup
+    matched_bank_info = None
+    if bank_name:
+        try:
+            import requests as _rq
+            from django.core.cache import cache
+            cached_banks = cache.get('vietqr_banks')
+            if not cached_banks:
+                api_url = getattr(settings, 'VIETQR_BANKS_API_URL', 'https://api.vietqr.io/v2/banks')
+                resp = _rq.get(api_url, timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    cached_banks = data.get('data', [])
+                    cache.set('vietqr_banks', cached_banks, getattr(settings, 'VIETQR_CACHE_TIMEOUT', 86400))
+            if cached_banks:
+                b_query = bank_name.strip().lower()
+                for b in cached_banks:
+                    short_n = (b.get('shortName') or '').lower()
+                    code_n = (b.get('code') or '').lower()
+                    full_n = (b.get('name') or '').lower()
+                    if b_query in short_n or b_query in code_n or short_n in b_query or b_query in full_n:
+                        matched_bank_info = {
+                            'short_name': b.get('shortName'),
+                            'code': b.get('code'),
+                            'name': b.get('name'),
+                            'bin': b.get('bin'),
+                        }
+                        break
+        except Exception as be:
+            logger.warning(f"VietQR bank lookup error: {be}")
+
     query = f"{cleaned} {bank_name}".strip()
 
     report_payload = {
         'account_number': cleaned,
         'bank_name': bank_name,
+        'matched_bank': matched_bank_info,
+        'summary': 'Chưa phát hiện dấu hiệu lừa đảo trong hệ thống',
+        'is_scam': False,
+        'risk_score': 0,
         'internal_database': {
             'found': False,
             'bank_name': bank_name,
@@ -1190,6 +1348,7 @@ def _assistant_scan_bank_account(account_number: str, bank_name: str = "") -> Di
             'scam_type': None,
         },
         'sentinel_reports': [],
+        'fraud_network': [],
         'scamwave_intel': None,
         'web_intelligence': [],
     }
@@ -1197,9 +1356,16 @@ def _assistant_scan_bank_account(account_number: str, bank_name: str = "") -> Di
     # 1. Query Internal BankAccount
     try:
         import hashlib
-        from api.core.models import BankAccount
+        from api.core.models import BankAccount, EntityLink
+        from django.db.models import Q
         acc_hash = hashlib.sha256(cleaned.encode()).hexdigest()
-        bank_obj = BankAccount.objects.filter(account_number_hash=acc_hash).first()
+        bank_qs = BankAccount.objects.filter(account_number_hash=acc_hash)
+        if bank_name:
+            specific_obj = bank_qs.filter(bank_name__icontains=bank_name).first()
+            bank_obj = specific_obj or bank_qs.first()
+        else:
+            bank_obj = bank_qs.first()
+
         if bank_obj:
             report_payload['internal_database']['found'] = True
             report_payload['internal_database']['bank_name'] = bank_obj.bank_name or bank_name
@@ -1208,6 +1374,24 @@ def _assistant_scan_bank_account(account_number: str, bank_name: str = "") -> Di
             report_payload['internal_database']['risk_score'] = bank_obj.risk_score
             report_payload['internal_database']['report_count'] = bank_obj.report_count
             report_payload['internal_database']['scam_type'] = bank_obj.scam_type
+            report_payload['risk_score'] = bank_obj.risk_score
+            report_payload['is_scam'] = (bank_obj.risk_score >= 60 or bank_obj.report_count > 0)
+            if report_payload['is_scam']:
+                report_payload['summary'] = f"Cảnh báo: Tài khoản nằm trong danh sách đen gian lận tài chính (Điểm rủi ro {bank_obj.risk_score}/100)"
+
+            links = EntityLink.objects.filter(
+                Q(from_type='account', from_entity_id=bank_obj.id) |
+                Q(to_type='account', to_entity_id=bank_obj.id)
+            )[:5]
+            for link in links:
+                other_type = link.to_type if link.from_type == 'account' else link.from_type
+                other_id = link.to_entity_id if link.from_type == 'account' else link.from_entity_id
+                report_payload['fraud_network'].append({
+                    'linked_entity_type': other_type,
+                    'linked_entity_id': other_id,
+                    'link_reason': link.link_reason,
+                    'confidence': link.confidence,
+                })
     except Exception as e:
         logger.warning(f"_assistant_scan_bank_account DB query error: {e}")
 
@@ -1220,8 +1404,14 @@ def _assistant_scan_bank_account(account_number: str, bank_name: str = "") -> Di
             Q(scammer_bank_account__icontains=cleaned)
         )
         if bank_name:
-            bank_filter |= Q(scammer_bank_name__icontains=bank_name, scammer_bank_account__icontains=cleaned)
+            bank_filter = bank_filter & (Q(scammer_bank_name__icontains=bank_name) | Q(target_value__icontains=bank_name)) | bank_filter
+
         sentinel_reps = Report.objects.filter(bank_filter).order_by('-created_at')[:5]
+        if sentinel_reps.exists():
+            report_payload['is_scam'] = True
+            report_payload['risk_score'] = max(report_payload['risk_score'], 85)
+            report_payload['summary'] = f"Phát hiện {sentinel_reps.count()} đơn tố cáo lừa đảo chuyển khoản ngân hàng"
+
         for sr in sentinel_reps:
             report_payload['sentinel_reports'].append({
                 'scam_type': sr.scam_type,
@@ -1240,6 +1430,9 @@ def _assistant_scan_bank_account(account_number: str, bank_name: str = "") -> Di
         sw = _tool_lookup_scamwave(query=query)
         if sw and sw.get('content'):
             report_payload['scamwave_intel'] = sw['content'][:2500]
+            if 'lừa đảo' in sw['content'].lower() or 'chiếm đoạt' in sw['content'].lower():
+                report_payload['is_scam'] = True
+                report_payload['risk_score'] = max(report_payload['risk_score'], 80)
     except Exception as e:
         logger.warning(f"_assistant_scan_bank_account ScamWave query error: {e}")
 
@@ -1309,17 +1502,28 @@ def _assistant_stealth_browse(url: str, inspect_security: bool = True) -> Dict[s
 
 def _assistant_query_threat_database(query: str, target_type: str = "all") -> Dict[str, Any]:
     """
-    Search Sentinel / ShieldCall VN community threat database for reports,
-    known scam targets, loss amounts, and fraud tactics.
+    Search Sentinel / ShieldCall VN threat database across:
+    - Community Reports (Report)
+    - Blacklisted Domains (Domain)
+    - High-risk Phone Numbers (PhoneNumber)
+    - Fraudulent Bank Accounts (BankAccount)
+    - Recent Scans (ScanEvent)
     """
-    from api.core.models import Report, ScanEvent
+    from api.core.models import Report, Domain, BankAccount, ScanEvent
+    from api.phone_security.models import PhoneNumber
     from django.db.models import Q
+    import hashlib
 
-    cleaned = query.strip()
+    cleaned = str(query).strip()
     result = {
         'query': cleaned,
         'matched_reports_count': 0,
         'reports': [],
+        'blacklist_matches': {
+            'domains': [],
+            'phones': [],
+            'bank_accounts': [],
+        },
         'related_scans': [],
     }
 
@@ -1366,6 +1570,53 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
                 'created_at': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
             })
 
+        # Blacklisted Domains
+        if target_type in ('all', 'domain', 'website', 'url', 'web'):
+            clean_dom = re.sub(r'^https?://', '', cleaned).split('/')[0].split(':')[0].strip().lower()
+            dom_matches = Domain.objects.filter(
+                Q(domain_name__icontains=clean_dom) | Q(scam_type__icontains=cleaned)
+            )[:5]
+            for d in dom_matches:
+                result['blacklist_matches']['domains'].append({
+                    'domain': d.domain_name,
+                    'risk_score': d.risk_score,
+                    'scam_type': d.scam_type,
+                    'report_count': d.report_count,
+                })
+
+        # High-risk Phone Numbers
+        if target_type in ('all', 'phone'):
+            phone_digits = re.sub(r'\D', '', cleaned)
+            phone_filter = Q(risk_label__icontains=cleaned)
+            if phone_digits:
+                phone_filter |= Q(phone_number__icontains=phone_digits)
+            phone_matches = PhoneNumber.objects.filter(phone_filter)[:5]
+            for p in phone_matches:
+                result['blacklist_matches']['phones'].append({
+                    'phone_number': p.phone_number,
+                    'risk_level': p.risk_level,
+                    'risk_label': p.risk_label,
+                    'carrier': p.carrier,
+                    'reports_count': p.reports_count,
+                })
+
+        # Fraudulent Bank Accounts
+        if target_type in ('all', 'bank', 'bank_account', 'account'):
+            acc_digits = re.sub(r'\D', '', cleaned)
+            acc_filter = Q(bank_name__icontains=cleaned)
+            if acc_digits:
+                acc_hash = hashlib.sha256(acc_digits.encode()).hexdigest()
+                acc_filter |= Q(account_number_hash=acc_hash)
+            bank_matches = BankAccount.objects.filter(acc_filter)[:5]
+            for b in bank_matches:
+                result['blacklist_matches']['bank_accounts'].append({
+                    'bank_name': b.bank_name,
+                    'masked_account': b.account_number_masked,
+                    'risk_score': b.risk_score,
+                    'scam_type': b.scam_type,
+                    'report_count': b.report_count,
+                })
+
         scans = ScanEvent.objects.filter(raw_input__icontains=cleaned).order_by('-created_at')[:5]
         for s in scans:
             result['related_scans'].append({
@@ -1379,6 +1630,68 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
         logger.warning(f"_assistant_query_threat_database error: {e}")
 
     return result
+
+
+def _assistant_lookup_company(query: str) -> Dict[str, Any]:
+    """
+    Search Vietnamese company registry (TraTenCongTy) for MST, company name,
+    legal representative, business address, and operating status.
+    """
+    res = lookup_tratencongty(query)
+    if not res:
+        return {
+            'query': query,
+            'found': False,
+            'summary': f"Không thể tra cứu thông tin doanh nghiệp cho '{query}'.",
+            'content': "Không có kết nối hoặc không tìm thấy dữ liệu.",
+            'links': [],
+        }
+    content = res.get('content', '')
+    found = bool(content and 'Không tìm thấy' not in content)
+    return {
+        'query': query,
+        'found': found,
+        'summary': f"Đã tìm thấy thông tin đăng ký doanh nghiệp cho '{query}'" if found else f"Không tìm thấy doanh nghiệp khớp '{query}'",
+        'content': content,
+        'links': res.get('links', []),
+    }
+
+
+def _assistant_get_latest_threat_trends(limit: int = 5) -> Dict[str, Any]:
+    """
+    Fetch the latest scam tactics and threat trends from TrendDaily and approved Reports.
+    """
+    from api.core.models import TrendDaily, Report
+    trends_payload = {
+        'count': 0,
+        'trends': [],
+        'recent_high_severity_reports': [],
+    }
+    try:
+        parsed_limit = max(1, min(10, int(limit or 5)))
+        recent_trends = TrendDaily.objects.all().order_by('-date')[:parsed_limit]
+        for t in recent_trends:
+            trends_payload['trends'].append({
+                'date': t.date.strftime('%d/%m/%Y') if t.date else '',
+                'scam_type': t.scam_type,
+                'region': t.region,
+                'cases_count': t.count,
+            })
+
+        high_reps = Report.objects.filter(severity__in=['high', 'critical', 'HIGH', 'CRITICAL']).order_by('-created_at')[:parsed_limit]
+        for r in high_reps:
+            trends_payload['recent_high_severity_reports'].append({
+                'scam_type': r.scam_type,
+                'target_type': r.target_type,
+                'severity': r.severity,
+                'description': r.description[:300] if r.description else '',
+                'date': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
+            })
+        trends_payload['count'] = len(trends_payload['trends']) + len(trends_payload['recent_high_severity_reports'])
+    except Exception as e:
+        logger.warning(f"_assistant_get_latest_threat_trends error: {e}")
+
+    return trends_payload
 
 
 def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None, debug: bool = False) -> Generator[str, None, None]:
@@ -1399,6 +1712,8 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
         'scan_bank_account': _assistant_scan_bank_account,
         'stealth_browse': _assistant_stealth_browse,
         'query_threat_database': _assistant_query_threat_database,
+        'lookup_company': _assistant_lookup_company,
+        'get_latest_threat_trends': _assistant_get_latest_threat_trends,
     }
     all_dispatch.update(tool_dispatch)
 
@@ -1482,30 +1797,46 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                     break
 
                 # Handle Tool Calls
-                messages.append({'role': 'assistant', 'content': "".join(current_content), 'tool_calls': current_tool_calls})
-                
                 serializable_calls = []
                 for tc in current_tool_calls:
-                    tool_name = tc.function.name
-                    args = tc.function.arguments or {}
-                    
+                    if isinstance(tc, dict):
+                        serializable_calls.append(tc)
+                    else:
+                        fn = getattr(tc, 'function', None)
+                        if fn:
+                            serializable_calls.append({
+                                'function': {
+                                    'name': getattr(fn, 'name', ''),
+                                    'arguments': dict(getattr(fn, 'arguments', {}) or {}),
+                                }
+                            })
+
+                messages.append({
+                    'role': 'assistant',
+                    'content': "".join(current_content),
+                    'tool_calls': serializable_calls
+                })
+
+                yield f"__TOOL_CALLS__:{json.dumps(serializable_calls, ensure_ascii=False)}"
+
+                for call_dict in serializable_calls:
+                    fn_data = call_dict.get('function', {})
+                    tool_name = fn_data.get('name', '')
+                    args = fn_data.get('arguments', {}) or {}
+
                     # Yield marker for UI
                     yield f"__STATUS__:executing_tool:{tool_name}"
-                    
-                    serializable_calls.append({
-                        'function': {'name': tool_name, 'arguments': args}
-                    })
 
                     # Execute
                     tool_func = all_dispatch.get(tool_name)
                     if tool_func:
                         try:
                             result = tool_func(**args)
-                            
+
                             # Special handling for search results to show in UI
                             if tool_name == 'web_search' and isinstance(result, list):
-                                yield f"__SEARCH_RESULTS__:{json.dumps(result)}"
-                            
+                                yield f"__SEARCH_RESULTS__:{json.dumps(result, ensure_ascii=False)}"
+
                             if result is None:
                                 result_str = "Không có kết quả."
                             elif isinstance(result, (dict, list)):
@@ -1516,8 +1847,10 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                                 result_str = str(result)[:8000]
                         except Exception as e:
                             logger.error(f"Tool {tool_name} execution error: {e}")
+                            result = {'error': str(e)}
                             result_str = f"Lỗi khi thực thi công cụ: {str(e)}"
                     else:
+                        result = {'error': f"Tool '{tool_name}' not found."}
                         result_str = f"Tool '{tool_name}' not found."
 
                     messages.append({
@@ -1526,9 +1859,8 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         'tool_name': tool_name
                     })
 
-                    yield f"__TOOL_RESULT__:{json.dumps({'tool': tool_name, 'status': 'done', 'summary': result_str[:250]})}"
+                    yield f"__TOOL_RESULT__:{json.dumps({'tool': tool_name, 'status': 'done', 'args': args, 'result': result}, ensure_ascii=False)}"
 
-                yield f"__TOOL_CALLS__:{json.dumps(serializable_calls)}"
                 iteration += 1
                 continue
 

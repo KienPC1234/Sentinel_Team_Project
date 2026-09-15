@@ -558,7 +558,14 @@ def forum_report_action(request, report_type, report_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-    action = request.POST.get('action') or json.loads(request.body).get('action') if request.body else None
+    action = request.POST.get('action')
+    if not action and request.body:
+        try:
+            body_data = json.loads(request.body)
+            if isinstance(body_data, dict):
+                action = body_data.get('action')
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            action = None
     if not action:
         return JsonResponse({'error': 'Missing action'}, status=400)
 
@@ -621,7 +628,14 @@ def forum_post_admin_action(request, post_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-    action = request.POST.get('action') or json.loads(request.body).get('action') if request.body else None
+    action = request.POST.get('action')
+    if not action and request.body:
+        try:
+            body_data = json.loads(request.body)
+            if isinstance(body_data, dict):
+                action = body_data.get('action')
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            action = None
     try:
         post = ForumPost.objects.get(id=post_id)
 
@@ -835,21 +849,20 @@ def approve_report(request, report_id):
     """Approve a community report"""
     report = get_object_or_404(Report, id=report_id)
     report.status = 'approved'
-    report.is_resolved = True
-    report.save()
+    report.moderator = request.user
+    report.save(update_fields=['status', 'moderator'])
     
-    # Notify user via email
-    from api.utils.email_utils import send_report_outcome_email
-    send_report_outcome_email(report.reporter, "website/tài khoản", report.target_value, 'approved')
-
-    # Notify user via push notification + WebSocket
+    # Notify user via email & push notification if registered
     if report.reporter:
+        from api.utils.email_utils import send_report_outcome_email
+        send_report_outcome_email(report.reporter, "website/tài khoản", report.target_value, 'approved')
+
         from api.utils.push_service import push_service
         push_service.send_push(
             report.reporter.id,
             'Báo cáo đã được chấp thuận',
             f'Báo cáo #{report_id} về {report.target_value} đã được chấp thuận. Cảm ơn bạn đã góp phần bảo vệ cộng đồng!',
-            url=f'/my-reports/',
+            url='/my-reports/',
             notification_type='success'
         )
     
@@ -861,21 +874,20 @@ def reject_report(request, report_id):
     """Reject a community report"""
     report = get_object_or_404(Report, id=report_id)
     report.status = 'rejected'
-    report.is_resolved = True
-    report.save()
+    report.moderator = request.user
+    report.save(update_fields=['status', 'moderator'])
     
-    # Notify user via email
-    from api.utils.email_utils import send_report_outcome_email
-    send_report_outcome_email(report.reporter, "website/tài khoản", report.target_value, 'rejected')
-
-    # Notify user via push notification + WebSocket
+    # Notify user via email & push notification if registered
     if report.reporter:
+        from api.utils.email_utils import send_report_outcome_email
+        send_report_outcome_email(report.reporter, "website/tài khoản", report.target_value, 'rejected')
+
         from api.utils.push_service import push_service
         push_service.send_push(
             report.reporter.id,
             'Báo cáo đã bị từ chối',
             f'Báo cáo #{report_id} về {report.target_value} đã bị từ chối. Vui lòng kiểm tra lại thông tin.',
-            url=f'/my-reports/',
+            url='/my-reports/',
             notification_type='warning'
         )
     

@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema, OpenApiParameter
+from api.utils.normalization import normalize_phone
 from .models import PhoneNumber, PhoneRiskLevel
 from .serializers import PhoneCheckResponseSerializer
 
@@ -24,7 +25,7 @@ class CheckPhoneView(APIView):
                 'error': 'phone parameter is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        normalized_phone = ''.join(c for c in phone if c.isdigit() or c.startswith('+'))
+        normalized_phone = normalize_phone(phone)
         
         cache_key = f'phone_risk:{normalized_phone}'
         cached_result = cache.get(cache_key)

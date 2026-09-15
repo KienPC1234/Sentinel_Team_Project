@@ -435,7 +435,7 @@ def send_report_outcome_email(user, report_type, target, status, reason=None):
     """
     Sends an email to the reporter about the outcome of their report.
     """
-    if not user.email:
+    if not user or not getattr(user, 'email', None):
         return
 
     subject = f"[ShieldCall VN] Kết quả xử lý báo cáo {report_type}"

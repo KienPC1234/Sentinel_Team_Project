@@ -52,3 +52,23 @@ def rebuild_vector_index(self, trigger='MANUAL'):
         
         push_service.send_rag_status_update('FAILED', f'Lỗi rebuild: {str(e)}', error=str(e))
         return f"Index rebuild failed: {str(e)}"
+
+
+@shared_task(name="api.maintenance.tasks.sync_threat_intelligence", bind=True)
+def sync_threat_intelligence(self, limit_per_feed=10000, sources=None, batch_size=2000):
+    """
+    Celery task to ingest and synchronize malicious domains and phishing feeds.
+    Runs daily via Celery Beat or triggered on-demand.
+    """
+    logger.info(f"[ThreatIntel-TASK] Started (task_id={self.request.id})")
+    try:
+        from .threat_feeds import sync_threat_feeds
+        stats = sync_threat_feeds(limit_per_feed=limit_per_feed, sources=sources, batch_size=batch_size)
+        logger.info(
+            f"[ThreatIntel-TASK] COMPLETED: {stats.get('total_saved', 0)} domains upserted in {stats.get('duration_seconds', 0)}s"
+        )
+        return stats
+    except Exception as e:
+        logger.error(f"[ThreatIntel-TASK] FAILED: {e}", exc_info=True)
+        return {"status": "FAILED", "error": str(e)}
+
