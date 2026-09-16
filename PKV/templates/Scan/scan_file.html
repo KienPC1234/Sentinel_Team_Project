@@ -47,27 +47,51 @@
     margin: 1rem 0;
 }
 .ai-markdown table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.825rem;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 0.75rem;
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 100% !important;
+    display: table !important;
+    table-layout: auto !important;
+    border-collapse: collapse !important;
+    margin: 1.25rem 0 !important;
+    font-size: 0.85rem !important;
+    background: rgba(0, 0, 0, 0.35) !important;
+    border-radius: 0.75rem !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
 }
 .ai-markdown th, .ai-markdown td {
-    padding: 0.6rem 0.85rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    text-align: left;
+    padding: 0.75rem 1rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    text-align: left !important;
+    white-space: normal !important;
+    word-break: break-word !important;
 }
 .ai-markdown th {
-    background: rgba(244, 114, 182, 0.1);
-    color: #f472b6;
-    font-weight: 700;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
+    background: rgba(244, 114, 182, 0.12) !important;
+    color: #f472b6 !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    font-size: 0.75rem !important;
+    letter-spacing: 0.05em !important;
+}
+.ai-markdown td:first-child, .ai-markdown th:first-child {
+    width: 25% !important;
+    min-width: 130px !important;
+    font-weight: 600 !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    white-space: nowrap !important;
+}
+.ai-markdown td:last-child, .ai-markdown th:last-child {
+    width: 75% !important;
+}
+.ai-markdown code {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #38bdf8 !important;
+    padding: 0.15rem 0.4rem !important;
+    border-radius: 0.35rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.8rem !important;
+    word-break: break-all !important;
 }
 .ai-markdown blockquote {
     border-left: 3px solid #f472b6;
@@ -80,7 +104,8 @@
 }
 </style>
 
-<div class="min-h-screen py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto" x-data="fileScanHandler()">
+<div class="max-w-7xl mx-auto px-4 py-8 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start" x-data="fileScanHandler()">
+    <div class="space-y-8 min-w-0">
     <!-- Header -->
     <div class="text-center mb-10" data-aos="fade-down">
         <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink-500/10 border border-pink-500/20 text-pink-400 text-xs font-black uppercase tracking-widest mb-4">
@@ -344,8 +369,9 @@
             </div>
         </div>
     </template>
+    </div>
+    {% include 'Scan/_scan_guide.html' with scan_type='file' %}
 </div>
-{% include 'Scan/_scan_guide.html' with scan_type='file' %}
 
 
 <script>
@@ -563,29 +589,69 @@ function fileScanHandler() {
 
         startPolling() {
             let dots = 0;
+            let pollAttempts = 0;
+            let consecutiveFailures = 0;
+            const maxPollAttempts = 60; // 60 * 1.5s = 90s max wait time
+
+            if (this.statusInterval) clearInterval(this.statusInterval);
+
             this.statusInterval = setInterval(async () => {
+                pollAttempts++;
+                if (pollAttempts > maxPollAttempts) {
+                    clearInterval(this.statusInterval);
+                    window.showToast('Quá trình phân tích tệp tin vượt quá thời gian chờ (90s). Vui lòng thử lại.', 'warning');
+                    this.reset();
+                    return;
+                }
+
                 try {
-                    const resp = await fetch(`/api/v1/scan/status/${this.scanId}/`);
+                    const resp = await fetch(`/api/v1/scan/status/${this.scanId}/`, {
+                        method: 'GET',
+                        headers: { 'X-CSRFToken': getCSRFToken() },
+                        credentials: 'same-origin'
+                    });
+
+                    if (!resp.ok) {
+                        consecutiveFailures++;
+                        if (consecutiveFailures >= 5) {
+                            clearInterval(this.statusInterval);
+                            const errMsg = resp.status === 404 
+                                ? 'Không tìm thấy phiên quét tệp tin trên máy chủ.'
+                                : `Máy chủ phản hồi lỗi (${resp.status}) khi kiểm tra trạng thái file.`;
+                            window.showToast(errMsg, 'error');
+                            this.reset();
+                        }
+                        return;
+                    }
+
+                    consecutiveFailures = 0;
                     const data = await resp.json();
                     
                     if (data.status === 'completed') {
                         this.progress = 100;
-                        this.result = data.result;
+                        this.result = data.result || {};
                         this.scanning = false;
                         clearInterval(this.statusInterval);
                         
                         // Auto-start AI Deep Analysis streaming for user
                         this.startAIAnalysis();
                     } else if (data.status === 'failed') {
-                        window.showToast('Hệ thống gặp lỗi khi phân tích file.', 'error');
+                        clearInterval(this.statusInterval);
+                        window.showToast('Hệ thống gặp lỗi trong quá trình quét mã độc.', 'error');
                         this.reset();
                     } else {
-                        if (this.progress < 90) this.progress += 3;
+                        if (this.progress < 90) this.progress += 2;
                         dots = (dots + 1) % 4;
                         this.statusMsg = 'Hệ thống đang kiểm tra an toàn' + '.'.repeat(dots);
                     }
                 } catch (e) {
                     console.error('Polling error', e);
+                    consecutiveFailures++;
+                    if (consecutiveFailures >= 6) {
+                        clearInterval(this.statusInterval);
+                        window.showToast('Lỗi kết nối máy chủ trong lúc chờ kết quả quét file.', 'error');
+                        this.reset();
+                    }
                 }
             }, 1500);
         },
@@ -602,6 +668,7 @@ function fileScanHandler() {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': getCSRFToken()
                     },
+                    credentials: 'same-origin',
                     body: JSON.stringify({
                         scan_id: this.scanId,
                         scan_type: 'file',

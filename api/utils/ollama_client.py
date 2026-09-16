@@ -36,8 +36,8 @@ SEARXNG_API_KEY = getattr(settings, 'SEARXNG_API_KEY', os.getenv('SEARXNG_API_KE
 # Mirror OLLAMA_API_KEY into the environment for any ollama library internals
 if OLLAMA_API_KEY:
     os.environ.setdefault('OLLAMA_API_KEY', OLLAMA_API_KEY)
-DEFAULT_MODEL = getattr(settings, 'LLM_MODEL', 'deepseek-flash' if LLM_PROVIDER == 'openai' else 'neural-chat')
-SMALL_MODEL = getattr(settings, 'SMALL_MODEL', DEFAULT_MODEL)
+DEFAULT_MODEL = getattr(settings, 'LLM_MODEL', 'deepseek-v4.1-flash:cloud')
+SMALL_MODEL = getattr(settings, 'SMALL_MODEL', 'gemma4:31b-cloud')
 LLM_TEMPERATURE = getattr(settings, 'LLM_TEMPERATURE', 0.3)
 LLM_MAX_TOKENS = getattr(settings, 'LLM_MAX_TOKENS', 16384)
 DEBUG_LLM = getattr(settings, 'DEBUG_LLM', True)  # Default True for ShieldCall Debugging
@@ -741,13 +741,15 @@ def _log_llm(prompt: str, response: str, system_prompt: str = None):
     
 def filter_thinking(text: str) -> str:
     """
-    Removes igid blocks from model responses.
+    Removes <think> blocks from model responses.
     Used for reasoning-capable models like DeepSeek.
     """
     if not text:
         return ""
-    # Remove content between igid and igid tags
-    return re.sub(r'igid.*?igid', '', text, flags=re.DOTALL).strip()
+    # Remove content between <think> and </think> tags
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    cleaned = re.sub(r'<think>.*', '', cleaned, flags=re.DOTALL)
+    return cleaned.strip()
 
 
 def filter_hallucinations(text: str) -> str:

@@ -158,6 +158,118 @@
         background: #11152b;
         color: #f8fafc;
     }
+
+    /* Global Callout Boxes & Markdown Alert Containers */
+    .callout-box,
+    .markdown-content .callout-box,
+    .ai-markdown .callout-box,
+    div[class*="callout-"],
+    .markdown-content div[style*="background"],
+    .ai-markdown div[style*="background"] {
+        display: block !important;
+        margin-top: 1.15rem !important;
+        margin-bottom: 1.15rem !important;
+        padding: 1.1rem 1.35rem !important;
+        border-radius: 12px !important;
+        line-height: 1.65 !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+        backdrop-filter: blur(8px) !important;
+    }
+
+    /* Adjacent callouts spacing */
+    .callout-box + .callout-box,
+    .markdown-content .callout-box + .callout-box,
+    .ai-markdown .callout-box + .callout-box,
+    .markdown-content div[style*="background"] + div[style*="background"],
+    .ai-markdown div[style*="background"] + div[style*="background"],
+    .markdown-content .callout-box + div[style*="background"],
+    .markdown-content div[style*="background"] + .callout-box,
+    .ai-markdown .callout-box + div[style*="background"],
+    .ai-markdown div[style*="background"] + .callout-box {
+        margin-top: 1.25rem !important;
+    }
+
+    /* Separation when callout is followed by lists, paragraphs, tables */
+    .callout-box + ul,
+    .callout-box + ol,
+    .markdown-content .callout-box + ul,
+    .markdown-content .callout-box + ol,
+    .ai-markdown .callout-box + ul,
+    .ai-markdown .callout-box + ol,
+    .markdown-content div[style*="background"] + ul,
+    .markdown-content div[style*="background"] + ol,
+    .ai-markdown div[style*="background"] + ul,
+    .ai-markdown div[style*="background"] + ol {
+        margin-top: 1.25rem !important;
+    }
+
+    .callout-box + p,
+    .markdown-content .callout-box + p,
+    .ai-markdown .callout-box + p,
+    .markdown-content div[style*="background"] + p,
+    .ai-markdown div[style*="background"] + p {
+        margin-top: 1.15rem !important;
+    }
+
+    /* Color themes */
+    .callout-safe,
+    .markdown-content .callout-safe,
+    .ai-markdown .callout-safe,
+    .markdown-content div[style*="34, 197, 94"],
+    .markdown-content div[style*="34,197,94"],
+    .ai-markdown div[style*="34, 197, 94"],
+    .ai-markdown div[style*="34,197,94"] {
+        background: rgba(34, 197, 94, 0.14) !important;
+        border: 1px solid rgba(34, 197, 94, 0.35) !important;
+        color: #dcfce7 !important;
+    }
+    .callout-safe strong,
+    .markdown-content .callout-safe strong,
+    .ai-markdown .callout-safe strong,
+    .markdown-content div[style*="34, 197, 94"] strong,
+    .ai-markdown div[style*="34, 197, 94"] strong {
+        color: #4ade80 !important;
+    }
+
+    .callout-danger,
+    .markdown-content .callout-danger,
+    .ai-markdown .callout-danger,
+    .markdown-content div[style*="239, 68, 68"],
+    .markdown-content div[style*="239,68,68"],
+    .ai-markdown div[style*="239, 68, 68"],
+    .ai-markdown div[style*="239,68,68"] {
+        background: rgba(239, 68, 68, 0.14) !important;
+        border: 1px solid rgba(239, 68, 68, 0.35) !important;
+        color: #fee2e2 !important;
+    }
+    .callout-danger strong,
+    .markdown-content .callout-danger strong,
+    .ai-markdown .callout-danger strong,
+    .markdown-content div[style*="239, 68, 68"] strong,
+    .ai-markdown div[style*="239, 68, 68"] strong {
+        color: #f87171 !important;
+    }
+
+    .callout-warning,
+    .markdown-content .callout-warning,
+    .ai-markdown .callout-warning,
+    .markdown-content div[style*="234, 179, 8"],
+    .markdown-content div[style*="234,179,8"],
+    .ai-markdown div[style*="234, 179, 8"],
+    .ai-markdown div[style*="234,179,8"] {
+        background: rgba(234, 179, 8, 0.14) !important;
+        border: 1px solid rgba(234, 179, 8, 0.35) !important;
+        color: #fef9c3 !important;
+    }
+    .callout-warning strong,
+    .markdown-content .callout-warning strong,
+    .ai-markdown .callout-warning strong,
+    .markdown-content div[style*="234, 179, 8"] strong,
+    .ai-markdown div[style*="234, 179, 8"] strong {
+        color: #facc15 !important;
+    }
     </style>
 
     {% tailwind_css %}
@@ -686,6 +798,48 @@
             cleanText = cleanText.replace(/background\s*:\s*(?:#d4edda|rgb\(212,\s*237,\s*218\))/gi, 'background:rgba(34,197,94,0.14);color:#dcfce7;border-color:rgba(34,197,94,0.35)');
             cleanText = cleanText.replace(/background\s*:\s*(?:#f8d7da|rgb\(248,\s*215,\s*218\))/gi, 'background:rgba(239,68,68,0.14);color:#fee2e2;border-color:rgba(239,68,68,0.35)');
             cleanText = cleanText.replace(/background\s*:\s*(?:#fff3cd|rgb\(255,\s*243,\s*205\))/gi, 'background:rgba(234,179,8,0.14);color:#fef9c3;border-color:rgba(234,179,8,0.35)');
+
+            // Normalize unicode bullet points into standard markdown lists
+            cleanText = cleanText.replace(/^[ \t]*[•●◆▪]\s*/gm, '- ');
+
+            // Ensure distinct spacing before and after callout <div> blocks for Markdown parser
+            cleanText = cleanText.replace(/<\/div>\s*(?:<br\s*\/?>\s*)*<div/gi, '</div>\n\n<div');
+            cleanText = cleanText.replace(/(<\/div>)\s*([A-Za-z0-9\u00C0-\u024F\u1EA0-\u1EF9#*•\-\+])/gi, '$1\n\n$2');
+
+            // Standardize callout box markup, inject classes and guarantee comfortable spacing
+            cleanText = cleanText.replace(/<div\s+([^>]*?(?:style=["'][^"']*(?:background|border)[^"']*["']|class=["'][^"']*callout[^"']*["'])[^>]*)>/gi, function(match, attrStr) {
+                let calloutType = 'callout-safe';
+                if (/239\s*,\s*68\s*,\s*68|f8d7da|fee2e2|danger|red/i.test(attrStr)) {
+                    calloutType = 'callout-danger';
+                } else if (/234\s*,\s*179\s*,\s*8|fff3cd|fef9c3|warning|amber|yellow/i.test(attrStr)) {
+                    calloutType = 'callout-warning';
+                } else if (/34\s*,\s*197\s*,\s*94|d4edda|dcfce7|safe|green/i.test(attrStr)) {
+                    calloutType = 'callout-safe';
+                }
+
+                let updatedAttr = attrStr;
+                if (/class=["']([^"']*)["']/i.test(updatedAttr)) {
+                    updatedAttr = updatedAttr.replace(/class=["']([^"']*)["']/i, function(_, existingClass) {
+                        const classes = existingClass.split(/\s+/).filter(Boolean);
+                        if (!classes.includes('callout-box')) classes.push('callout-box');
+                        if (!classes.includes(calloutType)) classes.push(calloutType);
+                        return `class="${classes.join(' ')}"`;
+                    });
+                } else {
+                    updatedAttr = `class="callout-box ${calloutType}" ${updatedAttr}`;
+                }
+
+                if (/style=["']([^"']*)["']/i.test(updatedAttr)) {
+                    updatedAttr = updatedAttr.replace(/style=["']([^"']*)["']/i, function(_, existingStyle) {
+                        let s = existingStyle;
+                        if (!/margin/i.test(s)) {
+                            s += ';margin:16px 0;';
+                        }
+                        return `style="${s}"`;
+                    });
+                }
+                return `<div ${updatedAttr}>`;
+            });
 
             cleanText = cleanText.trim();
             if (!cleanText) return '';
@@ -1792,7 +1946,7 @@
 
         (function showConsoleSafetyWarning() {
             try {
-                console.log('%c[CANH BAO BAO MAT]', 'color:#ff0000;font-size:48px;font-weight:900;line-height:1.2;');
+                console.log('%c[CẢNH BÁO BẢO MẬT]', 'color:#ff0000;font-size:48px;font-weight:900;line-height:1.2;');
                 console.log('%cĐÂY LÀ BẢNG ĐIỀU KHIỂN CHO DEVELOPER.', 'color:#ff3b30;font-size:20px;font-weight:800;');
                 console.log('%cKHÔNG ĐƯỢC PHÉP PASTE CODE VÀO ĐÂY. ĐỪNG TIN BẤT KỲ AI BẢO BẠN DÁN LỆNH VÀO CONSOLE.', 'color:#ff3b30;font-size:16px;font-weight:700;');
                 console.log('%cNếu bạn paste code vào đây, tài khoản hoặc dữ liệu có thể bị đánh cắp. Nếu có sự cố do tự paste mã lệnh, chúng tôi không chịu trách nhiệm.', 'color:#ff6b6b;font-size:14px;font-weight:700;');

@@ -427,15 +427,15 @@ def _notify_scan_complete(scan_event, title_suffix=''):
         risk_score = getattr(scan_event, 'risk_score', 0)
 
         level_labels = {
-            'RED': '[Nguy hiem] Cao',
-            'YELLOW': '[Canh bao] Trung binh',
-            'GREEN': '[An toan] Thap',
-            'SAFE': '[An toan] Thap',
+            'RED': '[Nguy hiểm] Cao',
+            'YELLOW': '[Cảnh báo] Trung bình',
+            'GREEN': '[An toàn] Thấp',
+            'SAFE': '[An toàn] Thấp',
         }
-        level_text = level_labels.get(risk_level, '[An toan] Thap')
+        level_text = level_labels.get(risk_level, '[An toàn] Thấp')
 
-        title = f"Ket qua quet: {level_text}"
-        message = f"{title_suffix} - Diem rui ro: {risk_score}/100"
+        title = f"Kết quả quét: {level_text}"
+        message = f"{title_suffix} - Điểm rủi ro: {risk_score}/100"
         url = f"/scan/status/{scan_event.id}/" if hasattr(scan_event, 'id') else None
 
         push_service.send_push(
@@ -456,7 +456,6 @@ def perform_scan_task(self, scan_event_id):
     Unified background task to perform scanning logic (phone, message, domain, email).
     """
     from api.core.models import ScanEvent, ScanStatus, RiskLevel
-    from api.utils.vt_client import VTClient
     from api.utils.ollama_client import analyze_text_for_scam
     from api.core.views.scan_views import _phone_risk_score, _analyze_message_text, _analyze_domain
     
@@ -1554,7 +1553,6 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
     """
     from api.core.models import ScanEvent, ScanStatus, RiskLevel
     from api.utils.ollama_client import analyze_text_for_scam
-    # from api.utils.vt_client import VTClient # Uncomment if VT is ready
 
     if urls is None: urls = []
 
@@ -2157,8 +2155,10 @@ def perform_file_scan_task(self, scan_event_id, file_path):
         scan_event.save()
 
         file_name = os.path.basename(file_path)
+        prefix = f"{scan_event_id}_"
+        display_name = file_name[len(prefix):] if file_name.startswith(prefix) else file_name
         file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-        logger.info(f"[FileScan] Event {scan_event_id}: START — file='{file_name}', size={file_size} bytes")
+        logger.info(f"[FileScan] Event {scan_event_id}: START — file='{display_name}', size={file_size} bytes")
 
         # Scan with Local Threat Engine & ClamAV Sandbox (100% on-premise)
         logger.info(f"[FileScan] Event {scan_event_id}: Scanning with Local Zero-Trust Sandbox...")
@@ -2200,7 +2200,7 @@ def perform_file_scan_task(self, scan_event_id, file_path):
                 details.append("Không phát hiện chữ ký độc hại hay cấu trúc bất thường.")
 
             scan_event.result_json = {
-                'file_name': file_name,
+                'file_name': display_name,
                 'file_size': file_size,
                 'malicious': malicious,
                 'suspicious': suspicious,
@@ -2227,7 +2227,7 @@ def perform_file_scan_task(self, scan_event_id, file_path):
         else:
             logger.warning(f"[FileScan] Event {scan_event_id}: Sandbox returned no result after {elapsed:.1f}s")
             scan_event.result_json = {
-                'file_name': file_name,
+                'file_name': display_name,
                 'file_size': file_size,
                 'risk_score': 0,
                 'risk_level': RiskLevel.GREEN,
@@ -2243,7 +2243,7 @@ def perform_file_scan_task(self, scan_event_id, file_path):
         logger.info(f"[FileScan] Event {scan_event_id}: COMPLETED in {total_time:.1f}s. Risk: {scan_event.risk_level}, Score: {scan_event.risk_score}")
 
         # Send push notification to user
-        _notify_scan_complete(scan_event, f"Quét file '{file_name}' hoàn tất")
+        _notify_scan_complete(scan_event, f"Quét file '{display_name}' hoàn tất")
 
     except ScanEvent.DoesNotExist:
         logger.error(f"[FileScan] ScanEvent #{scan_event_id} not found.")

@@ -188,18 +188,18 @@ SOCIALACCOUNT_PROVIDERS = {
     },
 }
 
-# LLM / AI Configuration (Supports OpenAI-compatible APIs e.g. DeepSeek, OpenAI, vLLM, Ollama)
-LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'openai')  # 'openai' or 'ollama'
+# LLM / AI Configuration (Ollama on localhost:11434 & optional OpenAI-compatible APIs)
+LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'ollama')  # 'ollama' or 'openai'
+OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+OLLAMA_API_KEY = os.getenv('OLLAMA_API_KEY', '')
+LLM_MODEL = os.getenv('LLM_MODEL', 'deepseek-v4.1-flash:cloud')
+SMALL_MODEL = os.getenv('SMALL_MODEL', 'gemma4:31b-cloud')
+LLM_TEMPERATURE = 0.3
+LLM_MAX_TOKENS = 16384
+
+# OpenAI-compatible API Fallback
 OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://api.deepseek.com')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
-LLM_MODEL = os.getenv('LLM_MODEL', 'deepseek-flash')
-SMALL_MODEL = os.getenv('SMALL_MODEL', 'deepseek-flash')
-LLM_TEMPERATURE = 0.3
-LLM_MAX_TOKENS = 4096
-
-# Ollama Legacy / Fallback
-OLLAMA_BASE_URL = 'http://localhost:11434'
-OLLAMA_API_KEY = ''
 
 # Optional: local Node Puppeteer host used by web-scan fallback
 PUPPETEER_HOST_URL = os.getenv('PUPPETEER_HOST_URL', 'http://127.0.0.1:3010/render')

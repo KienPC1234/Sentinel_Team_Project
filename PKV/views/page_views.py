@@ -196,11 +196,18 @@ def scan_lookup_view(request):
 def scan_status_view(request, scan_id):
     """Display scan result page for /scan/status/<id>/."""
     scan = get_object_or_404(ScanEvent, id=scan_id)
+    active_scans = request.session.get('active_scan_ids', [])
+    is_in_session = (
+        scan_id in active_scans 
+        or str(scan_id) in [str(x) for x in active_scans]
+    )
     can_view = bool(
         scan.user_id is None
         or request.user.is_staff
         or (request.user.is_authenticated and scan.user_id == request.user.id)
         or scan.is_public_referable
+        or is_in_session
+        or (scan.status in (ScanStatus.PENDING, ScanStatus.PROCESSING))
     )
     if not can_view:
         raise Http404("Scan không tồn tại")

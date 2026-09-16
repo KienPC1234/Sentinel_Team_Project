@@ -1733,6 +1733,14 @@ class ScanFileView(APIView):
         from api.core.tasks import perform_file_scan_task
         try:
             perform_file_scan_task.delay(scan_event.id, file_path)
+
+            # Store scan ID in session so the creator can always poll it securely
+            active_scans = request.session.get('active_scan_ids', [])
+            if scan_event.id not in active_scans:
+                active_scans.append(scan_event.id)
+                request.session['active_scan_ids'] = active_scans[-30:]
+                request.session.modified = True
+
             return Response({
                 'scan_id': scan_event.id,
                 'status': scan_event.status,
@@ -1835,14 +1843,29 @@ class ScanStatusView(APIView):
         from api.core.models import ScanEvent, ScanStatus
         try:
             event = ScanEvent.objects.get(id=scan_id)
+            active_scans = request.session.get('active_scan_ids', [])
+            is_in_session = (
+                scan_id in active_scans 
+                or str(scan_id) in [str(x) for x in active_scans]
+            )
+
+            # Allow access if:
+            # 1. Anonymous scan (no user attached)
+            # 2. Staff / Admin
+            # 3. Authenticated owner of the scan
+            # 4. Creator within active session
+            # 5. Publicly referable
+            # 6. Actively running scan (PENDING / PROCESSING)
             can_view = bool(
                 event.user_id is None
                 or request.user.is_staff
                 or (request.user.is_authenticated and event.user_id == request.user.id)
                 or event.is_public_referable
+                or is_in_session
+                or (event.status in (ScanStatus.PENDING, ScanStatus.PROCESSING))
             )
             if not can_view:
-                return Response({'error': 'Không tìm thấy kết quả scan.'}, status=404)
+                return Response({'error': 'Bạn không có quyền truy cập kết quả quét này.'}, status=status.HTTP_403_FORBIDDEN)
 
             if event.status == ScanStatus.COMPLETED:
                 _document_scan_for_admin(event)
@@ -1855,7 +1878,7 @@ class ScanStatusView(APIView):
                 'result': event.result_json if event.status == ScanStatus.COMPLETED else None
             })
         except ScanEvent.DoesNotExist:
-            return Response({'error': 'Scan không tồn tại.'}, status=404)
+            return Response({'error': 'Scan không tồn tại.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class ScanReportAdminView(APIView):

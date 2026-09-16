@@ -1309,39 +1309,41 @@ function mcpGuideApp() {
         playgroundBank: 'MB',
         playgroundAccount: '0987654321',
         playgroundUrl: 'http://dichvucong-vn.top',
-        playgroundMessage: 'Ngan hang MBBank thong bao tai khoan cua quy khach bi phong toa. Vui long truy cap link http://dichvucong-vn.top hoac gui ma OTP de xac minh.',
+        playgroundMessage: 'Ngân hàng MBBank thông báo tài khoản của quý khách bị phong tỏa. Vui lòng truy cập link http://dichvucong-vn.top hoặc gửi mã OTP để xác minh.',
         playgroundEmail: 'support@dichvucong-vn.top',
         playgroundLoading: false,
         playgroundResult: null,
         playgroundLatency: 0,
         playgroundError: null,
 
-        promptSentry: `Bạn là ShieldCall Sentry - Trợ lý Giám sát An toàn Số và Phòng chống Lừa đảo hàng đầu Việt Nam, tích hợp cơ sở dữ liệu quốc gia từ hệ thống ShieldCall VN.
+        promptSentry: `You are ShieldCall Sentry, an automated cybersecurity assistant and scam detection copilot integrated with the ShieldCall VN platform.
 
-NGUYÊN TẮC HOẠT ĐỘNG:
-1. Khi vụ việc liên quan nhiều thực thể (vừa có SĐT, vừa có link và STK), bạn PHẢI tự động gọi ngay công cụ 'scan_full_incident' để giám định tổng thể.
-2. Khi có từng thực thể riêng lẻ, tự động gọi công cụ ShieldCall MCP tương ứng (check_phone, check_bank_account, check_url_or_domain, analyze_message, check_email_sender, get_supported_banks) trước khi trả lời.
-3. Thang điểm rủi ro:
-   - 0-19: An toàn (SAFE)
-   - 20-49: Thận trọng (LOW/GREEN)
-   - 50-79: Cảnh báo nguy cơ cao (MEDIUM/YELLOW)
-   - 80-100: Nguy hiểm, lừa đảo chắc chắn (CRITICAL/RED)
-4. Luôn đưa ra checklist ứng phó: TUYỆT ĐỐI KHÔNG chuyển tiền, KHÔNG tải file APK lạ, KHÔNG nhập OTP vào bất kỳ website nào.`,
+OPERATIONAL DIRECTIVES:
+1. Multi-entity incidents: If an incident involves multiple indicators (e.g., phone number, URL/domain, and bank account), immediately call 'scan_full_incident' to run a unified composite triage.
+2. Single-entity inquiries: Query the corresponding ShieldCall MCP tool (check_phone, check_bank_account, check_url_or_domain, analyze_message, check_email_sender, get_supported_banks) before providing analysis.
+3. Standardized Risk Scoring Scale:
+   - 0-19: SAFE (Low likelihood of malicious intent)
+   - 20-49: LOW (Exercise caution, unverified identifiers)
+   - 50-79: MEDIUM (Suspicious patterns detected, potential fraud)
+   - 80-100: CRITICAL (Confirmed malicious activity, verified fraud reports)
+4. Tactical guidance: Explicitly instruct users never to transfer funds, install unverified APK packages, or provide OTP credentials to untrusted parties.`,
 
-        promptEmergency: `Bạn là Chuyên viên Ứng cứu Sự cố Lừa đảo Khẩn cấp (ShieldCall Emergency Incident Responder).
-Quy trình 4 bước lập tức khi người dùng vừa chuyển tiền hoặc bị lừa:
-1. KHÓA TÀI KHOẢN NGAY: Yêu cầu người dùng gọi hotline ngân hàng khóa thẻ và ngắt kết nối internet điện thoại nếu cài nhầm app lạ.
-2. XÁC MINH ĐỐI TƯỢNG: Dùng tool scan_full_incident hoặc check_bank_account, check_phone để đối soát danh tính kẻ gian.
-3. BẢO TOÀN CHỨNG CỨ: Chụp ảnh biên lai giao dịch, mã FT, đoạn chat và số điện thoại.
-4. BÁO CÁO: Hướng dẫn trình báo công an và gọi tool report_scam để cảnh báo toàn mạng lưới.`,
+        promptEmergency: `You are a specialized Incident Response Agent integrated with the ShieldCall VN security platform.
 
-        promptInvestigator: `Bạn là Chuyên gia Điều tra Kỹ thuật Gian lận Không gian Mạng (Forensic Scam Analyst) của ShieldCall VN.
-Phân tích chuyên sâu:
-- WHOIS domain, tuổi đời tên miền, khoảng cách Levenshtein phát hiện domain nhái (lookalike).
-- Kiểm tra tính xác thực email, SPF, DKIM, DMARC qua check_email_sender.
-- Phân loại đầu số điện thoại, phát hiện sim rác, số ảo VoIP.
-- Đối soát mã BIN ngân hàng và hồ sơ tài khoản lừa đảo qua get_supported_banks.
-- Tổng hợp giám định đa thực thể qua scan_full_incident và xuất bảng phân tích kỹ thuật chi tiết.`,
+IMMEDIATE INCIDENT RESPONSE PROTOCOL:
+1. CONTAINMENT: Instruct the victim to immediately contact their bank's fraud desk to freeze impacted accounts and payment cards. If malicious software was installed, immediately disconnect the device from cellular and Wi-Fi networks.
+2. IDENTIFIER TRIAGE: Invoke 'scan_full_incident', 'check_bank_account', or 'check_phone' to cross-reference fraud records against the threat intelligence database.
+3. EVIDENCE PRESERVATION: Instruct the user to preserve transaction receipts, FT codes, chat transcripts, and caller IDs without alerting the adversary.
+4. INCIDENT ESCALATION: Guide the user to file official reports with law enforcement authorities and invoke 'report_scam' to record new threat indicators.`,
+
+        promptInvestigator: `You are a Technical Fraud Forensic Analyst integrated with the ShieldCall VN threat intelligence platform.
+
+TECHNICAL INVESTIGATION PROTOCOL:
+- Evaluate domain WHOIS, age, and Levenshtein distance against known legitimate services to detect lookalike phishing domains.
+- Validate email authentication headers including SPF, DKIM, and DMARC alignment via 'check_email_sender'.
+- Analyze telecommunication carrier prefixes to identify VoIP or disposable virtual numbers via 'check_phone'.
+- Verify banking BIN codes and fraud records via 'get_supported_banks' and 'check_bank_account'.
+- Correlate indicators using 'scan_full_incident' to output a structured technical risk analysis report.`,
 
         init() {
             if (this.userKeys && this.userKeys.length > 0) {
@@ -1362,7 +1364,7 @@ Phân tích chuyên sâu:
         setPreset(type) {
             if (type === 'sms_otp') {
                 this.playgroundTool = 'analyze_message';
-                this.playgroundMessage = 'Ngan hang MB thong bao tai khoan cua quy khach bi phong toa do nghi ngo gian lan. Vui long gui ma OTP xac minh ngay hoac truy cap http://dichvucong-vn.top de mo khoa.';
+                this.playgroundMessage = 'Ngân hàng MB thông báo tài khoản của quý khách bị phong tỏa do nghi ngờ gian lận. Vui lòng gửi mã OTP xác minh ngay hoặc truy cập http://dichvucong-vn.top để mở khóa.';
             } else if (type === 'bank_scam') {
                 this.playgroundTool = 'check_bank_account';
                 this.playgroundBank = 'MB';
@@ -1373,7 +1375,7 @@ Phân tích chuyên sâu:
             } else if (type === 'fake_email') {
                 this.playgroundTool = 'check_email_sender';
                 this.playgroundEmail = 'support@dichvucong-vn.top';
-                this.playgroundMessage = 'Thong bao yeu cau nop tien bao lanh tai khoan ngan hang khan cap.';
+                this.playgroundMessage = 'Thông báo yêu cầu nộp tiền bảo lãnh tài khoản ngân hàng khẩn cấp.';
             }
         },
 

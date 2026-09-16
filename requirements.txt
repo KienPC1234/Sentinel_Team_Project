@@ -1,7 +1,6 @@
 django>=5.0
 djangorestframework
 drf-spectacular
-django-environ
 django-cors-headers
 pymysql
 cryptography
@@ -10,7 +9,6 @@ celery
 redis
 pillow
 requests>=2.31.0
-django-allauth
 django-tailwind
 python-dotenv
 easyocr
@@ -18,7 +16,6 @@ pyzbar
 opencv-python-headless
 ollama
 django-allauth[socialaccount]
-vt-py
 channels>=4.0.0
 channels-redis>=4.2.0
 daphne
@@ -34,7 +31,6 @@ phonenumbers
 einops
 markdown
 faster-whisper
-soundfile
 whitenoise
 faiss-cpu
 pywebpush>=2.0.3

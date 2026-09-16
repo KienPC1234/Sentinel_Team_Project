@@ -6,9 +6,10 @@
   [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
   [![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
   [![Database](https://img.shields.io/badge/Database-MariaDB%2FMySQL-orange.svg)](https://mariadb.org/)
-  [![Cache%2FBroker](https://img.shields.io/badge/Broker-Redis%208-red.svg)](https://redis.io/)
+  [![Cache/Broker](https://img.shields.io/badge/Broker-Redis%208-red.svg)](https://redis.io/)
   [![Inference](https://img.shields.io/badge/LLM-Ollama%20(DeepSeek%20%7C%20Gemma4)-purple.svg)](https://ollama.com/)
   [![Docker](https://img.shields.io/badge/Sandbox-Docker%20Zero--Trust-2496ED.svg)](https://www.docker.com/)
+  [![Hardware](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900.svg)](https://developer.nvidia.com/cuda-zone)
   [![Orchestration](https://img.shields.io/badge/Process-PM2-lightgrey.svg)](https://pm2.keymetrics.io/)
 </div>
 
@@ -20,59 +21,165 @@
 
 The platform employs a hybrid asynchronous architecture combining real-time ASGI WebSocket/SSE streams, background distributed task workers, GPU-accelerated neural computing, and an isolated Zero-Trust Docker Sandbox backed by industry-standard forensic toolsets.
 
-```
-                                      [ Client Layer ]
-                      (Web Frontend / Mobile Client / REST API Consumer)
-                                             │
-                                             ▼
-                            [ Reverse Proxy / TLS Termination ]
-                                        (sc.fptoj.com)
-                                             │
-                 ┌───────────────────────────┴───────────────────────────┐
-                 │                                                       │
-                 ▼ (HTTP / WebSocket / SSE)                              ▼ (Headless JS Render)
-        [ Daphne ASGI Server :8001 ]                                [ Puppeteer Host :3010 ]
-           ├── Django REST Framework                                     ├── Anti-SSRF DNS Resolver
-           ├── Channels Protocol Router                                  ├── Auto Memory Tab Recycling
-           └── Anti-SSRF Web Scraping Relay ◄────────────────────────────└── Stealth Mode (Blink Masking)
-                 │
-                 ├───► [ MariaDB / MySQL 11.x ] (Relational Persistence & Auth)
-                 │
-                 ├───► [ Redis 8.x ] (Channel Layers, Cache, Celery Broker)
-                 │        ▲
-                 │        │ (Task Distribution)
-                 │     [ Celery Workers & Celery Beat ]
-                 │        ├── Deep OCR Extraction (EasyOCR - GPU CUDA)
-                 │        ├── Voice Impersonation & Speech-to-Text (Faster-Whisper - GPU CUDA)
-                 │        └── Vector Index Ingestion (FAISS + Nomic Embed)
-                 │
-                 ├───► [ Zero-Trust Docker Malware Sandbox ] (Ephemeral Container : sentinel-sandbox)
-                 │        ├── YARA Multi-Vector Signature Rules
-                 │        ├── OLETools (VBA Macro Forensics & IOC Extraction)
-                 │        ├── PEFile (Windows PE Inspection, Section Entropy & API Imports)
-                 │        ├── PyPDF Exploit & Stream Decoder (/Launch, /JS, /OpenAction)
-                 │        └── ClamAV Antivirus Scanner
-                 │
-                 └───► [ Ollama Local / Cloud Daemon :11434 ]
-                          ├── Primary LLM: deepseek-v4-flash:cloud
-                          └── Fast / Classification LLM: gemma4:31b-cloud
+### 1.1 System Architecture Topology
+
+```mermaid
+flowchart TD
+    subgraph ClientTier["Client & Integration Layer"]
+        WebUI["Web Frontend & PWA"]
+        MobileClient["Mobile Client / Native Application"]
+        MCPClient["Claude Desktop & MCP Agents"]
+        APIClient["External REST API Consumers"]
+    end
+
+    subgraph IngressTier["Perimeter & Ingress Security"]
+        ReverseProxy["Reverse Proxy / Cloudflare WAF / TLS (:443)"]
+    end
+
+    subgraph AppTier["Application & Routing Tier (PM2 Cluster)"]
+        DaphneServer["Daphne ASGI Server (:8001)<br/>Django 5.2 | Channels 4 | DRF"]
+        PuppeteerCluster["Puppeteer Headless Cluster (:3010)<br/>Anti-SSRF DNS Resolver | Stealth Engine"]
+    end
+
+    subgraph DataTier["Storage, State & Cache Broker"]
+        RedisNode["Redis 8.x<br/>Cache | Channel Layer | Celery Broker"]
+        DatabaseNode[("MariaDB 11.x / MySQL 8.x<br/>Relational Storage & Auth")]
+    end
+
+    subgraph WorkerTier["Distributed Task Engine (Celery)"]
+        CeleryWorker["Celery Worker Cluster<br/>Multi-threaded Thread Pool"]
+        CeleryBeat["Celery Beat Scheduler<br/>Periodic Threat Sync"]
+    end
+
+    subgraph NeuralTier["Hardware-Accelerated Neural Computing"]
+        EasyOCRNode["EasyOCR Engine<br/>NVIDIA CUDA GPU"]
+        WhisperNode["Faster-Whisper STT<br/>NVIDIA CUDA GPU"]
+        FAISSNode["FAISS Vector DB<br/>Nomic Embed 768-dim"]
+    end
+
+    subgraph SandboxTier["Zero-Trust Execution Sandbox (Docker)"]
+        DockerSandbox["sentinel-sandbox:latest<br/>--network none | --read-only | --cap-drop ALL"]
+        YARAEngine["YARA Multi-Vector Signature Rules"]
+        OLEToolsEngine["OLETools VBA Macro Dissector"]
+        PEFileEngine["PEFile Entropy & Imphash Inspector"]
+        PyPDFEngine["PyPDF Stream & Exploit Decoder"]
+        ClamAVEngine["ClamAV Antivirus Daemon"]
+    end
+
+    subgraph InferenceTier["Large Language Model Inference"]
+        OllamaDaemon["Ollama Daemon (:11434)"]
+        PrimaryLLM["Primary: deepseek-v4.1-flash:cloud"]
+        ClassifierLLM["Classifier: gemma4"]
+    end
+
+    WebUI --> ReverseProxy
+    MobileClient --> ReverseProxy
+    MCPClient --> ReverseProxy
+    APIClient --> ReverseProxy
+
+    ReverseProxy --> DaphneServer
+    DaphneServer --> PuppeteerCluster
+    DaphneServer --> RedisNode
+    DaphneServer --> DatabaseNode
+
+    RedisNode <--> CeleryWorker
+    CeleryBeat --> RedisNode
+    CeleryWorker --> DatabaseNode
+
+    CeleryWorker --> EasyOCRNode
+    CeleryWorker --> WhisperNode
+    CeleryWorker --> FAISSNode
+
+    CeleryWorker --> DockerSandbox
+    DockerSandbox --> YARAEngine
+    DockerSandbox --> OLEToolsEngine
+    DockerSandbox --> PEFileEngine
+    DockerSandbox --> PyPDFEngine
+    DockerSandbox --> ClamAVEngine
+
+    DaphneServer --> OllamaDaemon
+    CeleryWorker --> OllamaDaemon
+    OllamaDaemon --> PrimaryLLM
+    OllamaDaemon --> ClassifierLLM
 ```
 
 ---
 
-## 2. Core Subsystems
+## 2. Multi-Vector Threat Analysis Pipeline
 
-### 2.1 Multi-Vector Threat Analysis Pipeline
-- **Telecommunication & Number Scoring**: Normalizes international and domestic Vietnamese MSISDN formats, cross-referencing threat telemetry and blacklist repositories.
-- **Financial Account Verification**: Detects fraudulent accounts and illicit beneficiary channels.
-- **Domain & Web Intelligence**: Inspects DNS MX records, domain age (WHOIS), SSL reputation, and ScamAdviser / Trustpilot metrics with SSRF-isolated relays.
+The platform evaluates artifacts across six dedicated investigation vectors, aggregates findings into structured telemetry, and executes heuristic and neural risk classification:
+
+```mermaid
+flowchart LR
+    subgraph Ingestion["Input Ingestion Layer"]
+        InPhone["Telephony / MSISDN"]
+        InBank["Financial Account"]
+        InWeb["Domain / URL"]
+        InMedia["Visual Media (Images)"]
+        InAudio["Acoustic Audio (.wav/.mp3)"]
+        InFile["Executable / Document File"]
+    end
+
+    subgraph Engines["Vector Processing Modules"]
+        ModPhone["Phone Pipeline<br/>E.164 Normalize + Blacklist"]
+        ModBank["Financial Pipeline<br/>VietQR Resolution + Fraud DB"]
+        ModWeb["Web Intelligence<br/>DNS/MX + WHOIS + Puppeteer"]
+        ModMedia["Vision Pipeline<br/>EasyOCR CUDA + QR Matrix"]
+        ModAudio["Acoustic Pipeline<br/>Faster-Whisper CUDA + Voice Intel"]
+        ModFile["Zero-Trust Sandbox<br/>Docker + YARA + PEFile + ClamAV"]
+    end
+
+    subgraph Synthesis["Intelligence Aggregation & LLM Reasoning"]
+        Aggregator["Threat Intelligence Aggregator"]
+        RAGIndex["FAISS Vector Search<br/>Local Knowledge Base"]
+        LLMEval["Ollama Reasoning Engine<br/>DeepSeek-v4.1-Flash / Gemma4"]
+    end
+
+    subgraph Verdict["Standardized Verdict"]
+        Score["Risk Score (0 - 100)"]
+        Badge["Threat Level (SAFE / WARNING / CRITICAL)"]
+        Guidance["Actionable Remediation Guidance"]
+    end
+
+    InPhone --> ModPhone
+    InBank --> ModBank
+    InWeb --> ModWeb
+    InMedia --> ModMedia
+    InAudio --> ModAudio
+    InFile --> ModFile
+
+    ModPhone --> Aggregator
+    ModBank --> Aggregator
+    ModWeb --> Aggregator
+    ModMedia --> Aggregator
+    ModAudio --> Aggregator
+    ModFile --> Aggregator
+
+    Aggregator --> RAGIndex
+    RAGIndex --> LLMEval
+    Aggregator --> LLMEval
+
+    LLMEval --> Score
+    LLMEval --> Badge
+    LLMEval --> Guidance
+```
+
+### 2.1 Vector Analysis Capabilities
+- **Telecommunication & Number Scoring**: Normalizes international and domestic Vietnamese MSISDN formats, cross-referencing threat telemetry, carrier assignments, and community scam reports.
+- **Financial Account Verification**: Performs programmatic lookup and beneficiary name resolution via VietQR integration, cross-referencing fraud intelligence databases.
+- **Domain & Web Intelligence**: Inspects DNS MX records, domain age (WHOIS), SSL reputation, and ScamAdviser / Trustpilot metrics via SSRF-isolated relays.
 - **Multi-Modal AI Analysis**:
-  - **Audio Streams**: Acoustic transcription via `Faster-Whisper` running on NVIDIA GPU CUDA followed by psychological manipulation analysis.
+  - **Audio Streams**: Acoustic transcription via `Faster-Whisper` running on NVIDIA CUDA followed by psychological manipulation and urgency indicator extraction.
   - **Visual Media**: Image OCR via `EasyOCR` (GPU accelerated) combined with QR code matrix decoding and phishing banner classification.
 
 ### 2.2 Zero-Trust Local Malware Sandbox Engine
 Replaces third-party external dependencies with an entirely isolated on-premise containment engine:
-- **Containment Model**: Every suspicious file is mounted read-only inside an ephemeral container (`sentinel-sandbox:latest`) with `--network none`, `--cap-drop ALL`, `--read-only`, `--memory 1g`, `--cpus 2.0`, and `--pids-limit 64`.
+- **Containment Model**: Every suspicious file is mounted read-only inside an ephemeral container (`sentinel-sandbox:latest`) with strict enforcement:
+  - `--network none`: Complete network isolation. Zero external telemetry or outbound egress.
+  - `--read-only`: Read-only root filesystem prevents modification or persistent writes.
+  - `--cap-drop ALL`: Drops all Linux kernel capabilities.
+  - `--security-opt=no-new-privileges:true`: Prevents privilege escalation.
+  - `--memory 1g --cpus 2.0 --pids-limit 64`: Throttles resource abuse and prevents fork bombs.
 - **Multi-Engine Static & Heuristic Dissection**:
   - **YARA Engine**: Scans binary patterns for ransomware extortion notes, process injection calls, and obfuscated droppers.
   - **OLETools (`olevba`)**: Dissects VBA macro streams in `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm` files to detect `Auto_Open`, `Shell()`, and `WScript.Shell`.
@@ -84,6 +191,47 @@ Replaces third-party external dependencies with an entirely isolated on-premise 
 - **Anti-SSRF Isolation**: Validates all target hostnames and DNS resolutions to block access to private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.169.254`).
 - **Anti-Detection Stealth**: Employs `puppeteer-extra-plugin-stealth` with automated flag masking (`navigator.webdriver` removal, custom humanized User-Agents).
 - **Leak Prevention & Resource Optimization**: Utilizes `WeakMap` page tracking, blocks heavy media streams (`audio`, `video`, `fonts`), and automatically recycles browser instances after 50 renders to release accumulated V8 memory.
+
+### 2.4 Model Context Protocol (MCP) Remote Server
+Exposes Sentinel threat tools directly to external AI agents, Claude Desktop, and IDE plugins over the standardized Model Context Protocol:
+
+```mermaid
+flowchart TD
+    subgraph Clients["User & Agent Clients"]
+        WebChat["Web AI Assistant (/ai-assistant/)"]
+        ClaudeDesk["Claude Desktop / MCP Client Host"]
+    end
+
+    subgraph MCPGateway["Protocol Router & SSE Gateway"]
+        SSEStream["SSE Event Stream (:8001/api/v1/mcp/sse/)"]
+        JSONRPC["JSON-RPC Message Relay (:8001/api/v1/mcp/messages/)"]
+    end
+
+    subgraph Tools["Live Forensic Tools"]
+        ToolPhone["scan_phone"]
+        ToolURL["scan_url"]
+        ToolBank["scan_bank_account"]
+        ToolThreat["query_threat_database"]
+        ToolStealth["stealth_browse"]
+        ToolSearch["web_search"]
+    end
+
+    subgraph Engine["Ollama / DeepSeek LLM"]
+        Reasoning["Reasoning & Synthesis (DeepSeek-v4.1-Flash)"]
+    end
+
+    WebChat --> SSEStream
+    ClaudeDesk --> SSEStream
+    SSEStream --> JSONRPC
+    JSONRPC --> Tools
+    Tools --> Reasoning
+    Reasoning --> SSEStream
+```
+
+- **Discovery Endpoint**: `GET /api/v1/mcp/`
+- **SSE Transport Stream**: `GET /api/v1/mcp/sse/`
+- **JSON-RPC Message Relay**: `POST /api/v1/mcp/messages/`
+- **Exposed Tools**: `scan_phone`, `scan_url`, `scan_bank_account`, `query_threat_database`, `stealth_browse`, `web_search`.
 
 ---
 
@@ -98,7 +246,7 @@ Replaces third-party external dependencies with an entirely isolated on-premise 
 | **Hardware Acceleration** | NVIDIA CUDA GPU (RTX 4070 SUPER), cuDNN |
 | **Malware Sandbox** | Docker Isolated Ephemeral Containers, YARA, OLETools, PEFile, PyPDF, ClamAV |
 | **Browser Cluster** | Puppeteer Extra, Chromium (Headless), Stealth Plugin, Anti-SSRF Relay |
-| **AI & Neural Computing** | Ollama SDK, PyTorch 2.x CUDA, Sentence-Transformers, FAISS, Faster-Whisper, EasyOCR |
+| **AI & Neural Computing** | Ollama SDK, PyTorch 2.x CUDA, FAISS (`nomic-embed-text-v1`), Faster-Whisper, EasyOCR |
 | **Process Manager** | PM2 (Production Ecosystem with Dynamic Path Resolution) |
 | **Security & Auth** | Cloudflare Turnstile, Django-OTP (TOTP/Email MFA), Google OAuth2, WhiteNoise |
 
@@ -119,12 +267,20 @@ Base URL: `https://sc.fptoj.com/api/v1`
 | `/scan/image/` | `POST` | OCR extraction and visual fraud detection | Turnstile |
 | `/scan/audio/` | `POST` | Speech-to-text and voice phishing detection | Turnstile |
 | `/scan/file/` | `POST` | Zero-Trust Docker sandbox file analysis | Turnstile |
+| `/scan/status/<scan_id>/` | `GET` | Asynchronous scan status and result retrieval | Session / Auth |
+| `/scan/analyze/stream/` | `POST` | Server-Sent Events (SSE) stream for scan events | Public / Token |
 | `/chat/stream/` | `POST` | Server-Sent Events (SSE) AI assistant stream | Session / Token |
+| `/mcp/` | `GET` | Model Context Protocol discovery metadata | Public |
+| `/mcp/sse/` | `GET` | MCP Server-Sent Events endpoint for agents | Public |
+| `/mcp/messages/` | `POST` | MCP JSON-RPC message relay | Public |
+| `/report/` | `POST` | Submit community cybercrime or scam incident report | Authenticated |
+| `/user/scans/` | `GET` | Historical scan telemetry for user account | Authenticated |
+| `/user/api-keys/` | `GET`, `POST` | Provision and manage developer API keys | Authenticated |
 | `/auth/register/` | `POST` | User registration with OTP validation | Public |
 | `/auth/login/` | `POST` | Credential validation and MFA challenge trigger | Public |
 | `/auth/mfa/verify/` | `POST` | Multi-Factor Authentication verification | Pre-auth Token |
 
-Interactive OpenAPI / Swagger Documentation is available at:
+Interactive OpenAPI and Swagger documentation:
 - **Swagger UI**: `https://sc.fptoj.com/api/docs/`
 - **ReDoc**: `https://sc.fptoj.com/api/redoc/`
 - **OpenAPI Schema**: `https://sc.fptoj.com/api/schema/`
@@ -172,7 +328,7 @@ REDIS_CACHE_URL=redis://127.0.0.1:6379/1
 
 # AI & LLM Inference
 OLLAMA_BASE_URL=http://localhost:11434
-LLM_MODEL=deepseek-v4-flash:cloud
+LLM_MODEL=deepseek-v4.1-flash:cloud
 SMALL_MODEL=gemma4:31b-cloud
 
 # GPU Acceleration
@@ -202,7 +358,7 @@ DEFAULT_FROM_EMAIL=FPTOJ Support <noreply@fptoj.com>
 docker build -t sentinel-sandbox:latest ./sandbox
 ```
 
-### 5.4 Install Dependencies & Build Frontend Assets
+### 5.4 Install Dependencies & Build Assets
 ```bash
 # Python Virtual Environment
 python3.11 -m venv .venv
@@ -254,6 +410,9 @@ Execute test suites to validate database integrity, LLM reasoning, sandbox analy
 
 # 2. Execute Backend API Integration Suite
 .venv/bin/python scripts/test_api.py
+
+# 3. Execute Django Unit Tests
+.venv/bin/python manage.py test api.ai_chat.tests
 ```
 
 ---

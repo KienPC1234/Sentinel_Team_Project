@@ -6,7 +6,6 @@ User = get_user_model()
 def calculate_reporter_trust(user) -> float:
     """
     Calculate a trust score (0.0 - 1.0) for a reporter based on:
-    - Account age (TODO)
     - Historical report accuracy
     - User Rank Points
     """

@@ -29,6 +29,7 @@ from .views import (
     mcp_guide_view, mcp_download_script_view,
 )
 from api.core.views import MCPConnectSSEView, MCPMessagesView, MCPDiscoveryView
+from api.core import views as core_api_views
 
 from .views.admin_views import (
     admin_dashboard, 
@@ -197,18 +198,21 @@ urlpatterns = [
 
     # API endpoints v1
     path('api/v1/', include([
-        path('', include('api.sessions_api.urls')),
-        path('', include('api.phone_security.urls')),
         path('chat/', include('api.ai_chat.urls')),
         path('admin/learn/ai-generate/', magic_create_lesson_api, name='admin-ai-generate-lesson'),
         path('admin/content/generate-summary/', generate_summary_api, name='admin-generate-summary'),
         path('admin/learn/magic-save/', magic_save_lesson_api, name='admin-magic-save-lesson'),
         path('admin/articles/ai-generate/', magic_create_article_api, name='admin-ai-generate-article'),
         path('admin/articles/magic-save/', magic_save_article_api, name='admin-magic-save-article'),
-        path('', include('api.media_analysis.urls')),
-        path('', include('api.maintenance.urls')),
         path('', include('api.core.urls')),
     ])),
+
+    # API Root Aliases (direct fallback endpoints to prevent 404s)
+    path('api/scan/file/', core_api_views.ScanFileView.as_view(), name='root-api-scan-file'),
+    path('api/scan/status/<int:scan_id>/', core_api_views.ScanStatusView.as_view(), name='root-api-scan-status'),
+    path('api/scan/analyze/stream/', core_api_views.ScanAnalyzeSSEView.as_view(), name='root-api-scan-analyze-stream'),
+    path('api/scan/analyze-sse/', core_api_views.ScanAnalyzeSSEView.as_view(), name='root-api-scan-analyze-sse'),
+    path('api/scan/analyze/', core_api_views.ScanAnalyzeSSEView.as_view(), name='root-api-scan-analyze'),
 
     # Allauth (Google OAuth)
     path('accounts/password/reset/', TurnstilePasswordResetView.as_view(), name='account_reset_password'),

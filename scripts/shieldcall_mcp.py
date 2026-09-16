@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
 """
-ShieldCall VN - Standalone Model Context Protocol (MCP) Server (Zero-Dependency)
-Tich hop co so du lieu an ninh so, phong chong lua dao cua ShieldCall VN
-vao bat ky chatbot AI nao: Claude Desktop, Cursor, Windsurf, Claude Code, Cline, ChatGPT.
+ShieldCall VN - Standalone Model Context Protocol (MCP) Server
+Integrates cybersecurity, anti-fraud intelligence, and threat detection
+into any MCP-compatible AI client: Claude Desktop, Cursor, Windsurf, Claude Code, Cline, ChatGPT.
 
-DAC DIEM NOI BAT:
-    - 100% Zero-Dependency: Chay truc tiep bang thu vien chuan Python 3 (sys, json, urllib, http).
-    - KHONG can cai dat bat ky thu vien ben ngoai nao (khong can pip install mcp hay requests).
-    - Tuong thich hoan toan tieu chuan Model Context Protocol (JSON-RPC 2.0).
-    - Ho tro ca 2 che do: Stdio (mac dinh cho AI Desktop) va SSE (mang noi bo / server tu xa).
+Architecture:
+    - Standard library only (sys, json, urllib, http, ssl). Zero external package dependencies.
+    - Full compliance with Model Context Protocol specification (JSON-RPC 2.0).
+    - Supports both stdio (desktop AI clients) and SSE transport modes.
 
-CACH SU DUNG:
+Usage:
 1. Claude Desktop (claude_desktop_config.json):
 {
   "mcpServers": {
     "shieldcall": {
       "command": "python",
-      "args": ["/duong_dan_toi/shieldcall_mcp.py"],
+      "args": ["/absolute/path/to/shieldcall_mcp.py"],
       "env": {
         "SHIELDCALL_API_KEY": "sc_live_your_api_key_here",
-        "SHIELDCALL_API_URL": "https://shieldcall.vn/api/v1"
+        "SHIELDCALL_API_URL": "https://sc.fptoj.com/api/v1"
       }
     }
   }
@@ -30,17 +29,17 @@ CACH SU DUNG:
   "mcpServers": {
     "shieldcall": {
       "command": "python",
-      "args": ["/duong_dan_toi/shieldcall_mcp.py"],
+      "args": ["/absolute/path/to/shieldcall_mcp.py"],
       "env": {
         "SHIELDCALL_API_KEY": "sc_live_your_api_key_here",
-        "SHIELDCALL_API_URL": "https://shieldcall.vn/api/v1"
+        "SHIELDCALL_API_URL": "https://sc.fptoj.com/api/v1"
       }
     }
   }
 }
 
-3. Chay qua mang (SSE Server cho nhieu may dung chung):
-    python shieldcall_mcp.py --transport sse --host 0.0.0.0 --port 8002
+3. Network SSE Transport:
+    python shieldcall_mcp.py --transport sse --host 127.0.0.1 --port 8002
 """
 
 import os
@@ -59,7 +58,6 @@ from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 import ssl
 
-# Setup logger to stderr (stdio transport reserves stdout strictly for JSON-RPC messages)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -69,11 +67,11 @@ logger = logging.getLogger("shieldcall_mcp")
 
 
 # ==============================================================================
-# 1. SHIELDCALL REST API CLIENT (ZERO-DEPENDENCY via urllib)
+# 1. SHIELDCALL REST API CLIENT (urllib implementation)
 # ==============================================================================
 
 class ShieldCallClient:
-    """Client goi truc tiep cac API kiem tra an ninh so cua ShieldCall VN qua urllib."""
+    """Client for querying ShieldCall VN cybersecurity and scam intelligence REST APIs."""
 
     def __init__(
         self,
@@ -81,7 +79,7 @@ class ShieldCallClient:
         api_key: Optional[str] = None,
         timeout: int = 30,
     ):
-        raw_url = api_url or os.getenv("SHIELDCALL_API_URL", "https://shieldcall.vn/api/v1")
+        raw_url = api_url or os.getenv("SHIELDCALL_API_URL", "https://sc.fptoj.com/api/v1")
         self.api_url = raw_url.rstrip("/")
         self.api_key = api_key or os.getenv("SHIELDCALL_API_KEY", "")
         self.timeout = timeout
@@ -90,7 +88,7 @@ class ShieldCallClient:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "ShieldCall-ZeroDep-MCP/1.0",
+            "User-Agent": "ShieldCall-MCP-Client/1.0",
         }
         if self.api_key:
             headers["X-API-Key"] = self.api_key
@@ -142,63 +140,68 @@ class ShieldCallClient:
             if status_code == 401:
                 return {
                     "error": (
-                        "Xac thuc API Key that bai (401 Unauthorized). "
-                        "Vui long kiem tra bien moi truong SHIELDCALL_API_KEY."
+                        "API Key authentication failed (401 Unauthorized). "
+                        "Please verify the SHIELDCALL_API_KEY environment variable."
                     )
                 }
             if status_code == 429:
-                detail = (err_data.get("detail") if isinstance(err_data, dict) else err_text) or "Vuot qua han muc request."
-                return {"error": f"Han muc API Key da het hoac bi gioi han toc do: {detail}"}
+                detail = (err_data.get("detail") if isinstance(err_data, dict) else err_text) or "Daily or rate quota exceeded."
+                return {"error": f"API rate limit or quota exceeded (429): {detail}"}
 
             if err_data and isinstance(err_data, dict):
-                return {"error": f"Loi API ({status_code}): {err_data.get('error') or err_data}"}
-            return {"error": f"Loi API ({status_code}): {err_text[:300]}"}
+                return {"error": f"API Error ({status_code}): {err_data.get('error') or err_data}"}
+            return {"error": f"API Error ({status_code}): {err_text[:300]}"}
         except urllib_error.URLError as e:
             return {
                 "error": (
-                    f"Khong the ket noi den may chu ShieldCall tai {self.api_url}. "
-                    f"Nguyen nhan: {e.reason}. Vui long kiem tra xem backend ShieldCall dang chay hay khong."
+                    f"Unable to connect to ShieldCall host at {self.api_url}. "
+                    f"Reason: {e.reason}. Please verify network connectivity."
                 )
             }
         except TimeoutError:
-            return {"error": f"Het thoi gian cho phan hoi ({self.timeout}s) tu ShieldCall API."}
+            return {"error": f"Request timeout after {self.timeout}s from ShieldCall API."}
         except Exception as e:
-            return {"error": f"Loi ngoai le khi goi ShieldCall API: {str(e)}"}
+            return {"error": f"Exception during ShieldCall API request: {str(e)}"}
 
     def scan_phone(self, phone: str) -> Dict[str, Any]:
-        """Quet va tra cuu muc do rui ro cua so dien thoai."""
-        return self._request("POST", "scan/phone/", data={"phone": phone})
+        """Scan and evaluate fraud risk for a phone number."""
+        return self._request("POST", "scan/phone/", data={"phone": (phone or "").strip()})
 
     def scan_bank_account(self, bank: str, account: str) -> Dict[str, Any]:
-        """Tra cuu so tai khoan ngan hang trong danh sach den lua dao."""
-        return self._request("POST", "scan/account/", data={"bank": bank, "account": account})
+        """Verify a bank account number against financial scam databases."""
+        return self._request("POST", "scan/account/", data={"bank": (bank or "").strip(), "account": (account or "").strip()})
 
     def scan_domain(self, url: str) -> Dict[str, Any]:
-        """Phan tich website, URL, phat hien ten mien gia mao (phishing/lookalike)."""
-        return self._request("POST", "scan/domain/", data={"url": url, "deep_scan": False})
+        """Analyze a URL or domain for phishing, lookalike indicators, and security status."""
+        return self._request("POST", "scan/domain/", data={"url": (url or "").strip(), "deep_scan": False})
 
     def scan_message(self, message: str) -> Dict[str, Any]:
-        """Phan tich noi dung tin nhan, SMS, kich ban lua dao chuyen tien/OTP."""
-        return self._request("POST", "scan/message/", data={"message": message, "sync": True})
+        """Analyze message text or SMS content for scam scripts and social engineering patterns."""
+        return self._request("POST", "scan/message/", data={"message": (message or "").strip(), "sync": True})
 
     def scan_email(self, email: str, content: str = "", subject: str = "") -> Dict[str, Any]:
-        """Phan tich dia chi email, SPF/DMARC va noi dung email lua dao."""
+        """Inspect email address, authentication headers (SPF/DMARC), and content for fraud."""
         return self._request(
             "POST",
             "scan/email/",
-            data={"email": email, "content": content, "subject": subject, "sync": True},
+            data={
+                "email": (email or "").strip(),
+                "content": (content or "").strip(),
+                "subject": (subject or "").strip(),
+                "sync": True,
+            },
         )
 
     def get_supported_banks(self) -> Any:
-        """Lay danh sach cac ngan hang duoc ho tro tai Viet Nam."""
+        """Retrieve verified Vietnamese banks with BIN codes and identifiers."""
         return self._request("GET", "scan/banks/")
 
     def lookup_scam_db(self, query: str, entity_type: str = "all") -> Dict[str, Any]:
-        """Tra cuu thuc the trong kho du lieu cong dong ShieldCall VN."""
-        return self._request("GET", "scan/lookup/", params={"q": query, "type": entity_type})
+        """Query threat and scam database records by keyword or identifier."""
+        return self._request("GET", "scan/lookup/", params={"q": (query or "").strip(), "type": (entity_type or "all").strip()})
 
     def get_scam_radar_trends(self) -> Dict[str, Any]:
-        """Lay so lieu radar va xu huong thu doan lua dao moi nhat."""
+        """Retrieve real-time scam statistics and prevalent regional threat patterns."""
         return self._request("GET", "trends/radar-stats/")
 
     @staticmethod
@@ -238,7 +241,7 @@ class ShieldCallClient:
         description: str,
         evidence_note: str = "",
     ) -> Dict[str, Any]:
-        """Gui bao cao hanh vi lua dao vao he thong kiem duyet cong dong."""
+        """Submit a scam incident report to the moderation database."""
         norm_val = (target_value or "").strip()
         if target_type == "phone":
             cleaned = re.sub(r"[\s\-\.]", "", norm_val)
@@ -246,11 +249,11 @@ class ShieldCallClient:
                 norm_val = "+84" + cleaned[1:]
 
         payload = {
-            "target_type": target_type,
+            "target_type": (target_type or "").strip(),
             "target_value": norm_val,
             "scam_type": self.normalize_scam_type(scam_type),
-            "description": description,
-            "evidence_note": evidence_note,
+            "description": (description or "").strip(),
+            "evidence_note": (evidence_note or "").strip(),
         }
         return self._request("POST", "report/", data=payload)
 
@@ -259,65 +262,66 @@ class ShieldCallClient:
 # 2. SYSTEM PERSONA PROMPTS
 # ==============================================================================
 
-SHIELDCALL_SENTRY_PROMPT = """Ban la ShieldCall Sentry - Tro ly Giam sat An toan So va Phong chong Lua dao Truc tuyen hang dau tai Viet Nam, tich hop truc tiep co so du lieu tu he thong ShieldCall VN.
+SHIELDCALL_SENTRY_PROMPT = """You are the ShieldCall Sentry assistant, an automated cybersecurity and fraud-prevention monitor integrated with the ShieldCall VN threat intelligence platform.
 
-NGUYEN TAC HOAT DONG COT LOI:
-1. Chu dong Kich hoat Cong cu (Proactive Tool Triggering):
-   - Khi nguoi dung mo ta mot tinh huong chua nhieu thuc the (vua co so dien thoai, link la va so tai khoan nhan tien), ban PHAI goi ngay cong cu 'scan_full_incident' de giam dinh tong the trong mot lan goi.
-   - Khi co tung thuc the don le, tu dong goi cong cu ShieldCall MCP tuong ung TRUOC KHI dua ra ket luan:
-     - check_phone: Khi co so dien thoai (vi du: '0912xxx', '+84...').
-     - check_bank_account: Khi co so tai khoan va ten ngan hang (vi du: '1903xxx Techcombank', 'MB').
-     - check_url_or_domain: Khi co lien ket, website, ten mien (vi du: 'https://...', 'dichvucong-vn.top').
-     - analyze_message: Khi co noi dung tin nhan dang ngo, thong bao trung thuong, de doa tu co quan cong an gia mao.
-     - check_email_sender: Khi co email nguoi gui hoac noi dung thu dien tu nghi van gia mao.
-     - get_supported_banks: Khi can tra cuu danh sach ngan hang chinh thong tai Viet Nam va ma BIN.
-     - lookup_scam_db: Tra cuu nhanh ten nguoi, tu khoa hoac doi tuong trong co so du lieu cong dong.
-     - get_scam_radar_trends: Cap nhat xu huong lua dao truc tuyen moi nhat theo thoi gian thuc.
-2. Thang Diem Rui ro (Risk Score):
-   - 0 - 19 (SAFE): An toan, chua ghi nhan dau hieu rui ro.
-   - 20 - 49 (LOW/GREEN): Rui ro thap, can than trong thong thuong.
-   - 50 - 79 (MEDIUM/YELLOW): CANH BAO RUI RO CAO. Co bao cao xau tu cong dong hoac su dung dau so ao/ten mien moi lap.
-   - 80 - 100 (CRITICAL/RED): NGUY HIEM CAO. Nam trong danh sach den hoac co nhieu nan nhan to giac.
-3. Phong cach Giao tiep va Khuyen nghi Hanh dong:
-   - Dut khoat, di thang vao ban chat ky thuat, khong vong vo.
-   - Luon dua ra checklist ung pho: Tuyet doi khong chuyen tien, khong cai file APK la, khong cung cap OTP.
-   - Huong dan goi report_scam neu phat hien dau hieu lua dao moi de bao ve cong dong.
+### Core Operational Principles:
+1. Proactive Tool Dispatch:
+   - For multi-entity incidents (involving telephone numbers, URLs, and bank accounts simultaneously), invoke the `scan_full_incident` tool to perform comprehensive inspection in a single call.
+   - For isolated indicators of compromise, invoke the corresponding ShieldCall MCP tool prior to formulating conclusions:
+     - `check_phone`: Inspect phone numbers (+84, local prefixes) against blacklists, telecom registries, and VoIP/virtual indicators.
+     - `check_bank_account`: Verify bank account numbers and beneficiary institutions against financial fraud records.
+     - `check_url_or_domain`: Inspect domains and URLs for phishing signatures, typosquatting/lookalike patterns, SSL status, and WHOIS registration age.
+     - `analyze_message`: Parse SMS, chat, or email content for social engineering, law enforcement impersonation, and OTP solicitation patterns.
+     - `check_email_sender`: Inspect sender domains for SPF, DKIM, DMARC alignment, and phishing heuristics.
+     - `get_supported_banks`: Retrieve verified Vietnamese bank codes and BIN registry for beneficiary verification.
+     - `lookup_scam_db`: Query community fraud incident archives by identifier or keyword.
+     - `get_scam_radar_trends`: Retrieve real-time regional scam trends and prevalent threat patterns.
+
+2. Risk Scoring Standards:
+   - 0 - 19 (SAFE): No threat indicators identified.
+   - 20 - 49 (LOW): Low risk, standard security precautions apply.
+   - 50 - 79 (MEDIUM): Elevated risk. Associated with suspicious metadata, short domain lifespans, or community warnings.
+   - 80 - 100 (CRITICAL): High threat level. Confirmed malicious indicator, blacklisted entity, or multiple victim reports.
+
+3. Response Protocol:
+   - Provide direct, concise, and technical assessments without conversational filler.
+   - Deliver clear mitigation steps: instruct users never to transfer funds, avoid installing unverified APK binaries, and never disclose OTP tokens.
+   - Direct users to invoke `report_scam` when novel fraudulent entities or tactics are discovered.
 """
 
-SHIELDCALL_EMERGENCY_PROMPT = """Ban la Chuyen vien Ung cuu Su co Lua dao Khan cap (ShieldCall Emergency Incident Responder). Nguoi dung dang trong trang thai lo lang, vua chuyen tien cho ke lua dao, vua bam vao lien ket doc hai, hoac bi thao tung tam ly chiem doat tai khoan.
+SHIELDCALL_EMERGENCY_PROMPT = """You are the ShieldCall Emergency Incident Responder. The user may be experiencing active financial fraud, unauthorized credential compromise, or phishing exploitation.
 
-QUY TRINH PHAN UNG KHAN CAP 4 BUOC:
-1. Buoc 1: CO LAP VA NGAN CHAN THIET HAI NGAY LAP TUC:
-   - Yeu cau nguoi dung goi ngay Hotline ngan hang de YEU CAU KHOA THE VA TAM DUNG MOI GIAO DICH TRUC TUYEN.
-   - Neu cai nham ung dung la (.APK): Bat che do may bay ngay lap tuc de ngat ket noi mang va thu hoi quyen tro nang (Accessibility).
-2. Buoc 2: XAC MINH VA LAP HO SO DOI TUONG:
-   - Su dung cong cu scan_full_incident hoac check_bank_account, check_phone, lookup_scam_db de kiem tra toan bo thong tin ke lua dao.
-3. Buoc 3: BAO TOAN CHUNG CU SO:
-   - Huong dan chup man hinh toan bo tin nhan, bien lai chuyen tien (ma giao dich, so tai khoan, ngan hang thu huong), ghi am cuoc goi neu co.
-4. Buoc 4: BAO CAO VA TO GIAC:
-   - Huong dan lien he Co quan Cong an gan nhat kem bo ho so chung cu.
-   - Goi tool report_scam de gui thong tin len co so du lieu canh bao toan quoc cua ShieldCall VN.
+### 4-Step Incident Response Protocol:
+1. Step 1: Immediate Containment:
+   - Instruct the user to immediately contact the issuing bank hotline to freeze cards, lock accounts, and halt digital transactions.
+   - If a suspicious mobile application (.APK) was installed: instruct the user to immediately enable Airplane Mode to sever network connectivity and revoke Accessibility permissions.
+2. Step 2: Entity Identification and Profiling:
+   - Query threat intelligence via `scan_full_incident`, `check_bank_account`, `check_phone`, or `lookup_scam_db` to profile the adversary infrastructure.
+3. Step 3: Evidence Preservation:
+   - Guide the user to capture comprehensive digital evidence: screenshots of chat logs, transfer receipts with reference numbers, beneficiary bank details, and call records.
+4. Step 4: Formal Escalation and Reporting:
+   - Advise the user to submit an official crime report to local law enforcement with the preserved digital evidence.
+   - Invoke `report_scam` to submit the threat actor parameters to the ShieldCall database.
 """
 
-SHIELDCALL_INVESTIGATOR_PROMPT = """Ban la Chuyen gia Dieu tra Ky thuat Gian lan Khong gian Mang (Forensic Scam Analyst) cua ShieldCall VN.
-Nhiem vu cua ban la phan tich cau truc ky thuat sau ve cac thuc the nghi van:
-- Ten mien: Doi soat ten mien nhai (Lookalike/Typosquatting bang khoang cach Levenshtein), tuoi doi ten mien (WHOIS registration age), dich vu DNS, SSL Certificate.
-- Email: Danh gia xac thuc SPF, DKIM, DMARC, MX records cua ten mien gui thu qua check_email_sender.
-- Dau so dien thoai: Phan loai nha mang, phat hien thue bao ao VoIP, OTT, cac dau so dich vu cuoc cao.
-- Tai khoan ngan hang: Doi chieu BIN ngan hang qua get_supported_banks, tra cuu ho so tai khoan lua dao co to chuc.
-- Tong hop vu viec phuc tap qua scan_full_incident va lap bang phan tich ky thuat chi tiet cho nguoi dung.
+SHIELDCALL_INVESTIGATOR_PROMPT = """You are a Cyber Fraud Investigation and Forensic Analyst with ShieldCall VN.
+Your objective is to conduct technical entity inspection on suspicious indicators:
+- Domain Analysis: Assess typosquatting distance (Levenshtein lookalike metrics), domain registration age via WHOIS, DNS records, and SSL certificate validity.
+- Email Authentication: Validate SPF, DKIM, DMARC policies, and MX server configurations via `check_email_sender`.
+- Telephony Infrastructure: Classify carrier networks, detect VoIP/virtual allocations, and flag premium-rate number prefixes via `check_phone`.
+- Banking Verification: Validate institution BIN codes via `get_supported_banks` and cross-reference structured fraud syndicate accounts.
+- Incident Correlation: Correlate multiple indicators using `scan_full_incident` and synthesize structured findings into a clear technical summary.
 """
 
 
 # ==============================================================================
-# 3. PURE PYTHON ZERO-DEPENDENCY MCP PROTOCOL ENGINE
+# 3. ZERO-DEPENDENCY MCP PROTOCOL ENGINE
 # ==============================================================================
 
 class ZeroDepMCPServer:
     """
-    May chu MCP tu chua (Zero-Dependency) trien khai chuan giao thuc
-    Model Context Protocol (JSON-RPC 2.0) qua Stdio va Server-Sent Events (SSE).
-    Hoat dong ngay lap tuc tren moi moi truong Python 3 ma khong can cai thu vien ngoai.
+    Model Context Protocol (JSON-RPC 2.0) server implementation
+    supporting stdio and Server-Sent Events (SSE) transports.
     """
 
     PROTOCOL_VERSION = "2024-11-05"
@@ -329,12 +333,19 @@ class ZeroDepMCPServer:
         self.prompts: Dict[str, Dict[str, Any]] = {}
 
     def tool(self, name: Optional[str] = None):
-        """Decorator dang ky tool MCP."""
+        """Decorator to register an MCP tool."""
         def decorator(func: Callable):
             tool_name = name or func.__name__
             sig = inspect.signature(func)
             props: Dict[str, Any] = {}
             required: List[str] = []
+
+            doc = (func.__doc__ or "").strip()
+            param_docs: Dict[str, str] = {}
+            if "Args:" in doc:
+                args_section = doc.split("Args:")[1].split("Returns:")[0]
+                for match in re.finditer(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(.+)$", args_section, re.MULTILINE):
+                    param_docs[match.group(1).strip()] = match.group(2).strip()
 
             for param_name, param in sig.parameters.items():
                 param_type = "string"
@@ -345,13 +356,17 @@ class ZeroDepMCPServer:
                 elif param.annotation is float:
                     param_type = "number"
 
-                props[param_name] = {"type": param_type}
+                prop_def: Dict[str, Any] = {"type": param_type}
+                if param_name in param_docs:
+                    prop_def["description"] = param_docs[param_name]
+
+                props[param_name] = prop_def
                 if param.default is inspect.Parameter.empty:
                     required.append(param_name)
 
             self.tools[tool_name] = {
                 "name": tool_name,
-                "description": (func.__doc__ or "").strip(),
+                "description": doc,
                 "inputSchema": {
                     "type": "object",
                     "properties": props,
@@ -363,7 +378,7 @@ class ZeroDepMCPServer:
         return decorator
 
     def prompt(self, name: Optional[str] = None):
-        """Decorator dang ky prompt MCP."""
+        """Decorator to register an MCP prompt."""
         def decorator(func: Callable):
             prompt_name = name or func.__name__
             self.prompts[prompt_name] = {
@@ -375,12 +390,12 @@ class ZeroDepMCPServer:
         return decorator
 
     def handle_request(self, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Xu ly mot thong diep JSON-RPC 2.0 va tra ve ket qua phan hoi."""
+        """Process a JSON-RPC 2.0 request and return the response."""
         req_id = req.get("id")
         method = req.get("method")
         params = req.get("params", {}) or {}
 
-        # Notifications (no id) -> do not reply
+        # Notifications (no id) -> do not send response
         if req_id is None and method:
             logger.debug("Received notification: %s", method)
             return None
@@ -392,8 +407,10 @@ class ZeroDepMCPServer:
                 "result": {
                     "protocolVersion": self.PROTOCOL_VERSION,
                     "capabilities": {
-                        "tools": {},
-                        "prompts": {},
+                        "tools": {"listChanged": False},
+                        "prompts": {"listChanged": False},
+                        "resources": {"subscribe": False, "listChanged": False},
+                        "logging": {},
                     },
                     "serverInfo": {
                         "name": self.name,
@@ -418,7 +435,7 @@ class ZeroDepMCPServer:
 
         if method == "tools/call":
             tool_name = params.get("name")
-            arguments = params.get("arguments", {}) or {}
+            arguments = params.get("arguments") or {}
 
             if tool_name not in self.tools:
                 return {
@@ -455,21 +472,26 @@ class ZeroDepMCPServer:
 
         if method == "prompts/list":
             prompts_list = [
-                {"name": p["name"], "description": p["description"]}
+                {"name": p["name"], "description": p["description"], "arguments": []}
                 for p in self.prompts.values()
             ]
             return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": prompts_list}}
 
         if method == "prompts/get":
             prompt_name = params.get("name")
-            if prompt_name not in self.prompts:
+            lookup_key = (
+                prompt_name.replace("-", "_")
+                if isinstance(prompt_name, str) and prompt_name not in self.prompts
+                else prompt_name
+            )
+            if lookup_key not in self.prompts:
                 return {
                     "jsonrpc": "2.0",
                     "id": req_id,
-                    "error": {"code": -32602, "message": f"Prompt '{prompt_name}' not found"},
+                    "error": {"code": -32602, "message": f"Prompt '{prompt_name}' not found."},
                 }
 
-            prompt_def = self.prompts[prompt_name]
+            prompt_def = self.prompts[lookup_key]
             prompt_text = prompt_def["func"]()
             return {
                 "jsonrpc": "2.0",
@@ -505,8 +527,15 @@ class ZeroDepMCPServer:
         }
 
     def run_stdio(self):
-        """Vong lap doc ghi Stdio tieu chuan theo JSON-RPC 2.0."""
-        logger.info("ShieldCall Zero-Dependency MCP Server dang lang nghe tren Stdio...")
+        """Standard JSON-RPC 2.0 stdio read-write loop."""
+        for stream in (sys.stdin, sys.stdout):
+            if hasattr(stream, "reconfigure"):
+                try:
+                    stream.reconfigure(encoding="utf-8")
+                except Exception:
+                    pass
+
+        logger.info("ShieldCall MCP Server listening on stdio...")
         stdin = sys.stdin
         stdout = sys.stdout
 
@@ -537,7 +566,7 @@ class ZeroDepMCPServer:
                 logger.exception("Unexpected error processing stdio line: %s", e)
 
     def run_sse(self, host: str = "127.0.0.1", port: int = 8002):
-        """May chu SSE tu chua su dung http.server cua Python Standard Library."""
+        """Standalone HTTP server handling Server-Sent Events (SSE) and JSON-RPC message posts."""
         from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
         server_instance = self
@@ -551,7 +580,7 @@ class ZeroDepMCPServer:
                 self.send_response(200)
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
                 self.end_headers()
 
             def do_GET(self):
@@ -568,12 +597,19 @@ class ZeroDepMCPServer:
                     self.send_header("Access-Control-Allow-Origin", "*")
                     self.end_headers()
 
-                    # Send endpoint event
-                    endpoint_msg = f"event: endpoint\ndata: /messages?session_id={session_id}\n\n"
+                    qs = urllib_parse.parse_qs(parsed.query)
+                    api_key = qs.get("api_key", [None])[0]
+
+                    messages_path = f"/messages?session_id={session_id}"
+                    if api_key:
+                        messages_path += f"&api_key={urllib_parse.quote(api_key)}"
+
+                    # Send mandatory endpoint event
+                    endpoint_msg = f"event: endpoint\ndata: {messages_path}\n\n"
                     self.wfile.write(endpoint_msg.encode("utf-8"))
                     self.wfile.flush()
 
-                    logger.info("SSE client connected with session: %s", session_id)
+                    logger.info("SSE client connected: session=%s", session_id)
                     try:
                         while True:
                             try:
@@ -582,11 +618,10 @@ class ZeroDepMCPServer:
                                 self.wfile.write(event_payload.encode("utf-8"))
                                 self.wfile.flush()
                             except queue.Empty:
-                                # Keepalive ping comment
                                 self.wfile.write(b": keepalive\n\n")
                                 self.wfile.flush()
                     except (ConnectionResetError, BrokenPipeError):
-                        logger.info("SSE client disconnected: %s", session_id)
+                        logger.info("SSE client disconnected: session=%s", session_id)
                     finally:
                         sessions.pop(session_id, None)
                 else:
@@ -624,11 +659,11 @@ class ZeroDepMCPServer:
                     self.end_headers()
 
         httpd = ThreadingHTTPServer((host, port), SSEHandler)
-        logger.info(f"ShieldCall Zero-Dependency SSE Server dang khoi chay tai http://{host}:{port}/sse")
+        logger.info(f"ShieldCall SSE Server listening at http://{host}:{port}/sse")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            logger.info("Dung may chu SSE.")
+            logger.info("Stopping SSE server.")
             httpd.server_close()
 
     def run(self, transport: str = "stdio", host: str = "127.0.0.1", port: int = 8002):
@@ -650,56 +685,74 @@ def create_server(
     server_name: str = "shieldcall-vn",
     client: Optional[Any] = None,
 ) -> ZeroDepMCPServer:
-    """Khoi tao va dang ky toan bo 10 tools va 3 prompts cho ShieldCall MCP Server."""
+    """Initialize and register all tools and prompts for ShieldCall MCP Server."""
     client = client or ShieldCallClient(api_url=api_url, api_key=api_key)
     server = ZeroDepMCPServer(server_name)
 
     @server.tool()
     def check_phone(phone_number: str) -> str:
         """
-        Tra cuu va danh gia do rui ro lua dao cua so dien thoai tai Viet Nam.
-        Kiem tra danh sach den, lich su bao cao cong dong, nha mang va dau hieu so ao (VoIP).
+        Evaluate scam and fraud risk for a phone number.
+        Inspects blacklists, community reports, carrier metadata, and VoIP/virtual indicators.
+
+        Args:
+            phone_number: Phone number to evaluate (e.g., '0912345678', '+84988776655').
         """
-        data = client.scan_phone(phone_number)
+        data = client.scan_phone((phone_number or "").strip())
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     @server.tool()
     def check_bank_account(bank_name: str, account_number: str) -> str:
         """
-        Tra cuu so tai khoan ngan hang trong co so du lieu gian lan tai chinh va lua dao truc tuyen.
+        Check a bank account against financial fraud and community scam databases.
+
+        Args:
+            bank_name: Bank code or name (e.g., 'MB', 'Techcombank', 'VCB', 'VietinBank').
+            account_number: Bank account number to verify.
         """
-        data = client.scan_bank_account(bank=bank_name, account=account_number)
+        data = client.scan_bank_account(bank=(bank_name or "").strip(), account=(account_number or "").strip())
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     @server.tool()
     def check_url_or_domain(url: str) -> str:
         """
-        Phan tich duong link, URL hoac ten mien de phat hien website gia mao (phishing),
-        ten mien nhai thuong hieu (lookalike domain), chung chi SSL va tuoi doi ten mien.
+        Analyze a URL or domain to detect phishing sites, brand lookalike domains,
+        SSL certificate issues, and suspicious domain registration age.
+
+        Args:
+            url: URL or domain name to inspect (e.g., 'https://vietcombank-ebank.xyz', 'dichvucong-vn.top').
         """
-        data = client.scan_domain(url)
+        data = client.scan_domain((url or "").strip())
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     @server.tool()
     def analyze_message(message_content: str) -> str:
         """
-        Phan tich noi dung tin nhan van ban, SMS hoac doan chat de phat hien kich ban lua dao.
+        Analyze message or SMS text to detect social engineering and scam scripts
+        (impersonation, lottery scams, fake law enforcement, urgent OTP requests).
+
+        Args:
+            message_content: Full text of the suspicious message or dialogue.
         """
-        data = client.scan_message(message_content)
+        data = client.scan_message((message_content or "").strip())
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     @server.tool()
     def lookup_scam_db(query: str, entity_type: str = "all") -> str:
         """
-        Tim kiem tong hop trong kho du lieu cong dong ShieldCall VN.
+        Search the ShieldCall community threat and scam database.
+
+        Args:
+            query: Keyword, phone number, account number, target name, or URL.
+            entity_type: Filter category ('all', 'phone', 'account', 'domain', 'report').
         """
-        data = client.lookup_scam_db(query=query, entity_type=entity_type)
+        data = client.lookup_scam_db(query=(query or "").strip(), entity_type=(entity_type or "all").strip())
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     @server.tool()
     def get_scam_radar_trends() -> str:
         """
-        Lay thong ke xu huong lua dao truc tuyen theo thoi gian thuc (Scam Radar).
+        Retrieve real-time regional scam trends and prevalent threat patterns (Scam Radar).
         """
         data = client.get_scam_radar_trends()
         return json.dumps(data, ensure_ascii=False, indent=2)
@@ -707,7 +760,7 @@ def create_server(
     @server.tool()
     def get_supported_banks() -> str:
         """
-        Lay danh sach cac ngan hang duoc ho tro tai Viet Nam (ma ngan hang, ten viet tat, BIN code).
+        Retrieve the list of supported Vietnamese banks with BIN codes, short names, and identifiers.
         """
         data = client.get_supported_banks()
         return json.dumps(data, ensure_ascii=False, indent=2)
@@ -719,9 +772,18 @@ def create_server(
         email_subject: str = "",
     ) -> str:
         """
-        Kiem tra do rui ro lua dao cua email: xac thuc SPF, DKIM, DMARC, danh sach den va noi dung phishing.
+        Evaluate email fraud risk: check SPF, DKIM, DMARC, blacklist status, and phishing heuristics.
+
+        Args:
+            sender_email: Sender email address (e.g., 'alert@support-vietcombank.com').
+            email_content: Body content of the email.
+            email_subject: Subject line of the email.
         """
-        data = client.scan_email(email=sender_email, content=email_content, subject=email_subject)
+        data = client.scan_email(
+            email=(sender_email or "").strip(),
+            content=(email_content or "").strip(),
+            subject=(email_subject or "").strip(),
+        )
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     @server.tool()
@@ -734,79 +796,95 @@ def create_server(
         sender_email: str = "",
     ) -> str:
         """
-        Phan tich tong hop mot vu viec nghi van lua dao da thuc the trong mot lan goi duy nhat.
-        Dong thoi kiem tra so dien thoai, tai khoan ngan hang, duong link/domain, dia chi email va noi dung.
+        Perform a unified multi-entity security assessment for a suspected scam incident.
+        Concurrently checks phone numbers, bank accounts, domains, emails, and message text,
+        then synthesizes an overall risk assessment.
+
+        Args:
+            message_content: Suspicious message or narrative text.
+            phone_number: Associated phone number.
+            bank_name: Bank name or code provided by the suspect.
+            account_number: Bank account number provided by the suspect.
+            url: Suspicious link or domain.
+            sender_email: Sender email address.
         """
         entities_scanned = {}
         all_threats = []
         max_score = 0
 
-        if phone_number.strip():
-            p_res = client.scan_phone(phone_number.strip())
+        p_val = (phone_number or "").strip()
+        b_name = (bank_name or "").strip()
+        a_val = (account_number or "").strip()
+        u_val = (url or "").strip()
+        e_val = (sender_email or "").strip()
+        m_val = (message_content or "").strip()
+
+        if p_val:
+            p_res = client.scan_phone(p_val)
             entities_scanned["phone"] = p_res
             p_score = int(p_res.get("risk_score", 0)) if isinstance(p_res, dict) else 0
             max_score = max(max_score, p_score)
             if isinstance(p_res, dict) and p_res.get("details"):
-                all_threats.extend([f"[SDT {phone_number}] {d}" for d in p_res.get("details", [])])
+                all_threats.extend([f"[Phone {p_val}] {d}" for d in p_res.get("details", [])])
 
-        if account_number.strip():
-            b_res = client.scan_bank_account(bank=bank_name.strip() or "Other", account=account_number.strip())
+        if a_val:
+            b_res = client.scan_bank_account(bank=b_name or "Other", account=a_val)
             entities_scanned["bank_account"] = b_res
             b_score = int(b_res.get("risk_score", 0)) if isinstance(b_res, dict) else 0
             max_score = max(max_score, b_score)
             if isinstance(b_res, dict) and b_res.get("details"):
-                all_threats.extend([f"[STK {bank_name} {account_number}] {d}" for d in b_res.get("details", [])])
+                all_threats.extend([f"[Bank {b_name} {a_val}] {d}" for d in b_res.get("details", [])])
 
-        if url.strip():
-            u_res = client.scan_domain(url.strip())
+        if u_val:
+            u_res = client.scan_domain(u_val)
             entities_scanned["url"] = u_res
             u_score = int(u_res.get("risk_score", 0)) if isinstance(u_res, dict) else 0
             max_score = max(max_score, u_score)
             if isinstance(u_res, dict) and u_res.get("details"):
-                all_threats.extend([f"[URL {url}] {d}" for d in u_res.get("details", [])])
+                all_threats.extend([f"[URL {u_val}] {d}" for d in u_res.get("details", [])])
 
-        if sender_email.strip():
-            e_res = client.scan_email(email=sender_email.strip(), content=message_content.strip())
+        if e_val:
+            e_res = client.scan_email(email=e_val, content=m_val)
             entities_scanned["email"] = e_res
             e_score = int(e_res.get("risk_score", 0)) if isinstance(e_res, dict) else 0
             max_score = max(max_score, e_score)
             if isinstance(e_res, dict) and e_res.get("security_checks"):
-                all_threats.extend([f"[Email {sender_email}] {c}" for c in e_res.get("security_checks", [])])
+                all_threats.extend([f"[Email {e_val}] {c}" for c in e_res.get("security_checks", [])])
 
-        if message_content.strip():
-            m_res = client.scan_message(message_content.strip())
+        if m_val:
+            m_res = client.scan_message(m_val)
             entities_scanned["message"] = m_res
             m_score = int(m_res.get("risk_score", 0)) if isinstance(m_res, dict) else 0
             max_score = max(max_score, m_score)
             if isinstance(m_res, dict) and m_res.get("patterns_found"):
-                all_threats.extend([f"[Noi dung tin nhan] Dau hieu: {p}" for p in m_res.get("patterns_found", [])])
+                all_threats.extend([f"[Message Pattern] {p}" for p in m_res.get("patterns_found", [])])
             if isinstance(m_res, dict) and m_res.get("explanation"):
-                all_threats.append(f"[AI nhan dinh] {m_res.get('explanation')}")
+                all_threats.append(f"[AI Assessment] {m_res.get('explanation')}")
 
         if max_score >= 70:
             overall_level = "red"
             recommended_actions = [
-                "[NGUY HIEM] TUYET DOI KHONG CHUYEN TIEN vao tai khoan duoc chi dinh.",
-                "[CANH BAO] KHONG bam link hoac cung cap OTP/mat khau duoi bat ky hinh thuc nao.",
-                "[UNG CUU] Lien he ngay hotline ngan hang de khoa tai khoan neu da lo chuyen tien.",
-                "[TO GIAC] Bao cao vu viec cho Co quan Cong an gan nhat va ghi lai toan bo bang chung.",
+                "[DANGER] DO NOT TRANSFER FUNDS to the specified account.",
+                "[WARNING] Do not click links or disclose OTP credentials under any circumstances.",
+                "[ACTION] Immediately contact issuing bank support to freeze accounts if funds were already transferred.",
+                "[REPORT] Submit formal report to law enforcement and preserve all digital evidence.",
             ]
         elif max_score >= 40:
             overall_level = "yellow"
             recommended_actions = [
-                "[CANH BAO] Nghi ngo co dau hieu gian lan, can tam dung moi giao dich.",
-                "[XAC MINH] Xac minh lai thong tin nguoi lien he qua kenh chinh thong.",
-                "[DONG GOP] Gui bao cao len ShieldCall de cong dong cung canh giac.",
+                "[WARNING] Suspected fraud patterns detected. Halt all pending transactions.",
+                "[VERIFY] Independently verify counterparty credentials through official communication channels.",
+                "[REPORT] Submit details to ShieldCall threat database to alert the community.",
             ]
         elif max_score >= 10:
             overall_level = "green"
             recommended_actions = [
-                "[CHU Y] Do rui ro thap nhung can than trong neu co yeu cau tai chinh bat thuong.",
+                "[INFO] Low risk detected. Exercise standard security diligence for any unexpected financial requests.",
             ]
         else:
             overall_level = "safe"
             recommended_actions = [
-                "[AN TOAN] Chua ghi nhan dau hieu lua dao nao trong he thong co so du lieu.",
+                "[SAFE] No confirmed threat indicators recorded in the security database.",
             ]
 
         composite_report = {
@@ -828,30 +906,41 @@ def create_server(
         evidence_note: str = "",
     ) -> str:
         """
-        Gui bao cao hanh vi hoac doi tuong lua dao moi len he thong kiem duyet ShieldCall VN.
+        Submit a new scam report to the ShieldCall moderation system.
+
+        Args:
+            target_type: Target category ('phone', 'account', 'domain', 'message', 'other').
+            target_value: Target identifier (phone number, account number, URL, etc.).
+            scam_type: Scam classification ('police_impersonation', 'bank_impersonation', 'recruitment_scam', 'investment_scam', 'delivery_scam', 'phishing', 'other').
+            description: Detailed incident narrative and sequence of events.
+            evidence_note: Supporting evidence notes (transaction ID, timestamps, etc.).
         """
         data = client.report_scam(
-            target_type=target_type,
-            target_value=target_value,
-            scam_type=scam_type,
-            description=description,
-            evidence_note=evidence_note,
+            target_type=(target_type or "").strip(),
+            target_value=(target_value or "").strip(),
+            scam_type=(scam_type or "other").strip(),
+            description=(description or "").strip(),
+            evidence_note=(evidence_note or "").strip(),
         )
         return json.dumps(data, ensure_ascii=False, indent=2)
 
+    # --------------------------------------------------------------------------
+    # PROMPTS
+    # --------------------------------------------------------------------------
+
     @server.prompt()
     def shieldcall_sentry() -> str:
-        """Prompt khoi tao bien chatbot thanh Chuyen vien An ninh So thuong truc (Sentry)."""
+        """Operational prompt configuring the model as a proactive cybersecurity sentry."""
         return SHIELDCALL_SENTRY_PROMPT
 
     @server.prompt()
     def emergency_advisor() -> str:
-        """Prompt ung cuu khan cap 4 buoc khi nan nhan vua bi lua hoac chuyen tien."""
+        """Incident response prompt for acute fraud emergencies and containment."""
         return SHIELDCALL_EMERGENCY_PROMPT
 
     @server.prompt()
     def scam_investigator() -> str:
-        """Prompt giam dinh ky thuat va tham dinh dau vet so chuyen sau."""
+        """Technical investigation prompt for deep forensic indicator inspection."""
         return SHIELDCALL_INVESTIGATOR_PROMPT
 
     return server
@@ -863,37 +952,37 @@ def create_server(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ShieldCall VN - Standalone Model Context Protocol (MCP) Server (Zero-Dependency)"
+        description="ShieldCall VN - Model Context Protocol (MCP) Server"
     )
     parser.add_argument(
         "--transport",
         choices=["stdio", "sse", "streamable-http"],
         default="stdio",
-        help="Che do MCP Transport (mac dinh: stdio)",
+        help="MCP transport mode (default: stdio)",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8002,
-        help="Port cho network transport SSE (mac dinh: 8002)",
+        help="Port for SSE network transport (default: 8002)",
     )
     parser.add_argument(
         "--host",
         type=str,
         default="127.0.0.1",
-        help="Host address cho network transport (mac dinh: 127.0.0.1)",
+        help="Host address for network transport (default: 127.0.0.1)",
     )
     parser.add_argument(
         "--api-url",
         type=str,
         default=None,
-        help="Dia chi ShieldCall API backend (vi du: https://shieldcall.vn/api/v1)",
+        help="ShieldCall backend API endpoint (e.g., https://sc.fptoj.com/api/v1)",
     )
     parser.add_argument(
         "--api-key",
         type=str,
         default=None,
-        help="ShieldCall API Key (vi du: sc_live_...)",
+        help="ShieldCall API Key (e.g., sc_live_...)",
     )
 
     args = parser.parse_args()

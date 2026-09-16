@@ -304,14 +304,14 @@
                 </div>
 
                 <div x-show="open" x-cloak style="display: none;" x-transition class="mt-6 rounded-3xl border border-red-500/20 bg-black/20 p-5 space-y-4 animate-fadein">
-                    <p class="text-[11px] text-red-200/80 font-semibold leading-relaxed">Nhập mật khẩu hiện tại và gõ chính xác cụm từ <span class="font-black text-red-300">XOA TAI KHOAN</span> để xác nhận xóa tài khoản.</p>
+                    <p class="text-[11px] text-red-200/80 font-semibold leading-relaxed">Nhập mật khẩu hiện tại và gõ chính xác cụm từ <span class="font-black text-red-300">XÓA TÀI KHOẢN</span> (hoặc <span class="font-bold text-red-300">XOA TAI KHOAN</span>) để xác nhận xóa tài khoản.</p>
                     <div class="space-y-2">
                         <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Mật khẩu hiện tại</label>
                         <input type="password" x-model="password" class="liquid-input w-full py-3.5 px-5 text-sm font-bold" placeholder="••••••••">
                     </div>
                     <div class="space-y-2">
                         <label class="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Cụm từ xác nhận</label>
-                        <input type="text" x-model="confirmationText" class="liquid-input w-full py-3.5 px-5 text-sm font-black tracking-[0.15em] uppercase" placeholder="XOA TAI KHOAN">
+                        <input type="text" x-model="confirmationText" class="liquid-input w-full py-3.5 px-5 text-sm font-black tracking-[0.15em] uppercase" placeholder="XÓA TÀI KHOẢN">
                     </div>
                     <button @click="submitDelete()" :disabled="loading" class="liquid-btn w-full py-4 text-[11px] font-black uppercase tracking-[0.2em] bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20 disabled:opacity-60">
                         <span x-show="!loading">XÓA TÀI KHOẢN NGAY</span>
@@ -795,12 +795,12 @@
                 password: '',
                 confirmationText: '',
                 async submitDelete() {
-                    const expected = 'XOA TAI KHOAN';
+                    const norm = (this.confirmationText || '').trim().toUpperCase();
                     if (!this.password) {
                         return showToast('Vui lòng nhập mật khẩu hiện tại.', 'warning');
                     }
-                    if ((this.confirmationText || '').trim().toUpperCase() !== expected) {
-                        return showToast('Bạn phải nhập chính xác cụm từ xác nhận.', 'warning');
+                    if (norm !== 'XOA TAI KHOAN' && norm !== 'XÓA TÀI KHOẢN') {
+                        return showToast('Bạn phải nhập chính xác cụm từ xác nhận (XÓA TÀI KHOẢN).', 'warning');
                     }
 
                     const accepted = await window.scConfirm(

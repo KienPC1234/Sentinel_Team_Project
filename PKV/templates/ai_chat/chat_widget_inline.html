@@ -61,14 +61,28 @@
                         <span x-show="msg.streaming" class="streaming-cursor"></span>
 
                         <!-- Search Results (RAG & Web) -->
-                        <div x-show="msg.from==='bot' && msg.metadata && (msg.metadata.web_search || msg.metadata.internal_knowledge)" class="search-results-container">
-                            <div class="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 flex items-center gap-2">
-                                <i class="bi bi-search text-[10px]"></i> Nguồn tham khảo
-                            </div>
-                            <div class="flex flex-col gap-1">
+                        <div x-show="msg.from==='bot' && !msg.streaming && msg.metadata && (msg.metadata.web_search || msg.metadata.internal_knowledge)" 
+                             x-data="{ expanded: false }"
+                             class="search-results-container mt-2">
+                            <button type="button" @click="expanded = !expanded" class="w-full flex items-center justify-between text-left group select-none">
+                                <div class="flex items-center gap-2 overflow-hidden">
+                                    <div class="w-4 h-4 rounded bg-cyan-500/10 text-cyan-400 flex items-center justify-center shrink-0 text-[10px]">
+                                        <i class="bi bi-globe2"></i>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-white/70 uppercase tracking-widest">Nguồn tham khảo</span>
+                                    <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono font-medium" 
+                                          x-text="((msg.metadata && msg.metadata.internal_knowledge ? msg.metadata.internal_knowledge.length : 0) + (msg.metadata && msg.metadata.web_search ? msg.metadata.web_search.length : 0)) + ' nguồn'">
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1 text-[10px] text-slate-400 group-hover:text-cyan-400 transition-colors shrink-0">
+                                    <span x-text="expanded ? 'Thu gọn' : 'Mở rộng'"></span>
+                                    <i class="bi bi-chevron-down transition-transform duration-200" :class="{ 'rotate-180': expanded }"></i>
+                                </div>
+                            </button>
+                            <div x-show="expanded" class="flex flex-col gap-1 mt-2 pt-2 border-t border-white/5">
                                 <!-- Internal Knowledge (RAG) -->
                                 <template x-for="res in (msg.metadata ? msg.metadata.internal_knowledge : [])" :key="res.url + 'rag'">
-                                    <a :href="res.url" target="_blank" class="search-item group">
+                                    <a :href="res.url" target="_blank" rel="noopener noreferrer" class="search-item group">
                                         <div class="flex items-center justify-between gap-2 overflow-hidden">
                                             <div class="flex items-center gap-2 overflow-hidden">
                                                 <div class="w-4 h-4 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
@@ -83,7 +97,7 @@
 
                                 <!-- Web Search Results -->
                                 <template x-for="res in (msg.metadata ? msg.metadata.web_search : [])" :key="res.url + 'web'">
-                                    <a :href="res.url" target="_blank" class="search-item group">
+                                    <a :href="res.url" target="_blank" rel="noopener noreferrer" class="search-item group">
                                         <div class="flex items-center justify-between gap-2 overflow-hidden">
                                             <div class="flex items-center gap-2 overflow-hidden">
                                                 <div class="w-4 h-4 rounded bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
@@ -240,16 +254,74 @@
         background: rgba(255,255,255,0.1);
         border-radius: 10px;
     }
-    .ai-markdown table {
+    [x-data*="chatWidget"] .ai-markdown table {
         display: block;
         width: 100%;
         overflow-x: auto;
         white-space: nowrap;
         margin: 0.5rem 0;
     }
-    .ai-markdown td, .ai-markdown th {
+    [x-data*="chatWidget"] .ai-markdown td, 
+    [x-data*="chatWidget"] .ai-markdown th {
         min-width: 100px;
         word-break: normal;
+    }
+
+    /* Markdown headings, lists and callout containers */
+    .ai-markdown h1, .ai-markdown h2, .ai-markdown h3, .ai-markdown h4 {
+        font-weight: 700;
+        margin: 1.15rem 0 0.6rem;
+        color: #fff;
+        line-height: 1.4;
+    }
+    .ai-markdown h1:first-child, .ai-markdown h2:first-child, .ai-markdown h3:first-child, .ai-markdown p:first-child {
+        margin-top: 0 !important;
+    }
+    .ai-markdown p {
+        margin-bottom: 0.75rem;
+        line-height: 1.6;
+    }
+    .ai-markdown p:last-child {
+        margin-bottom: 0;
+    }
+    .ai-markdown ul, .ai-markdown ol {
+        margin-top: 0.75rem !important;
+        margin-left: 1.25rem !important;
+        margin-bottom: 0.95rem !important;
+        list-style: inherit !important;
+    }
+    .ai-markdown li {
+        margin-bottom: 0.4rem !important;
+        line-height: 1.6 !important;
+    }
+    .ai-markdown li:last-child {
+        margin-bottom: 0.2rem !important;
+    }
+    .ai-markdown .callout-box,
+    .ai-markdown div[style*="background"] {
+        display: block !important;
+        margin-top: 1rem !important;
+        margin-bottom: 1rem !important;
+        padding: 0.95rem 1.15rem !important;
+        border-radius: 10px !important;
+        line-height: 1.6 !important;
+        box-sizing: border-box !important;
+    }
+    .ai-markdown .callout-box + .callout-box,
+    .ai-markdown div[style*="background"] + div[style*="background"],
+    .ai-markdown .callout-box + div[style*="background"],
+    .ai-markdown div[style*="background"] + .callout-box {
+        margin-top: 1.15rem !important;
+    }
+    .ai-markdown .callout-box + ul,
+    .ai-markdown .callout-box + ol,
+    .ai-markdown div[style*="background"] + ul,
+    .ai-markdown div[style*="background"] + ol {
+        margin-top: 1.15rem !important;
+    }
+    .ai-markdown .callout-box + p,
+    .ai-markdown div[style*="background"] + p {
+        margin-top: 1rem !important;
     }
 </style>
 
