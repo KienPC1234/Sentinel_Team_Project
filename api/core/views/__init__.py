@@ -42,6 +42,9 @@ from .api_key_views import (
     UserAPIKeyListCreateView, UserAPIKeyDetailView,
     UserAPIKeyToggleView, UserAPIKeyRegenerateView,
 )
+from .mcp_remote_views import (
+    MCPConnectSSEView, MCPMessagesView, MCPDiscoveryView,
+)
 
 __all__ = [
     'ChatStreamView', 'ScanAnalyzeSSEView',
@@ -72,5 +75,6 @@ __all__ = [
     'LessonReactionView', 'ArticleReactionView', 'ArticleCommentListCreateView', 'ArticleCommentReactionView',
     'ScamIQStartView', 'ScamIQStatusView', 'ScamIQSubmitView', 'ScamIQHistoryView',
     'UserAPIKeyListCreateView', 'UserAPIKeyDetailView', 'UserAPIKeyToggleView', 'UserAPIKeyRegenerateView',
+    'MCPConnectSSEView', 'MCPMessagesView', 'MCPDiscoveryView',
 ]
 

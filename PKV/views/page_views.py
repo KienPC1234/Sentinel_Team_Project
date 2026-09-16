@@ -1184,7 +1184,7 @@ def mcp_guide_view(request):
             )
         )
 
-    site_url = getattr(settings, 'SITE_URL', 'http://127.0.0.1:8001').rstrip('/')
+    site_url = request.build_absolute_uri('/').rstrip('/')
     api_url = f"{site_url}/api/v1"
 
     return render(request, "MCP/mcp_guide.html", {

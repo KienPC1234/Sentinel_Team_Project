@@ -107,7 +107,7 @@
                     <input type="file" x-ref="fileInput" class="hidden" @change="handleFileSelect($event)">
                     <i class="bi bi-cloud-arrow-up text-5xl text-white/20 mb-4 group-hover:text-pink-500/50 transition-colors"></i>
                     <p class="text-white font-bold text-lg mb-2">Click hoặc kéo thả file vào đây</p>
-                    <p class="text-white/40 text-sm">Hỗ trợ .exe, .zip, .rar, .pdf, .docx, .xlsx, .apk, .bat, .ps1, .vbs (Tối đa 500MB)</p>
+                    <p class="text-white/40 text-sm">Hỗ trợ .exe, .zip, .rar, .pdf, .docx, .xlsx, .apk, .bat, .ps1, .vbs (Tối đa 100MB)</p>
                 </div>
             </template>
 
@@ -400,8 +400,8 @@ function fileScanHandler() {
 
         handleFileSelect(e) {
             const selected = e.target.files[0];
-            if (selected && selected.size > 500 * 1024 * 1024) {
-                window.showToast('Tệp quá lớn. Dung lượng tối đa là 500 MB.', 'error');
+            if (selected && selected.size > 100 * 1024 * 1024) {
+                window.showToast('Tệp quá lớn. Dung lượng tối đa được hỗ trợ tải lên là 100 MB.', 'error');
                 return;
             }
             this.file = selected;
@@ -412,8 +412,8 @@ function fileScanHandler() {
         handleDrop(e) {
             this.dragging = false;
             const dropped = e.dataTransfer.files[0];
-            if (dropped && dropped.size > 500 * 1024 * 1024) {
-                window.showToast('Tệp quá lớn. Dung lượng tối đa là 500 MB.', 'error');
+            if (dropped && dropped.size > 100 * 1024 * 1024) {
+                window.showToast('Tệp quá lớn. Dung lượng tối đa được hỗ trợ tải lên là 100 MB.', 'error');
                 return;
             }
             this.file = dropped;
@@ -520,7 +520,26 @@ function fileScanHandler() {
                     body: formData
                 });
                 
-                const data = await resp.json();
+                if (resp.status === 413) {
+                    window.showToast('Dung lượng tệp vượt quá giới hạn tải lên (mã lỗi 413 - Tối đa 100 MB). Vui lòng chọn tệp nhỏ hơn.', 'error');
+                    this.reset();
+                    return;
+                }
+
+                let data = null;
+                try {
+                    data = await resp.json();
+                } catch (_) {
+                    data = null;
+                }
+
+                if (!resp.ok || !data) {
+                    const errMsg = (data && data.error) ? data.error : `Máy chủ phản hồi lỗi (${resp.status}): Không thể xử lý tệp tải lên.`;
+                    window.showToast(errMsg, 'error');
+                    this.reset();
+                    return;
+                }
+
                 if (data.scan_id) {
                     this.scanId = data.scan_id;
                     this.loading = false;
@@ -528,7 +547,6 @@ function fileScanHandler() {
                     this.statusMsg = 'Hệ thống đang phân tích mã độc...';
                     this.startPolling();
                 } else {
-                    // If turnstile failed server-side (race condition), reset and ask user to retry
                     if (data.error && data.error.includes('anti-spam')) {
                         window.showToast('Phiên xác minh đã hết hạn. Vui lòng xác minh lại.', 'warning');
                         if (window.turnstile) window.turnstile.reset('#file-turnstile-widget');
@@ -538,7 +556,7 @@ function fileScanHandler() {
                     this.reset();
                 }
             } catch (e) {
-                window.showToast('Lỗi kết nối máy chủ.', 'error');
+                window.showToast('Lỗi kết nối máy chủ hoặc gián đoạn đường truyền tải file.', 'error');
                 this.reset();
             }
         },

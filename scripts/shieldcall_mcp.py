@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-ShieldCall VN - Standalone Model Context Protocol (MCP) Server
+ShieldCall VN - Standalone Model Context Protocol (MCP) Server (Zero-Dependency)
 Tich hop co so du lieu an ninh so, phong chong lua dao cua ShieldCall VN
 vao bat ky chatbot AI nao: Claude Desktop, Cursor, Windsurf, Claude Code, Cline, ChatGPT.
 
-YEU CAU HE THONG:
-    pip install "mcp>=1.0.0" requests
+DAC DIEM NOI BAT:
+    - 100% Zero-Dependency: Chay truc tiep bang thu vien chuan Python 3 (sys, json, urllib, http).
+    - KHONG can cai dat bat ky thu vien ben ngoai nao (khong can pip install mcp hay requests).
+    - Tuong thich hoan toan tieu chuan Model Context Protocol (JSON-RPC 2.0).
+    - Ho tro ca 2 che do: Stdio (mac dinh cho AI Desktop) va SSE (mang noi bo / server tu xa).
 
 CACH SU DUNG:
 1. Claude Desktop (claude_desktop_config.json):
@@ -16,7 +19,7 @@ CACH SU DUNG:
       "args": ["/duong_dan_toi/shieldcall_mcp.py"],
       "env": {
         "SHIELDCALL_API_KEY": "sc_live_your_api_key_here",
-        "SHIELDCALL_API_URL": "http://127.0.0.1:8001/api/v1"
+        "SHIELDCALL_API_URL": "https://shieldcall.vn/api/v1"
       }
     }
   }
@@ -30,7 +33,7 @@ CACH SU DUNG:
       "args": ["/duong_dan_toi/shieldcall_mcp.py"],
       "env": {
         "SHIELDCALL_API_KEY": "sc_live_your_api_key_here",
-        "SHIELDCALL_API_URL": "http://127.0.0.1:8001/api/v1"
+        "SHIELDCALL_API_URL": "https://shieldcall.vn/api/v1"
       }
     }
   }
@@ -45,9 +48,18 @@ import sys
 import json
 import logging
 import argparse
-from typing import Any, Dict, Optional
+import inspect
+import queue
+import threading
+import uuid
+import re
+from typing import Any, Dict, List, Optional, Callable
+from urllib import request as urllib_request
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+import ssl
 
-# Setup logger to stderr (stdio transport reserves stdout for JSON-RPC)
+# Setup logger to stderr (stdio transport reserves stdout strictly for JSON-RPC messages)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -55,31 +67,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("shieldcall_mcp")
 
-# Import MCP Server with cross-version compatibility (mcp 1.x FastMCP vs mcp 2.x MCPServer)
-try:
-    from mcp.server.mcpserver import MCPServer
-except ImportError:
-    try:
-        from mcp.server.fastmcp import FastMCP as MCPServer
-    except ImportError:
-        logger.error(
-            "Chua cai dat thu vien mcp. Vui long chay: pip install \"mcp>=1.0.0\" requests"
-        )
-        sys.exit(1)
-
-try:
-    import requests
-except ImportError:
-    logger.error("Chua cai dat thu vien requests. Vui long chay: pip install requests")
-    sys.exit(1)
-
 
 # ==============================================================================
-# 1. SHIELDCALL REST API CLIENT
+# 1. SHIELDCALL REST API CLIENT (ZERO-DEPENDENCY via urllib)
 # ==============================================================================
 
 class ShieldCallClient:
-    """Client goi truc tiep cac API kiem tra an ninh so cua ShieldCall VN."""
+    """Client goi truc tiep cac API kiem tra an ninh so cua ShieldCall VN qua urllib."""
 
     def __init__(
         self,
@@ -87,7 +81,7 @@ class ShieldCallClient:
         api_key: Optional[str] = None,
         timeout: int = 30,
     ):
-        raw_url = api_url or os.getenv("SHIELDCALL_API_URL", "http://127.0.0.1:8001/api/v1")
+        raw_url = api_url or os.getenv("SHIELDCALL_API_URL", "https://shieldcall.vn/api/v1")
         self.api_url = raw_url.rstrip("/")
         self.api_key = api_key or os.getenv("SHIELDCALL_API_KEY", "")
         self.timeout = timeout
@@ -96,7 +90,7 @@ class ShieldCallClient:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "ShieldCall-MCP-Server/1.0",
+            "User-Agent": "ShieldCall-ZeroDep-MCP/1.0",
         }
         if self.api_key:
             headers["X-API-Key"] = self.api_key
@@ -111,46 +105,62 @@ class ShieldCallClient:
         params: Optional[Dict] = None,
     ) -> Dict[str, Any]:
         url = f"{self.api_url}/{endpoint.lstrip('/')}"
-        try:
-            resp = requests.request(
-                method=method,
-                url=url,
-                headers=self._headers(),
-                json=data if method in ("POST", "PUT", "PATCH") else None,
-                params=params,
-                timeout=self.timeout,
-            )
+        if params:
+            query_str = urllib_parse.urlencode(params)
+            url = f"{url}?{query_str}"
 
-            if resp.status_code == 401:
+        req_body = None
+        if data is not None and method in ("POST", "PUT", "PATCH"):
+            req_body = json.dumps(data).encode("utf-8")
+
+        req = urllib_request.Request(
+            url=url,
+            data=req_body,
+            headers=self._headers(),
+            method=method,
+        )
+
+        ctx = ssl.create_default_context()
+
+        try:
+            with urllib_request.urlopen(req, timeout=self.timeout, context=ctx) as response:
+                resp_bytes = response.read()
+                resp_text = resp_bytes.decode("utf-8")
+                try:
+                    return json.loads(resp_text)
+                except Exception:
+                    return {"raw": resp_text}
+        except urllib_error.HTTPError as e:
+            status_code = e.code
+            try:
+                err_text = e.read().decode("utf-8")
+                err_data = json.loads(err_text)
+            except Exception:
+                err_data = None
+                err_text = ""
+
+            if status_code == 401:
                 return {
                     "error": (
                         "Xac thuc API Key that bai (401 Unauthorized). "
                         "Vui long kiem tra bien moi truong SHIELDCALL_API_KEY."
                     )
                 }
-            if resp.status_code == 429:
-                try:
-                    detail = resp.json().get("detail", "Vuot qua han muc request.")
-                except Exception:
-                    detail = resp.text
+            if status_code == 429:
+                detail = (err_data.get("detail") if isinstance(err_data, dict) else err_text) or "Vuot qua han muc request."
                 return {"error": f"Han muc API Key da het hoac bi gioi han toc do: {detail}"}
 
-            if not resp.ok:
-                try:
-                    err_json = resp.json()
-                    return {"error": f"Loi API ({resp.status_code}): {err_json}"}
-                except Exception:
-                    return {"error": f"Loi API ({resp.status_code}): {resp.text[:300]}"}
-
-            return resp.json()
-        except requests.exceptions.ConnectionError:
+            if err_data and isinstance(err_data, dict):
+                return {"error": f"Loi API ({status_code}): {err_data.get('error') or err_data}"}
+            return {"error": f"Loi API ({status_code}): {err_text[:300]}"}
+        except urllib_error.URLError as e:
             return {
                 "error": (
                     f"Khong the ket noi den may chu ShieldCall tai {self.api_url}. "
-                    "Vui long kiem tra xem backend ShieldCall dang chay hay khong."
+                    f"Nguyen nhan: {e.reason}. Vui long kiem tra xem backend ShieldCall dang chay hay khong."
                 )
             }
-        except requests.exceptions.Timeout:
+        except TimeoutError:
             return {"error": f"Het thoi gian cho phan hoi ({self.timeout}s) tu ShieldCall API."}
         except Exception as e:
             return {"error": f"Loi ngoai le khi goi ShieldCall API: {str(e)}"}
@@ -229,8 +239,6 @@ class ShieldCallClient:
         evidence_note: str = "",
     ) -> Dict[str, Any]:
         """Gui bao cao hanh vi lua dao vao he thong kiem duyet cong dong."""
-        import re
-
         norm_val = (target_value or "").strip()
         if target_type == "phone":
             cleaned = re.sub(r"[\s\-\.]", "", norm_val)
@@ -302,17 +310,349 @@ Nhiem vu cua ban la phan tich cau truc ky thuat sau ve cac thuc the nghi van:
 
 
 # ==============================================================================
-# 3. SERVER INITIALIZATION & TOOL REGISTRATION
+# 3. PURE PYTHON ZERO-DEPENDENCY MCP PROTOCOL ENGINE
+# ==============================================================================
+
+class ZeroDepMCPServer:
+    """
+    May chu MCP tu chua (Zero-Dependency) trien khai chuan giao thuc
+    Model Context Protocol (JSON-RPC 2.0) qua Stdio va Server-Sent Events (SSE).
+    Hoat dong ngay lap tuc tren moi moi truong Python 3 ma khong can cai thu vien ngoai.
+    """
+
+    PROTOCOL_VERSION = "2024-11-05"
+
+    def __init__(self, name: str = "shieldcall-vn", version: str = "1.0.0"):
+        self.name = name
+        self.version = version
+        self.tools: Dict[str, Dict[str, Any]] = {}
+        self.prompts: Dict[str, Dict[str, Any]] = {}
+
+    def tool(self, name: Optional[str] = None):
+        """Decorator dang ky tool MCP."""
+        def decorator(func: Callable):
+            tool_name = name or func.__name__
+            sig = inspect.signature(func)
+            props: Dict[str, Any] = {}
+            required: List[str] = []
+
+            for param_name, param in sig.parameters.items():
+                param_type = "string"
+                if param.annotation is int:
+                    param_type = "integer"
+                elif param.annotation is bool:
+                    param_type = "boolean"
+                elif param.annotation is float:
+                    param_type = "number"
+
+                props[param_name] = {"type": param_type}
+                if param.default is inspect.Parameter.empty:
+                    required.append(param_name)
+
+            self.tools[tool_name] = {
+                "name": tool_name,
+                "description": (func.__doc__ or "").strip(),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": props,
+                    "required": required,
+                },
+                "func": func,
+            }
+            return func
+        return decorator
+
+    def prompt(self, name: Optional[str] = None):
+        """Decorator dang ky prompt MCP."""
+        def decorator(func: Callable):
+            prompt_name = name or func.__name__
+            self.prompts[prompt_name] = {
+                "name": prompt_name,
+                "description": (func.__doc__ or "").strip(),
+                "func": func,
+            }
+            return func
+        return decorator
+
+    def handle_request(self, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Xu ly mot thong diep JSON-RPC 2.0 va tra ve ket qua phan hoi."""
+        req_id = req.get("id")
+        method = req.get("method")
+        params = req.get("params", {}) or {}
+
+        # Notifications (no id) -> do not reply
+        if req_id is None and method:
+            logger.debug("Received notification: %s", method)
+            return None
+
+        if method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": self.PROTOCOL_VERSION,
+                    "capabilities": {
+                        "tools": {},
+                        "prompts": {},
+                    },
+                    "serverInfo": {
+                        "name": self.name,
+                        "version": self.version,
+                    },
+                },
+            }
+
+        if method == "ping":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
+        if method == "tools/list":
+            tools_list = [
+                {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "inputSchema": t["inputSchema"],
+                }
+                for t in self.tools.values()
+            ]
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools_list}}
+
+        if method == "tools/call":
+            tool_name = params.get("name")
+            arguments = params.get("arguments", {}) or {}
+
+            if tool_name not in self.tools:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "content": [{"type": "text", "text": f"Error: Tool '{tool_name}' not found."}],
+                        "isError": True,
+                    },
+                }
+
+            tool_def = self.tools[tool_name]
+            try:
+                result_val = tool_def["func"](**arguments)
+                text_out = result_val if isinstance(result_val, str) else json.dumps(result_val, ensure_ascii=False)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "content": [{"type": "text", "text": text_out}],
+                        "isError": False,
+                    },
+                }
+            except Exception as ex:
+                logger.exception("Error executing tool %s: %s", tool_name, ex)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "content": [{"type": "text", "text": f"Execution error in {tool_name}: {str(ex)}"}],
+                        "isError": True,
+                    },
+                }
+
+        if method == "prompts/list":
+            prompts_list = [
+                {"name": p["name"], "description": p["description"]}
+                for p in self.prompts.values()
+            ]
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": prompts_list}}
+
+        if method == "prompts/get":
+            prompt_name = params.get("name")
+            if prompt_name not in self.prompts:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32602, "message": f"Prompt '{prompt_name}' not found"},
+                }
+
+            prompt_def = self.prompts[prompt_name]
+            prompt_text = prompt_def["func"]()
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "description": prompt_def["description"],
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": {"type": "text", "text": prompt_text},
+                        }
+                    ],
+                },
+            }
+
+        if method == "resources/list":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": []}}
+
+        if method == "resources/templates/list":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"resourceTemplates": []}}
+
+        if method == "logging/setLevel":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
+        if method == "completion/complete":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"completion": {"values": []}}}
+
+        # Fallback for unsupported methods
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {"code": -32601, "message": f"Method '{method}' not implemented."},
+        }
+
+    def run_stdio(self):
+        """Vong lap doc ghi Stdio tieu chuan theo JSON-RPC 2.0."""
+        logger.info("ShieldCall Zero-Dependency MCP Server dang lang nghe tren Stdio...")
+        stdin = sys.stdin
+        stdout = sys.stdout
+
+        while True:
+            line = stdin.readline()
+            if not line:
+                break
+            clean_line = line.strip()
+            if not clean_line:
+                continue
+
+            try:
+                req = json.loads(clean_line)
+                res = self.handle_request(req)
+                if res is not None:
+                    out_json = json.dumps(res, ensure_ascii=False)
+                    stdout.write(out_json + "\n")
+                    stdout.flush()
+            except json.JSONDecodeError:
+                err_resp = {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32700, "message": "Parse error: Invalid JSON"},
+                }
+                stdout.write(json.dumps(err_resp) + "\n")
+                stdout.flush()
+            except Exception as e:
+                logger.exception("Unexpected error processing stdio line: %s", e)
+
+    def run_sse(self, host: str = "127.0.0.1", port: int = 8002):
+        """May chu SSE tu chua su dung http.server cua Python Standard Library."""
+        from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+        server_instance = self
+        sessions: Dict[str, queue.Queue] = {}
+
+        class SSEHandler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):
+                logger.info("%s - - [%s] %s", self.client_address[0], self.log_date_time_string(), format % args)
+
+            def do_OPTIONS(self):
+                self.send_response(200)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+                self.end_headers()
+
+            def do_GET(self):
+                parsed = urllib_parse.urlparse(self.path)
+                if parsed.path == "/sse":
+                    session_id = uuid.uuid4().hex
+                    q: queue.Queue = queue.Queue()
+                    sessions[session_id] = q
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Connection", "keep-alive")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+
+                    # Send endpoint event
+                    endpoint_msg = f"event: endpoint\ndata: /messages?session_id={session_id}\n\n"
+                    self.wfile.write(endpoint_msg.encode("utf-8"))
+                    self.wfile.flush()
+
+                    logger.info("SSE client connected with session: %s", session_id)
+                    try:
+                        while True:
+                            try:
+                                msg = q.get(timeout=20)
+                                event_payload = f"event: message\ndata: {json.dumps(msg, ensure_ascii=False)}\n\n"
+                                self.wfile.write(event_payload.encode("utf-8"))
+                                self.wfile.flush()
+                            except queue.Empty:
+                                # Keepalive ping comment
+                                self.wfile.write(b": keepalive\n\n")
+                                self.wfile.flush()
+                    except (ConnectionResetError, BrokenPipeError):
+                        logger.info("SSE client disconnected: %s", session_id)
+                    finally:
+                        sessions.pop(session_id, None)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+                    self.wfile.write(b"Not Found")
+
+            def do_POST(self):
+                parsed = urllib_parse.urlparse(self.path)
+                if parsed.path == "/messages":
+                    qs = urllib_parse.parse_qs(parsed.query)
+                    session_id = qs.get("session_id", [None])[0]
+
+                    content_length = int(self.headers.get("Content-Length", 0))
+                    body = self.rfile.read(content_length).decode("utf-8")
+
+                    try:
+                        req_data = json.loads(body)
+                        res = server_instance.handle_request(req_data)
+                        if res and session_id and session_id in sessions:
+                            sessions[session_id].put(res)
+
+                        self.send_response(202)
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(b'{"status": "accepted"}')
+                    except Exception as err:
+                        self.send_response(400)
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"error": str(err)}).encode("utf-8"))
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+        httpd = ThreadingHTTPServer((host, port), SSEHandler)
+        logger.info(f"ShieldCall Zero-Dependency SSE Server dang khoi chay tai http://{host}:{port}/sse")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            logger.info("Dung may chu SSE.")
+            httpd.server_close()
+
+    def run(self, transport: str = "stdio", host: str = "127.0.0.1", port: int = 8002):
+        if transport == "stdio":
+            self.run_stdio()
+        elif transport in ("sse", "streamable-http"):
+            self.run_sse(host=host, port=port)
+        else:
+            raise ValueError(f"Unknown transport: {transport}")
+
+
+# ==============================================================================
+# 4. SERVER INITIALIZATION & TOOL REGISTRATION
 # ==============================================================================
 
 def create_server(
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
     server_name: str = "shieldcall-vn",
-) -> MCPServer:
+    client: Optional[Any] = None,
+) -> ZeroDepMCPServer:
     """Khoi tao va dang ky toan bo 10 tools va 3 prompts cho ShieldCall MCP Server."""
-    client = ShieldCallClient(api_url=api_url, api_key=api_key)
-    server = MCPServer(server_name)
+    client = client or ShieldCallClient(api_url=api_url, api_key=api_key)
+    server = ZeroDepMCPServer(server_name)
 
     @server.tool()
     def check_phone(phone_number: str) -> str:
@@ -518,12 +858,12 @@ def create_server(
 
 
 # ==============================================================================
-# 4. CLI ENTRYPOINT
+# 5. CLI ENTRYPOINT
 # ==============================================================================
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ShieldCall VN - Model Context Protocol (MCP) Server"
+        description="ShieldCall VN - Standalone Model Context Protocol (MCP) Server (Zero-Dependency)"
     )
     parser.add_argument(
         "--transport",
@@ -535,7 +875,7 @@ def main():
         "--port",
         type=int,
         default=8002,
-        help="Port cho network transport SSE hoac HTTP (mac dinh: 8002)",
+        help="Port cho network transport SSE (mac dinh: 8002)",
     )
     parser.add_argument(
         "--host",
@@ -547,7 +887,7 @@ def main():
         "--api-url",
         type=str,
         default=None,
-        help="Dia chi ShieldCall API backend (vi du: http://127.0.0.1:8001/api/v1)",
+        help="Dia chi ShieldCall API backend (vi du: https://shieldcall.vn/api/v1)",
     )
     parser.add_argument(
         "--api-key",
@@ -561,14 +901,9 @@ def main():
     server = create_server(api_url=args.api_url, api_key=args.api_key)
 
     if args.transport == "stdio":
-        logger.info("Starting ShieldCall MCP Server in stdio transport mode...")
         server.run(transport="stdio")
-    elif args.transport == "sse":
-        logger.info(f"Starting ShieldCall MCP Server in SSE mode on {args.host}:{args.port}...")
+    elif args.transport in ("sse", "streamable-http"):
         server.run(transport="sse", host=args.host, port=args.port)
-    elif args.transport == "streamable-http":
-        logger.info(f"Starting ShieldCall MCP Server in HTTP mode on {args.host}:{args.port}...")
-        server.run(transport="streamable-http", host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

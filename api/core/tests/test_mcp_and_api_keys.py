@@ -253,3 +253,148 @@ class AnalysisFeaturesVerificationTest(TestCase):
         bank_names = [b.get('shortName') or b.get('code') for b in resp.data]
         self.assertTrue(any('MB' in str(b) for b in bank_names))
 
+
+class RemoteMCPViewsTest(TestCase):
+    """
+    Test suite for Remote Model Context Protocol (MCP) endpoints:
+    - Discovery (/api/v1/mcp/)
+    - SSE handshake (/api/v1/mcp/sse/)
+    - Messages JSON-RPC execution (/api/v1/mcp/messages/)
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='remote_mcp_tester',
+            email='remote_mcp@test.com',
+            password='Password123!'
+        )
+        self.key_obj, self.raw_token = APIKey.generate(
+            user=self.user,
+            name="Claude Web Connector Key",
+            tier=APIKey.Tier.FREE
+        )
+        self.client = Client()
+
+    def test_mcp_discovery_endpoint(self):
+        """GET /api/v1/mcp/ returns capability discovery metadata."""
+        resp = self.client.get('/api/v1/mcp/')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data.get('name'), 'shieldcall-vn')
+        self.assertEqual(data.get('protocol_version'), '2024-11-05')
+        self.assertIn('transports', data)
+        self.assertIn('sse', data['transports'])
+        self.assertEqual(data.get('tools_count'), 10)
+        self.assertIn('check_phone', data.get('tools', []))
+        self.assertIn('check_bank_account', data.get('tools', []))
+        self.assertIn('prompts', data)
+
+    def test_mcp_sse_unauthenticated_rejects(self):
+        """GET /api/v1/mcp/sse/ without key returns 401."""
+        resp = self.client.get('/api/v1/mcp/sse/')
+        self.assertEqual(resp.status_code, 401)
+        data = resp.json()
+        self.assertEqual(data.get('code'), 'API_KEY_REQUIRED')
+
+    def test_mcp_sse_invalid_key_rejects(self):
+        """GET /api/v1/mcp/sse/ with invalid key returns 401."""
+        resp = self.client.get('/api/v1/mcp/sse/?api_key=sc_live_invalid_key_999999')
+        self.assertEqual(resp.status_code, 401)
+        data = resp.json()
+        self.assertEqual(data.get('code'), 'INVALID_API_KEY')
+
+    def test_mcp_messages_initialize_direct_rpc(self):
+        """POST /api/v1/mcp/messages/ with initialize returns protocol version & server info."""
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "claude-web", "version": "1.0.0"}
+            }
+        }
+        resp = self.client.post(
+            f'/api/v1/mcp/messages/?api_key={self.raw_token}',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data.get('id'), 1)
+        self.assertIn('result', data)
+        self.assertEqual(data['result']['protocolVersion'], '2024-11-05')
+        self.assertEqual(data['result']['serverInfo']['name'], 'shieldcall-vn')
+
+    def test_mcp_messages_tools_list(self):
+        """POST /api/v1/mcp/messages/ with tools/list returns all 10 tools with schemas."""
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list",
+            "params": {}
+        }
+        resp = self.client.post(
+            f'/api/v1/mcp/messages/?api_key={self.raw_token}',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data.get('id'), 2)
+        tools = data['result']['tools']
+        self.assertEqual(len(tools), 10)
+        tool_names = [t['name'] for t in tools]
+        self.assertIn('check_phone', tool_names)
+        self.assertIn('check_bank_account', tool_names)
+        self.assertIn('scan_full_incident', tool_names)
+
+    def test_mcp_messages_prompts_list(self):
+        """POST /api/v1/mcp/messages/ with prompts/list returns registered persona prompts."""
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "prompts/list",
+            "params": {}
+        }
+        resp = self.client.post(
+            f'/api/v1/mcp/messages/?api_key={self.raw_token}',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        prompts = data['result']['prompts']
+        self.assertEqual(len(prompts), 3)
+        prompt_names = [p['name'] for p in prompts]
+        self.assertIn('shieldcall_sentry', prompt_names)
+        self.assertIn('emergency_advisor', prompt_names)
+        self.assertIn('scam_investigator', prompt_names)
+
+    def test_mcp_messages_tools_call_get_banks(self):
+        """POST /api/v1/mcp/messages/ with tools/call executes tool successfully."""
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "get_supported_banks",
+                "arguments": {}
+            }
+        }
+        resp = self.client.post(
+            f'/api/v1/mcp/messages/?api_key={self.raw_token}',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data.get('id'), 4)
+        self.assertIn('result', data)
+        content = data['result']['content']
+        self.assertTrue(len(content) > 0)
+        self.assertEqual(content[0]['type'], 'text')
+        self.assertIn('MB', content[0]['text'])
+
+

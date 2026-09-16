@@ -36,7 +36,21 @@ Model Context Protocol (MCP) là giao thức mở cho phép mọi mô hình ngô
 
 ---
 
-## 3. Hướng Dẫn Cấu Hình Nhanh Cho Claude Desktop
+## 3. Hướng Dẫn Kết Nối Claude Chat (claude.ai Web & Mobile) qua Remote MCP
+
+Nếu bạn sử dụng **Claude Chat trên trình duyệt web (claude.ai)** hoặc **ứng dụng Claude trên điện thoại (iOS / Android)**:
+Bạn **không cần cài Python** hay chạy script trên máy cá nhân.
+
+1. Truy cập [claude.ai](https://claude.ai) -> Bấm vào Avatar tài khoản -> Chọn **Settings** (hoặc **Customize**) -> Chọn thẻ **Connectors**.
+2. Nhấn nút **Add custom connector**.
+3. Điền thông tin:
+   - **Name**: `ShieldCall VN`
+   - **MCP server URL**: `https://shieldcall.vn/api/v1/mcp/sse?api_key=sc_live_your_api_key_here`
+4. Nhấn **Add connector** để hoàn tất. Claude sẽ tự động nhận diện và kích hoạt toàn bộ 10 công cụ an ninh số của ShieldCall.
+
+---
+
+## 4. Hướng Dẫn Cấu Hình Cho Claude Desktop (Máy Tính)
 
 Mở file cấu hình MCP của Claude Desktop:
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`

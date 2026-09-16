@@ -144,6 +144,11 @@
 
             <!-- Platform Tabs -->
             <div class="flex flex-wrap gap-2 p-1 bg-black/40 border border-white/10 rounded-2xl">
+                <button @click="activePlatform = 'claude_chat'" :class="activePlatform === 'claude_chat' ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20' : 'text-white/60 hover:text-white'"
+                    class="px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Claude Chat (Web / Mobile)
+                </button>
                 <button @click="activePlatform = 'claude'" :class="activePlatform === 'claude' ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20' : 'text-white/60 hover:text-white'"
                     class="px-4 py-2 rounded-xl text-xs font-black transition-all">
                     Claude Desktop
@@ -194,7 +199,7 @@
                 </div>
             </div>
 
-            <!-- Terminal Download & Installation Commands -->
+            <!-- Terminal Download & Zero-Dependency Badge -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
                 <div class="space-y-1.5">
                     <span class="text-[10px] font-bold text-white/50 uppercase tracking-wider block">Lệnh tải file script bằng Terminal:</span>
@@ -206,12 +211,12 @@
                     </div>
                 </div>
                 <div class="space-y-1.5">
-                    <span class="text-[10px] font-bold text-white/50 uppercase tracking-wider block">Cài đặt 2 thư viện phụ thuộc:</span>
-                    <div class="flex items-center gap-2">
-                        <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
-                        <button @click="copyText('pip install "mcp>=1.0.0" requests', 'btn-pip')" id="btn-pip" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs shrink-0" title="Sao chép">
-                            <i class="bi bi-clipboard"></i>
-                        </button>
+                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block flex items-center gap-1.5">
+                        <i class="bi bi-check-circle-fill text-emerald-400"></i> Độc lập 100% (Zero-Dependency):
+                    </span>
+                    <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-[11px] flex items-center justify-between">
+                        <span>Chạy trực tiếp với Python 3 có sẵn. Không cần chạy <code>pip install</code>.</span>
+                        <span class="px-2 py-0.5 rounded-md bg-emerald-400/20 text-emerald-300 font-mono text-[10px] font-bold shrink-0 ml-2">Python 3.8+</span>
                     </div>
                 </div>
             </div>
@@ -240,6 +245,154 @@
             </div>
         </div>
 
+        <!-- Tab 0: Claude Chat (Web & Mobile Custom Connector) -->
+        <div x-show="activePlatform === 'claude_chat'" x-transition class="space-y-6">
+            <div class="liquid-card p-6 space-y-6 border-cyan-400/30 bg-gradient-to-br from-cyan-500/[0.04] via-white/[0.02] to-transparent">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <h3 class="text-lg font-black text-white flex items-center gap-2">
+                                <i class="bi bi-chat-square-quote-fill text-cyan-400"></i> Claude Chat (claude.ai Web & Mobile)
+                            </h3>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                Remote MCP Connector
+                            </span>
+                        </div>
+                        <p class="text-xs text-white/60">
+                            Kết nối trực tiếp ShieldCall vào tài khoản <strong>claude.ai</strong> trên trình duyệt và ứng dụng điện thoại (iOS / Android) mà <strong>không cần cài Python hay chạy script máy khách</strong>.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="text-[10px] font-mono bg-white/10 px-3 py-1.5 rounded-xl text-white/80 border border-white/15">
+                            Transport: Server-Sent Events (SSE)
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 1-Click Remote MCP URL Box -->
+                <div class="p-5 rounded-2xl bg-black/60 border border-cyan-400/30 space-y-3 shadow-inner">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <span class="text-xs font-black text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="bi bi-link-45deg text-base"></i> Đường dẫn MCP Server URL (Dán vào Claude):
+                        </span>
+                        <span class="text-[11px] text-white/50">Tự động gắn API Key thực đã chọn ở thanh trên cùng</span>
+                    </div>
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                        <input type="text" readonly :value="getClaudeChatConnectorUrl()"
+                            class="flex-1 p-3 bg-white/5 border border-white/15 rounded-xl font-mono text-xs text-cyan-300 select-all focus:outline-none focus:border-cyan-400">
+                        <button @click="copyText(getClaudeChatConnectorUrl(), 'claude-chat-url-btn')" id="claude-chat-url-btn"
+                            class="liquid-btn py-3 px-5 text-xs font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-cyan-400/20 shrink-0">
+                            <i class="bi bi-clipboard"></i> Sao chép URL
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 text-[11px] text-white/50 pt-1">
+                        <span class="flex items-center gap-1 text-emerald-400 font-bold">
+                            <i class="bi bi-check-circle-fill"></i> Hỗ trợ cả tài khoản Free, Pro, Team, Enterprise
+                        </span>
+                        <span class="text-white/20">•</span>
+                        <span>Đã mã hóa bảo mật chuẩn HTTPS (SSL/TLS)</span>
+                    </div>
+                </div>
+
+                <!-- Step by step instructions matching Claude UI -->
+                <div class="space-y-4">
+                    <h4 class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                        4 Bước Cấu Hình Trong Claude Chat (claude.ai):
+                    </h4>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Step 1 -->
+                        <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-black text-xs shrink-0">1</span>
+                                <h5 class="text-xs font-bold text-white">Mở mục Connectors trong Claude</h5>
+                            </div>
+                            <p class="text-[11px] text-white/60 leading-relaxed pl-8">
+                                Truy cập <a href="https://claude.ai" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">claude.ai</a> -> Nhấp vào biểu tượng <strong>Tài khoản (Avatar góc dưới bên trái)</strong> -> Chọn <strong>Settings</strong> (hoặc Customize) -> Chọn thẻ <strong>Connectors</strong>.
+                            </p>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-black text-xs shrink-0">2</span>
+                                <h5 class="text-xs font-bold text-white">Thêm Custom Connector</h5>
+                            </div>
+                            <p class="text-[11px] text-white/60 leading-relaxed pl-8">
+                                Nhấp vào nút <strong>Add custom connector</strong>. Cửa sổ thiết lập Model Context Protocol sẽ hiển thị trên màn hình.
+                            </p>
+                        </div>
+
+                        <!-- Step 3 -->
+                        <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-black text-xs shrink-0">3</span>
+                                <h5 class="text-xs font-bold text-white">Điền thông tin máy chủ ShieldCall</h5>
+                            </div>
+                            <div class="text-[11px] text-white/60 space-y-1.5 pl-8">
+                                <div>• <strong>Name:</strong> Nhập <code class="text-cyan-300">ShieldCall VN</code></div>
+                                <div>• <strong>MCP server URL:</strong> Dán đường link ở khung màu đen phía trên.</div>
+                                <div class="text-white/40 text-[10px]">* Hoặc bấm Advanced settings -> Thêm header <code>X-API-Key</code>.</div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4 -->
+                        <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-emerald-400/20 text-emerald-300 flex items-center justify-center font-black text-xs shrink-0">4</span>
+                                <h5 class="text-xs font-bold text-white">Bấm "Add connector" để kích hoạt</h5>
+                            </div>
+                            <p class="text-[11px] text-white/60 leading-relaxed pl-8">
+                                Claude sẽ tự động bắt tay với ShieldCall qua HTTPS, nạp toàn bộ 10 công cụ an ninh số. Giờ đây mọi câu hỏi về SĐT, STK, link lừa đảo sẽ được AI tự động kiểm tra!
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Test Prompts -->
+                <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3">
+                    <p class="text-xs font-bold text-white/80 flex items-center gap-2">
+                        <i class="bi bi-lightning-charge-fill text-yellow-400"></i> Câu lệnh mẫu bạn có thể chat thử nghiệm ngay với Claude:
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="p-3 bg-black/40 rounded-xl border border-white/10 text-xs space-y-2 flex flex-col justify-between">
+                            <p class="text-white/70 italic text-[11px]">"Kiểm tra số điện thoại 0912345678 giúp tôi xem có lịch sử lừa đảo hay cuộc gọi rác không."</p>
+                            <button @click="copyText('Kiểm tra số điện thoại 0912345678 giúp tôi xem có lịch sử lừa đảo hay cuộc gọi rác không.', 'prompt-test-1')" id="prompt-test-1"
+                                class="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold self-end flex items-center gap-1">
+                                <i class="bi bi-clipboard"></i> Sao chép
+                            </button>
+                        </div>
+                        <div class="p-3 bg-black/40 rounded-xl border border-white/10 text-xs space-y-2 flex flex-col justify-between">
+                            <p class="text-white/70 italic text-[11px]">"Kiểm tra tài khoản Techcombank 1903654321 xem có nằm trong danh sách đen tài chính không."</p>
+                            <button @click="copyText('Kiểm tra tài khoản Techcombank 1903654321 xem có nằm trong danh sách đen tài chính không.', 'prompt-test-2')" id="prompt-test-2"
+                                class="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold self-end flex items-center gap-1">
+                                <i class="bi bi-clipboard"></i> Sao chép
+                            </button>
+                        </div>
+                        <div class="p-3 bg-black/40 rounded-xl border border-white/10 text-xs space-y-2 flex flex-col justify-between">
+                            <p class="text-white/70 italic text-[11px]">"Phân tích đường link dichvucong-vn.top xem có phải tên miền nhái giả mạo cổng dịch vụ công không."</p>
+                            <button @click="copyText('Phân tích đường link dichvucong-vn.top xem có phải tên miền nhái giả mạo cổng dịch vụ công không.', 'prompt-test-3')" id="prompt-test-3"
+                                class="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold self-end flex items-center gap-1">
+                                <i class="bi bi-clipboard"></i> Sao chép
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Multi-Chatbot Compatibility Notice -->
+                <div class="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-white/70 flex items-start gap-3">
+                    <i class="bi bi-layers text-purple-400 text-base shrink-0 mt-0.5"></i>
+                    <div class="space-y-1">
+                        <p class="font-bold text-purple-300">Tương thích với các Chatbot khác hỗ trợ Remote MCP:</p>
+                        <p class="text-[11px] leading-relaxed">
+                            Cùng đường dẫn Remote MCP trên, bạn cũng có thể cấu hình cho <strong>Open WebUI</strong>, <strong>LibreChat</strong>, <strong>Dify AI</strong>, hoặc bất kỳ hệ thống chatbot nào hỗ trợ giao thức <strong>MCP SSE / Streamable HTTP</strong>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Tab 1: Claude Desktop -->
         <div x-show="activePlatform === 'claude'" x-transition class="space-y-6">
             <div class="liquid-card p-6 space-y-6">
@@ -257,24 +410,28 @@
                 <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
                     <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
-                        Chuẩn bị: Tải script & cài thư viện
+                        Chuẩn bị: Tải script độc lập (Zero-Dependency)
                     </p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
                         <div class="space-y-1.5">
                             <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Tải file script (1 file duy nhất):</p>
                             <div class="flex items-center gap-2">
-                                <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">curl -O https://shieldcall.vn/mcp/download/</code>
+                                <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">curl -sSL https://shieldcall.vn/mcp/download/ -o shieldcall_mcp.py</code>
                                 <a href="/mcp/download/" download="shieldcall_mcp.py" class="shrink-0 px-3 py-2 rounded-xl text-[10px] font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
                                     <i class="bi bi-download"></i> Tải ngay
                                 </a>
                             </div>
                         </div>
                         <div class="space-y-1.5">
-                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP (1 lần duy nhất):</p>
-                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                            <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                <i class="bi bi-shield-check"></i> 100% Zero-Dependency:
+                            </p>
+                            <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-[11px]">
+                                Chạy trực tiếp bằng Python 3, không cần cài đặt bất kỳ thư viện bên ngoài nào.
+                            </div>
                         </div>
                     </div>
-                    <p class="text-[11px] text-white/50">Sau khi tải xong, ghi nhớ đường dẫn file <code class="text-cyan-300">shieldcall_mcp.py</code> và cập nhật vào ô <strong class="text-white">scriptPath</strong> bên dưới nếu cần.</p>
+                    <p class="text-[11px] text-white/50">Sau khi tải xong, ghi nhớ đường dẫn file <code class="text-cyan-300">shieldcall_mcp.py</code> và cập nhật vào ô <strong class="text-white">scriptPath</strong> ở thanh công cụ phía trên nếu cần.</p>
                 </div>
 
                 <div class="space-y-2">
@@ -326,7 +483,7 @@
                 <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
                     <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
-                        Chuẩn bị: Tải script & cài thư viện
+                        Chuẩn bị: Tải script độc lập (Zero-Dependency)
                     </p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
                         <div class="space-y-1.5">
@@ -339,8 +496,12 @@
                             </div>
                         </div>
                         <div class="space-y-1.5">
-                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP:</p>
-                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                            <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                <i class="bi bi-shield-check"></i> 100% Zero-Dependency:
+                            </p>
+                            <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-[11px]">
+                                Không cần cài thư viện qua pip. Chạy trực tiếp bằng Python 3.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -385,7 +546,7 @@
                 <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
                     <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
-                        Chuẩn bị: Tải script & cài thư viện
+                        Chuẩn bị: Tải script độc lập (Zero-Dependency)
                     </p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
                         <div class="space-y-1.5">
@@ -398,8 +559,12 @@
                             </div>
                         </div>
                         <div class="space-y-1.5">
-                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP:</p>
-                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                            <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                <i class="bi bi-shield-check"></i> 100% Zero-Dependency:
+                            </p>
+                            <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-[11px]">
+                                Không cần cài thư viện qua pip. Chạy trực tiếp bằng Python 3.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -434,7 +599,7 @@
                 <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
                     <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
-                        Chuẩn bị: Tải script & cài thư viện
+                        Chuẩn bị: Tải script độc lập (Zero-Dependency)
                     </p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
                         <div class="space-y-1.5">
@@ -447,8 +612,12 @@
                             </div>
                         </div>
                         <div class="space-y-1.5">
-                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP:</p>
-                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                            <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                <i class="bi bi-shield-check"></i> 100% Zero-Dependency:
+                            </p>
+                            <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-[11px]">
+                                Không cần cài thư viện qua pip. Chạy trực tiếp bằng Python 3.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -483,7 +652,7 @@
                 <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
                     <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
-                        Chuẩn bị: Tải script & cài thư viện
+                        Chuẩn bị: Tải script độc lập (Zero-Dependency)
                     </p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
                         <div class="space-y-1.5">
@@ -496,8 +665,12 @@
                             </div>
                         </div>
                         <div class="space-y-1.5">
-                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP:</p>
-                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                            <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                <i class="bi bi-shield-check"></i> 100% Zero-Dependency:
+                            </p>
+                            <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-[11px]">
+                                Không cần cài thư viện qua pip. Chạy trực tiếp bằng Python 3.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1112,13 +1285,24 @@
 <script>
 function mcpGuideApp() {
     return {
-        activePlatform: 'claude',
+        activePlatform: 'claude_chat',
         userKeys: {{ user_api_keys_json|default:"[]"|safe }},
         selectedKey: '',
         siteUrl: '{{ site_url }}',
         apiUrl: '{{ api_url }}',
         pythonPath: 'python',
         scriptPath: 'shieldcall_mcp.py',
+
+        getClaudeChatConnectorUrl() {
+            const base = (this.siteUrl || window.location.origin).replace(/\/+$/, '');
+            const key = this.getCurrentApiKey();
+            return `${base}/api/v1/mcp/sse/?api_key=${key}`;
+        },
+
+        getClaudeChatDirectUrl() {
+            const base = (this.siteUrl || window.location.origin).replace(/\/+$/, '');
+            return `${base}/api/v1/mcp/sse/`;
+        },
 
         playgroundTool: 'check_phone',
         playgroundPhone: '0912345678',

@@ -814,10 +814,23 @@ document.addEventListener('alpine:init', () => {
                     headers: { 'X-CSRFToken': getCSRFToken() },
                     body: formData,
                 });
-                const data = await resp.json();
 
-                if (!resp.ok || !data.scan_id) {
-                    showToast(data.error || 'Lỗi khi gửi file âm thanh.', 'error');
+                if (resp.status === 413) {
+                    showToast('Tệp âm thanh quá lớn vượt quá giới hạn tải lên (mã lỗi 413 - Tối đa 50 MB). Vui lòng cắt ngắn hoặc nén file.', 'error');
+                    this.resetScanState();
+                    return;
+                }
+
+                let data = null;
+                try {
+                    data = await resp.json();
+                } catch (_) {
+                    data = null;
+                }
+
+                if (!resp.ok || !data || !data.scan_id) {
+                    const errMsg = (data && data.error) ? data.error : `Máy chủ phản hồi lỗi (${resp.status}): Không thể xử lý tệp âm thanh.`;
+                    showToast(errMsg, 'error');
                     this.resetScanState();
                     return;
                 }
@@ -827,7 +840,7 @@ document.addEventListener('alpine:init', () => {
                 this.connectWebSocket(data.scan_id);
                 this.startStatusPolling();
             } catch (e) {
-                showToast('Lỗi kết nối máy chủ.', 'error');
+                showToast('Lỗi kết nối máy chủ hoặc gián đoạn đường truyền tải file.', 'error');
                 this.resetScanState();
             }
         },

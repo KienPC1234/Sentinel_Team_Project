@@ -28,6 +28,7 @@ from .views import (
     announcements_view, tickets_view, inbox_view, admin_tickets_view,
     mcp_guide_view, mcp_download_script_view,
 )
+from api.core.views import MCPConnectSSEView, MCPMessagesView, MCPDiscoveryView
 
 from .views.admin_views import (
     admin_dashboard, 
@@ -128,6 +129,8 @@ urlpatterns = [
     path("ai-assistant/<uuid:session_id>/", AssistantPageView.as_view(), name="ai-assistant-session"),
     path("scam-iq-exam/", scam_iq_exam_view, name="scam-iq-exam"),
     path("mcp/", mcp_guide_view, name="mcp-guide"),
+    path("mcp/sse/", MCPConnectSSEView.as_view(), name="root-mcp-sse"),
+    path("mcp/messages/", MCPMessagesView.as_view(), name="root-mcp-messages"),
     path("mcp/download/", mcp_download_script_view, name="mcp-download-script"),
     path("api/v1/mcp/download/", mcp_download_script_view, name="api-mcp-download-script"),
     

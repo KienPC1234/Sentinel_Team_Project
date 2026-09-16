@@ -65,6 +65,11 @@ urlpatterns = [
     path('user/api-keys/<int:pk>/toggle/', views.UserAPIKeyToggleView.as_view(), name='user-api-key-toggle'),
     path('user/api-keys/<int:pk>/regenerate/', views.UserAPIKeyRegenerateView.as_view(), name='user-api-key-regenerate'),
 
+    # Remote Model Context Protocol (MCP) Server for Claude Chat, Claude Desktop & Chatbots
+    path('mcp/sse/', views.MCPConnectSSEView.as_view(), name='mcp-sse'),
+    path('mcp/messages/', views.MCPMessagesView.as_view(), name='mcp-messages'),
+    path('mcp/', views.MCPDiscoveryView.as_view(), name='mcp-discovery'),
+
 
     # Admin
     path('admin/reports/', views.AdminReportsView.as_view(), name='admin-reports'),

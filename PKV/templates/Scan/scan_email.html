@@ -130,9 +130,22 @@
                 fd.append('file', this.emlFile);
                 fd.append('cf-turnstile-response', tsToken);
                 fetch('/api/v1/scan/email/', { method: 'POST', headers: { 'X-CSRFToken': getCSRFToken() }, body: fd })
-                .then(r => { if (!r.ok) return r.json().then(e => { throw e }); return r.json(); })
+                .then(async r => {
+                    if (r.status === 413) {
+                        throw new Error('Tệp .eml quá lớn vượt quá giới hạn tải lên (mã lỗi 413 - Tối đa 25 MB).');
+                    }
+                    if (!r.ok) {
+                        let msg = `Lỗi xử lý file (${r.status})`;
+                        try {
+                            const errJson = await r.json();
+                            msg = errJson.error || errJson.message || msg;
+                        } catch (_) {}
+                        throw new Error(msg);
+                    }
+                    return r.json();
+                })
                 .then(data => { this.displayEmail = data.extracted_info?.from || this.emlFileName; this.handleResult(data); })
-                .catch(e => { showToast(e.error || 'Có lỗi xử lý file.', 'error'); this.loading = false; });
+                .catch(e => { showToast(e.message || 'Có lỗi xử lý file.', 'error'); this.loading = false; });
             }
         },
         handleResult(data) {
