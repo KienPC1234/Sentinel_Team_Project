@@ -7,6 +7,7 @@
             target_type: new URLSearchParams(window.location.search).get('target_type') || 'phone',
             target_value: new URLSearchParams(window.location.search).get('target_value') || new URLSearchParams(window.location.search).get('phone') || new URLSearchParams(window.location.search).get('bank_account') || '',
             scam_type: new URLSearchParams(window.location.search).get('scam_type') || '',
+            scam_type_other: '',
             severity: 'medium',
             description: '',
             allImages: [],
@@ -310,6 +311,10 @@
                     if (typeof showToast === 'function') showToast('Vui lòng chọn phương thức lừa đảo', 'warning');
                     return;
                 }
+                if (this.scam_type === 'other' && !this.scam_type_other.trim()) {
+                    if (typeof showToast === 'function') showToast('Vui lòng ghi rõ hình thức lừa đảo cụ thể', 'warning');
+                    return;
+                }
                 if (!this.description.trim() || this.description.trim().length < 10) {
                     if (typeof showToast === 'function') showToast('Nội dung mô tả tối thiểu 10 ký tự', 'warning');
                     return;
@@ -331,12 +336,17 @@
                     return;
                 }
 
+                let finalDesc = this.description.trim();
+                if (this.scam_type === 'other' && this.scam_type_other.trim()) {
+                    finalDesc = `[Phương thức cụ thể: ${this.scam_type_other.trim()}]\n` + finalDesc;
+                }
+
                 const fd = new FormData();
                 fd.append('target_type', this.target_type);
                 fd.append('target_value', this.target_value.trim());
                 fd.append('scam_type', this.scam_type);
                 fd.append('severity', this.severity);
-                fd.append('description', this.description.trim());
+                fd.append('description', finalDesc);
                 fd.append('cf-turnstile-response', tsToken);
 
                 // Contextual auxiliary perpetrator fields
@@ -417,6 +427,7 @@
                 this.target_type = 'phone';
                 this.target_value = '';
                 this.scam_type = '';
+                this.scam_type_other = '';
                 this.severity = 'medium';
                 this.description = '';
                 this.allImages = [];
@@ -577,10 +588,10 @@
 
                     <!-- Searchable Bank Dropdown Panel -->
                     <div x-show="showBankDropdown" x-transition class="p-4 rounded-2xl bg-black/60 border border-white/10 space-y-3">
-                        <div class="relative">
-                            <i class="bi bi-search absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 text-xs pointer-events-none z-10"></i>
+                        <div class="flex items-center w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 focus-within:border-cyan-500/50 transition-all">
+                            <i class="bi bi-search text-white/40 text-xs mr-3 shrink-0 pointer-events-none"></i>
                             <input type="text" x-model="bankSearch" placeholder="Tìm kiếm theo tên ngân hàng hoặc mã viết tắt..."
-                                class="liquid-input has-icon-left w-full py-2.5 pl-10 pr-4 text-xs font-medium">
+                                class="bg-transparent border-0 outline-none text-white text-xs w-full p-0 placeholder:text-white/30 font-medium focus:ring-0">
                         </div>
                         <div class="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
                             <template x-for="b in filteredBanks" :key="b.code || b.shortName">
@@ -660,6 +671,18 @@
                         <i class="bi bi-three-dots text-base text-white/60"></i>
                         <span>Hình thức lừa đảo khác</span>
                     </button>
+                </div>
+
+                <!-- Specific description if scam_type is 'other' -->
+                <div x-show="scam_type === 'other'" x-transition class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-500/30 space-y-2 mt-3 shadow-lg shadow-cyan-500/5">
+                    <label class="text-[11px] font-black text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                        <i class="bi bi-pencil-square"></i>
+                        <span>Mô tả cụ thể phương thức lừa đảo khác:</span>
+                    </label>
+                    <input type="text" x-model="scam_type_other"
+                        placeholder="VD: Bắt cóc tống tiền online, Thôi miên qua điện thoại, Giả mạo trúng thưởng vé máy bay..."
+                        class="liquid-input w-full py-3 px-4 text-xs font-bold text-white placeholder:text-white/30 border-cyan-500/30 focus:border-cyan-400">
+                    <p class="text-[10px] text-white/40">Ghi rõ phương thức giúp hệ thống phân loại chính xác và cảnh báo sớm cho cộng đồng.</p>
                 </div>
             </div>
 

@@ -768,25 +768,38 @@ select.liquid-select {
 
 /* Dedicated helper classes for inputs with left/right icons */
 .has-icon-left, input.has-icon-left, select.has-icon-left {
-    padding-left: 3.25rem !important;
+    padding-left: 2.75rem !important;
 }
 .has-icon-right, input.has-icon-right, select.has-icon-right {
-    padding-right: 3.25rem !important;
+    padding-right: 2.75rem !important;
 }
 
-/* Automatic protection for input container with absolute icon on the left */
-.relative:has(> [class*="absolute"][class*="left-"]) > input,
-.relative:has(> [class*="absolute"][class*="left-"]) > select {
-    padding-left: 3.25rem !important;
+/* Flexbox input group helper */
+.liquid-input-group {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 0.625rem 1rem;
+    transition: all 0.2s ease;
+}
+.liquid-input-group:focus-within {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.1);
+    background: rgba(0, 0, 0, 0.35);
+}
+.liquid-input-group input {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    color: #fff;
+    width: 100%;
 }
 
-/* Automatic protection for input container with absolute icon or action button on the right */
-.relative:has(> [class*="absolute"][class*="right-"]:not(button)) > input {
-    padding-right: 3.25rem !important;
-}
-.relative:has(> button[class*="absolute"][class*="right-"]) > input {
-    padding-right: 7rem !important;
-}
 
 
 /* Specific Select Fix */
