@@ -85,10 +85,14 @@ class APIKeyAuthentication(BaseAuthentication):
         now = timezone.now()
         today = now.date()
 
+        last_reset = api_key.last_reset_date
+        if hasattr(last_reset, 'date') and callable(last_reset.date):
+            last_reset = last_reset.date()
+
         # Reset daily counters if day rolled over
-        if api_key.last_reset_date != today:
+        if last_reset is None or last_reset != today:
             api_key.requests_today = 0
-            if api_key.last_reset_date.month != today.month or api_key.last_reset_date.year != today.year:
+            if last_reset is None or (last_reset.month != today.month or last_reset.year != today.year):
                 api_key.requests_this_month = 0
             api_key.last_reset_date = today
 

@@ -1034,7 +1034,9 @@ class SupportTicket(models.Model):
         return f"[{self.status}] {self.title[:50]} by {self.author.username}"
 
 
-# ─── API Key Model for MCP & External Integrations ────────────────────────────
+def _get_utc_today():
+    return timezone.now().date()
+
 
 class APIKey(models.Model):
     """
@@ -1042,11 +1044,16 @@ class APIKey(models.Model):
     and third-party developer access.
     """
     class Tier(models.TextChoices):
-        FREE = 'free', 'Cơ bản (Free - 500 req/ngày)'
-        DEVELOPER = 'developer', 'Lập trình viên (Developer - 2.000 req/ngày)'
-        UNLIMITED = 'unlimited', 'Không giới hạn (Unlimited/Admin)'
+        FREE = 'FREE', 'Gói Miễn Phí (500 req/ngày)'
+        DEVELOPER = 'DEVELOPER', 'Gói Phát Triển (2,000 req/ngày)'
+        UNLIMITED = 'UNLIMITED', 'Gói Doanh Nghiệp (Không giới hạn)'
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='api_keys')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='api_keys',
+        help_text="Người dùng sở hữu khóa API"
+    )
     name = models.CharField(max_length=120, help_text="Tên định danh khóa (ví dụ: Claude Desktop, Cursor, Dev Bot)")
     prefix = models.CharField(max_length=24, db_index=True, help_text="Tiền tố hiển thị (ví dụ: sc_live_abcd1234)")
     hashed_key = models.CharField(max_length=128, unique=True, db_index=True, help_text="SHA-256 hash của API key bí mật")
@@ -1060,7 +1067,7 @@ class APIKey(models.Model):
     requests_today = models.PositiveIntegerField(default=0)
     requests_this_month = models.PositiveIntegerField(default=0)
     total_requests = models.PositiveIntegerField(default=0)
-    last_reset_date = models.DateField(default=timezone.now)
+    last_reset_date = models.DateField(default=_get_utc_today)
     last_used_at = models.DateTimeField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
@@ -1109,6 +1116,7 @@ class APIKey(models.Model):
             rate_limit_per_minute=limits['rpm'],
             daily_quota=limits['daily'],
             monthly_quota=limits['monthly'],
+            last_reset_date=_get_utc_today(),
         )
         return key_instance, raw_token
 

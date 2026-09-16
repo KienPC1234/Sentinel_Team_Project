@@ -171,6 +171,75 @@
             </div>
         </div>
 
+        <!-- Standalone Script Download & Global Config Parameters -->
+        <div class="liquid-card p-6 border border-cyan-500/30 bg-gradient-to-br from-cyan-500/[0.05] via-white/[0.02] to-transparent rounded-3xl space-y-5">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+                        <h3 class="text-sm font-black text-white uppercase tracking-wider">Tải Script Python Độc Lập (Standalone MCP)</h3>
+                        <span class="px-2 py-0.5 rounded-full bg-cyan-400/10 text-cyan-300 border border-cyan-400/20 text-[10px] font-bold">1 file ~24KB</span>
+                    </div>
+                    <p class="text-xs text-white/60 leading-relaxed">
+                        Bạn <strong>không cần clone toàn bộ repository</strong> hay cài đặt mã nguồn dự án. Script chứa đầy đủ MCP server, công cụ an ninh và kết nối bảo mật tới ShieldCall API.
+                    </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                    <a href="/mcp/download/" download="shieldcall_mcp.py" class="liquid-btn py-2.5 px-4 text-xs font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-cyan-400/20">
+                        <i class="bi bi-download"></i> Tải Script (.py)
+                    </a>
+                    <a href="/mcp/download/?raw=1" target="_blank" rel="noopener noreferrer" class="liquid-btn py-2.5 px-3.5 text-xs font-bold bg-white/10 text-white hover:bg-white/20 border border-white/15 flex items-center gap-1.5">
+                        <i class="bi bi-code-slash"></i> Xem mã nguồn Raw
+                    </a>
+                </div>
+            </div>
+
+            <!-- Terminal Download & Installation Commands -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                <div class="space-y-1.5">
+                    <span class="text-[10px] font-bold text-white/50 uppercase tracking-wider block">Lệnh tải file script bằng Terminal:</span>
+                    <div class="flex items-center gap-2">
+                        <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">curl -sSL https://shieldcall.vn/mcp/download/ -o shieldcall_mcp.py</code>
+                        <button @click="copyText('curl -sSL https://shieldcall.vn/mcp/download/ -o shieldcall_mcp.py', 'btn-curl')" id="btn-curl" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs shrink-0" title="Sao chép">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="space-y-1.5">
+                    <span class="text-[10px] font-bold text-white/50 uppercase tracking-wider block">Cài đặt 2 thư viện phụ thuộc:</span>
+                    <div class="flex items-center gap-2">
+                        <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                        <button @click="copyText('pip install "mcp>=1.0.0" requests', 'btn-pip')" id="btn-pip" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs shrink-0" title="Sao chép">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Path Config Inputs -->
+            <div class="pt-2 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-white/80 flex items-center justify-between">
+                        <span>Đường dẫn file script trên máy bạn (scriptPath):</span>
+                        <span class="text-[10px] font-normal text-cyan-400">Tự động cập nhật vào JSON</span>
+                    </label>
+                    <input type="text" x-model="scriptPath" @input="updateConfigSnippets()" placeholder="shieldcall_mcp.py hoặc /path/to/shieldcall_mcp.py"
+                        class="w-full bg-black/60 border border-cyan-400/30 rounded-xl px-3.5 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                    <p class="text-[11px] text-white/40">Nếu đặt cùng thư mục workspace bạn chỉ cần để <code>shieldcall_mcp.py</code>, hoặc điền đường dẫn tuyệt đối.</p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-white/80 flex items-center justify-between">
+                        <span>Lệnh Python (pythonPath):</span>
+                        <span class="text-[10px] font-normal text-cyan-400">Tự động cập nhật vào JSON</span>
+                    </label>
+                    <input type="text" x-model="pythonPath" @input="updateConfigSnippets()" placeholder="python hoặc python3 hoặc C:\Python311\python.exe"
+                        class="w-full bg-black/60 border border-cyan-400/30 rounded-xl px-3.5 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                    <p class="text-[11px] text-white/40">Mặc định là <code>python</code>. Nếu dùng macOS/Linux có thể đổi thành <code>python3</code>.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Tab 1: Claude Desktop -->
         <div x-show="activePlatform === 'claude'" x-transition class="space-y-6">
             <div class="liquid-card p-6 space-y-6">
@@ -202,7 +271,7 @@
                         </div>
                         <div class="space-y-1.5">
                             <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP (1 lần duy nhất):</p>
-                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install mcp httpx</code>
+                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
                         </div>
                     </div>
                     <p class="text-[11px] text-white/50">Sau khi tải xong, ghi nhớ đường dẫn file <code class="text-cyan-300">shieldcall_mcp.py</code> và cập nhật vào ô <strong class="text-white">scriptPath</strong> bên dưới nếu cần.</p>
@@ -253,6 +322,29 @@
                     <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">.cursor/mcp.json</span>
                 </div>
 
+                <!-- Prerequisite: Download Script -->
+                <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
+                    <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+                        Chuẩn bị: Tải script & cài thư viện
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Tải file script vào thư mục dự án:</p>
+                            <div class="flex items-center gap-2">
+                                <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">curl -sSL https://shieldcall.vn/mcp/download/ -o shieldcall_mcp.py</code>
+                                <a href="/mcp/download/" download="shieldcall_mcp.py" class="shrink-0 px-3 py-2 rounded-xl text-[10px] font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+                                    <i class="bi bi-download"></i> Tải ngay
+                                </a>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP:</p>
+                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="space-y-2">
                     <p class="text-xs font-bold text-white/80">Cách 1: Thêm trực tiếp file <code>.cursor/mcp.json</code> vào thư mục dự án:</p>
                     <div class="flex items-center justify-between pt-1">
@@ -270,7 +362,7 @@
                     <ol class="list-decimal list-inside space-y-1 text-xs text-white/70 pl-2">
                         <li>Mở <strong>Cursor Settings</strong> (Ctrl+, hoặc Cmd+,) &rarr; chọn tab <strong>Features</strong> &rarr; <strong>MCP Servers</strong>.</li>
                         <li>Bấm <strong>Add New MCP Server</strong>.</li>
-                        <li>Điền Name: <code>shieldcall</code>, Type: <code>command</code>, Command: <code>python /đường_dẫn_tới/scripts/shieldcall_mcp.py</code></li>
+                        <li>Điền Name: <code>shieldcall</code>, Type: <code>command</code>, Command: <code>python shieldcall_mcp.py</code> (hoặc điền đường dẫn tuyệt đối tới file đã tải).</li>
                     </ol>
                 </div>
             </div>
@@ -287,6 +379,29 @@
                         <p class="text-xs text-white/50">Cấu hình file MCP cho trợ lý AI Cascade trong Windsurf.</p>
                     </div>
                     <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">~/.codeium/windsurf/mcp_config.json</span>
+                </div>
+
+                <!-- Prerequisite: Download Script -->
+                <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
+                    <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+                        Chuẩn bị: Tải script & cài thư viện
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Tải file script vào máy:</p>
+                            <div class="flex items-center gap-2">
+                                <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">curl -sSL https://shieldcall.vn/mcp/download/ -o shieldcall_mcp.py</code>
+                                <a href="/mcp/download/" download="shieldcall_mcp.py" class="shrink-0 px-3 py-2 rounded-xl text-[10px] font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+                                    <i class="bi bi-download"></i> Tải ngay
+                                </a>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP:</p>
+                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="space-y-2">
@@ -315,6 +430,29 @@
                     <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">claude mcp add</span>
                 </div>
 
+                <!-- Prerequisite: Download Script -->
+                <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
+                    <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+                        Chuẩn bị: Tải script & cài thư viện
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Tải file script vào máy:</p>
+                            <div class="flex items-center gap-2">
+                                <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">curl -sSL https://shieldcall.vn/mcp/download/ -o shieldcall_mcp.py</code>
+                                <a href="/mcp/download/" download="shieldcall_mcp.py" class="shrink-0 px-3 py-2 rounded-xl text-[10px] font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+                                    <i class="bi bi-download"></i> Tải ngay
+                                </a>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP:</p>
+                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="space-y-2">
                     <div class="flex items-center justify-between">
                         <p class="text-xs font-bold text-white/80">Lệnh Terminal:</p>
@@ -339,6 +477,29 @@
                         <p class="text-xs text-white/50">Thêm cấu hình vào file cài đặt MCP của extension Cline hoặc Roo Code.</p>
                     </div>
                     <span class="text-[10px] font-mono bg-white/10 px-2.5 py-1 rounded-md text-white/70">cline_mcp_settings.json</span>
+                </div>
+
+                <!-- Prerequisite: Download Script -->
+                <div class="p-4 rounded-2xl bg-white/[0.03] border border-cyan-400/20 space-y-3">
+                    <p class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-cyan-400/20 text-cyan-300 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+                        Chuẩn bị: Tải script & cài thư viện
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Tải file script vào máy:</p>
+                            <div class="flex items-center gap-2">
+                                <code class="flex-1 p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">curl -sSL https://shieldcall.vn/mcp/download/ -o shieldcall_mcp.py</code>
+                                <a href="/mcp/download/" download="shieldcall_mcp.py" class="shrink-0 px-3 py-2 rounded-xl text-[10px] font-black bg-cyan-400 text-black hover:bg-cyan-300 uppercase tracking-wider flex items-center gap-1 whitespace-nowrap">
+                                    <i class="bi bi-download"></i> Tải ngay
+                                </a>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <p class="text-[10px] font-bold text-white/50 uppercase tracking-wider">Cài thư viện MCP:</p>
+                            <code class="block p-2.5 bg-black/60 border border-white/10 rounded-xl text-cyan-300 select-all text-[11px]">pip install "mcp>=1.0.0" requests</code>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="space-y-2">
@@ -899,8 +1060,9 @@
                     Trên macOS hoặc Linux, lệnh <code>python</code> mặc định có thể không trỏ đến Python 3 hoặc môi trường ảo dự án. Khắc phục bằng cách thay chữ <code>python</code> trong file cấu hình bằng đường dẫn tuyệt đối:
                 </p>
                 <div class="p-2.5 rounded-xl bg-black/50 border border-white/10 font-mono text-[11px] text-cyan-300 select-all">
-                    /đường_dẫn_tuyệt_đối/Sentinel_Team_Project/.venv/bin/python
+                    /usr/bin/python3
                 </div>
+                <p class="text-[11px] text-white/50">Mẹo: Mở Terminal và gõ <code>which python3</code> (macOS/Linux) hoặc <code>where python</code> (Windows) để lấy chính xác đường dẫn.</p>
             </div>
 
             <div class="liquid-card p-6 space-y-3 bg-white/[0.02]">
@@ -937,7 +1099,7 @@
                     Nếu bạn muốn chạy MCP Server trên máy chủ Linux từ xa cho cả đội ngũ sử dụng mà không cần cài Python trên từng máy cá nhân, khởi chạy lệnh sau:
                 </p>
                 <div class="p-2.5 rounded-xl bg-black/50 border border-white/10 font-mono text-[11px] text-cyan-300 select-all">
-                    python scripts/shieldcall_mcp.py --transport sse --host 0.0.0.0 --port 8002
+                    python shieldcall_mcp.py --transport sse --host 0.0.0.0 --port 8002
                 </div>
                 <p class="text-[11px] text-white/50">Khi đó phía Client chỉ cần khai báo: <code>"url": "http://ip-may-chu:8002/sse"</code>.</p>
             </div>
@@ -956,7 +1118,7 @@ function mcpGuideApp() {
         siteUrl: '{{ site_url }}',
         apiUrl: '{{ api_url }}',
         pythonPath: 'python',
-        scriptPath: '/path/to/Sentinel_Team_Project/scripts/shieldcall_mcp.py',
+        scriptPath: 'shieldcall_mcp.py',
 
         playgroundTool: 'check_phone',
         playgroundPhone: '0912345678',
@@ -1140,7 +1302,7 @@ Phân tích chuyên sâu:
             const config = {
                 "mcpServers": {
                     "shieldcall": {
-                        "command": "python",
+                        "command": this.pythonPath || "python",
                         "args": [
                             this.scriptPath
                         ],
@@ -1158,7 +1320,7 @@ Phân tích chuyên sâu:
             const config = {
                 "mcpServers": {
                     "shieldcall": {
-                        "command": "python",
+                        "command": this.pythonPath || "python",
                         "args": [
                             this.scriptPath
                         ],
@@ -1176,7 +1338,7 @@ Phân tích chuyên sâu:
             const config = {
                 "mcpServers": {
                     "shieldcall": {
-                        "command": "python",
+                        "command": this.pythonPath || "python",
                         "args": [
                             this.scriptPath
                         ],
@@ -1191,14 +1353,14 @@ Phân tích chuyên sâu:
         },
 
         getClaudeCodeCommand() {
-            return `claude mcp add shieldcall python ${this.scriptPath} -e SHIELDCALL_API_KEY=${this.getCurrentApiKey()} -e SHIELDCALL_API_URL=${this.apiUrl}`;
+            return `claude mcp add shieldcall ${this.pythonPath || 'python'} ${this.scriptPath} -e SHIELDCALL_API_KEY=${this.getCurrentApiKey()} -e SHIELDCALL_API_URL=${this.apiUrl}`;
         },
 
         getClineConfig() {
             const config = {
                 "mcpServers": {
                     "shieldcall": {
-                        "command": "python",
+                        "command": this.pythonPath || "python",
                         "args": [this.scriptPath],
                         "env": {
                             "SHIELDCALL_API_KEY": this.getCurrentApiKey(),
