@@ -18,11 +18,12 @@ def fetch_with_puppeteer_host(url: str, timeout_ms: int = 20000) -> Dict[str, An
 
     Returns a normalized payload to keep Celery tasks resilient.
     """
-    endpoint = getattr(
-        settings,
-        'PUPPETEER_HOST_URL',
-        os.getenv('PUPPETEER_HOST_URL', 'http://127.0.0.1:3010/render'),
-    )
+    endpoint = (
+        getattr(settings, 'PUPPETEER_HOST_URL', None)
+        if getattr(settings, 'configured', False)
+        else None
+    ) or os.getenv('PUPPETEER_HOST_URL', 'http://127.0.0.1:3010/render')
+
 
     payload = {
         'url': url,
@@ -34,15 +35,26 @@ def fetch_with_puppeteer_host(url: str, timeout_ms: int = 20000) -> Dict[str, An
 
     try:
         response = requests.post(endpoint, json=payload, timeout=request_timeout_seconds)
-        response.raise_for_status()
         data = response.json() if response.content else {}
+
+        if not response.ok:
+            err_msg = data.get('error') or f'HTTP {response.status_code}'
+            return {
+                'ok': False,
+                'title': '',
+                'content': '',
+                'captcha_detected': False,
+                'status_code': response.status_code,
+                'final_url': url,
+                'error': _safe_text(err_msg, 500),
+            }
 
         return {
             'ok': bool(data.get('ok')),
             'title': _safe_text(data.get('title', ''), 300),
             'content': _safe_text(data.get('content', ''), 70000),
             'captcha_detected': bool(data.get('captcha_detected')),
-            'status_code': data.get('status_code'),
+            'status_code': data.get('status_code') or 200,
             'final_url': data.get('final_url') or url,
             'error': _safe_text(data.get('error', ''), 500),
         }
@@ -54,5 +66,5 @@ def fetch_with_puppeteer_host(url: str, timeout_ms: int = 20000) -> Dict[str, An
             'captcha_detected': False,
             'status_code': None,
             'final_url': url,
-            'error': f'Puppeteer host unavailable: {exc}',
+            'error': f'Puppeteer host connection failed: {exc}',
         }

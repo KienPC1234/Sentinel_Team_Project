@@ -26,6 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pypdf \
     python-magic \
     flare-capa \
+    cryptography \
+
     # Remove compiler packages to keep image lightweight
     && apt-get purge -y gcc build-essential python3-dev libmagic-dev \
     && apt-get autoremove -y \

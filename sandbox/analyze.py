@@ -279,7 +279,8 @@ def analyze_with_oletools(file_path: str, head_bytes: bytes) -> Dict[str, Any]:
         return result
 
     ext = os.path.splitext(file_path)[1].lower()
-    is_office_ext = ext in ('.doc', '.docx', '.xls', '.xlsx', '.xlsm', '.docm', '.dotm', '.ppt', '.pptx', '.vba', '.bas', '.cls', '.rtf', '.bin')
+    base_name = os.path.basename(file_path).lower()
+    is_office_ext = ext in ('.doc', '.docx', '.xls', '.xlsx', '.xlsm', '.docm', '.dotm', '.ppt', '.pptx', '.vba', '.bas', '.cls', '.rtf') or (ext == '.bin' and 'vbaproject' in base_name)
     is_ole_magic = head_bytes.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1')
     is_zip = head_bytes.startswith(b'PK\x03\x04')
 
@@ -288,7 +289,7 @@ def analyze_with_oletools(file_path: str, head_bytes: bytes) -> Dict[str, Any]:
 
     try:
         vbaparser = VBA_Parser(file_path)
-        if getattr(vbaparser, 'type', None) in ('Text', None) and not is_office_ext:
+        if getattr(vbaparser, 'type', None) in ('Text', None) and ext not in ('.vba', '.bas', '.cls'):
             vbaparser.close()
             return result
 
@@ -315,15 +316,134 @@ def analyze_with_oletools(file_path: str, head_bytes: bytes) -> Dict[str, Any]:
     return result
 
 
+def extract_pe_digital_signature(file_path: str, pe) -> Dict[str, Any]:
+    """
+    Extracts Authenticode digital signatures, certificate chains, and vendor validity from PE files.
+    """
+    sig_info = {
+        'is_signed': False,
+        'is_trusted_ca': False,
+        'is_self_signed': False,
+        'signers': [],
+        'issuers': [],
+        'certificate_count': 0,
+        'certificates': [],
+    }
+    if not hasattr(pe, 'OPTIONAL_HEADER') or not hasattr(pe.OPTIONAL_HEADER, 'DATA_DIRECTORY'):
+        return sig_info
+
+    try:
+        import struct
+        sec_idx = pefile.DIRECTORY_ENTRY.get('IMAGE_DIRECTORY_ENTRY_SECURITY', 4)
+        if len(pe.OPTIONAL_HEADER.DATA_DIRECTORY) <= sec_idx:
+            return sig_info
+
+        sec_dir = pe.OPTIONAL_HEADER.DATA_DIRECTORY[sec_idx]
+        if not sec_dir or sec_dir.VirtualAddress <= 0 or sec_dir.Size <= 0:
+            return sig_info
+
+        offset = sec_dir.VirtualAddress
+        size = sec_dir.Size
+
+        with open(file_path, 'rb') as f:
+            f.seek(offset)
+            cert_data = f.read(size)
+
+        cursor = 0
+        while cursor + 8 <= len(cert_data):
+            dwLength, wRevision, wCertificateType = struct.unpack_from('<IHH', cert_data, cursor)
+            if dwLength <= 8 or cursor + dwLength > len(cert_data):
+                break
+
+            # 0x0002 is WIN_CERT_TYPE_PKCS_SIGNED_DATA
+            if wCertificateType == 0x0002:
+                raw_pkcs7 = cert_data[cursor + 8 : cursor + dwLength]
+                try:
+                    from cryptography.hazmat.primitives.serialization import pkcs7
+                    certs = pkcs7.load_der_pkcs7_certificates(raw_pkcs7)
+                    if certs:
+                        sig_info['is_signed'] = True
+                        sig_info['certificate_count'] += len(certs)
+
+                        trusted_roots = (
+                            'microsoft', 'digicert', 'sectigo', 'verisign', 'symantec',
+                            'globalsign', 'comodo', 'thawte', 'entrust', 'godaddy',
+                            'google', 'apple', 'amazon', 'certum', 'usertrust', 'identrust',
+                            'steam', 'valve', 'nvidia', 'intel', 'amd', 'oracle'
+                        )
+
+                        for c in certs:
+                            subject_dn = c.subject.rfc4514_string()
+                            issuer_dn = c.issuer.rfc4514_string()
+
+                            subject_cn = None
+                            for attr in c.subject:
+                                if attr.oid.dotted_string == '2.5.4.3':
+                                    subject_cn = attr.value
+                                elif not subject_cn and attr.oid.dotted_string == '2.5.4.10':
+                                    subject_cn = attr.value
+                            signer_name = subject_cn or subject_dn
+
+                            issuer_cn = None
+                            for attr in c.issuer:
+                                if attr.oid.dotted_string == '2.5.4.3':
+                                    issuer_cn = attr.value
+                                elif not issuer_cn and attr.oid.dotted_string == '2.5.4.10':
+                                    issuer_cn = attr.value
+                            issuer_name = issuer_cn or issuer_dn
+
+                            is_self = (subject_dn == issuer_dn)
+                            if is_self:
+                                sig_info['is_self_signed'] = True
+
+                            if any(r in issuer_name.lower() or r in signer_name.lower() for r in trusted_roots):
+                                sig_info['is_trusted_ca'] = True
+
+                            if signer_name not in sig_info['signers']:
+                                sig_info['signers'].append(signer_name)
+                            if issuer_name not in sig_info['issuers']:
+                                sig_info['issuers'].append(issuer_name)
+
+                            sig_info['certificates'].append({
+                                'signer': signer_name,
+                                'issuer': issuer_name,
+                                'serial_number': hex(c.serial_number),
+                                'is_self_signed': is_self,
+                            })
+                except Exception:
+                    pass
+
+            cursor += (dwLength + 7) & ~7
+    except Exception:
+        pass
+    return sig_info
+
+
 def analyze_with_pefile(file_path: str, head_bytes: bytes) -> Dict[str, Any]:
-    """PE structure and Win32 API import analysis using PEFile."""
-    result = {'is_pe': False, 'sections': [], 'imphash': None, 'suspicious_apis': [], 'high_entropy_sections': []}
+    """PE structure, Authenticode digital signature, and Win32 API import analysis using PEFile."""
+    result = {
+        'is_pe': False,
+        'sections': [],
+        'imphash': None,
+        'suspicious_apis': [],
+        'high_entropy_sections': [],
+        'digital_signature': {
+            'is_signed': False,
+            'is_trusted_ca': False,
+            'is_self_signed': False,
+            'signers': [],
+            'issuers': [],
+            'certificate_count': 0,
+            'certificates': [],
+        },
+    }
     if not PEFILE_AVAILABLE or not head_bytes.startswith(b'MZ'):
         return result
 
     try:
         pe = pefile.PE(file_path, fast_load=True)
         result['is_pe'] = True
+        result['digital_signature'] = extract_pe_digital_signature(file_path, pe)
         pe.parse_data_directories(directories=[
             pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_IMPORT'],
             pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_EXPORT'],
@@ -794,25 +914,74 @@ def run_full_sandbox_analysis_dict(file_path: str) -> dict:
 
     # Process PEFile
     if pe_results.get('is_pe'):
-        if pe_results.get('suspicious_apis'):
-            if len(pe_results['suspicious_apis']) >= 2:
-                is_malicious = True
-            else:
+        sig = pe_results.get('digital_signature', {})
+        is_signed = sig.get('is_signed', False)
+        is_trusted = is_signed and sig.get('is_trusted_ca', False) and not sig.get('is_self_signed', False)
+        is_self_signed = sig.get('is_self_signed', False)
+
+        # 1. Digital Signature Evaluation
+        if is_signed:
+            signer_str = ', '.join(sig.get('signers', [])) or 'Authenticode Valid'
+            issuer_str = ', '.join(sig.get('issuers', [])) or 'Known CA'
+            if is_trusted:
+                forensic_evidence.append({
+                    'category': 'Authenticode Digital Signature',
+                    'severity': 'INFO',
+                    'description': f"Tệp tin có chữ ký số Authenticode hợp lệ cấp bởi CA tin cậy: {signer_str} (Issuer: {issuer_str})",
+                    'evidence': f"Signer: {signer_str}",
+                })
+            elif is_self_signed:
                 is_suspicious = True
+                forensic_evidence.append({
+                    'category': 'Untrusted Digital Signature',
+                    'severity': 'MEDIUM',
+                    'description': f"Tệp tin sử dụng chữ ký số tự ký (Self-Signed) không được bảo chứng bởi CA uy tín: {signer_str}",
+                    'evidence': f"Self-Signed: {signer_str}",
+                })
+            else:
+                forensic_evidence.append({
+                    'category': 'Authenticode Digital Signature',
+                    'severity': 'INFO',
+                    'description': f"Tệp tin có chữ ký số Authenticode: {signer_str}",
+                    'evidence': f"Signer: {signer_str}",
+                })
+        else:
+            forensic_evidence.append({
+                'category': 'Authenticode Digital Signature',
+                'severity': 'INFO',
+                'description': "Tệp thực thi nhị phân không có chữ ký số xác thực (Unsigned PE Executable)",
+                'evidence': "Signature: None",
+            })
+
+        # 2. Suspicious Win32 API imports
+        if pe_results.get('suspicious_apis'):
+            # If the binary is signed by a trusted CA and has no ClamAV or YARA malware matches,
+            # low-level APIs (VirtualAlloc, CreateRemoteThread) are standard and legitimate for
+            # system tools, debuggers, compilers, and game engines.
+            # Do NOT flag as MALICIOUS or SUSPICIOUS purely on API names when trusted!
+            if not is_trusted:
+                if len(pe_results['suspicious_apis']) >= 3:
+                    is_suspicious = True
+                elif len(pe_results['suspicious_apis']) >= 1:
+                    is_suspicious = True
+
             for api in pe_results['suspicious_apis']:
                 forensic_evidence.append({
-                    'category': 'Win32 Process Injection API (PEFile)',
-                    'severity': 'CRITICAL' if 'Injection' in api['description'] else 'HIGH',
-                    'description': f"Nhập API nguy hiểm: {api['api']} ({api['description']})",
+                    'category': 'Win32 Sensitive API Imports (PEFile)',
+                    'severity': 'LOW' if is_trusted else 'HIGH',
+                    'description': f"Nhập API nhạy cảm: {api['api']} ({api['description']})",
                     'evidence': f"Import: {api['api']}",
                 })
+
+        # 3. High entropy sections
         if pe_results.get('high_entropy_sections'):
-            is_suspicious = True
+            if not is_trusted:
+                is_suspicious = True
             for sec in pe_results['high_entropy_sections']:
                 forensic_evidence.append({
                     'category': 'Packed / Encrypted PE Section',
-                    'severity': 'MEDIUM',
-                    'description': f"Phần Section '{sec['name']}' có entropy cao ({sec['entropy']}/8.0), dấu hiệu bị Pack/Obfuscate",
+                    'severity': 'LOW' if is_trusted else 'MEDIUM',
+                    'description': f"Phần Section '{sec['name']}' có entropy cao ({sec['entropy']}/8.0), dấu hiệu nén/mã hóa",
                     'evidence': f"Section: {sec['name']}, Entropy: {sec['entropy']}",
                 })
 
@@ -846,6 +1015,7 @@ def run_full_sandbox_analysis_dict(file_path: str) -> dict:
             'is_archive': archive_info.get('is_archive', False),
             'archive_file_count': len(archive_info.get('child_files', [])),
             'exif': exif_info.get('metadata', {}),
+            'digital_signature': pe_results.get('digital_signature', {}),
         },
         'forensic_evidence': forensic_evidence,
         'archive_analysis': {

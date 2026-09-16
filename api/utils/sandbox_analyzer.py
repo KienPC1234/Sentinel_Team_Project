@@ -23,6 +23,11 @@ import base64
 import requests
 from typing import Dict, Any, Optional, List
 
+try:
+    from django.conf import settings
+except ImportError:
+    settings = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,23 +47,85 @@ def calculate_entropy(data: bytes) -> float:
     return round(entropy, 4)
 
 
+def _get_setting(name: str, default: Any = None) -> Any:
+    """Safely retrieve a Django setting without triggering ImproperlyConfigured in non-Django runtimes."""
+    try:
+        from django.conf import settings
+        if getattr(settings, 'configured', False):
+            return getattr(settings, name, default)
+    except Exception:
+        pass
+    return default
+
+
 class LocalSandboxAnalyzer:
     """
     On-premise file & threat analyzer running locally in Docker sandbox with zero cloud leakage.
+    Configurable via Django settings, environment variables, or explicit constructor arguments.
     """
 
-    def __init__(self):
-        self.clamscan_bin = self._find_clamscan()
+    DEFAULT_DAEMON_URL = 'http://127.0.0.1:5005'
+    DEFAULT_DOCKER_IMAGE = 'sentinel-sandbox:latest'
+    DEFAULT_DOCKER_MEMORY = '1g'
+    DEFAULT_DOCKER_PIDS_LIMIT = 64
+    DEFAULT_TIMEOUT = 45
+    DEFAULT_DAEMON_TIMEOUT = 30
+    DEFAULT_DOCKER_BIN = 'docker'
+    DEFAULT_MAX_SNIPPET_BYTES = 512_000
+    DEFAULT_MAX_SNIPPET_LINES = 150
+
+    def __init__(
+        self,
+        daemon_url: Optional[str] = None,
+        docker_image: Optional[str] = None,
+        docker_memory: Optional[str] = None,
+        docker_pids_limit: Optional[int] = None,
+        docker_bin: Optional[str] = None,
+        clamscan_bin: Optional[str] = None,
+        timeout: Optional[int] = None,
+        daemon_timeout: Optional[int] = None,
+    ):
+        cfg_daemon_url = _get_setting('SANDBOX_DAEMON_URL')
+        self.daemon_url = (daemon_url or cfg_daemon_url or os.getenv('SANDBOX_DAEMON_URL', self.DEFAULT_DAEMON_URL)).rstrip('/')
+
+        cfg_docker_image = _get_setting('SANDBOX_DOCKER_IMAGE')
+        self.docker_image = docker_image or cfg_docker_image or os.getenv('SANDBOX_DOCKER_IMAGE', self.DEFAULT_DOCKER_IMAGE)
+
+        cfg_docker_mem = _get_setting('SANDBOX_DOCKER_MEMORY')
+        self.docker_memory = docker_memory or cfg_docker_mem or os.getenv('SANDBOX_DOCKER_MEMORY', self.DEFAULT_DOCKER_MEMORY)
+
+        cfg_docker_pids = _get_setting('SANDBOX_DOCKER_PIDS_LIMIT')
+        env_docker_pids = os.getenv('SANDBOX_DOCKER_PIDS_LIMIT')
+        self.docker_pids_limit = docker_pids_limit or cfg_docker_pids or (int(env_docker_pids) if env_docker_pids else self.DEFAULT_DOCKER_PIDS_LIMIT)
+
+        cfg_docker_bin = _get_setting('DOCKER_BIN')
+        self.docker_bin = docker_bin or cfg_docker_bin or os.getenv('DOCKER_BIN', self.DEFAULT_DOCKER_BIN)
+
+        cfg_timeout = _get_setting('SANDBOX_TIMEOUT')
+        env_timeout = os.getenv('SANDBOX_TIMEOUT')
+        self.default_timeout = timeout or cfg_timeout or (int(env_timeout) if env_timeout else self.DEFAULT_TIMEOUT)
+
+        cfg_daemon_timeout = _get_setting('SANDBOX_DAEMON_TIMEOUT')
+        env_daemon_timeout = os.getenv('SANDBOX_DAEMON_TIMEOUT')
+        self.default_daemon_timeout = daemon_timeout or cfg_daemon_timeout or (int(env_daemon_timeout) if env_daemon_timeout else self.DEFAULT_DAEMON_TIMEOUT)
+
+        self.clamscan_bin = clamscan_bin or self._find_clamscan()
         self.has_docker = self._check_docker()
 
     def _check_docker(self) -> bool:
         try:
-            res = subprocess.run(['docker', 'ps'], capture_output=True, timeout=2)
+            res = subprocess.run([self.docker_bin, 'ps'], capture_output=True, timeout=2)
             return res.returncode == 0
         except Exception:
             return False
 
     def _find_clamscan(self) -> Optional[str]:
+        cfg_clamscan = _get_setting('CLAMSCAN_BIN')
+        configured = cfg_clamscan or os.getenv('CLAMSCAN_BIN')
+        if configured and os.path.exists(configured):
+            return configured
+
+
         for candidate in ('/usr/bin/clamscan', '/usr/bin/clamdscan', 'clamscan'):
             try:
                 res = subprocess.run([candidate, '--version'], capture_output=True, timeout=3)
@@ -67,6 +134,7 @@ class LocalSandboxAnalyzer:
             except Exception:
                 continue
         return None
+
 
     _BINARY_MAGIC = [
         b'\x7fELF', b'MZ', b'PK\x03\x04', b'\x1f\x8b', b'BZh',
@@ -128,7 +196,7 @@ class LocalSandboxAnalyzer:
         Control characters stripped to prevent prompt injection.
         """
         try:
-            if os.path.getsize(file_path) > 512_000:
+            if os.path.getsize(file_path) > self.DEFAULT_MAX_SNIPPET_BYTES:
                 return ''
             kind, ent_val = self._classify_content(head_bytes)
             if kind == 'binary':
@@ -136,7 +204,7 @@ class LocalSandboxAnalyzer:
             lines = []
             with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                 for i, line in enumerate(f):
-                    if i >= 150:
+                    if i >= self.DEFAULT_MAX_SNIPPET_LINES:
                         break
                     clean = ''.join(
                         ch for ch in line.rstrip('\n\r')
@@ -156,7 +224,7 @@ class LocalSandboxAnalyzer:
         except Exception:
             return ''
 
-    def scan_file(self, file_path: str, timeout: int = 60) -> Dict[str, Any]:
+    def scan_file(self, file_path: str, timeout: Optional[int] = None) -> Dict[str, Any]:
         """
         Execute comprehensive local static analysis + ClamAV scan + Docker sandbox isolation on a file.
         Produces verifiable forensic evidence proving why a file is clean, suspicious, or malicious.
@@ -172,6 +240,8 @@ class LocalSandboxAnalyzer:
                 'error': 'File not found',
             }
 
+        effective_timeout = timeout if timeout is not None else self.default_timeout
+
         file_size = os.path.getsize(file_path)
         with open(file_path, 'rb') as f:
             head_bytes = f.read(min(file_size, 4 * 1024 * 1024))
@@ -183,7 +253,8 @@ class LocalSandboxAnalyzer:
         entropy = calculate_entropy(head_bytes)
         script_snippet = self._extract_script_snippet(file_path, head_bytes)
         # 1. PRIMARY: Execute full analysis inside Docker Sandbox Container (Daemon or Ephemeral)
-        docker_sandbox_result = self._run_docker_sandbox_probe(file_path) if self.has_docker else None
+        docker_sandbox_result = self._run_docker_sandbox_probe(file_path, timeout=effective_timeout) if self.has_docker else None
+
 
         malicious = 0
         suspicious = 0
@@ -234,7 +305,7 @@ class LocalSandboxAnalyzer:
             }
 
         # 2. SECONDARY / FALLBACK: Local host inspection if Docker is unavailable
-        clamav_result = self._scan_with_clamav(file_path, timeout=timeout)
+        clamav_result = self._scan_with_clamav(file_path, timeout=effective_timeout)
         heuristics = self._inspect_file_heuristics(file_path, head_bytes, entropy)
 
         if clamav_result.get('infected'):
@@ -319,77 +390,87 @@ class LocalSandboxAnalyzer:
             'engine': 'Local-ZeroTrust-Docker-ClamAV-Sandbox',
         }
 
-    def _run_docker_sandbox_probe(self, file_path: str) -> Dict[str, Any]:
+    def _run_docker_sandbox_probe(self, file_path: str, timeout: Optional[int] = None) -> Dict[str, Any]:
         """
         Runs isolated heuristic extraction via Sentinel Docker Sandbox Daemon (or fallback container).
         """
         abs_path = os.path.abspath(file_path)
+        effective_timeout = timeout if timeout is not None else self.default_timeout
 
         # 1. High-speed Daemon Microservice Mode (<20ms) via base64 or path
+        scan_url = f"{self.daemon_url}/scan"
         try:
             import base64
             with open(abs_path, 'rb') as f:
                 b64_data = base64.b64encode(f.read()).decode('utf-8')
+            daemon_timeout = min(effective_timeout, self.default_daemon_timeout)
             resp = requests.post(
-                'http://127.0.0.1:5005/scan',
+                scan_url,
                 json={
                     'file_base64': b64_data,
                     'file_name': os.path.basename(abs_path),
                 },
-                timeout=5
+                timeout=daemon_timeout
             )
             if resp.status_code == 200:
                 container_data = resp.json()
                 return {
                     'executed_in_container': True,
-                    'mode': 'Docker Sandbox Daemon (Port 5005)',
+                    'mode': f'Docker Sandbox Daemon ({self.daemon_url})',
                     'isolation_level': 'Zero-Trust Ephemeral Sandbox (Network Isolated, Memory Capped)',
                     'container_analysis': container_data,
                 }
-        except Exception:
-            pass
+            else:
+                logger.warning(f"[Sandbox Daemon] Non-200 status {resp.status_code} from {scan_url}: {resp.text[:200]}")
+        except Exception as daemon_err:
+            logger.debug(f"[Sandbox Daemon] Microservice error or timeout on {scan_url}: {daemon_err}")
 
         # 2. Ephemeral CLI Fallback Mode
         try:
+            cli_timeout = max(35, effective_timeout)
             cmd = [
-                'docker', 'run', '--rm',
+                self.docker_bin, 'run', '--rm',
+                '--entrypoint', 'python',
                 '--network', 'none',
                 '--cap-drop', 'ALL',
-                '--memory', '1g',
-                '--pids-limit', '64',
+                '--memory', str(self.docker_memory),
+                '--pids-limit', str(self.docker_pids_limit),
                 '-v', f"{abs_path}:/target:ro",
-                'sentinel-sandbox:latest',
-                'python', '/sandbox/analyze.py', '/target'
+                self.docker_image,
+                '/sandbox/analyze.py', '/target'
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=cli_timeout)
             if res.returncode == 0 and res.stdout.strip():
                 try:
                     container_data = json.loads(res.stdout.strip())
                     return {
                         'executed_in_container': True,
-                        'mode': 'Docker Ephemeral CLI Fallback',
+                        'mode': f'Docker Ephemeral CLI Fallback ({self.docker_image})',
                         'isolation_level': 'Zero-Trust Ephemeral Sandbox (No Network, Cap-Drop ALL, Memory-Capped)',
                         'container_analysis': container_data,
                     }
-                except Exception:
-                    pass
+                except Exception as parse_err:
+                    logger.warning(f"[Sandbox CLI] JSON parse failed: {parse_err}")
             return {
-                'executed_in_container': True,
-                'mode': 'Docker Ephemeral CLI Fallback',
-                'isolation_level': 'Zero-Trust Ephemeral Sandbox (No Network, Cap-Drop ALL, Memory-Capped)',
-                'output': res.stdout.strip(),
+                'executed_in_container': False,
+                'mode': f'Docker Ephemeral CLI Fallback ({self.docker_image})',
+                'error': res.stderr.strip() or 'Container exited with non-zero status or empty output',
+                'output': res.stdout.strip()[:500],
             }
         except Exception as e:
+            logger.error(f"[Sandbox CLI] Fallback execution failed: {e}")
             return {'executed_in_container': False, 'error': str(e)}
 
-    def _scan_with_clamav(self, file_path: str, timeout: int = 30) -> Dict[str, Any]:
+    def _scan_with_clamav(self, file_path: str, timeout: Optional[int] = None) -> Dict[str, Any]:
         """Scan file using ClamAV engine."""
         if not self.clamscan_bin:
             return {'available': False, 'infected': False, 'threat_name': None}
 
+        effective_timeout = timeout if timeout is not None else self.default_timeout
         try:
             cmd = [self.clamscan_bin, '--no-summary', file_path]
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=effective_timeout)
+
             
             if proc.returncode == 1:
                 match = re.search(r':\s*(.+)\s+FOUND', proc.stdout)
@@ -415,18 +496,8 @@ class LocalSandboxAnalyzer:
         is_pe = head_bytes.startswith(b'MZ')
         is_elf = head_bytes.startswith(b'\x7fELF')
         details['is_executable'] = is_pe or is_elf or ext in ('.exe', '.dll', '.bat', '.cmd', '.ps1', '.vbs', '.apk')
-
-        if is_pe:
-            if b'VirtualAlloc' in head_bytes and (b'WriteProcessMemory' in head_bytes or b'CreateRemoteThread' in head_bytes):
-                high_risk.append({
-                    'desc': "Phát hiện mẫu tiêm tiến trình bộ nhớ (Process Injection / DLL Injection API)",
-                    'evidence': "Import APIs: VirtualAlloc + WriteProcessMemory / CreateRemoteThread",
-                })
-            if b'URLDownloadToFile' in head_bytes or b'InternetOpenUrl' in head_bytes:
-                suspicious.append({
-                    'desc': "Chứa lệnh tự động tải tệp tin từ Internet ngầm (Downloader Pattern)",
-                    'evidence': "Import APIs: URLDownloadToFile / InternetOpenUrl",
-                })
+        details['is_pe'] = is_pe
+        details['is_elf'] = is_elf
 
         # 2. PDF Exploit Inspection
         if ext == '.pdf' or b'%PDF-' in head_bytes[:1024]:

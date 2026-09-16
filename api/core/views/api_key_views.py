@@ -3,11 +3,12 @@ ShieldCall VN – User API Key Management Views
 Handles CRUD operations, quota monitoring, and key regeneration for users.
 """
 import logging
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, inline_serializer
 from api.core.models import APIKey
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,16 @@ class UserAPIKeyListCreateView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Danh sách API Key của người dùng",
+        responses={200: inline_serializer(
+            name='UserAPIKeyListResponse',
+            fields={
+                'api_keys': serializers.ListField(child=serializers.DictField()),
+                'limits_summary': serializers.DictField(),
+            }
+        )}
+    )
     def get(self, request):
         keys = APIKey.objects.filter(user=request.user).order_by('-created_at')
         max_allowed = MAX_KEYS_PER_STAFF if request.user.is_staff else MAX_KEYS_PER_USER
@@ -54,6 +65,37 @@ class UserAPIKeyListCreateView(APIView):
             }
         })
 
+    @extend_schema(
+        summary="Tạo API Key mới",
+        request=inline_serializer(
+            name='UserAPIKeyCreateRequest',
+            fields={
+                'name': serializers.CharField(required=False, default=""),
+                'tier': serializers.CharField(required=False, default="free"),
+            }
+        ),
+        responses={201: inline_serializer(
+            name='UserAPIKeyCreateResponse',
+            fields={
+                'id': serializers.IntegerField(),
+                'name': serializers.CharField(),
+                'prefix': serializers.CharField(),
+                'tier': serializers.CharField(),
+                'tier_display': serializers.CharField(),
+                'rate_limit_per_minute': serializers.IntegerField(),
+                'daily_quota': serializers.IntegerField(),
+                'monthly_quota': serializers.IntegerField(),
+                'requests_today': serializers.IntegerField(),
+                'requests_this_month': serializers.IntegerField(),
+                'total_requests': serializers.IntegerField(),
+                'last_used_at': serializers.DateTimeField(allow_null=True),
+                'is_active': serializers.BooleanField(),
+                'created_at': serializers.DateTimeField(),
+                'raw_key': serializers.CharField(),
+                'warning': serializers.CharField(),
+            }
+        )}
+    )
     def post(self, request):
         max_allowed = MAX_KEYS_PER_STAFF if request.user.is_staff else MAX_KEYS_PER_USER
         current_count = APIKey.objects.filter(user=request.user).count()
@@ -94,6 +136,13 @@ class UserAPIKeyDetailView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Thu hồi và xóa vĩnh viễn API Key",
+        responses={200: inline_serializer(
+            name='UserAPIKeyDeleteResponse',
+            fields={'message': serializers.CharField()}
+        )}
+    )
     def delete(self, request, pk: int):
         api_key = get_object_or_404(APIKey, pk=pk, user=request.user)
         api_key.delete()
@@ -106,6 +155,18 @@ class UserAPIKeyToggleView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Bật hoặc vô hiệu hóa trạng thái API Key",
+        request=None,
+        responses={200: inline_serializer(
+            name='UserAPIKeyToggleResponse',
+            fields={
+                'id': serializers.IntegerField(),
+                'is_active': serializers.BooleanField(),
+                'message': serializers.CharField(),
+            }
+        )}
+    )
     def post(self, request, pk: int):
         api_key = get_object_or_404(APIKey, pk=pk, user=request.user)
         api_key.is_active = not api_key.is_active
@@ -124,6 +185,31 @@ class UserAPIKeyRegenerateView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Tái tạo token bí mật mới cho API Key",
+        request=None,
+        responses={200: inline_serializer(
+            name='UserAPIKeyRegenerateResponse',
+            fields={
+                'id': serializers.IntegerField(),
+                'name': serializers.CharField(),
+                'prefix': serializers.CharField(),
+                'tier': serializers.CharField(),
+                'tier_display': serializers.CharField(),
+                'rate_limit_per_minute': serializers.IntegerField(),
+                'daily_quota': serializers.IntegerField(),
+                'monthly_quota': serializers.IntegerField(),
+                'requests_today': serializers.IntegerField(),
+                'requests_this_month': serializers.IntegerField(),
+                'total_requests': serializers.IntegerField(),
+                'last_used_at': serializers.DateTimeField(allow_null=True),
+                'is_active': serializers.BooleanField(),
+                'created_at': serializers.DateTimeField(),
+                'raw_key': serializers.CharField(),
+                'warning': serializers.CharField(),
+            }
+        )}
+    )
     def post(self, request, pk: int):
         api_key = get_object_or_404(APIKey, pk=pk, user=request.user)
         raw_token = api_key.regenerate()
@@ -135,4 +221,5 @@ class UserAPIKeyRegenerateView(APIView):
             'Vui lòng cập nhật cấu hình trên ứng dụng hoặc chatbot của bạn.'
         )
         return Response(response_data)
+
 

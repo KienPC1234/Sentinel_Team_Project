@@ -2,14 +2,14 @@ openapi: 3.0.3
 info:
   title: ShieldCall VN API
   version: 1.0.0
-  description: API for ShieldCall VN Web
+  description: Hệ thống API Nền tảng Phòng chống Lừa đảo & An toàn số ShieldCall VN
 paths:
   /api/v1/admin/notifications/broadcast/:
     post:
-      operationId: v1_admin_notifications_broadcast_create
+      operationId: admin_notifications_broadcast_create
       description: POST — Admin sends a notification to all users (or specific users).
       tags:
-      - v1
+      - admin
       requestBody:
         content:
           application/json:
@@ -28,8 +28,9 @@ paths:
               - title
               - message
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '201':
           content:
@@ -41,13 +42,14 @@ paths:
           description: ''
   /api/v1/admin/rag/:
     get:
-      operationId: v1_admin_rag_retrieve
+      operationId: admin_rag_retrieve
       description: GET /api/admin/rag — Dashboard for RAG management
       tags:
-      - v1
+      - admin
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -59,13 +61,14 @@ paths:
           description: ''
   /api/v1/admin/rag/clear-logs/:
     post:
-      operationId: v1_admin_rag_clear_logs_create
+      operationId: admin_rag_clear_logs_create
       description: POST /api/admin/rag/clear-logs — Clear sync history logs
       tags:
-      - v1
+      - admin
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -77,13 +80,14 @@ paths:
           description: ''
   /api/v1/admin/rag/rebuild/:
     post:
-      operationId: v1_admin_rag_rebuild_create
+      operationId: admin_rag_rebuild_create
       description: POST /api/admin/rag/rebuild — Trigger vector index rebuild
       tags:
-      - v1
+      - admin
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -95,13 +99,14 @@ paths:
           description: ''
   /api/v1/admin/rag/reset/:
     post:
-      operationId: v1_admin_rag_reset_create
+      operationId: admin_rag_reset_create
       description: Deletes the vector index files and triggers a fresh rebuild.
       tags:
-      - v1
+      - admin
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -113,30 +118,26 @@ paths:
           description: ''
   /api/v1/admin/reports/:
     get:
-      operationId: v1_admin_reports_list
+      operationId: admin_reports_list
       description: GET /api/admin/reports — Moderation queue
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
       tags:
-      - v1
+      - admin
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedReportListList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportList'
           description: ''
   /api/v1/admin/reports/{report_id}/action/:
     post:
-      operationId: v1_admin_reports_action_create
+      operationId: admin_reports_action_create
       description: POST /api/admin/reports/{id}/action — Approve or reject a report
       parameters:
       - in: path
@@ -145,22 +146,23 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - admin
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReportModerate'
+              $ref: '#/components/schemas/ReportModerateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ReportModerate'
+              $ref: '#/components/schemas/ReportModerateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ReportModerate'
+              $ref: '#/components/schemas/ReportModerateRequest'
         required: true
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -172,13 +174,14 @@ paths:
           description: ''
   /api/v1/admin/stats/:
     get:
-      operationId: v1_admin_stats_retrieve
+      operationId: admin_stats_retrieve
       description: GET /api/admin/stats — System overview stats
       tags:
-      - v1
+      - admin
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -190,106 +193,58 @@ paths:
           description: ''
   /api/v1/admin/tickets/:
     get:
-      operationId: v1_admin_tickets_retrieve
+      operationId: admin_tickets_retrieve
       description: GET — all tickets. PATCH — respond to ticket.
       tags:
-      - v1
+      - admin
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
     patch:
-      operationId: v1_admin_tickets_partial_update
+      operationId: admin_tickets_partial_update
       description: GET — all tickets. PATCH — respond to ticket.
       tags:
-      - v1
+      - admin
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
-  /api/v1/analyze-audio:
-    post:
-      operationId: v1_analyze_audio_create
-      description: Analyze recorded audio for speech-to-text and scam detection.
-      tags:
-      - v1
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AudioAnalysisRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AudioAnalysisRequest'
-        required: true
-      security:
-      - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AudioAnalysisResponse'
-          description: ''
-  /api/v1/analyze-images:
-    post:
-      operationId: v1_analyze_images_create
-      description: Analyze multiple images for OCR and risk detection.
-      tags:
-      - v1
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ImageAnalysisRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ImageAnalysisRequest'
-        required: true
-      security:
-      - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImageAnalysisResponse'
-          description: ''
   /api/v1/announcements/:
     get:
-      operationId: v1_announcements_retrieve
+      operationId: announcements_retrieve
       description: GET — list, POST — admin creates announcement.
       tags:
-      - v1
+      - announcements
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
     post:
-      operationId: v1_announcements_create
+      operationId: announcements_create
       description: GET — list, POST — admin creates announcement.
       tags:
-      - v1
+      - announcements
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/announcements/{announcement_id}/reaction/:
     post:
-      operationId: v1_announcements_reaction_create
+      operationId: announcements_reaction_create
       description: POST — toggle reaction on an announcement.
       parameters:
       - in: path
@@ -298,28 +253,32 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - announcements
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/articles/:
     get:
-      operationId: v1_articles_retrieve
+      operationId: v1_articles_list
+      summary: Danh sách bài viết tin tức và cảnh báo an toàn
       tags:
-      - v1
+      - articles
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/articles/{slug}/:
     get:
-      operationId: v1_articles_retrieve_2
+      operationId: v1_articles_detail
+      summary: Chi tiết bài viết theo slug
       parameters:
       - in: path
         name: slug
@@ -327,20 +286,21 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - articles
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/auth/account/delete/:
     post:
-      operationId: v1_auth_account_delete_create
+      operationId: auth_account_delete_create
       description: POST /api/v1/auth/account/delete/ — permanently delete user account
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -355,8 +315,9 @@ paths:
               - password
               - confirmation_text
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -368,11 +329,11 @@ paths:
           description: ''
   /api/v1/auth/email-change/request/:
     post:
-      operationId: v1_auth_email_change_request_create
+      operationId: auth_email_change_request_create
       description: POST /api/v1/auth/email-change/request/ — verify password and send
         OTP to new email
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -387,8 +348,9 @@ paths:
               - password
               - new_email
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -400,11 +362,11 @@ paths:
           description: ''
   /api/v1/auth/email-change/verify/:
     post:
-      operationId: v1_auth_email_change_verify_create
+      operationId: auth_email_change_verify_create
       description: POST /api/v1/auth/email-change/verify/ — verify OTP sent to new
         email and update account email
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -419,8 +381,9 @@ paths:
               - new_email
               - otp
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -432,25 +395,26 @@ paths:
           description: ''
   /api/v1/auth/login/:
     post:
-      operationId: v1_auth_login_create
+      operationId: auth_login_create
       description: POST /api/auth/login
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Login'
+              $ref: '#/components/schemas/LoginRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Login'
+              $ref: '#/components/schemas/LoginRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Login'
+              $ref: '#/components/schemas/LoginRequest'
         required: true
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
@@ -463,13 +427,14 @@ paths:
           description: ''
   /api/v1/auth/logout/:
     post:
-      operationId: v1_auth_logout_create
+      operationId: auth_logout_create
       description: POST /api/auth/logout — revoke token
       tags:
-      - v1
+      - auth
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -481,13 +446,14 @@ paths:
           description: ''
   /api/v1/auth/me/:
     get:
-      operationId: v1_auth_me_retrieve
+      operationId: auth_me_retrieve
       description: GET /api/me — current user info
       tags:
-      - v1
+      - auth
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -498,24 +464,25 @@ paths:
                 description: Unspecified response body
           description: ''
     patch:
-      operationId: v1_auth_me_partial_update
+      operationId: auth_me_partial_update
       description: Update profile (avatar, bio, etc.)
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedUserProfile'
+              $ref: '#/components/schemas/PatchedUserProfileRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedUserProfile'
+              $ref: '#/components/schemas/PatchedUserProfileRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedUserProfile'
+              $ref: '#/components/schemas/PatchedUserProfileRequest'
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -527,9 +494,9 @@ paths:
           description: ''
   /api/v1/auth/mfa/deactivate/:
     post:
-      operationId: v1_auth_mfa_deactivate_create
+      operationId: auth_mfa_deactivate_create
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -546,8 +513,9 @@ paths:
               - password
               - token
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -559,12 +527,13 @@ paths:
           description: ''
   /api/v1/auth/mfa/recovery/:
     get:
-      operationId: v1_auth_mfa_recovery_retrieve
+      operationId: auth_mfa_recovery_retrieve
       tags:
-      - v1
+      - auth
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -575,12 +544,13 @@ paths:
                 description: Unspecified response body
           description: ''
     post:
-      operationId: v1_auth_mfa_recovery_create
+      operationId: auth_mfa_recovery_create
       tags:
-      - v1
+      - auth
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -592,12 +562,13 @@ paths:
           description: ''
   /api/v1/auth/mfa/setup/email/:
     get:
-      operationId: v1_auth_mfa_setup_email_retrieve
+      operationId: auth_mfa_setup_email_retrieve
       tags:
-      - v1
+      - auth
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
@@ -609,9 +580,9 @@ paths:
                 description: Unspecified response body
           description: ''
     post:
-      operationId: v1_auth_mfa_setup_email_create
+      operationId: auth_mfa_setup_email_create
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -623,8 +594,9 @@ paths:
               required:
               - token
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
@@ -637,12 +609,13 @@ paths:
           description: ''
   /api/v1/auth/mfa/setup/totp/:
     get:
-      operationId: v1_auth_mfa_setup_totp_retrieve
+      operationId: auth_mfa_setup_totp_retrieve
       tags:
-      - v1
+      - auth
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -653,9 +626,9 @@ paths:
                 description: Unspecified response body
           description: ''
     post:
-      operationId: v1_auth_mfa_setup_totp_create
+      operationId: auth_mfa_setup_totp_create
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -667,8 +640,9 @@ paths:
               required:
               - token
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -680,12 +654,13 @@ paths:
           description: ''
   /api/v1/auth/mfa/status/:
     get:
-      operationId: v1_auth_mfa_status_retrieve
+      operationId: auth_mfa_status_retrieve
       tags:
-      - v1
+      - auth
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -697,9 +672,9 @@ paths:
           description: ''
   /api/v1/auth/mfa/verify/:
     post:
-      operationId: v1_auth_mfa_verify_create
+      operationId: auth_mfa_verify_create
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -713,8 +688,9 @@ paths:
               required:
               - token
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
@@ -727,10 +703,10 @@ paths:
           description: ''
   /api/v1/auth/password/change/:
     post:
-      operationId: v1_auth_password_change_create
+      operationId: auth_password_change_create
       description: POST /api/v1/auth/password/change/ — change password with OTP
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -748,8 +724,9 @@ paths:
               - new_password
               - token
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -761,10 +738,10 @@ paths:
           description: ''
   /api/v1/auth/register/:
     post:
-      operationId: v1_auth_register_create
+      operationId: auth_register_create
       description: POST /api/auth/register — create account after OTP verification
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
@@ -779,8 +756,9 @@ paths:
               - email
               - otp
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '201':
@@ -793,26 +771,27 @@ paths:
           description: ''
   /api/v1/auth/register/request-otp/:
     post:
-      operationId: v1_auth_register_request_otp_create
+      operationId: auth_register_request_otp_create
       description: POST /api/auth/register/request-otp — validate input then send
         OTP to email
       tags:
-      - v1
+      - auth
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Register'
+              $ref: '#/components/schemas/RegisterRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Register'
+              $ref: '#/components/schemas/RegisterRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Register'
+              $ref: '#/components/schemas/RegisterRequest'
         required: true
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
@@ -825,15 +804,16 @@ paths:
           description: ''
   /api/v1/chat/config/:
     get:
-      operationId: v1_chat_config_retrieve
+      operationId: chat_config_retrieve
       description: |-
         GET: Get current user's chatbot personalization config.
         PUT: Update chatbot config.
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -842,26 +822,27 @@ paths:
                 $ref: '#/components/schemas/ChatbotConfig'
           description: ''
     put:
-      operationId: v1_chat_config_update
+      operationId: chat_config_update
       description: |-
         GET: Get current user's chatbot personalization config.
         PUT: Update chatbot config.
       tags:
-      - v1
+      - chat
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChatbotConfig'
+              $ref: '#/components/schemas/ChatbotConfigRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ChatbotConfig'
+              $ref: '#/components/schemas/ChatbotConfigRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ChatbotConfig'
+              $ref: '#/components/schemas/ChatbotConfigRequest'
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -871,15 +852,16 @@ paths:
           description: ''
   /api/v1/chat/folders/:
     get:
-      operationId: v1_chat_folders_list
+      operationId: chat_folders_list
       description: |-
         GET: List all chat folders for the current user.
         POST: Create a new chat folder.
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -890,27 +872,28 @@ paths:
                   $ref: '#/components/schemas/ChatFolder'
           description: ''
     post:
-      operationId: v1_chat_folders_create
+      operationId: chat_folders_create
       description: |-
         GET: List all chat folders for the current user.
         POST: Create a new chat folder.
       tags:
-      - v1
+      - chat
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChatFolder'
+              $ref: '#/components/schemas/ChatFolderRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ChatFolder'
+              $ref: '#/components/schemas/ChatFolderRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ChatFolder'
+              $ref: '#/components/schemas/ChatFolderRequest'
         required: true
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '201':
           content:
@@ -920,7 +903,7 @@ paths:
           description: ''
   /api/v1/chat/folders/{folder_id}/:
     patch:
-      operationId: v1_chat_folders_partial_update
+      operationId: chat_folders_partial_update
       parameters:
       - in: path
         name: folder_id
@@ -928,21 +911,22 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - chat
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedChatFolder'
+              $ref: '#/components/schemas/PatchedChatFolderRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedChatFolder'
+              $ref: '#/components/schemas/PatchedChatFolderRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedChatFolder'
+              $ref: '#/components/schemas/PatchedChatFolderRequest'
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -951,7 +935,7 @@ paths:
                 $ref: '#/components/schemas/ChatFolder'
           description: ''
     delete:
-      operationId: v1_chat_folders_destroy
+      operationId: chat_folders_destroy
       parameters:
       - in: path
         name: folder_id
@@ -959,16 +943,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '204':
           description: No response body
   /api/v1/chat/messages/{message_id}/delete_after/:
     delete:
-      operationId: v1_chat_messages_delete_after_destroy
+      operationId: chat_messages_delete_after_destroy
       description: |-
         DELETE: Remove all messages in a session AFTER a specific message ID.
         Used for history branching when editing an old message.
@@ -979,10 +964,11 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -994,15 +980,16 @@ paths:
           description: ''
   /api/v1/chat/saved/:
     get:
-      operationId: v1_chat_saved_list
+      operationId: chat_saved_list
       description: |-
         GET: List saved/bookmarked messages.
         POST: Bookmark a message.
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -1013,12 +1000,12 @@ paths:
                   $ref: '#/components/schemas/SavedMessage'
           description: ''
     post:
-      operationId: v1_chat_saved_create
+      operationId: chat_saved_create
       description: |-
         GET: List saved/bookmarked messages.
         POST: Bookmark a message.
       tags:
-      - v1
+      - chat
       requestBody:
         content:
           application/json:
@@ -1032,8 +1019,9 @@ paths:
               required:
               - message_id
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '201':
           content:
@@ -1051,7 +1039,7 @@ paths:
           description: ''
   /api/v1/chat/saved/{saved_id}/:
     delete:
-      operationId: v1_chat_saved_destroy
+      operationId: chat_saved_destroy
       description: 'DELETE: Remove a bookmarked message.'
       parameters:
       - in: path
@@ -1060,22 +1048,24 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '204':
           description: No response body
   /api/v1/chat/search/:
     get:
-      operationId: v1_chat_search_retrieve
+      operationId: chat_search_retrieve
       description: 'GET: Search chat sessions and messages by query string.'
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -1087,15 +1077,17 @@ paths:
           description: ''
   /api/v1/chat/sessions/:
     get:
-      operationId: v1_chat_sessions_list
+      operationId: chat_sessions_list
       description: |-
-        GET: List all chat sessions for the current user.
-        POST: Create a new chat session.
+        GET: List all chat sessions for the current user or guest.
+        POST: Create a new chat session (supports authenticated and guest users).
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
+      - {}
       responses:
         '200':
           content:
@@ -1106,12 +1098,12 @@ paths:
                   $ref: '#/components/schemas/ChatSession'
           description: ''
     post:
-      operationId: v1_chat_sessions_create
+      operationId: chat_sessions_create
       description: |-
-        GET: List all chat sessions for the current user.
-        POST: Create a new chat session.
+        GET: List all chat sessions for the current user or guest.
+        POST: Create a new chat session (supports authenticated and guest users).
       tags:
-      - v1
+      - chat
       requestBody:
         content:
           application/json:
@@ -1121,8 +1113,10 @@ paths:
                 folder_id:
                   type: string
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
+      - {}
       responses:
         '201':
           content:
@@ -1134,7 +1128,7 @@ paths:
           description: ''
   /api/v1/chat/sessions/{session_id}/:
     get:
-      operationId: v1_chat_sessions_retrieve
+      operationId: chat_sessions_retrieve
       description: |-
         GET: Retrieve message history for a session.
         DELETE: Remove a chat session.
@@ -1146,10 +1140,12 @@ paths:
           format: uuid
         required: true
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
+      - {}
       responses:
         '200':
           content:
@@ -1160,7 +1156,7 @@ paths:
                 description: Unspecified response body
           description: ''
     patch:
-      operationId: v1_chat_sessions_partial_update
+      operationId: chat_sessions_partial_update
       description: |-
         GET: Retrieve message history for a session.
         DELETE: Remove a chat session.
@@ -1172,15 +1168,17 @@ paths:
           format: uuid
         required: true
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
+      - {}
       responses:
         '200':
           description: No response body
     delete:
-      operationId: v1_chat_sessions_destroy
+      operationId: chat_sessions_destroy
       description: |-
         GET: Retrieve message history for a session.
         DELETE: Remove a chat session.
@@ -1192,46 +1190,51 @@ paths:
           format: uuid
         required: true
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
+      - {}
       responses:
         '204':
           description: No response body
   /api/v1/chat/sessions/clear_all/:
     delete:
-      operationId: v1_chat_sessions_clear_all_destroy
-      description: 'DELETE: Remove all chat sessions for the current user.'
+      operationId: chat_sessions_clear_all_destroy
+      description: 'DELETE: Remove all chat sessions for the current user or guest.'
       tags:
-      - v1
+      - chat
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
+      - {}
       responses:
         '204':
           description: No response body
   /api/v1/chat/stream/:
     post:
-      operationId: v1_chat_stream_create
+      operationId: chat_stream_create
       description: Streaming chat endpoint using AIAgent with RAG and history.
       tags:
-      - v1
+      - chat
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChatAIRequest'
+              $ref: '#/components/schemas/ChatAIRequestRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ChatAIRequest'
+              $ref: '#/components/schemas/ChatAIRequestRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ChatAIRequest'
+              $ref: '#/components/schemas/ChatAIRequestRequest'
         required: true
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
@@ -1242,92 +1245,47 @@ paths:
                 additionalProperties: {}
                 description: Unspecified response body
           description: ''
-  /api/v1/check-phone:
-    get:
-      operationId: v1_check_phone_retrieve
-      description: Check the risk level of a phone number.
-      parameters:
-      - in: query
-        name: phone
-        schema:
-          type: string
-        description: Phone number to check
-        required: true
-      tags:
-      - v1
-      security:
-      - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PhoneCheckResponse'
-          description: ''
-  /api/v1/check-session:
-    get:
-      operationId: v1_check_session_retrieve
-      description: Check if a session is valid and return a new one if expired.
-      parameters:
-      - in: query
-        name: session_id
-        schema:
-          type: string
-        description: UUID of the session to check
-        required: true
-      tags:
-      - v1
-      security:
-      - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SessionCheckResponse'
-          description: ''
   /api/v1/debug/system/:
     get:
-      operationId: v1_debug_system_retrieve
+      operationId: debug_system_retrieve
       description: Debug view to test system connectivity.
       tags:
-      - v1
+      - debug
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/dm/inbox/:
     get:
-      operationId: v1_dm_inbox_retrieve
+      operationId: dm_inbox_retrieve
       description: GET — user's conversations. POST — send message.
       tags:
-      - v1
+      - dm
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
     post:
-      operationId: v1_dm_inbox_create
+      operationId: dm_inbox_create
       description: GET — user's conversations. POST — send message.
       tags:
-      - v1
+      - dm
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/dm/thread/{username}/:
     get:
-      operationId: v1_dm_thread_retrieve
+      operationId: dm_thread_retrieve
       description: GET — messages with a specific user.
       parameters:
       - in: path
@@ -1336,16 +1294,17 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - dm
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/comments/{comment_id}/like/:
     post:
-      operationId: v1_forum_comments_like_create
+      operationId: forum_comments_like_create
       description: POST /api/forum/comments/<id>/like/ — toggle like
       parameters:
       - in: path
@@ -1354,16 +1313,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/comments/{comment_id}/reaction/:
     post:
-      operationId: v1_forum_comments_reaction_create
+      operationId: forum_comments_reaction_create
       description: |-
         POST /api/forum/comments/<id>/reaction/ — upvote, downvote, helpful
 
@@ -1377,16 +1337,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/comments/{comment_id}/report/:
     post:
-      operationId: v1_forum_comments_report_create
+      operationId: forum_comments_report_create
       description: POST /api/forum/comments/<id>/report/
       parameters:
       - in: path
@@ -1395,43 +1356,54 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/posts/:
     get:
-      operationId: v1_forum_posts_retrieve
+      operationId: v1_forum_posts_list
       description: GET /api/forum/posts/ — list, POST — create
+      summary: Danh sách bài viết diễn đàn cộng đồng
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ForumPost'
+          description: ''
     post:
-      operationId: v1_forum_posts_create
+      operationId: forum_posts_create
       description: GET /api/forum/posts/ — list, POST — create
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/posts/{post_id}/:
     get:
-      operationId: v1_forum_posts_retrieve_2
+      operationId: v1_forum_posts_detail
       description: |-
         GET /api/forum/posts/<id>/ — detail with comments
         PATCH /api/forum/posts/<id>/ — author edits post
+      summary: Chi tiết bài viết diễn đàn cùng các bình luận
       parameters:
       - in: path
         name: post_id
@@ -1439,16 +1411,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
     patch:
-      operationId: v1_forum_posts_partial_update
+      operationId: forum_posts_partial_update
       description: Author can edit their own post (title, content, category).
       parameters:
       - in: path
@@ -1457,16 +1430,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/posts/{post_id}/comment/:
     post:
-      operationId: v1_forum_posts_comment_create
+      operationId: forum_posts_comment_create
       description: POST /api/forum/posts/<id>/comment/
       parameters:
       - in: path
@@ -1475,16 +1449,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/posts/{post_id}/like/:
     post:
-      operationId: v1_forum_posts_like_create
+      operationId: forum_posts_like_create
       description: POST /api/forum/posts/<id>/like/ — toggle like
       parameters:
       - in: path
@@ -1493,16 +1468,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/posts/{post_id}/like/mutual/:
     post:
-      operationId: v1_forum_posts_like_mutual_create
+      operationId: forum_posts_like_mutual_create
       description: POST /api/forum/posts/<id>/like/mutual/ — with mutual exclusivity
       parameters:
       - in: path
@@ -1511,16 +1487,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/posts/{post_id}/reaction/:
     post:
-      operationId: v1_forum_posts_reaction_create
+      operationId: forum_posts_reaction_create
       description: 'POST /api/forum/posts/<id>/reaction/ — reaction_type: helpful,
         share'
       parameters:
@@ -1530,16 +1507,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/posts/{post_id}/reaction/mutual/:
     post:
-      operationId: v1_forum_posts_reaction_mutual_create
+      operationId: forum_posts_reaction_mutual_create
       description: |-
         POST /api/forum/posts/<id>/reaction/mutual/ — with mutual exclusivity
 
@@ -1551,16 +1529,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/forum/posts/{post_id}/report/:
     post:
-      operationId: v1_forum_posts_report_create
+      operationId: forum_posts_report_create
       description: POST /api/forum/posts/<id>/report/
       parameters:
       - in: path
@@ -1569,16 +1548,17 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - forum
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/learn/articles/{slug}/comments/:
     get:
-      operationId: v1_learn_articles_comments_retrieve
+      operationId: learn_articles_comments_retrieve
       parameters:
       - in: path
         name: slug
@@ -1586,16 +1566,17 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - learn
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
     post:
-      operationId: v1_learn_articles_comments_create
+      operationId: learn_articles_comments_create
       parameters:
       - in: path
         name: slug
@@ -1603,16 +1584,17 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - learn
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/learn/articles/{slug}/comments/{comment_id}/reaction/:
     post:
-      operationId: v1_learn_articles_comments_reaction_create
+      operationId: learn_articles_comments_reaction_create
       parameters:
       - in: path
         name: comment_id
@@ -1625,16 +1607,17 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - learn
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/learn/articles/{slug}/reaction/:
     post:
-      operationId: v1_learn_articles_reaction_create
+      operationId: learn_articles_reaction_create
       parameters:
       - in: path
         name: slug
@@ -1642,16 +1625,17 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - learn
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/learn/lessons/{slug}/reaction/:
     post:
-      operationId: v1_learn_lessons_reaction_create
+      operationId: learn_lessons_reaction_create
       parameters:
       - in: path
         name: slug
@@ -1659,22 +1643,24 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - learn
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/notifications/:
     get:
-      operationId: v1_notifications_retrieve
+      operationId: notifications_retrieve
       description: GET — user's notifications with pagination.
       tags:
-      - v1
+      - notifications
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -1686,7 +1672,7 @@ paths:
           description: ''
   /api/v1/notifications/{notification_id}/read/:
     post:
-      operationId: v1_notifications_read_create
+      operationId: notifications_read_create
       description: POST — mark a single notification as read.
       parameters:
       - in: path
@@ -1695,134 +1681,144 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - notifications
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/notifications/read-all/:
     post:
-      operationId: v1_notifications_read_all_create
+      operationId: notifications_read_all_create
       description: POST — mark all user notifications as read.
       tags:
-      - v1
+      - notifications
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/notifications/test-push/:
     post:
-      operationId: v1_notifications_test_push_create
+      operationId: notifications_test_push_create
       tags:
-      - v1
+      - notifications
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/notifications/unread-count/:
     get:
-      operationId: v1_notifications_unread_count_retrieve
+      operationId: notifications_unread_count_retrieve
       description: GET — unread notification count for the bell badge.
       tags:
-      - v1
+      - notifications
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/notifications/webpush/subscribe/:
     post:
-      operationId: v1_notifications_webpush_subscribe_create
+      operationId: notifications_webpush_subscribe_create
       description: Registers/updates a browser Web Push subscription for current user.
       tags:
-      - v1
+      - notifications
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/notifications/webpush/unsubscribe/:
     post:
-      operationId: v1_notifications_webpush_unsubscribe_create
+      operationId: notifications_webpush_unsubscribe_create
       description: Marks a browser Web Push subscription inactive.
       tags:
-      - v1
+      - notifications
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/push/public-key/:
     get:
-      operationId: v1_push_public_key_retrieve
+      operationId: push_public_key_retrieve
       description: GET public VAPID key for frontend bootstrap.
       tags:
-      - v1
+      - push
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/push/subscribe/:
     post:
-      operationId: v1_push_subscribe_create
+      operationId: push_subscribe_create
       description: Registers/updates a browser Web Push subscription for current user.
       tags:
-      - v1
+      - push
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/push/unsubscribe/:
     post:
-      operationId: v1_push_unsubscribe_create
+      operationId: push_unsubscribe_create
       description: Marks a browser Web Push subscription inactive.
       tags:
-      - v1
+      - push
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/report/:
     post:
-      operationId: v1_report_create
+      operationId: report_create
       description: POST /api/report — Submit a scam report
       tags:
-      - v1
+      - report
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReportCreate'
+              $ref: '#/components/schemas/ReportCreateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ReportCreate'
+              $ref: '#/components/schemas/ReportCreateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ReportCreate'
+              $ref: '#/components/schemas/ReportCreateRequest'
         required: true
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '201':
@@ -1833,38 +1829,9 @@ paths:
                 additionalProperties: {}
                 description: Unspecified response body
           description: ''
-  /api/v1/report-crash:
-    post:
-      operationId: v1_report_crash_create
-      description: Submit crash logs from the device.
-      tags:
-      - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CrashReportRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CrashReportRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CrashReportRequest'
-        required: true
-      security:
-      - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CrashReportResponse'
-          description: ''
   /api/v1/report/{id}/:
     get:
-      operationId: v1_report_retrieve
+      operationId: report_retrieve
       description: GET /api/report/<pk>/ — Get detail of a report
       parameters:
       - in: path
@@ -1873,10 +1840,11 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - report
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -1886,29 +1854,31 @@ paths:
           description: ''
   /api/v1/scam-iq/history/:
     get:
-      operationId: v1_scam_iq_history_retrieve
+      operationId: scam_iq_history_retrieve
       tags:
-      - v1
+      - scam-iq
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/scam-iq/start/:
     post:
-      operationId: v1_scam_iq_start_create
+      operationId: scam_iq_start_create
       tags:
-      - v1
+      - scam-iq
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/scam-iq/status/{task_id}/:
     get:
-      operationId: v1_scam_iq_status_retrieve
+      operationId: scam_iq_status_retrieve
       parameters:
       - in: path
         name: task_id
@@ -1916,27 +1886,29 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - scam-iq
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/scam-iq/submit/:
     post:
-      operationId: v1_scam_iq_submit_create
+      operationId: scam_iq_submit_create
       tags:
-      - v1
+      - scam-iq
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/scan/{scan_id}/report-admin/:
     post:
-      operationId: v1_scan_report_admin_create
+      operationId: scan_report_admin_create
       description: POST /api/scan/<id>/report-admin — User requests admin verification
         for a scan result.
       parameters:
@@ -1946,168 +1918,210 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/scan/account/:
     post:
-      operationId: v1_scan_account_create
+      operationId: scan_account_create
       description: POST /api/scan/account — Look up bank account risk
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/analyze/:
+    post:
+      operationId: scan_analyze_create
+      description: SSE endpoint for detailed AI analysis of a scan result.
+      tags:
+      - scan
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/analyze-sse/:
     post:
-      operationId: v1_scan_analyze_sse_create
+      operationId: scan_analyze_sse_create
       description: SSE endpoint for detailed AI analysis of a scan result.
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scan/analyze/stream/:
+    post:
+      operationId: scan_analyze_stream_create
+      description: SSE endpoint for detailed AI analysis of a scan result.
+      tags:
+      - scan
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/audio/:
     post:
-      operationId: v1_scan_audio_create
+      operationId: scan_audio_create
       description: |-
         POST /api/scan/audio — Audio transcription + AI scam analysis.
         Accepts audio file upload, offloads to Celery for Faster-Whisper + AI.
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/banks/:
     get:
-      operationId: v1_scan_banks_retrieve
+      operationId: scan_banks_retrieve
       description: |-
         GET /api/scan/banks — Fetch list of banks from VietQR API.
         Cached for 24 hours to ensure local performance.
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/domain/:
     post:
-      operationId: v1_scan_domain_create
+      operationId: scan_domain_create
       description: POST /api/scan/domain — Analyze URL/domain for phishing
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/email/:
     post:
-      operationId: v1_scan_email_create
+      operationId: scan_email_create
       description: POST /api/scan/email — Analyze email sender and content (.eml upload)
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/file/:
     post:
-      operationId: v1_scan_file_create
-      description: POST /api/scan/file — File upload scan using VirusTotal
+      operationId: scan_file_create
+      description: |-
+        POST /api/scan/file — Zero-Trust Docker Sandbox file analysis.
+        Accepts any file up to 500 MB, stores temporarily, offloads to Celery.
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/image/:
     post:
-      operationId: v1_scan_image_create
+      operationId: scan_image_create
       description: |-
         POST /api/scan/image — OCR & Scam Analysis (Multi-image)
         Offloaded to Celery because OCR and AI are heavy.
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/lookup/:
     get:
-      operationId: v1_scan_lookup_retrieve
+      operationId: scan_lookup_retrieve
       description: |-
         GET /api/v1/scan/lookup/?q=...&type=all&risk=all&page=1
         Unified search across ScanEvent + Report for the lookup page.
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/message/:
     post:
-      operationId: v1_scan_message_create
+      operationId: scan_message_create
       description: POST /api/scan/message — Analyze text message for scams (Multi-image
         support)
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/phone/:
     post:
-      operationId: v1_scan_phone_create
+      operationId: scan_phone_create
       description: POST /api/scan/phone — Scan phone number risk
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/scan/status/{scan_id}/:
     get:
-      operationId: v1_scan_status_retrieve
+      operationId: scan_status_retrieve
       description: GET /api/scan/status/<id> — Check status of a scan job
       parameters:
       - in: path
@@ -2116,10 +2130,11 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - scan
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
@@ -2132,72 +2147,78 @@ paths:
           description: ''
   /api/v1/tickets/:
     get:
-      operationId: v1_tickets_retrieve
+      operationId: tickets_retrieve
       description: GET — user's tickets. POST — create ticket.
       tags:
-      - v1
+      - tickets
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
     post:
-      operationId: v1_tickets_create
+      operationId: tickets_create
       description: GET — user's tickets. POST — create ticket.
       tags:
-      - v1
+      - tickets
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           description: No response body
   /api/v1/trends/daily/:
     get:
-      operationId: v1_trends_daily_retrieve
+      operationId: trends_daily_retrieve
       tags:
-      - v1
+      - trends
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/trends/hot/:
     get:
-      operationId: v1_trends_hot_retrieve
+      operationId: trends_hot_retrieve
       tags:
-      - v1
+      - trends
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/trends/radar-stats/:
     get:
-      operationId: v1_trends_radar_stats_retrieve
+      operationId: trends_radar_stats_retrieve
       tags:
-      - v1
+      - trends
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
           description: No response body
   /api/v1/user/alerts/:
     get:
-      operationId: v1_user_alerts_list
+      operationId: user_alerts_list
       description: GET/POST /api/user/alerts — User saved alerts
       tags:
-      - v1
+      - user
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -2208,25 +2229,26 @@ paths:
                   $ref: '#/components/schemas/UserAlert'
           description: ''
     post:
-      operationId: v1_user_alerts_create
+      operationId: user_alerts_create
       description: GET/POST /api/user/alerts — User saved alerts
       tags:
-      - v1
+      - user
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserAlert'
+              $ref: '#/components/schemas/UserAlertRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/UserAlert'
+              $ref: '#/components/schemas/UserAlertRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/UserAlert'
+              $ref: '#/components/schemas/UserAlertRequest'
         required: true
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '201':
           content:
@@ -2235,13 +2257,14 @@ paths:
                 $ref: '#/components/schemas/UserAlert'
           description: ''
     delete:
-      operationId: v1_user_alerts_destroy
+      operationId: user_alerts_destroy
       description: GET/POST /api/user/alerts — User saved alerts
       tags:
-      - v1
+      - user
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -2251,11 +2274,136 @@ paths:
                 additionalProperties: {}
                 description: Unspecified response body
           description: ''
+  /api/v1/user/api-keys/:
+    get:
+      operationId: user_api_keys_retrieve
+      description: |-
+        GET  /api/v1/user/api-keys/  — List all API keys of authenticated user
+        POST /api/v1/user/api-keys/  — Create a new API key (returns raw key once)
+      summary: Danh sách API Key của người dùng
+      tags:
+      - user
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAPIKeyListResponse'
+          description: ''
+    post:
+      operationId: user_api_keys_create
+      description: |-
+        GET  /api/v1/user/api-keys/  — List all API keys of authenticated user
+        POST /api/v1/user/api-keys/  — Create a new API key (returns raw key once)
+      summary: Tạo API Key mới
+      tags:
+      - user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAPIKeyCreateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserAPIKeyCreateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserAPIKeyCreateRequestRequest'
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAPIKeyCreateResponse'
+          description: ''
+  /api/v1/user/api-keys/{id}/:
+    delete:
+      operationId: user_api_keys_destroy
+      description: DELETE /api/v1/user/api-keys/<id>/ — Revoke/delete an API key
+      summary: Thu hồi và xóa vĩnh viễn API Key
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - user
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAPIKeyDeleteResponse'
+          description: ''
+  /api/v1/user/api-keys/{id}/regenerate/:
+    post:
+      operationId: user_api_keys_regenerate_create
+      description: POST /api/v1/user/api-keys/<id>/regenerate/ — Generate new secret
+        for existing key
+      summary: Tái tạo token bí mật mới cho API Key
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - user
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAPIKeyRegenerateResponse'
+          description: ''
+  /api/v1/user/api-keys/{id}/toggle/:
+    post:
+      operationId: user_api_keys_toggle_create
+      description: POST /api/v1/user/api-keys/<id>/toggle/ — Enable/Disable an API
+        key
+      summary: Bật hoặc vô hiệu hóa trạng thái API Key
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - user
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAPIKeyToggleResponse'
+          description: ''
   /api/v1/user/card/{username}/:
     get:
-      operationId: v1_user_card_retrieve
+      operationId: user_card_retrieve
       description: GET /api/v1/user/card/<username>/ — Mini user profile card for
         hover.
+      summary: Thẻ tóm tắt thông tin người dùng khi rê chuột (hover)
       parameters:
       - in: path
         name: username
@@ -2263,17 +2411,22 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - user
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCardResponse'
+          description: ''
   /api/v1/user/profile/{username}/:
     get:
-      operationId: v1_user_profile_retrieve
+      operationId: user_profile_retrieve
       description: GET /api/user/profile/<username> — Public profile info
       parameters:
       - in: path
@@ -2282,10 +2435,11 @@ paths:
           type: string
         required: true
       tags:
-      - v1
+      - user
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       - {}
       responses:
         '200':
@@ -2298,37 +2452,34 @@ paths:
           description: ''
   /api/v1/user/reports/:
     get:
-      operationId: v1_user_reports_list
+      operationId: user_reports_list
       description: GET /api/user/reports — User report history
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
       tags:
-      - v1
+      - user
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedReportListList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportList'
           description: ''
   /api/v1/user/scan-picker/:
     get:
-      operationId: v1_user_scan_picker_retrieve
+      operationId: user_scan_picker_retrieve
       description: GET /api/user/scan-picker — scans available for forum reference
         with filters.
       tags:
-      - v1
+      - user
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -2340,80 +2491,71 @@ paths:
           description: ''
   /api/v1/user/scans/:
     get:
-      operationId: v1_user_scans_list
+      operationId: user_scans_list
       description: GET /api/user/scans — User scan history
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
       tags:
-      - v1
+      - user
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedScanEventListList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScanEventList'
           description: ''
   /api/v1/utils/editor-media/:
     get:
-      operationId: v1_utils_editor_media_retrieve
+      operationId: utils_editor_media_retrieve
       description: GET/DELETE /api/v1/utils/editor-media/ — list or delete user's
         uploaded CKEditor images.
+      summary: Danh sách tệp hình ảnh đã tải lên của người dùng
       tags:
-      - v1
+      - utils
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: {}
-                description: Unspecified response body
+                $ref: '#/components/schemas/EditorMediaLibraryResponse'
           description: ''
-    post:
-      operationId: v1_utils_editor_media_create
-      description: Allow POST as fallback for clients that don't send JSON body with
-        DELETE.
-      tags:
-      - v1
-      security:
-      - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
-      responses:
-        '200':
-          description: No response body
     delete:
-      operationId: v1_utils_editor_media_destroy
+      operationId: utils_editor_media_destroy
       description: GET/DELETE /api/v1/utils/editor-media/ — list or delete user's
         uploaded CKEditor images.
+      summary: Xóa tệp hình ảnh khỏi thư viện media của người dùng
       tags:
-      - v1
+      - utils
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
-        '204':
-          description: No response body
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorMediaDeleteResponse'
+          description: ''
   /api/v1/utils/fetch-url/:
     get:
-      operationId: v1_utils_fetch_url_retrieve
+      operationId: utils_fetch_url_retrieve
       description: GET /api/v1/utils/fetch-url/?url=... — Get metadata for Editor.js
         Link tool
       tags:
-      - v1
+      - utils
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -2425,13 +2567,14 @@ paths:
           description: ''
   /api/v1/utils/mentions/:
     get:
-      operationId: v1_utils_mentions_retrieve
+      operationId: utils_mentions_retrieve
       description: GET /api/v1/utils/mentions/?query=@... — Search users for mentions
       tags:
-      - v1
+      - utils
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
@@ -2443,21 +2586,29 @@ paths:
           description: ''
   /api/v1/utils/upload-image/:
     post:
-      operationId: v1_utils_upload_image_create
+      operationId: utils_upload_image_create
       description: POST /api/v1/utils/upload-image/ — Editor.js image upload
+      summary: Tải lên tệp hình ảnh cho trình soạn thảo nội dung
       tags:
-      - v1
+      - utils
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EditorImageUploadRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EditorImageUploadRequestRequest'
       security:
+      - apiKeyAuth: []
+      - cookieAuth: []
       - tokenAuth: []
-      - CsrfExemptSessionAuthentication: []
       responses:
         '200':
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: {}
-                description: Unspecified response body
+                $ref: '#/components/schemas/EditorImageUploadResponse'
           description: ''
 components:
   schemas:
@@ -2469,51 +2620,36 @@ components:
       description: |-
         * `approve` - approve
         * `reject` - reject
-    AudioAnalysisRequest:
-      type: object
-      properties:
-        audio:
-          type: string
-          format: uri
-        phone_number:
-          type: string
-        session_id:
-          type: string
-          format: uuid
-      required:
-      - audio
-      - phone_number
-    AudioAnalysisResponse:
-      type: object
-      properties:
-        risk_score:
-          type: integer
-        is_scam:
-          type: boolean
-        transcript:
-          type: string
-        warning_message:
-          type: string
-      required:
-      - is_scam
-      - risk_score
-      - transcript
-      - warning_message
-    ChatAIRequest:
+    CategoryEnum:
+      enum:
+      - warning
+      - discussion
+      - experience
+      - question
+      type: string
+      description: |-
+        * `warning` - Cảnh báo
+        * `discussion` - Thảo luận
+        * `experience` - Kinh nghiệm
+        * `question` - Hỏi đáp
+    ChatAIRequestRequest:
       type: object
       properties:
         user_message:
           type: string
+          minLength: 1
         session_id:
           type: string
           format: uuid
         context:
           type: string
+          minLength: 1
           default: general
         images:
           type: array
           items:
             type: string
+            minLength: 1
           default: []
       required:
       - session_id
@@ -2540,6 +2676,15 @@ components:
       - id
       - name
       - updated_at
+    ChatFolderRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+      - name
     ChatSession:
       type: object
       properties:
@@ -2593,75 +2738,223 @@ components:
       - language_style_display
       - tone_display
       - updated_at
-    CrashReportRequest:
+    ChatbotConfigRequest:
       type: object
       properties:
-        device_info:
+        tone:
+          $ref: '#/components/schemas/ToneEnum'
+        language_style:
+          $ref: '#/components/schemas/LanguageStyleEnum'
+        custom_name:
           type: string
-        stack_trace:
+          description: Custom name for the AI assistant
+          maxLength: 50
+        custom_instructions:
           type: string
-        timestamp:
+          description: Additional instructions for the AI
+    EditorImageUploadRequestRequest:
+      type: object
+      properties:
+        image:
+          type: string
+          format: binary
+        file:
+          type: string
+          format: binary
+        upload:
+          type: string
+          format: binary
+    EditorImageUploadResponse:
+      type: object
+      properties:
+        success:
           type: integer
-        version:
+        url:
           type: string
-          default: ''
-        os_version:
+        path:
           type: string
-          default: ''
-        severity:
-          type: string
-          default: ERROR
+        file:
+          type: object
+          additionalProperties: {}
       required:
-      - device_info
-      - stack_trace
-      - timestamp
-    CrashReportResponse:
+      - file
+      - path
+      - success
+      - url
+    EditorMediaDeleteResponse:
       type: object
       properties:
-        status:
-          type: string
-        report_id:
-          type: string
-          format: uuid
+        success:
+          type: integer
       required:
-      - report_id
-      - status
-    ImageAnalysisRequest:
+      - success
+    EditorMediaLibraryResponse:
       type: object
       properties:
-        images:
+        success:
+          type: integer
+        items:
           type: array
           items:
-            type: string
-            format: uri
-        session_id:
-          type: string
-          format: uuid
+            type: object
+            additionalProperties: {}
       required:
-      - images
-    ImageAnalysisResponse:
+      - items
+      - success
+    ForumPost:
       type: object
       properties:
-        ocr_text:
+        id:
+          type: integer
+          readOnly: true
+        author_name:
           type: string
-        risk_analysis:
-          $ref: '#/components/schemas/ImageRiskAnalysis'
-      required:
-      - ocr_text
-      - risk_analysis
-    ImageRiskAnalysis:
-      type: object
-      properties:
-        is_safe:
+          readOnly: true
+        author_username:
+          type: string
+          readOnly: true
+        author_is_staff:
           type: boolean
-        risk_level:
+          readOnly: true
+        author_avatar:
           type: string
-        details:
+          format: uri
+          nullable: true
+          readOnly: true
+        author_rank:
           type: string
+          readOnly: true
+        author_posts_count:
+          type: string
+          readOnly: true
+        author_comments_count:
+          type: string
+          readOnly: true
+        author_joined:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 300
+        content:
+          type: string
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        image:
+          type: string
+          format: uri
+          nullable: true
+        views_count:
+          type: integer
+          readOnly: true
+        unique_views_count:
+          type: string
+          readOnly: true
+        likes_count:
+          type: integer
+          readOnly: true
+        helpful_count:
+          type: integer
+          readOnly: true
+        shares_count:
+          type: integer
+          readOnly: true
+        dislikes_count:
+          type: integer
+          readOnly: true
+        reports_count:
+          type: integer
+          readOnly: true
+        comments_count:
+          type: integer
+          readOnly: true
+        is_pinned:
+          type: boolean
+        is_locked:
+          type: boolean
+        user_liked:
+          type: string
+          readOnly: true
+        user_helpful:
+          type: string
+          readOnly: true
+        user_shared:
+          type: string
+          readOnly: true
+        user_disliked:
+          type: string
+          readOnly: true
+        comments:
+          type: string
+          readOnly: true
+        last_comment_author:
+          type: string
+          readOnly: true
+        last_comment_at:
+          type: string
+          readOnly: true
+        scan_reference:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
       required:
-      - details
-      - is_safe
-      - risk_level
+      - author_avatar
+      - author_comments_count
+      - author_is_staff
+      - author_joined
+      - author_name
+      - author_posts_count
+      - author_rank
+      - author_username
+      - comments
+      - comments_count
+      - content
+      - created_at
+      - dislikes_count
+      - helpful_count
+      - id
+      - last_comment_at
+      - last_comment_author
+      - likes_count
+      - reports_count
+      - scan_reference
+      - shares_count
+      - title
+      - unique_views_count
+      - user_disliked
+      - user_helpful
+      - user_liked
+      - user_shared
+      - views_count
+    GenderEnum:
+      enum:
+      - male
+      - female
+      - non_binary
+      - transgender
+      - gender_fluid
+      - bigender
+      - genderqueer
+      - agender
+      - intersex
+      - other
+      - prefer_not_to_say
+      type: string
+      description: |-
+        * `male` - Nam
+        * `female` - Nữ
+        * `non_binary` - Phi nhị nguyên giới (Non-binary)
+        * `transgender` - Người chuyển giới (Transgender)
+        * `gender_fluid` - Linh hoạt giới (Genderfluid)
+        * `bigender` - Song giới (Bigender)
+        * `genderqueer` - Giới phi chuẩn (Genderqueer)
+        * `agender` - Vô giới (Agender)
+        * `intersex` - Liên giới tính (Intersex)
+        * `other` - Khác
+        * `prefer_not_to_say` - Tôi không muốn tiết lộ
     LanguageStyleEnum:
       enum:
       - simple
@@ -2672,90 +2965,38 @@ components:
         * `simple` - Đơn giản, dễ hiểu
         * `detailed` - Chi tiết, chuyên sâu
         * `concise` - Ngắn gọn, súc tích
-    Login:
+    LoginRequest:
       type: object
       properties:
         email:
           type: string
           format: email
+          minLength: 1
         password:
           type: string
           writeOnly: true
+          minLength: 1
       required:
       - email
       - password
-    PaginatedReportListList:
-      type: object
-      required:
-      - count
-      - results
-      properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportList'
-    PaginatedScanEventListList:
-      type: object
-      required:
-      - count
-      - results
-      properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/ScanEventList'
-    PatchedChatFolder:
+    PatchedChatFolderRequest:
       type: object
       properties:
-        id:
-          type: integer
-          readOnly: true
         name:
           type: string
+          minLength: 1
           maxLength: 100
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-    PatchedUserProfile:
+    PatchedUserProfileRequest:
       type: object
       properties:
         display_name:
           type: string
           maxLength: 100
+        gender:
+          $ref: '#/components/schemas/GenderEnum'
         avatar:
           type: string
-          format: uri
+          format: binary
           nullable: true
         bio:
           type: string
@@ -2766,59 +3007,43 @@ components:
         messenger_link:
           type: string
           nullable: true
-        rank_points:
-          type: integer
-          readOnly: true
-        rank_info:
-          type: string
-          readOnly: true
-    PhoneCheckResponse:
-      type: object
-      properties:
-        risk_level:
-          type: string
-        risk_label:
-          type: string
-        recommendations:
-          type: array
-          items:
-            type: string
-      required:
-      - recommendations
-      - risk_label
-      - risk_level
-    Register:
+    RegisterRequest:
       type: object
       properties:
         email:
           type: string
           format: email
+          minLength: 1
         password:
           type: string
           writeOnly: true
           minLength: 8
         full_name:
           type: string
+          minLength: 1
           default: ''
           maxLength: 150
         first_name:
           type: string
+          minLength: 1
           default: ''
           maxLength: 150
         last_name:
           type: string
+          minLength: 1
           default: ''
           maxLength: 150
       required:
       - email
       - password
-    ReportCreate:
+    ReportCreateRequest:
       type: object
       properties:
         target_type:
           $ref: '#/components/schemas/TargetTypeEnum'
         target_value:
           type: string
+          minLength: 1
           description: 'Normalized: phone number, domain, account info'
           maxLength: 500
         scam_type:
@@ -2827,9 +3052,10 @@ components:
           $ref: '#/components/schemas/SeverityEnum'
         description:
           type: string
+          minLength: 1
         evidence_file:
           type: string
-          format: uri
+          format: binary
           nullable: true
         scammer_phone:
           type: string
@@ -2996,13 +3222,14 @@ components:
       - scam_type
       - target_type
       - target_value
-    ReportModerate:
+    ReportModerateRequest:
       type: object
       properties:
         action:
           $ref: '#/components/schemas/ActionEnum'
         note:
           type: string
+          minLength: 1
           default: ''
       required:
       - action
@@ -3132,18 +3359,6 @@ components:
         * `email` - Email
         * `file` - Tệp tin
         * `audio` - Âm thanh
-    SessionCheckResponse:
-      type: object
-      properties:
-        is_valid:
-          type: boolean
-        new_session_id:
-          type: string
-          format: uuid
-          nullable: true
-      required:
-      - is_valid
-      - new_session_id
     SeverityEnum:
       enum:
       - low
@@ -3196,6 +3411,161 @@ components:
         * `casual` - Thoải mái
         * `formal` - Trang trọng
         * `humorous` - Hài hước
+    UserAPIKeyCreateRequestRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          default: ''
+        tier:
+          type: string
+          minLength: 1
+          default: free
+    UserAPIKeyCreateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        prefix:
+          type: string
+        tier:
+          type: string
+        tier_display:
+          type: string
+        rate_limit_per_minute:
+          type: integer
+        daily_quota:
+          type: integer
+        monthly_quota:
+          type: integer
+        requests_today:
+          type: integer
+        requests_this_month:
+          type: integer
+        total_requests:
+          type: integer
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        raw_key:
+          type: string
+        warning:
+          type: string
+      required:
+      - created_at
+      - daily_quota
+      - id
+      - is_active
+      - last_used_at
+      - monthly_quota
+      - name
+      - prefix
+      - rate_limit_per_minute
+      - raw_key
+      - requests_this_month
+      - requests_today
+      - tier
+      - tier_display
+      - total_requests
+      - warning
+    UserAPIKeyDeleteResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    UserAPIKeyListResponse:
+      type: object
+      properties:
+        api_keys:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        limits_summary:
+          type: object
+          additionalProperties: {}
+      required:
+      - api_keys
+      - limits_summary
+    UserAPIKeyRegenerateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        prefix:
+          type: string
+        tier:
+          type: string
+        tier_display:
+          type: string
+        rate_limit_per_minute:
+          type: integer
+        daily_quota:
+          type: integer
+        monthly_quota:
+          type: integer
+        requests_today:
+          type: integer
+        requests_this_month:
+          type: integer
+        total_requests:
+          type: integer
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        raw_key:
+          type: string
+        warning:
+          type: string
+      required:
+      - created_at
+      - daily_quota
+      - id
+      - is_active
+      - last_used_at
+      - monthly_quota
+      - name
+      - prefix
+      - rate_limit_per_minute
+      - raw_key
+      - requests_this_month
+      - requests_today
+      - tier
+      - tier_display
+      - total_requests
+      - warning
+    UserAPIKeyToggleResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        is_active:
+          type: boolean
+        message:
+          type: string
+      required:
+      - id
+      - is_active
+      - message
     UserAlert:
       type: object
       properties:
@@ -3221,8 +3591,72 @@ components:
       - id
       - target_type
       - target_value
+    UserAlertRequest:
+      type: object
+      properties:
+        target_type:
+          $ref: '#/components/schemas/TargetTypeEnum'
+        target_value:
+          type: string
+          minLength: 1
+          maxLength: 500
+        risk_level:
+          $ref: '#/components/schemas/RiskLevelEnum'
+        note:
+          type: string
+          maxLength: 500
+      required:
+      - target_type
+      - target_value
+    UserCardResponse:
+      type: object
+      properties:
+        username:
+          type: string
+        display_name:
+          type: string
+        avatar:
+          type: string
+          nullable: true
+        is_staff:
+          type: boolean
+        rank:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        joined:
+          type: string
+        last_seen:
+          type: string
+          nullable: true
+        posts_count:
+          type: integer
+        comments_count:
+          type: integer
+        reaction_score:
+          type: integer
+        bio:
+          type: string
+          nullable: true
+      required:
+      - avatar
+      - bio
+      - comments_count
+      - display_name
+      - is_staff
+      - joined
+      - last_seen
+      - posts_count
+      - rank
+      - reaction_score
+      - username
   securitySchemes:
-    CsrfExemptSessionAuthentication:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: 'ShieldCall VN Personal API Key (Format: sc_live_...)'
+    cookieAuth:
       type: apiKey
       in: cookie
       name: sessionid

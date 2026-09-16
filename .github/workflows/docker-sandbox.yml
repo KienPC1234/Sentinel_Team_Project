@@ -1,0 +1,140 @@
+name: Docker Sandbox CI
+
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - 'sandbox/**'
+      - '.github/workflows/docker-sandbox.yml'
+      - 'api/utils/sandbox_analyzer.py'
+  pull_request:
+    branches: [ "master" ]
+    paths:
+      - 'sandbox/**'
+      - '.github/workflows/docker-sandbox.yml'
+      - 'api/utils/sandbox_analyzer.py'
+  workflow_dispatch:
+
+jobs:
+  build-and-verify:
+    name: Build & Verify Sandbox Container
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Sandbox image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./sandbox
+          file: ./sandbox/Dockerfile
+          load: true
+          tags: sentinel-sandbox:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify Ephemeral CLI Sandbox execution
+        run: |
+          echo "Testing ephemeral zero-trust container CLI mode..."
+          echo "This is a benign diagnostic test file." > /tmp/ci_clean_test.txt
+          CLI_OUTPUT=$(docker run --rm \
+            --network none \
+            --cap-drop ALL \
+            --memory 1g \
+            --pids-limit 64 \
+            -v /tmp/ci_clean_test.txt:/target:ro \
+            sentinel-sandbox:latest \
+            /sandbox/analyze.py /target)
+          echo "CLI Output: $CLI_OUTPUT"
+          CLI_VERDICT=$(echo "$CLI_OUTPUT" | jq -r '.verdict')
+          if [ "$CLI_VERDICT" != "SAFE" ]; then
+            echo "Expected SAFE verdict from ephemeral CLI, got: $CLI_VERDICT"
+            exit 1
+          fi
+
+      - name: Start Sandbox Daemon container
+        run: |
+          docker run -d \
+            --name sentinel-sandbox-daemon \
+            -p 5005:5005 \
+            --restart unless-stopped \
+            sentinel-sandbox:latest
+
+      - name: Poll Sandbox Health Check
+        run: |
+          echo "Waiting for daemon service to report healthy..."
+          HEALTHY=false
+          for i in {1..35}; do
+            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5005/health || true)
+            if [ "$STATUS_CODE" -eq 200 ]; then
+              echo "Sandbox daemon is healthy at iteration $i"
+              curl -s http://127.0.0.1:5005/health | jq .
+              HEALTHY=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$HEALTHY" != "true" ]; then
+            echo "Sandbox daemon failed health check within 35 seconds."
+            docker logs sentinel-sandbox-daemon
+            exit 1
+          fi
+
+      - name: Verify Clean File scan via Daemon API
+        run: |
+          B64_CLEAN=$(echo -n "This is a completely safe test text file." | base64 -w 0)
+          PAYLOAD="{\"file_base64\": \"$B64_CLEAN\", \"file_name\": \"test_clean.txt\"}"
+          RESPONSE=$(curl -s -X POST http://127.0.0.1:5005/scan \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          echo "Clean Scan Response: $RESPONSE"
+          VERDICT=$(echo "$RESPONSE" | jq -r '.verdict')
+          if [ "$VERDICT" != "SAFE" ]; then
+            echo "Expected SAFE verdict, got: $VERDICT"
+            exit 1
+          fi
+
+      - name: Verify Malware Detection (EICAR) via Daemon API
+        run: |
+          EICAR_STRING='X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+          B64_EICAR=$(echo -n "$EICAR_STRING" | base64 -w 0)
+          PAYLOAD="{\"file_base64\": \"$B64_EICAR\", \"file_name\": \"eicar.com\"}"
+          RESPONSE=$(curl -s -X POST http://127.0.0.1:5005/scan \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          echo "EICAR Scan Response: $RESPONSE"
+          VERDICT=$(echo "$RESPONSE" | jq -r '.verdict')
+          if [ "$VERDICT" != "MALICIOUS" ]; then
+            echo "Expected MALICIOUS verdict, got: $VERDICT"
+            exit 1
+          fi
+
+      - name: Set up Python for Django Client integration
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Django dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Sandbox & Puppeteer integration tests
+        env:
+          DJANGO_SETTINGS_MODULE: PKV.settings_ci
+          SANDBOX_DAEMON_URL: http://127.0.0.1:5005
+          SANDBOX_DOCKER_IMAGE: sentinel-sandbox:latest
+        run: |
+          python manage.py test api.core.tests.test_sandbox_and_puppeteer --keepdb
+
+      - name: Dump Daemon Logs on failure
+        if: failure()
+        run: |
+          docker logs sentinel-sandbox-daemon || true
+

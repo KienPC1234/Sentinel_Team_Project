@@ -2,11 +2,17 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema
 from ..models import Article, ArticleCategory
 from rest_framework.permissions import AllowAny
 
 class ArticleListView(APIView):
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id='v1_articles_list',
+        summary="Danh sách bài viết tin tức và cảnh báo an toàn"
+    )
     def get(self, request):
         category = request.query_params.get('category')
         articles = Article.objects.filter(is_published=True)
@@ -28,6 +34,11 @@ class ArticleListView(APIView):
 
 class ArticleDetailView(APIView):
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id='v1_articles_detail',
+        summary="Chi tiết bài viết theo slug"
+    )
     def get(self, request, slug):
         article = get_object_or_404(Article, slug=slug, is_published=True)
         return Response({

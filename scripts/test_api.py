@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-ShieldCall VN Backend API - Test Suite
+ShieldCall VN Backend API - Modern V1 Test Suite
 
-This script tests all API endpoints to ensure they are working correctly.
+This script tests active v1 API endpoints to ensure they are working correctly.
 """
 
 import json
 import urllib.request
 import urllib.parse
-import uuid
 import sys
-from pathlib import Path
+import os
 
 # Configuration
-API_BASE_URL = "http://localhost:8001/api/v1"
+API_BASE_URL = os.getenv('API_BASE_URL', "http://localhost:8001/api/v1")
+SCHEMA_URL = os.getenv('SCHEMA_URL', "http://localhost:8001/api/schema/")
+
 
 class APITester:
     def __init__(self, base_url):
         self.base_url = base_url
-        self.session_id = None
         self.test_results = []
     
     def log_test(self, name, status, details=""):
@@ -33,173 +33,107 @@ class APITester:
         print(f"{status_symbol} {name}: {status}")
         if details:
             print(f"  Details: {details}")
-    
-    def test_check_session(self):
-        """Test 1: Check Session Management"""
-        print("\n=== Test 1: Session Management ===")
-        
-        # Create new session with fresh UUID (non-existent in DB)
-        print("\n1.1 Testing new session (non-existent UUID):")
+
+    def test_schema_endpoint(self):
+        """Test 1: OpenAPI Schema Endpoint"""
+        print("\n=== Test 1: OpenAPI Schema ===")
         try:
-            new_uuid = str(uuid.uuid4())
-            url = f"{self.base_url}/check-session?session_id={new_uuid}"
-            response = urllib.request.urlopen(url)
-            data = json.loads(response.read())
-            
-            if data.get("is_valid") == False and data.get("new_session_id"):
-                self.log_test("Create session with non-existent UUID", "PASS", 
-                             f"Got new session: {data['new_session_id']}")
-                self.session_id = data['new_session_id']
+            req = urllib.request.Request(SCHEMA_URL, headers={'Accept': 'application/vnd.oai.openapi'})
+            response = urllib.request.urlopen(req, timeout=10)
+            content = response.read().decode('utf-8')
+            if "openapi: 3.0" in content:
+                self.log_test("OpenAPI 3.0 Schema Availability", "PASS", "Schema fetched and verified")
             else:
-                self.log_test("Create session with non-existent UUID", "FAIL", str(data))
+                self.log_test("OpenAPI 3.0 Schema Availability", "FAIL", "Invalid schema content")
         except Exception as e:
-            self.log_test("Create session with non-existent UUID", "FAIL", str(e))
-        
-        # Test with existing valid UUID 
-        print("\n1.2 Testing existing valid session:")
-        try:
-            if self.session_id:
-                url = f"{self.base_url}/check-session?session_id={self.session_id}"
-                response = urllib.request.urlopen(url)
-                data = json.loads(response.read())
-                
-                if data.get("is_valid") == True and data.get("new_session_id") is None:
-                    self.log_test("Check existing valid session", "PASS")
-                else:
-                    self.log_test("Check existing valid session", "FAIL", str(data))
-            else:
-                self.log_test("Check existing valid session", "SKIP", "No session ID available")
-        except Exception as e:
-            self.log_test("Check existing valid session", "FAIL", str(e))
-    
-    def test_check_phone(self):
-        """Test 2: Phone Security"""
-        print("\n\n=== Test 2: Phone Security ===")
-        
-        test_phones = [
-            "0912345678",
-            "+84912345678",
-            "0932123456"
-        ]
-        
+            self.log_test("OpenAPI 3.0 Schema Availability", "FAIL", str(e))
+
+    def test_scan_phone(self):
+        """Test 2: Phone Risk Scan (v1)"""
+        print("\n=== Test 2: Phone Risk Scan ===")
+        test_phones = ["0912345678", "0988888888"]
         for phone in test_phones:
             try:
-                url = f"{self.base_url}/check-phone?phone={urllib.parse.quote(phone)}"
-                response = urllib.request.urlopen(url)
-                data = json.loads(response.read())
-                
-                if "risk_level" in data and data["risk_level"] in ["SAFE", "GREEN", "YELLOW", "RED"]:
-                    self.log_test(f"Check phone {phone}", "PASS", f"Risk: {data['risk_level']}")
-                else:
-                    self.log_test(f"Check phone {phone}", "FAIL", str(data))
-            except Exception as e:
-                self.log_test(f"Check phone {phone}", "FAIL", str(e))
-    
-    def test_chat_ai(self):
-        """Test 3: AI Chat"""
-        print("\n\n=== Test 3: AI Chat ===")
-        
-        if not self.session_id:
-            print("Generating new session ID for chat test...")
-            try:
-                url = f"{self.base_url}/check-session?session_id={uuid.uuid4()}"
-                response = urllib.request.urlopen(url)
-                data = json.loads(response.read())
-                self.session_id = data.get("new_session_id")
-            except Exception as e:
-                self.log_test("Chat AI", "FAIL", f"Could not get session: {e}")
-                return
-        
-        test_messages = [
-            {"message": "Tin nhắn này lừa đảo không?", "context": "general"},
-            {"message": "Một ngân hàng yêu cầu tôi cung cấp thông tin tài khoản", "context": "scam"},
-        ]
-        
-        for i, test in enumerate(test_messages):
-            try:
-                payload = {
-                    "user_message": test["message"],
-                    "session_id": str(self.session_id) if self.session_id else None,
-                    "context": test["context"]
-                }
-                
+                payload = {"phone": phone}
                 req = urllib.request.Request(
-                    f"{self.base_url}/chat/stream/",
+                    f"{self.base_url}/scan/phone/",
                     data=json.dumps(payload).encode('utf-8'),
                     headers={'Content-Type': 'application/json'},
                     method='POST'
                 )
-                
-                response = urllib.request.urlopen(req, timeout=30)
-                raw_chunk = response.read(256).decode('utf-8', errors='ignore')
-                if raw_chunk:
-                    self.log_test(f"Chat AI - Test {i+1}", "PASS", 
-                                 f"Streaming initial chunk received: {raw_chunk[:50]}...")
+                response = urllib.request.urlopen(req, timeout=15)
+                data = json.loads(response.read())
+                if "risk_level" in data and "risk_score" in data:
+                    self.log_test(f"Scan Phone {phone}", "PASS", f"Risk: {data['risk_level']} (Score: {data['risk_score']})")
                 else:
-                    self.log_test(f"Chat AI - Test {i+1}", "FAIL", "Empty stream response")
+                    self.log_test(f"Scan Phone {phone}", "FAIL", str(data))
             except Exception as e:
-                self.log_test(f"Chat AI - Test {i+1}", "FAIL", str(e))
-    
-    def test_report_crash(self):
-        """Test 4: Crash Reporting"""
-        print("\n\n=== Test 4: Crash Reporting ===")
-        
+                self.log_test(f"Scan Phone {phone}", "FAIL", str(e))
+
+    def test_scan_domain(self):
+        """Test 3: Domain Risk Scan (v1)"""
+        print("\n=== Test 3: Domain Risk Scan ===")
         try:
-            payload = {
-                "device_info": "Samsung SM-G991B (SDK 34)",
-                "stack_trace": "java.lang.NullPointerException...",
-                "timestamp": 1706450000000,
-                "version": "1.0.0",
-                "severity": "ERROR"
-            }
-            
+            payload = {"domain": "google.com"}
             req = urllib.request.Request(
-                f"{self.base_url}/report-crash",
+                f"{self.base_url}/scan/domain/",
                 data=json.dumps(payload).encode('utf-8'),
                 headers={'Content-Type': 'application/json'},
                 method='POST'
             )
-            
-            response = urllib.request.urlopen(req)
+            response = urllib.request.urlopen(req, timeout=15)
             data = json.loads(response.read())
-            
-            if data.get("status") == "success" and "report_id" in data:
-                self.log_test("Report Crash", "PASS", f"Report ID: {data['report_id']}")
+            if "risk_level" in data:
+                self.log_test("Scan Domain google.com", "PASS", f"Risk: {data.get('risk_level')}")
             else:
-                self.log_test("Report Crash", "FAIL", str(data))
+                self.log_test("Scan Domain google.com", "FAIL", str(data))
         except Exception as e:
-            self.log_test("Report Crash", "FAIL", str(e))
-    
+            self.log_test("Scan Domain google.com", "FAIL", str(e))
+
+    def test_trends(self):
+        """Test 4: Trends APIs (v1)"""
+        print("\n=== Test 4: Trends APIs ===")
+        try:
+            req = urllib.request.Request(f"{self.base_url}/trends/daily/")
+            response = urllib.request.urlopen(req, timeout=10)
+            data = json.loads(response.read())
+            self.log_test("Daily Trends Retrieval", "PASS", f"Received {len(data) if isinstance(data, list) else 'dict'} items")
+        except Exception as e:
+            self.log_test("Daily Trends Retrieval", "FAIL", str(e))
+
+        try:
+            req = urllib.request.Request(f"{self.base_url}/trends/hot/")
+            response = urllib.request.urlopen(req, timeout=10)
+            data = json.loads(response.read())
+            self.log_test("Hot Trends Retrieval", "PASS", "Hot trends OK")
+        except Exception as e:
+            self.log_test("Hot Trends Retrieval", "FAIL", str(e))
+
     def print_summary(self):
         """Print test summary"""
-        print("\n\n=== TEST SUMMARY ===")
+        print("\n=== TEST SUMMARY ===")
         passed = sum(1 for t in self.test_results if t["status"] == "PASS")
         failed = sum(1 for t in self.test_results if t["status"] == "FAIL")
-        skipped = sum(1 for t in self.test_results if t["status"] == "SKIP")
         total = len(self.test_results)
         
-        print(f"Total: {total}")
-        print(f"Passed: {passed}")
-        print(f"Failed: {failed}")
-        print(f"Skipped: {skipped}")
-        
+        print(f"Total: {total} | Passed: {passed} | Failed: {failed}")
         if failed == 0:
-            print("\n✓ All tests passed!")
+            print("\nAll tests passed successfully.")
             return 0
         else:
-            print(f"\n✗ {failed} test(s) failed")
+            print(f"\n{failed} test(s) failed.")
             return 1
-    
+
     def run_all_tests(self):
         """Run all tests"""
-        print("ShieldCall VN Backend API - Test Suite")
+        print("ShieldCall VN Backend API - Modern V1 Test Suite")
         print(f"Base URL: {self.base_url}")
         print("=" * 50)
         
-        self.test_check_session()
-        self.test_check_phone()
-        self.test_chat_ai()
-        self.test_report_crash()
+        self.test_schema_endpoint()
+        self.test_scan_phone()
+        self.test_scan_domain()
+        self.test_trends()
         
         return self.print_summary()
 
@@ -208,3 +142,4 @@ if __name__ == "__main__":
     tester = APITester(API_BASE_URL)
     exit_code = tester.run_all_tests()
     sys.exit(exit_code)
+

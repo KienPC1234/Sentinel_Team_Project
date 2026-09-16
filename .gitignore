@@ -220,6 +220,7 @@ staticfiles/
 celerybeat-schedule.*
 scripts/puppeteer_host/node_modules/
 scripts/puppeteer_host/chrome/
+scripts/puppeteer_host/puppeteer_profile/
 *.zip
 
 # Malware Sandbox downloaded databases & precompiled indexes

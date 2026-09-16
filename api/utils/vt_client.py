@@ -18,8 +18,18 @@ class VTClient:
     while executing 100% locally via ClamAV and heuristic sandbox engines.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
-        self.analyzer = LocalSandboxAnalyzer()
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        daemon_url: Optional[str] = None,
+        docker_image: Optional[str] = None,
+        timeout: Optional[int] = None,
+    ):
+        self.analyzer = LocalSandboxAnalyzer(
+            daemon_url=daemon_url,
+            docker_image=docker_image,
+            timeout=timeout,
+        )
 
     def scan_url(self, url: str) -> Dict[str, Any]:
         """

@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -28,7 +28,26 @@ class EditorImageUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
-    @extend_schema(responses={200: serializers.DictField()})
+    @extend_schema(
+        summary="Tải lên tệp hình ảnh cho trình soạn thảo nội dung",
+        request=inline_serializer(
+            name='EditorImageUploadRequest',
+            fields={
+                'image': serializers.ImageField(required=False),
+                'file': serializers.FileField(required=False),
+                'upload': serializers.FileField(required=False),
+            }
+        ),
+        responses={200: inline_serializer(
+            name='EditorImageUploadResponse',
+            fields={
+                'success': serializers.IntegerField(),
+                'url': serializers.CharField(),
+                'path': serializers.CharField(),
+                'file': serializers.DictField(),
+            }
+        )}
+    )
     def post(self, request):
         file_obj = request.FILES.get('image') or request.FILES.get('file') or request.FILES.get('upload')
         if not file_obj:
@@ -62,7 +81,16 @@ class EditorMediaLibraryView(APIView):
     """GET/DELETE /api/v1/utils/editor-media/ — list or delete user's uploaded CKEditor images."""
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(responses={200: serializers.DictField()})
+    @extend_schema(
+        summary="Danh sách tệp hình ảnh đã tải lên của người dùng",
+        responses={200: inline_serializer(
+            name='EditorMediaLibraryResponse',
+            fields={
+                'success': serializers.IntegerField(),
+                'items': serializers.ListField(child=serializers.DictField()),
+            }
+        )}
+    )
     def get(self, request):
         base_prefix = os.path.join('editor_images', f'u_{request.user.id}')
         if not default_storage.exists(base_prefix):
@@ -102,6 +130,17 @@ class EditorMediaLibraryView(APIView):
         items.sort(key=lambda x: x.get('modified_at') or '', reverse=True)
         return Response({"success": 1, "items": items})
 
+    @extend_schema(
+        summary="Xóa tệp hình ảnh khỏi thư viện media của người dùng",
+        request=inline_serializer(
+            name='EditorMediaDeleteRequest',
+            fields={'path': serializers.CharField()}
+        ),
+        responses={200: inline_serializer(
+            name='EditorMediaDeleteResponse',
+            fields={'success': serializers.IntegerField()}
+        )}
+    )
     def delete(self, request):
         target_path = request.data.get('path', '') if isinstance(request.data, dict) else ''
         user_prefix = os.path.join('editor_images', f'u_{request.user.id}')
@@ -119,6 +158,7 @@ class EditorMediaLibraryView(APIView):
         default_storage.delete(normalized_target)
         return Response({"success": 1})
 
+    @extend_schema(exclude=True)
     def post(self, request):
         """Allow POST as fallback for clients that don't send JSON body with DELETE."""
         return self.delete(request)

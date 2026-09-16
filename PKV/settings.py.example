@@ -164,10 +164,22 @@ MEDIA_ROOT = BASE_DIR / 'media'
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'api.core.authentication.APIKeyAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
 }
+
+# DRF Spectacular OpenAPI 3.0 Configuration
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'ShieldCall VN API',
+    'DESCRIPTION': 'Hệ thống API Nền tảng Phòng chống Lừa đảo & An toàn số ShieldCall VN',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'PREPROCESSING_HOOKS': ['api.utils.openapi.preprocessing_filter_spec'],
+    'COMPONENT_SPLIT_REQUEST': True,
+}
+
 
 # ─── Third Party Services ──────────────────────────────────────────
 
@@ -203,6 +215,16 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
 # Optional: local Node Puppeteer host used by web-scan fallback
 PUPPETEER_HOST_URL = os.getenv('PUPPETEER_HOST_URL', 'http://127.0.0.1:3010/render')
+
+# Zero-Trust Docker Malware Sandbox Daemon & Container Configuration
+SANDBOX_DAEMON_URL = os.getenv('SANDBOX_DAEMON_URL', 'http://127.0.0.1:5005')
+SANDBOX_DOCKER_IMAGE = os.getenv('SANDBOX_DOCKER_IMAGE', 'sentinel-sandbox:latest')
+SANDBOX_DOCKER_MEMORY = os.getenv('SANDBOX_DOCKER_MEMORY', '1g')
+SANDBOX_DOCKER_PIDS_LIMIT = int(os.getenv('SANDBOX_DOCKER_PIDS_LIMIT', '64'))
+SANDBOX_TIMEOUT = int(os.getenv('SANDBOX_TIMEOUT', '45'))
+SANDBOX_DAEMON_TIMEOUT = int(os.getenv('SANDBOX_DAEMON_TIMEOUT', '30'))
+DOCKER_BIN = os.getenv('DOCKER_BIN', 'docker')
+CLAMSCAN_BIN = os.getenv('CLAMSCAN_BIN', None)
 
 # SMTP Email
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

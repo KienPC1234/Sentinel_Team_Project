@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# If arguments are provided to the container, execute them directly
+if [ "$#" -gt 0 ]; then
+    exec "$@"
+fi
+
 # Start ClamAV daemon in the background to hold 3.6M+ signatures in memory for ultra-fast scans
 if command -v clamd >/dev/null 2>&1; then
     echo "[Sandbox] Initializing ClamAV daemon in background..."

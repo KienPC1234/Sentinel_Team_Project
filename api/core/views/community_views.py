@@ -4,10 +4,11 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q, F, Count
 from django.utils import timezone
 
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 from api.core.models import (
     Announcement, AnnouncementReaction, DirectMessage, SupportTicket,
@@ -298,6 +299,25 @@ class UserCardView(APIView):
     """GET /api/v1/user/card/<username>/ — Mini user profile card for hover."""
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Thẻ tóm tắt thông tin người dùng khi rê chuột (hover)",
+        responses={200: inline_serializer(
+            name='UserCardResponse',
+            fields={
+                'username': serializers.CharField(),
+                'display_name': serializers.CharField(),
+                'avatar': serializers.CharField(allow_null=True),
+                'is_staff': serializers.BooleanField(),
+                'rank': serializers.DictField(allow_null=True),
+                'joined': serializers.CharField(),
+                'last_seen': serializers.CharField(allow_null=True),
+                'posts_count': serializers.IntegerField(),
+                'comments_count': serializers.IntegerField(),
+                'reaction_score': serializers.IntegerField(),
+                'bio': serializers.CharField(allow_null=True),
+            }
+        )}
+    )
     def get(self, request, username):
         try:
             user = User.objects.select_related('profile').get(username=username)

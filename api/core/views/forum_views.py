@@ -23,6 +23,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from drf_spectacular.utils import extend_schema
 
 from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 
@@ -132,6 +133,11 @@ class ForumPostListCreateView(APIView):
         forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
         return forwarded or request.META.get('REMOTE_ADDR')
 
+    @extend_schema(
+        operation_id='v1_forum_posts_list',
+        summary="Danh sách bài viết diễn đàn cộng đồng",
+        responses={200: ForumPostSerializer(many=True)}
+    )
     def get(self, request):
         category = request.query_params.get('category')
         posts = ForumPost.objects.select_related('author').order_by('-is_pinned', '-created_at')
@@ -187,6 +193,10 @@ class ForumPostDetailView(APIView):
             ip = request.META.get('REMOTE_ADDR')
         return ip
 
+    @extend_schema(
+        operation_id='v1_forum_posts_detail',
+        summary="Chi tiết bài viết diễn đàn cùng các bình luận"
+    )
     def get(self, request, post_id):
         try:
             post = ForumPost.objects.select_related('author').get(id=post_id)

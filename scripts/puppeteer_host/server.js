@@ -16,8 +16,13 @@ function getBaseUrl(req) {
 
 /* Health */
 app.get('/health', async (req, res) => {
-  await launchBrowser();
-  res.json({ ok: true });
+  try {
+    await launchBrowser();
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[Puppeteer Health Error]:', e);
+    res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
 });
 
 /* Render */
@@ -38,7 +43,8 @@ app.post('/render', async (req, res) => {
       content: result.content.slice(0, 50000)
     });
   } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
+    console.error(`[Puppeteer Render Error] url=${url}:`, e.message || e);
+    res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 });
 

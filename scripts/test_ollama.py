@@ -8,8 +8,10 @@ This script verifies that Ollama is properly integrated and responding.
 import sys
 import json
 import requests
+import os
 
-OLLAMA_URL = "http://localhost:11434"
+OLLAMA_URL = os.getenv('OLLAMA_BASE_URL', os.getenv('OLLAMA_URL', "http://localhost:11434"))
+
 
 def test_ollama_connection():
     """Test if Ollama service is running"""
