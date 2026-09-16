@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Bài kiểm tra lừa đảo mới nhất{% endblock %}
+{% block title %}Bài kiểm tra Scam IQ - Nhận diện lừa đảo mới nhất{% endblock %}
 
 {% block head_extra %}
 <style>
@@ -17,26 +17,43 @@
     word-break: normal;
     overflow-wrap: break-word;
 }
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(34, 211, 238, 0.25);
+    border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(34, 211, 238, 0.5);
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <section class="max-w-7xl mx-auto px-4 space-y-6" x-data="scamIQExam()" x-init="init()">
+    <!-- Top Welcome Card -->
     <div class="liquid-card p-6 sm:p-8 border-cyan-500/20">
         <p class="text-[10px] font-black text-cyan-300 uppercase tracking-[0.28em]">Scam IQ Exam</p>
         <h1 class="text-2xl sm:text-3xl font-black text-white mt-2 leading-tight">Bài kiểm tra về những hình thức lừa đảo mới nhất hiện nay</h1>
-        <p class="text-sm text-white/55 mt-3 max-w-3xl">
-            Bộ đề gồm 30 câu từ dễ đến cực khó, cập nhật nhiều tình huống lừa đảo hiện đại. Mỗi câu tối đa 10 điểm, tổng điểm tối đa 300.
+        <p class="text-sm text-white/55 mt-3 max-w-3xl leading-relaxed">
+            Bộ đề gồm 30 câu từ dễ đến cực khó, bao gồm mô phỏng tin nhắn SMS mạo danh, email phishing và tình huống phản ứng sự cố an ninh khẩn cấp. Mỗi câu tối đa 10 điểm, tổng điểm tối đa 300.
         </p>
 
         <div class="mt-6 flex flex-wrap items-center gap-3" x-show="stage === 'idle'">
-            <button @click="startExam()" :disabled="loading" class="liquid-btn py-3 px-6 bg-cyan-500 text-black font-black hover:bg-cyan-400 disabled:opacity-50">
+            <button @click="startExam()" :disabled="loading" class="liquid-btn py-3 px-6 bg-cyan-500 text-black font-black hover:bg-cyan-400 disabled:opacity-50 transition-all">
                 <i class="bi bi-lightning-charge-fill mr-2"></i> Khởi tạo câu hỏi
             </button>
-            <a href="/home/" class="liquid-btn py-3 px-6 bg-white/5 text-white font-black hover:bg-white/10">Về trang chủ</a>
+            <a href="/home/" class="liquid-btn py-3 px-6 bg-white/5 text-white font-black hover:bg-white/10 transition-all">Về trang chủ</a>
         </div>
 
-        <div class="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+        <!-- History Section in Idle -->
+        <div class="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-4" x-show="stage === 'idle'">
             <div class="flex items-center justify-between gap-2">
                 <p class="text-xs font-black text-white/80 uppercase tracking-widest">Lịch sử làm bài gần đây</p>
                 <button @click="loadHistory()" class="text-[11px] text-cyan-300 hover:text-cyan-200 font-bold">Làm mới</button>
@@ -56,7 +73,7 @@
                             <tr class="border-t border-white/5">
                                 <td class="py-2 pr-3 text-white/70" x-text="formatTime(h.created_at)"></td>
                                 <td class="py-2 pr-3 text-cyan-300 font-bold" x-text="`${h.score}/${h.max_score}`"></td>
-                                <td class="py-2 pr-3 text-white/70" x-text="`${h.correct_count}/${questions.length || 30} đúng`"></td>
+                                <td class="py-2 pr-3 text-white/70" x-text="`${h.correct_count}/30 đúng`"></td>
                                 <td class="py-2 pr-3 text-purple-300" x-text="h.level_label || '-'"></td>
                             </tr>
                         </template>
@@ -66,6 +83,7 @@
             <p x-show="!history.length" class="text-[12px] text-white/45 mt-3">Bạn chưa có lượt làm bài nào. Hoàn thành 1 bài để lịch sử hiển thị tại đây.</p>
         </div>
 
+        <!-- Loading Progress -->
         <div x-show="stage === 'loading'" class="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-5 overflow-hidden relative">
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_45%)] pointer-events-none"></div>
             <div class="relative z-10 flex items-start gap-4">
@@ -74,7 +92,7 @@
                 </div>
                 <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2 flex-wrap">
-                        <p class="text-sm font-bold text-cyan-300">AI đang tạo bộ câu hỏi mới...</p>
+                        <p class="text-sm font-bold text-cyan-300">AI đang tổng hợp bộ câu hỏi mới...</p>
                         <span class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-white/10 text-white/70" x-text="`${progressCreated}/${progressTotal} câu`"></span>
                         <span class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-cyan-500/15 text-cyan-200" x-text="progressPhaseLabel"></span>
                     </div>
@@ -91,22 +109,56 @@
             </div>
         </div>
 
-        <div x-show="error" class="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 text-sm" x-text="error"></div>
+        <div x-show="error" class="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 text-sm flex items-center justify-between gap-3">
+            <span x-text="error"></span>
+            <button @click="startExam()" class="px-3 py-1 rounded-lg bg-red-500/20 text-red-100 text-xs font-bold hover:bg-red-500/30">Thử lại</button>
+        </div>
     </div>
 
+    <!-- Active Question Stage -->
     <template x-if="stage === 'ready' && currentQuestion">
         <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
             <div class="liquid-card p-6 sm:p-8 space-y-6">
-                <div class="flex flex-wrap items-center gap-2">
-                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-white/5 text-white/60" x-text="`Câu ${index + 1} / ${questions.length}`"></span>
-                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 text-cyan-300" x-text="currentQuestion.difficulty_label"></span>
-                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-300" x-text="typeLabel(currentQuestion.type)"></span>
+                <!-- Top Status Bar with Timer -->
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-4">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-white/5 text-white/70" x-text="'Câu ' + (index + 1) + ' / ' + questions.length"></span>
+                        <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 text-cyan-300" x-text="currentQuestion.difficulty_label || currentQuestion.difficulty"></span>
+                        <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-300" x-text="typeLabel(currentQuestion.type)"></span>
+                        <template x-if="currentQuestion.category">
+                            <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/[0.04] text-white/45" x-text="currentQuestion.category"></span>
+                        </template>
+                    </div>
+                    <!-- Running Exam Timer -->
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-mono font-bold">
+                        <i class="bi bi-clock-history text-xs"></i>
+                        <span x-text="formattedTimer"></span>
+                    </div>
                 </div>
 
+                <!-- Mobile Quick Question Navigation Strip (Only visible < 1024px) -->
+                <div class="lg:hidden -mx-2 px-2 pb-1 overflow-x-auto custom-scrollbar">
+                    <div class="flex gap-1.5 min-w-max">
+                        <template x-for="(q, idx) in questions" :key="q.id">
+                            <button @click="jumpTo(idx)"
+                                    class="w-8 h-8 rounded-lg text-[10px] font-black border transition-all"
+                                    :class="idx === index
+                                        ? 'bg-cyan-400 text-black border-cyan-300 scale-105 shadow-sm'
+                                        : isAnswered(q)
+                                            ? 'bg-green-500/20 text-green-300 border-green-500/40'
+                                            : 'bg-white/5 text-white/40 border-white/10'"
+                                    x-text="idx + 1"></button>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Question Title -->
                 <h2 class="text-xl font-black text-white leading-relaxed scam-iq-wrap" x-text="cleanQuestionText(currentQuestion.question)"></h2>
 
+                <!-- Simulation Block -->
                 <template x-if="isSimulationType(currentQuestion.type)">
                     <div class="space-y-4">
+                        <!-- SMS Simulation Card -->
                         <template x-if="currentQuestion.type === 'simulation_sms'">
                             <div class="rounded-3xl border border-white/10 bg-gradient-to-br from-[#0b1020] to-[#121a2f] p-4 max-w-2xl shadow-[0_10px_35px_rgba(0,0,0,0.35)]">
                                 <div class="flex items-center justify-between text-[11px] text-white/50 mb-3">
@@ -116,11 +168,12 @@
                                 <div class="rounded-2xl bg-white/[0.05] border border-white/10 p-4">
                                     <p class="text-[11px] text-cyan-300 font-mono tracking-wide" x-text="simField(currentQuestion, 'from', 'Unknown sender')"></p>
                                     <p class="text-sm text-white/90 mt-2 whitespace-pre-line leading-relaxed" x-text="simBody(currentQuestion)"></p>
-                                    <div class="mt-3 text-[11px] text-white/45 inline-flex items-center gap-1.5"><i class="bi bi-shield-exclamation"></i> Nội dung trên chỉ để mô phỏng luyện tập</div>
+                                    <div class="mt-3 text-[11px] text-white/45 inline-flex items-center gap-1.5"><i class="bi bi-shield-exclamation"></i> Tình huống mô phỏng nhằm mục đích luyện tập an ninh số</div>
                                 </div>
                             </div>
                         </template>
 
+                        <!-- Email Simulation Card -->
                         <template x-if="currentQuestion.type === 'simulation_email'">
                             <div class="rounded-3xl border border-white/10 bg-gradient-to-br from-[#0b1020] to-[#15192b] overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.35)]">
                                 <div class="px-4 py-3 border-b border-white/10 bg-white/[0.03] flex items-center justify-between">
@@ -133,15 +186,33 @@
                                     <p class="text-[11px] text-white/60"><span class="text-white/85 font-bold">Preview:</span> <span x-text="simField(currentQuestion, 'preview', 'Không có preview')"></span></p>
                                     <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4 mt-2">
                                         <p class="text-sm text-white/90 whitespace-pre-line leading-relaxed" x-text="simBody(currentQuestion)"></p>
-                                        <div class="mt-3 text-[11px] text-white/45 inline-flex items-center gap-1.5"><i class="bi bi-shield-exclamation"></i> Nội dung trên chỉ để mô phỏng luyện tập</div>
+                                        <div class="mt-3 text-[11px] text-white/45 inline-flex items-center gap-1.5"><i class="bi bi-shield-exclamation"></i> Tình huống mô phỏng nhằm mục đích luyện tập an ninh số</div>
                                     </div>
                                 </div>
                             </div>
                         </template>
 
+                        <!-- Incident Response Simulation Card -->
+                        <template x-if="currentQuestion.type === 'incident_response'">
+                            <div class="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-[#1c1308] to-[#121a2f] p-5 max-w-2xl shadow-[0_10px_35px_rgba(245,158,11,0.12)] space-y-3">
+                                <div class="flex items-center justify-between text-[11px] text-amber-300 border-b border-amber-500/20 pb-2.5">
+                                    <span class="inline-flex items-center gap-2 font-black uppercase tracking-wider">
+                                        <i class="bi bi-shield-slash-fill text-amber-400"></i> Báo động Sự cố An toàn Số
+                                    </span>
+                                    <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-200 text-[10px] font-black uppercase tracking-wider">Khẩn cấp</span>
+                                </div>
+                                <div class="p-3.5 rounded-2xl bg-black/40 border border-amber-500/20">
+                                    <p class="text-xs text-amber-100/90 font-medium leading-relaxed">
+                                        <i class="bi bi-info-circle-fill text-amber-400 mr-1.5"></i> Tình huống phản ứng sự cố khẩn cấp. Trình bày chi tiết: các bước xác thực thông tin, biện pháp cô lập rủi ro, tuyệt đối không chuyển tiền theo lệnh phi chính thống và đầu mối báo cáo an ninh mạng.
+                                    </p>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Free text answer input -->
                         <div class="space-y-2">
-                            <p class="text-[11px] font-black text-white/50 uppercase tracking-widest">Bạn sẽ làm gì tiếp theo?</p>
-                            <textarea class="liquid-input w-full min-h-[120px] p-4 text-sm font-medium"
+                            <p class="text-[11px] font-black text-white/50 uppercase tracking-widest">Bạn sẽ phản hồi hoặc hành động như thế nào?</p>
+                            <textarea class="liquid-input w-full min-h-[120px] p-4 text-sm font-medium focus:border-cyan-400"
                                       :value="freeTextValue(currentQuestion.id)"
                                       @input="setFreeText(currentQuestion.id, $event.target.value)"
                                       placeholder="Viết phản hồi/hành động cụ thể (ví dụ: không bấm link, xác minh hotline chính thức, đổi mật khẩu, báo cáo phishing...)"></textarea>
@@ -149,10 +220,14 @@
                     </div>
                 </template>
 
+                <!-- Multiple Choice Block -->
                 <template x-if="!isSimulationType(currentQuestion.type)">
                     <div class="space-y-3">
                         <template x-if="currentQuestion.type === 'multi_select'">
-                            <p class="text-[11px] text-cyan-300 font-bold uppercase tracking-widest">Có nhiều đáp án đúng</p>
+                            <div class="flex items-center justify-between py-1">
+                                <p class="text-[11px] text-cyan-300 font-bold uppercase tracking-widest"><i class="bi bi-check2-square mr-1"></i> Có nhiều đáp án đúng</p>
+                                <span class="text-[11px] text-white/40" x-text="`Đã chọn: ${selectedCount(currentQuestion.id)}`"></span>
+                            </div>
                         </template>
                         <template x-for="opt in currentQuestion.options" :key="opt.id">
                             <label class="w-full flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 hover:border-cyan-400/30 cursor-pointer transition-all"
@@ -161,32 +236,34 @@
                                     <input type="checkbox" :checked="isChecked(opt.id)" @change="toggleChoice(opt.id)" class="mt-1 accent-cyan-400" />
                                 </template>
                                 <template x-if="currentQuestion.type !== 'multi_select'">
-                                    <input type="radio" :name="`q-${currentQuestion.id}`" :checked="isChecked(opt.id)" @change="setSingleChoice(opt.id)" class="mt-1 accent-cyan-400" />
+                                    <input type="radio" :name="'q-' + currentQuestion.id" :checked="isChecked(opt.id)" @change="setSingleChoice(opt.id)" class="mt-1 accent-cyan-400" />
                                 </template>
                                 <div class="min-w-0">
                                     <p class="text-xs font-black text-cyan-300" x-text="opt.id"></p>
-                                    <p class="text-sm text-white/80 mt-1" x-text="opt.text"></p>
+                                    <p class="text-sm text-white/80 mt-1 leading-relaxed" x-text="opt.text"></p>
                                 </div>
                             </label>
                         </template>
                     </div>
                 </template>
 
-                <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <!-- Action Buttons Row -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-white/5">
                     <button @click="prevQuestion()" :disabled="index === 0" class="liquid-btn py-2.5 px-5 bg-white/5 text-white font-bold hover:bg-white/10 disabled:opacity-40">← Câu trước</button>
-                    <div class="text-[11px] text-white/40" x-text="`Đã trả lời ${answeredCount()} / ${questions.length}`"></div>
+                    <div class="text-[11px] text-white/40 font-mono" x-text="`Đã trả lời ${answeredCount()} / ${questions.length}`"></div>
                     <template x-if="index < questions.length - 1">
                         <button @click="nextQuestion()" class="liquid-btn py-2.5 px-5 bg-cyan-500 text-black font-black hover:bg-cyan-400">Câu tiếp theo →</button>
                     </template>
                     <template x-if="index === questions.length - 1">
-                        <button @click="submitExam()" :disabled="submitting" class="liquid-btn py-2.5 px-5 bg-green-500 text-black font-black hover:bg-green-400 disabled:opacity-60">
-                            <span x-show="!submitting">Nộp bài</span>
-                            <span x-show="submitting">Đang chấm...</span>
+                        <button @click="submitExam()" :disabled="submitting" class="liquid-btn py-2.5 px-6 bg-green-500 text-black font-black hover:bg-green-400 disabled:opacity-60 shadow-lg shadow-green-500/20">
+                            <span x-show="!submitting">Nộp bài thi</span>
+                            <span x-show="submitting">Đang chấm điểm...</span>
                         </button>
                     </template>
                 </div>
             </div>
 
+            <!-- Desktop Sidebar Navigation Grid -->
             <aside class="liquid-card p-4 lg:sticky lg:top-24 space-y-3 border border-cyan-500/20 bg-gradient-to-b from-cyan-500/[0.06] to-transparent">
                 <div class="flex items-center justify-between">
                     <p class="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Điều hướng câu hỏi</p>
@@ -207,40 +284,66 @@
                                 x-text="idx + 1"></button>
                     </template>
                 </div>
-                <div class="grid grid-cols-1 gap-1.5 text-[10px] text-white/55 pt-1">
-                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-cyan-300 mr-2"></span> Câu hiện tại</p>
-                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-2"></span> Đã trả lời</p>
-                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-white/25 mr-2"></span> Chưa trả lời</p>
+                <div class="grid grid-cols-1 gap-1.5 text-[10px] text-white/55 pt-1 border-t border-white/5">
+                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-cyan-300 mr-2"></span> Đang làm</p>
+                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-2"></span> Đã chọn</p>
+                    <p class="flex items-center"><span class="inline-block w-2 h-2 rounded-full bg-white/25 mr-2"></span> Chưa chọn</p>
                 </div>
             </aside>
         </div>
     </template>
 
+    <!-- Results Stage -->
     <template x-if="stage === 'result' && result">
-        <div class="liquid-card p-6 sm:p-8 space-y-6">
-            <div class="rounded-2xl border border-cyan-500/25 bg-cyan-500/8 p-5">
-                <p class="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">Kết quả</p>
-                <div class="flex items-center justify-between">
-                    <h3 class="text-2xl font-black text-white mt-2" x-text="`${result.score} / ${result.max_score} điểm`"></h3>
-                    <template x-if="isAIScoring">
-                        <span class="px-2 py-1 rounded bg-purple-500/20 text-purple-300 text-[10px] font-black animate-pulse">
-                            <i class="bi bi-robot mr-1"></i> AI ĐANG CHẤM...
-                        </span>
-                    </template>
+        <div class="liquid-card p-6 sm:p-8 space-y-8">
+            <!-- Stylized Certificate Banner -->
+            <div class="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/40 via-[#0a1020] to-purple-950/30 p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                <div class="absolute top-0 right-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                    <div class="space-y-2 max-w-xl">
+                        <div class="flex items-center gap-2">
+                            <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-cyan-500/20 border border-cyan-400/40 text-cyan-300">
+                                Bảng điểm & Chứng nhận Scam IQ
+                            </span>
+                            <span class="text-xs text-white/40" x-text="'Thời gian: ' + (formattedTimer || '--:--')"></span>
+                        </div>
+                        <h3 class="text-3xl sm:text-4xl font-black text-white tracking-tight" x-text="result.level.label"></h3>
+                        <p class="text-sm text-white/70 leading-relaxed" x-text="result.level.description"></p>
+                        <p class="text-xs text-cyan-300/90 font-medium pt-1" x-text="percentileLabel"></p>
+                    </div>
+
+                    <!-- Score Badge Circle -->
+                    <div class="flex flex-col items-center justify-center p-6 rounded-3xl border border-cyan-400/30 bg-white/[0.03] backdrop-blur-md shrink-0 shadow-lg text-center min-w-[210px]">
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">Điểm số đạt được</p>
+                        <div class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-blue-200 to-purple-300 my-1">
+                            <span x-text="result.score"></span><span class="text-lg text-white/40 font-normal"> / 300</span>
+                        </div>
+                        <p class="text-xs font-bold text-white/60" x-text="`Tỷ lệ: ${Math.round((result.score / result.max_score) * 100)}%`"></p>
+                        <p class="text-[11px] text-green-400 font-bold mt-2" x-text="`Đúng ${result.correct_count}/30 câu`"></p>
+                    </div>
                 </div>
-                <p class="text-sm text-white/65 mt-1" x-text="result.level.label"></p>
-                <p class="text-xs text-white/50 mt-2" x-text="result.level.description"></p>
-                <p class="text-xs text-white/45 mt-3" x-text="`Đúng ${result.correct_count}/${questions.length} câu • Sai ${result.wrong_count} câu`"></p>
+
+                <!-- Certificate action buttons -->
+                <div class="mt-6 pt-5 border-t border-white/10 flex flex-wrap items-center gap-3">
+                    <button @click="copyResultSummary()" class="liquid-btn py-2.5 px-5 bg-cyan-400 text-black font-black text-xs hover:bg-cyan-300 transition-all">
+                        <i class="bi bi-clipboard-check mr-1.5"></i> Sao chép kết quả
+                    </button>
+                    <button @click="resetExam()" class="liquid-btn py-2.5 px-5 bg-white/10 text-white font-bold text-xs hover:bg-white/15 transition-all">
+                        <i class="bi bi-arrow-clockwise mr-1.5"></i> Làm bài mới
+                    </button>
+                    <a href="/home/" class="liquid-btn py-2.5 px-5 bg-white/5 text-white/70 font-bold text-xs hover:bg-white/10 transition-all">Về trang chủ</a>
+                </div>
             </div>
 
+            <!-- AI Background Scoring Notification (if simulations present) -->
             <div x-show="isAIScoring" class="rounded-2xl border border-purple-500/30 bg-purple-500/10 p-5">
                  <div class="flex items-center gap-3">
                      <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0">
                          <i class="bi bi-robot text-purple-300 text-lg animate-bounce"></i>
                      </div>
                      <div class="min-w-0 flex-1">
-                         <p class="text-sm font-bold text-purple-200">AI Giám khảo đang chấm các câu hỏi thực tế</p>
-                         <p class="text-[11px] text-purple-300/70 mt-1" x-text="aiProgressMessage || 'Đang kết nối với AI...'"></p>
+                         <p class="text-sm font-bold text-purple-200">AI Giám khảo đang chấm điểm các tình huống thực tế...</p>
+                         <p class="text-[11px] text-purple-300/70 mt-1" x-text="aiProgressMessage || 'Đang kết nối AI giám khảo...'"></p>
                          <div class="mt-2 h-1 rounded-full bg-white/10 overflow-hidden">
                              <div class="h-full bg-purple-400 scam-iq-shimmer w-full"></div>
                          </div>
@@ -248,69 +351,171 @@
                  </div>
             </div>
 
-            <div class="overflow-x-auto rounded-2xl border border-white/10">
-                <table class="w-full text-sm">
-                    <thead class="bg-white/[0.03]">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Mức</th>
-                            <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Điểm</th>
-                            <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Đánh giá</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="band in result.level_bands" :key="band.code">
-                            <tr :class="band.code === result.level.code ? 'bg-cyan-500/10' : 'border-t border-white/5'">
-                                <td class="px-4 py-3 text-white font-bold" x-text="band.label"></td>
-                                <td class="px-4 py-3 text-white/70" x-text="`${band.min} - ${band.max}`"></td>
-                                <td class="px-4 py-3 text-white/70" x-text="band.description"></td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
-
-            <div x-show="result.ai_feedback && result.ai_feedback.length">
-                <h4 class="text-lg font-black text-white mt-6">Nhận xét từ AI cho các tình huống thực tế</h4>
-                <div class="mt-3 space-y-3">
-                    <template x-for="f in result.ai_feedback" :key="f.question_id">
-                        <div class="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4 transition-all">
+            <!-- Difficulty Breakdown (4 Cards: Easy, Medium, Hard, Extreme) -->
+            <div class="space-y-3">
+                <p class="text-[11px] font-black text-cyan-300 uppercase tracking-widest">Năng lực theo cấp độ thử thách</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <template x-for="band in difficultyBands" :key="band.key">
+                        <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
                             <div class="flex items-center justify-between">
-                                <p class="text-[11px] font-black text-purple-300 uppercase tracking-widest" x-text="f.question_id"></p>
-                                <span class="px-2 py-0.5 rounded-lg text-[10px] font-black" :class="f.is_correct ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'" x-text="`${f.ai_score}/10 điểm` "></span>
+                                <span class="text-xs font-black uppercase tracking-wider" :class="band.textColor" x-text="band.label"></span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 text-white/70" x-text="band.ratio"></span>
                             </div>
-                            <p class="text-sm text-white mt-2 scam-iq-wrap" x-text="cleanQuestionText(f.question)"></p>
-                            <p class="text-xs text-white/55 mt-2"><span class="text-purple-300 font-bold">Câu trả lời:</span> <span x-text="f.user_answer"></span></p>
-                            <div class="mt-3 p-3 rounded-xl bg-white/5 border border-white/10">
-                                <p class="text-xs text-purple-200"><i class="bi bi-robot mr-2"></i> <span x-text="f.ai_comment"></span></p>
+                            <div class="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                                <div class="h-full rounded-full transition-all duration-500" :class="band.barColor" :style="`width:${band.pct}%`"></div>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] text-white/50">
+                                <span x-text="band.pct + '% chính xác'"></span>
+                                <span x-text="band.status"></span>
                             </div>
                         </div>
                     </template>
                 </div>
             </div>
 
-            <div>
-                <h4 class="text-lg font-black text-white">Các sai sót cần cải thiện</h4>
-                <template x-if="!result.mistakes.length">
-                    <p class="text-sm text-green-300 mt-2">Tuyệt vời! Bạn không có lỗi nào trong phần trắc nghiệm.</p>
-                </template>
-                <div class="mt-3 space-y-3" x-show="result.mistakes.length">
-                    <template x-for="m in result.mistakes" :key="m.question_id">
-                        <div class="rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
-                            <p class="text-[11px] font-black text-red-300 uppercase tracking-widest" x-text="`${m.question_id} • ${m.difficulty}`"></p>
-                            <p class="text-sm text-white mt-2 scam-iq-wrap" x-text="cleanQuestionText(m.question)"></p>
-                            <p class="text-xs text-white/55 mt-2" x-text="`Bạn chọn: ${m.selected && m.selected.length ? m.selected.join(', ') : 'Chưa trả lời'} | Đáp án đúng: ${m.expected ? m.expected.join(', ') : '-'}`"></p>
-                            <p class="text-xs text-white/65 mt-2" x-text="m.explanation"></p>
-                        </div>
-                    </template>
+            <!-- Level Scale Table -->
+            <div class="space-y-3">
+                <p class="text-[11px] font-black text-white/50 uppercase tracking-widest">Thang cấp độ năng lực Scam IQ</p>
+                <div class="overflow-x-auto rounded-2xl border border-white/10">
+                    <table class="w-full text-sm">
+                        <thead class="bg-white/[0.03]">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Mức</th>
+                                <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Điểm</th>
+                                <th class="px-4 py-3 text-left text-[11px] font-black text-white/50 uppercase">Đánh giá</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="band in result.level_bands" :key="band.code">
+                                <tr :class="band.code === result.level.code ? 'bg-cyan-500/10' : 'border-t border-white/5'">
+                                    <td class="px-4 py-3 text-white font-bold" x-text="band.label"></td>
+                                    <td class="px-4 py-3 text-white/70" x-text="`${band.min} - ${band.max}`"></td>
+                                    <td class="px-4 py-3 text-white/70" x-text="band.description"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <div class="flex flex-wrap gap-3 pt-2">
-                <button @click="resetExam()" class="liquid-btn py-2.5 px-5 bg-cyan-500 text-black font-black hover:bg-cyan-400">Làm bài mới</button>
-                <a href="/home/" class="liquid-btn py-2.5 px-5 bg-white/5 text-white font-bold hover:bg-white/10">Về trang chủ</a>
+            <!-- Interactive Question Review -->
+            <div class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-white/10 pb-3">
+                    <div>
+                        <h4 class="text-lg font-black text-white">Xem lại chi tiết câu hỏi</h4>
+                        <p class="text-xs text-white/50">Phân tích đáp án và giải thích chuyên sâu từ ShieldCall VN</p>
+                    </div>
+                    <!-- Review Filter Pills -->
+                    <div class="flex flex-wrap gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/10 text-xs">
+                        <button @click="reviewFilter = 'all'"
+                                class="px-3 py-1.5 rounded-lg font-bold transition-all"
+                                :class="reviewFilter === 'all' ? 'bg-cyan-500 text-black font-black' : 'text-white/60 hover:text-white'">
+                            Tất cả (30)
+                        </button>
+                        <button @click="reviewFilter = 'mistakes'"
+                                class="px-3 py-1.5 rounded-lg font-bold transition-all"
+                                :class="reviewFilter === 'mistakes' ? 'bg-red-500 text-white font-black' : 'text-white/60 hover:text-white'">
+                            Câu sai (<span x-text="result.mistakes ? result.mistakes.length : 0"></span>)
+                        </button>
+                        <button @click="reviewFilter = 'simulations'"
+                                class="px-3 py-1.5 rounded-lg font-bold transition-all"
+                                :class="reviewFilter === 'simulations' ? 'bg-purple-500 text-white font-black' : 'text-white/60 hover:text-white'">
+                            Tự luận (<span x-text="(result.ai_feedback || []).length"></span>)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Questions List -->
+                <div class="space-y-4">
+                    <template x-for="q in filteredReviewQuestions" :key="q.id">
+                        <div class="rounded-2xl border p-5 space-y-3 transition-all"
+                             :class="q.isMistake ? 'border-red-500/25 bg-red-500/[0.03]' : q.isSim ? 'border-purple-500/25 bg-purple-500/[0.03]' : 'border-green-500/25 bg-green-500/[0.02]'">
+                            <!-- Question meta & status -->
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-white/10 text-white/80" x-text="'Câu ' + (q.index + 1)"></span>
+                                    <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-500/10 text-cyan-300" x-text="q.difficulty_label || q.difficulty"></span>
+                                    <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-white/5 text-white/50" x-text="q.category"></span>
+                                </div>
+                                <template x-if="q.isSim">
+                                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-500/20 text-purple-300">
+                                        <i class="bi bi-robot mr-1"></i> Tự luận AI chấm
+                                    </span>
+                                </template>
+                                <template x-if="!q.isSim && q.isMistake">
+                                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-red-500/20 text-red-300">
+                                        <i class="bi bi-x-circle mr-1"></i> Chưa chính xác (0đ)
+                                    </span>
+                                </template>
+                                <template x-if="!q.isSim && !q.isMistake">
+                                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-green-500/20 text-green-300">
+                                        <i class="bi bi-check-circle mr-1"></i> Chính xác (+10đ)
+                                    </span>
+                                </template>
+                            </div>
+
+                            <!-- Question content -->
+                            <p class="text-sm font-bold text-white scam-iq-wrap leading-relaxed" x-text="cleanQuestionText(q.question)"></p>
+
+                            <!-- Options display for multiple choice -->
+                            <template x-if="!q.isSim && q.options && q.options.length">
+                                <div class="grid grid-cols-1 gap-2 pt-1">
+                                    <template x-for="opt in q.options" :key="opt.id">
+                                        <div class="p-3 rounded-xl border text-xs flex items-start gap-2.5"
+                                             :class="q.expected.includes(opt.id)
+                                                ? 'border-green-500/40 bg-green-500/10 text-green-200 font-medium'
+                                                : q.selected.includes(opt.id)
+                                                    ? 'border-red-500/40 bg-red-500/10 text-red-200'
+                                                    : 'border-white/5 bg-white/[0.02] text-white/60'">
+                                            <span class="font-black" x-text="opt.id + '.'"></span>
+                                            <span class="flex-1" x-text="opt.text"></span>
+                                            <template x-if="q.expected.includes(opt.id)">
+                                                <span class="text-[10px] font-black uppercase text-green-400 shrink-0">Đáp án đúng</span>
+                                            </template>
+                                            <template x-if="q.selected.includes(opt.id) && !q.expected.includes(opt.id)">
+                                                <span class="text-[10px] font-black uppercase text-red-400 shrink-0">Lựa chọn của bạn</span>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- Free text display for simulations -->
+                            <template x-if="q.isSim">
+                                <div class="space-y-2 pt-1">
+                                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/10 text-xs">
+                                        <p class="text-white/40 text-[10px] font-black uppercase tracking-wider mb-1">Câu trả lời của bạn:</p>
+                                        <p class="text-white/90 whitespace-pre-wrap" x-text="q.userAnswerText || '(Chưa nhập)'"></p>
+                                    </div>
+                                    <template x-if="q.aiFeedback">
+                                        <div class="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs space-y-1">
+                                            <div class="flex items-center justify-between text-purple-300 font-bold">
+                                                <span><i class="bi bi-robot mr-1"></i> Đánh giá từ AI:</span>
+                                                <span x-text="`${q.aiFeedback.ai_score}/10 điểm`"></span>
+                                            </div>
+                                            <p class="text-purple-200" x-text="q.aiFeedback.ai_comment"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- Explanation Box -->
+                            <div class="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/15 text-xs text-cyan-200/90 leading-relaxed">
+                                <span class="font-black text-cyan-300 uppercase text-[10px] mr-1"><i class="bi bi-lightbulb mr-1"></i>Giải thích:</span>
+                                <span x-text="q.explanation"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
     </template>
+
+    <!-- Floating Copy Toast -->
+    <div x-show="toastText" x-transition.opacity class="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-cyan-400 text-black font-black text-xs shadow-2xl flex items-center gap-2">
+        <i class="bi bi-check-circle-fill"></i>
+        <span x-text="toastText"></span>
+    </div>
 </section>
 
 <script>
@@ -336,6 +541,11 @@ function scamIQExam() {
         aiProgressMessage: '',
         isAIScoring: false,
         aiSocket: null,
+        elapsedSeconds: 0,
+        timerInterval: null,
+        reviewFilter: 'all',
+        toastText: '',
+        toastTimeout: null,
 
         init() {
             this.loadHistory();
@@ -343,6 +553,130 @@ function scamIQExam() {
 
         get currentQuestion() {
             return this.questions[this.index] || null;
+        },
+
+        get formattedTimer() {
+            const mins = Math.floor(this.elapsedSeconds / 60).toString().padStart(2, '0');
+            const secs = (this.elapsedSeconds % 60).toString().padStart(2, '0');
+            return `${mins}:${secs}`;
+        },
+
+        get percentileLabel() {
+            const score = this.result?.score || 0;
+            if (score >= 270) return 'Top 5% người dùng có năng lực tự vệ số cao nhất';
+            if (score >= 210) return 'Top 20% người dùng có kiến thức an ninh mạng tốt';
+            if (score >= 150) return 'Top 45% người dùng mức độ cảnh giác trung bình';
+            return 'Cần trang bị thêm kiến thức phòng chống lừa đảo trực tuyến';
+        },
+
+        get difficultyBands() {
+            const bd = this.result?.difficulty_breakdown || {};
+            const configs = [
+                { key: 'easy', label: 'Căn bản (Easy)', textColor: 'text-green-400', barColor: 'bg-green-400' },
+                { key: 'medium', label: 'Trung bình (Medium)', textColor: 'text-cyan-400', barColor: 'bg-cyan-400' },
+                { key: 'hard', label: 'Nâng cao (Hard)', textColor: 'text-amber-400', barColor: 'bg-amber-400' },
+                { key: 'extreme', label: 'Cực khó (Extreme)', textColor: 'text-purple-400', barColor: 'bg-purple-400' }
+            ];
+            return configs.map(c => {
+                const data = bd[c.key] || { total: 0, correct: 0 };
+                const total = data.total || 0;
+                const correct = data.correct || 0;
+                const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+                let status = 'Cần luyện thêm';
+                if (pct >= 85) status = 'Thành thạo';
+                else if (pct >= 60) status = 'Khá vững';
+                return {
+                    ...c,
+                    ratio: `${correct}/${total}`,
+                    pct: pct,
+                    status: status
+                };
+            });
+        },
+
+        get filteredReviewQuestions() {
+            if (!this.result || !this.questions) return [];
+            const mistakesMap = {};
+            (this.result.mistakes || []).forEach(m => { mistakesMap[m.question_id] = m; });
+            const aiFeedbackMap = {};
+            (this.result.ai_feedback || []).forEach(f => { aiFeedbackMap[f.question_id] = f; });
+
+            const list = this.questions.map((q, idx) => {
+                const isSim = this.isSimulationType(q.type);
+                const mistake = mistakesMap[q.id];
+                const isMistake = !!mistake;
+                const expected = mistake ? mistake.expected : (q.correct_option_ids || []);
+                const rawAns = this.answers[q.id] || {};
+                const selected = Array.isArray(rawAns) ? rawAns : (rawAns.selected_ids || []);
+                const userAnswerText = typeof rawAns === 'object' ? (rawAns.free_text || '') : '';
+                const aiFeedback = aiFeedbackMap[q.id] || null;
+
+                return {
+                    id: q.id,
+                    index: idx,
+                    question: q.question,
+                    difficulty: q.difficulty,
+                    difficulty_label: q.difficulty_label,
+                    type: q.type,
+                    category: q.category,
+                    options: q.options || [],
+                    expected: expected,
+                    selected: selected,
+                    explanation: q.explanation || (mistake ? mistake.explanation : ''),
+                    isSim: isSim,
+                    isMistake: isMistake,
+                    userAnswerText: userAnswerText,
+                    aiFeedback: aiFeedback
+                };
+            });
+
+            if (this.reviewFilter === 'mistakes') {
+                return list.filter(q => q.isMistake);
+            }
+            if (this.reviewFilter === 'simulations') {
+                return list.filter(q => q.isSim);
+            }
+            return list;
+        },
+
+        startTimer() {
+            this.elapsedSeconds = 0;
+            if (this.timerInterval) clearInterval(this.timerInterval);
+            this.timerInterval = setInterval(() => {
+                this.elapsedSeconds += 1;
+            }, 1000);
+        },
+
+        stopTimer() {
+            if (this.timerInterval) {
+                clearInterval(this.timerInterval);
+                this.timerInterval = null;
+            }
+        },
+
+        showToastMessage(msg) {
+            this.toastText = msg;
+            if (this.toastTimeout) clearTimeout(this.toastTimeout);
+            this.toastTimeout = setTimeout(() => {
+                this.toastText = '';
+            }, 3000);
+        },
+
+        copyResultSummary() {
+            if (!this.result) return;
+            const score = this.result.score;
+            const maxScore = this.result.max_score || 300;
+            const level = this.result.level?.label || 'Scam IQ';
+            const text = `[ShieldCall VN] Tôi vừa hoàn tất bài kiểm tra Scam IQ:\n` +
+                         `• Xếp hạng: ${level}\n` +
+                         `• Điểm số: ${score}/${maxScore} (${Math.round((score / maxScore) * 100)}%)\n` +
+                         `• Thời gian hoàn thành: ${this.formattedTimer}\n` +
+                         `Kiểm tra chỉ số đề kháng lừa đảo số của bạn tại: https://shieldcall.vn/scam-iq-exam/`;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this.showToastMessage('Đã sao chép kết quả thi vào bộ nhớ tạm!');
+                }).catch(() => {});
+            }
         },
 
         typeLabel(type) {
@@ -372,7 +706,7 @@ function scamIQExam() {
         simBody(question) {
             const derived = this.deriveSimulationFromQuestion(question);
             const body = String(derived?.body || '').trim();
-            return body || 'Nội dung email mô phỏng đang được chuẩn hóa. Hãy tập trung vào quy trình xác minh trước khi thao tác.';
+            return body || 'Nội dung tình huống mô phỏng đang được chuẩn hóa. Hãy tập trung vào quy trình xác minh trước khi thao tác.';
         },
 
         deriveSimulationFromQuestion(question) {
@@ -445,11 +779,6 @@ function scamIQExam() {
                         if (typeof progress.total_questions === 'number') this.progressTotal = progress.total_questions;
                         if (typeof progress.created_questions === 'number') this.progressCreated = progress.created_questions;
                         if (progress.phase_label) this.progressPhaseLabel = progress.phase_label;
-                        if (Array.isArray(progress.web_sources) && progress.web_sources.length) {
-                            console.groupCollapsed(`[ScamIQ][WebTool] ${progress.web_sources.length} nguồn web đã dùng`);
-                            progress.web_sources.forEach((url, idx) => console.log(`#${idx + 1}:`, url));
-                            console.groupEnd();
-                        }
                         if (payload.message) this.progressMessage = payload.message;
                     } catch (_) {}
                 };
@@ -480,7 +809,7 @@ function scamIQExam() {
                         if (payload.status === 'processing') {
                             this.aiProgressMessage = payload.message;
                         } else if (payload.status === 'done') {
-                            this.aiProgressMessage = payload.message || 'Hoàn tất!';
+                            this.aiProgressMessage = payload.message || 'Hoàn tất chấm điểm AI!';
                             if (payload.data) {
                                 this.result.score = payload.data.score;
                                 this.result.level = payload.data.level;
@@ -532,6 +861,13 @@ function scamIQExam() {
             const raw = this.answers[qid] || [];
             const cur = Array.isArray(raw) ? raw : (raw.selected_ids || []);
             return cur.includes(optionId);
+        },
+
+        selectedCount(qid) {
+            if (!qid) return 0;
+            const raw = this.answers[qid] || [];
+            const cur = Array.isArray(raw) ? raw : (raw.selected_ids || []);
+            return cur.length;
         },
 
         setSingleChoice(optionId) {
@@ -616,8 +952,9 @@ function scamIQExam() {
             this.index = 0;
             this.progressCreated = 0;
             this.progressTotal = 30;
-            this.progressMessage = 'Đang khởi tạo pipeline tạo đề...';
+            this.progressMessage = 'Đang khởi tạo pipeline đề thi...';
             this.progressPhaseLabel = 'Khởi tạo';
+            this.stopTimer();
 
             try {
                 const resp = await fetch('/api/v1/scam-iq/start/', {
@@ -645,7 +982,7 @@ function scamIQExam() {
         },
 
         async pollStatus() {
-            for (let i = 0; i < 45; i++) {
+            for (let i = 0; i < 80; i++) {
                 const resp = await fetch(`/api/v1/scam-iq/status/${this.taskId}/`, {
                     method: 'GET',
                     credentials: 'include',
@@ -666,18 +1003,20 @@ function scamIQExam() {
                     this.progressMessage = 'Bộ câu hỏi đã sẵn sàng.';
                     this.progressPhaseLabel = 'Hoàn tất';
                     this.closeTaskSocket();
+                    this.startTimer();
                     return;
                 }
 
                 await new Promise(resolve => setTimeout(resolve, 1500));
             }
 
-            throw new Error('Tạo câu hỏi quá lâu. Vui lòng thử lại.');
+            throw new Error('Hệ thống đang chuẩn bị đề thi kỹ lưỡng hơn thường lệ. Vui lòng bấm thử lại.');
         },
 
         async submitExam() {
             this.error = '';
             this.submitting = true;
+            this.stopTimer();
             try {
                 const resp = await fetch('/api/v1/scam-iq/submit/', {
                     method: 'POST',
@@ -695,6 +1034,7 @@ function scamIQExam() {
                 if (!resp.ok) throw new Error(data.error || 'Nộp bài thất bại.');
                 this.result = data;
                 this.stage = 'result';
+                this.reviewFilter = 'all';
                 
                 if (data.ai_task_id) {
                     this.taskIdAI = data.ai_task_id;
@@ -712,6 +1052,7 @@ function scamIQExam() {
         },
 
         resetExam() {
+            this.stopTimer();
             this.closeTaskSocket();
             this.stage = 'idle';
             this.taskId = '';
@@ -724,6 +1065,7 @@ function scamIQExam() {
             this.taskIdAI = '';
             this.aiProgressMessage = '';
             this.isAIScoring = false;
+            this.reviewFilter = 'all';
             this.closeAISocket();
         },
     }

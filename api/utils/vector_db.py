@@ -257,3 +257,23 @@ class ScamVectorDB:
 
 # Shortcut for singleton access
 vector_db = ScamVectorDB()
+
+
+def preload_vector_db_async():
+    """
+    Warm up the vector database embedding model in a background daemon thread
+    to eliminate the ~16s cold start latency on the user's first AI query.
+    """
+    import threading
+
+    def _warmup():
+        try:
+            logger.info("[VectorDB] Starting background embedding model warm-up...")
+            vector_db._load_model()
+            logger.info("[VectorDB] Background warm-up finished successfully.")
+        except Exception as e:
+            logger.warning(f"[VectorDB] Background warm-up notice: {e}")
+
+    t = threading.Thread(target=_warmup, daemon=True, name="VectorDB-Warmup")
+    t.start()
+

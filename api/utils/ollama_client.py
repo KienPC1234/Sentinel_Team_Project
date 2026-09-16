@@ -438,7 +438,8 @@ def _format_openai_messages(messages):
         elif role == 'assistant':
             item = {'role': 'assistant', 'content': content}
             reasoning = m.get('reasoning_content') or m.get('thinking')
-            if reasoning:
+            # DeepSeek accepts reasoning_content in assistant history, but strict OpenAI endpoints reject it.
+            if reasoning and 'deepseek' in (OPENAI_BASE_URL or '').lower():
                 item['reasoning_content'] = str(reasoning)
             tool_calls = m.get('tool_calls')
             if tool_calls:
@@ -576,8 +577,22 @@ def _openai_chat_stream_with_retry(max_retries: int = 3, **chat_kwargs):
     if tools:
         params['tools'] = tools
         params['tool_choice'] = 'auto'
-
-    raw_stream = cli.chat.completions.create(**params)
+    last_exc = None
+    raw_stream = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            raw_stream = cli.chat.completions.create(**params)
+            break
+        except Exception as e:
+            last_exc = e
+            err_str = str(e)
+            is_retryable = any(tok in err_str.lower() for tok in ['503', '502', '504', '429', 'rate limit', 'timeout', 'connection', 'remote end closed'])
+            if is_retryable and attempt < max_retries:
+                wait = 2 ** attempt
+                logger.warning(f"[OpenAI/DeepSeek] Stream attempt {attempt}/{max_retries} failed ({err_str[:120]}), retrying in {wait}s...")
+                _time.sleep(wait)
+                continue
+            raise last_exc
 
     def _stream_gen():
         tool_calls_accumulator = {}

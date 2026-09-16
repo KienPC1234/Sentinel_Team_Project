@@ -28,3 +28,10 @@ application = ProtocolTypeRouter({
 
 if settings.DEBUG:
     application = ASGIStaticFilesHandler(application)
+
+try:
+    from api.utils.vector_db import preload_vector_db_async
+    preload_vector_db_async()
+except Exception:
+    pass
+

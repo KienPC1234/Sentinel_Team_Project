@@ -66,7 +66,7 @@ Thêm cấu hình sau:
       "args": ["/đường_dẫn_tới/Sentinel_Team_Project/scripts/shieldcall_mcp.py"],
       "env": {
         "SHIELDCALL_API_KEY": "sc_live_your_api_key_here",
-        "SHIELDCALL_API_URL": "http://127.0.0.1:8001/api/v1"
+        "SHIELDCALL_API_URL": "https://shieldcall.vn/api/v1"
       }
     }
   }
@@ -77,7 +77,7 @@ Khởi động lại Claude Desktop. Khi mở hội thoại, công cụ ShieldCa
 
 ---
 
-## 4. Mẫu System Prompt Khởi Đầu (Ready to Copy)
+## 5. Mẫu System Prompt Khởi Đầu (Ready to Copy)
 
 Dán mẫu prompt sau vào System Instructions hoặc Claude Projects để chatbot chủ động tự gọi công cụ tra cứu ngầm:
 

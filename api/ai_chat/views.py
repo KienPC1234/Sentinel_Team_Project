@@ -367,9 +367,9 @@ class ChatAIStreamView(APIView):
                         yield f"data: {json.dumps({'chunk': chunk})}\n\n"
                         chunk_count += 1
                 
-                # Retrieve classification result
+                # Retrieve classification result without blocking stream completion
                 try:
-                    classification = class_future.result(timeout=5)
+                    classification = class_future.result(timeout=0.05) if class_future.done() else {}
                 except Exception:
                     classification = {}
                 
