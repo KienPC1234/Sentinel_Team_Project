@@ -8,7 +8,10 @@ from django.contrib.auth.password_validation import validate_password
 from django.utils.text import slugify
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
-from api.utils.normalization import normalize_phone_e164
+from api.utils.normalization import (
+    normalize_phone_e164, normalize_domain, normalize_email,
+    is_valid_email, normalize_bank_account
+)
 from .models import (
     Domain, BankAccount, Report, ScanEvent, TrendDaily,
     EntityLink, UserAlert, ScamType, Severity, TargetType, ScanType,
@@ -184,15 +187,59 @@ class ReportCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         target_type = attrs.get('target_type')
-        target_value = attrs.get('target_value')
+        target_value = (attrs.get('target_value') or '').strip()
+
+        if not target_value:
+            raise serializers.ValidationError({
+                'target_value': 'Thông tin đối tượng không được để trống.'
+            })
 
         if target_type == 'phone':
             try:
-                attrs['target_value'] = normalize_phone_e164(target_value, strict=True)
+                attrs['target_value'] = normalize_phone_e164(target_value, default_country_code='84', strict=False)
             except ValueError:
                 raise serializers.ValidationError({
-                    'target_value': 'Số điện thoại báo cáo phải có mã quốc gia, ví dụ +84xxxxxxxxx hoặc +1xxxxxxxxxx.'
+                    'target_value': 'Số điện thoại không hợp lệ (cần từ 8 đến 15 chữ số).'
                 })
+        elif target_type == 'domain':
+            norm_domain = normalize_domain(target_value)
+            if not norm_domain or len(norm_domain) < 3 or '.' not in norm_domain:
+                raise serializers.ValidationError({
+                    'target_value': 'Tên miền hoặc đường dẫn website không hợp lệ.'
+                })
+            attrs['target_value'] = norm_domain
+        elif target_type == 'email':
+            norm_email = normalize_email(target_value)
+            if not is_valid_email(norm_email):
+                raise serializers.ValidationError({
+                    'target_value': 'Địa chỉ email không đúng định dạng (VD: name@domain.com).'
+                })
+            attrs['target_value'] = norm_email
+        elif target_type == 'account':
+            norm_acc = normalize_bank_account(target_value)
+            if not norm_acc or len(norm_acc) < 4:
+                raise serializers.ValidationError({
+                    'target_value': 'Số tài khoản ngân hàng không hợp lệ (ít nhất 4 ký tự số).'
+                })
+            attrs['target_value'] = norm_acc
+
+        # Normalize auxiliary scammer details if provided
+        scammer_phone = (attrs.get('scammer_phone') or '').strip()
+        if scammer_phone:
+            try:
+                attrs['scammer_phone'] = normalize_phone_e164(scammer_phone, default_country_code='84', strict=False)
+            except ValueError:
+                attrs['scammer_phone'] = scammer_phone
+
+        scammer_bank_account = (attrs.get('scammer_bank_account') or '').strip()
+        if scammer_bank_account:
+            attrs['scammer_bank_account'] = normalize_bank_account(scammer_bank_account)
+
+        if attrs.get('scammer_name'):
+            attrs['scammer_name'] = re.sub(r'\s+', ' ', attrs['scammer_name']).strip()
+
+        if attrs.get('scammer_bank_name'):
+            attrs['scammer_bank_name'] = attrs['scammer_bank_name'].strip()
 
         return attrs
 

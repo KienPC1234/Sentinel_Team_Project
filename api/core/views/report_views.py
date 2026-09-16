@@ -133,6 +133,11 @@ class ReportCreateView(APIView):
             Domain.objects.filter(domain_name=target).update(
                 report_count=F('report_count') + 1
             )
+        elif report.target_type == 'account':
+            acc_hash = BankAccount.hash_account(target)
+            BankAccount.objects.filter(account_number_hash=acc_hash).update(
+                report_count=F('report_count') + 1
+            )
         elif report.target_type == 'email':
             from api.utils.normalization import normalize_email
             normalized = normalize_email(target)
@@ -140,6 +145,13 @@ class ReportCreateView(APIView):
                 report.target_value = normalized
                 report.save()
                 target = normalized
+
+        if report.scammer_bank_account and report.target_type != 'account':
+            s_acc_hash = BankAccount.hash_account(report.scammer_bank_account)
+            BankAccount.objects.filter(account_number_hash=s_acc_hash).update(
+                report_count=F('report_count') + 1
+            )
+
 
         # Auto-link to the most recent ScanEvent for this user and target
         if request.user.is_authenticated:

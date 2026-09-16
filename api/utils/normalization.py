@@ -102,3 +102,11 @@ def is_valid_email(email: str) -> bool:
     # Simple regex for email validation
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
+
+
+def normalize_bank_account(account: str) -> str:
+    """Normalize bank account by stripping spaces, hyphens, dots, and converting to uppercase."""
+    if not account:
+        return ""
+    return re.sub(r'[\s\-._]', '', account.strip()).upper()
+
