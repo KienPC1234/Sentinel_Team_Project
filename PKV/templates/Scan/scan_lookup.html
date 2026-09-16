@@ -88,7 +88,7 @@
     <div class="liquid-card p-6 space-y-5" data-aos="fade-up" data-aos-delay="650">
         <form action="/scan/lookup/" method="get" class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
             <div class="relative">
-                <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-white/35"></i>
+                <i class="bi bi-search absolute left-3.5 top-1/2 -translate-y-1/2 text-white/35 pointer-events-none z-10"></i>
                 <input type="text" name="q" value="{{ search_query }}" placeholder="Nhập từ khóa để tra cứu lịch sử scan..." class="w-full h-11 pl-10 pr-3 rounded-xl bg-white/[0.03] border border-white/10 text-white text-sm placeholder:text-white/35 focus:outline-none focus:border-cyan-500/40">
                 {% if selected_type %}
                 <input type="hidden" name="type" value="{{ selected_type }}">

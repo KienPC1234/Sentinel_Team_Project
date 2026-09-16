@@ -90,17 +90,17 @@
                 <!-- Microphone Selector -->
                 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3" x-show="!isRecording">
                     <div class="flex-1 relative">
-                        <div class="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                        <div class="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none z-10">
                             <i class="bi bi-mic"></i>
                         </div>
                         <select x-model="selectedDeviceId" @change="testSelectedMic()"
-                                class="w-full bg-white/[0.03] border border-white/10 text-white/80 text-sm font-bold rounded-xl pl-10 pr-4 py-3 appearance-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-all cursor-pointer">
+                                class="w-full bg-white/[0.03] border border-white/10 text-white/80 text-sm font-bold rounded-xl pl-11 pr-10 py-3 appearance-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-all cursor-pointer">
                             <option value="" class="bg-slate-900">Micro mặc định</option>
                             <template x-for="d in audioDevices" :key="d.deviceId">
                                 <option :value="d.deviceId" x-text="d.label || ('Microphone ' + (audioDevices.indexOf(d)+1))" class="bg-slate-900"></option>
                             </template>
                         </select>
-                        <div class="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                        <div class="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none z-10">
                             <i class="bi bi-chevron-down text-xs"></i>
                         </div>
                     </div>

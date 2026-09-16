@@ -524,8 +524,15 @@
             <!-- Value Input + Bank Selection if Account -->
             <div class="space-y-3">
                 <div class="relative">
+                    <div class="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none flex items-center justify-center w-5 h-5 z-10">
+                        <template x-if="target_type === 'phone'"><i class="bi bi-telephone text-base"></i></template>
+                        <template x-if="target_type === 'domain'"><i class="bi bi-globe text-base"></i></template>
+                        <template x-if="target_type === 'account'"><i class="bi bi-credit-card text-base"></i></template>
+                        <template x-if="target_type === 'email'"><i class="bi bi-envelope text-base"></i></template>
+                        <template x-if="target_type === 'message'"><i class="bi bi-chat-left-text text-base"></i></template>
+                    </div>
                     <input type="text"
-                        class="liquid-input w-full py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/30"
+                        class="liquid-input has-icon-left w-full py-4 pl-12 pr-4 text-sm font-bold placeholder:text-white/30"
                         x-model="target_value"
                         @input="onTargetInput()"
                         :placeholder="target_type === 'phone' ? 'Nhập số điện thoại (VD: 0912345678 hoặc +84...)' :
@@ -533,13 +540,6 @@
                                       target_type === 'account' ? 'Nhập số tài khoản ngân hàng...' :
                                       target_type === 'email' ? 'Nhập địa chỉ email giả mạo (VD: support@scam.vn)' :
                                       'Nhập số điện thoại gửi tin nhắn, link hoặc thông tin đối tượng...'">
-                    <div class="absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
-                        <template x-if="target_type === 'phone'"><i class="bi bi-telephone text-base"></i></template>
-                        <template x-if="target_type === 'domain'"><i class="bi bi-globe text-base"></i></template>
-                        <template x-if="target_type === 'account'"><i class="bi bi-credit-card text-base"></i></template>
-                        <template x-if="target_type === 'email'"><i class="bi bi-envelope text-base"></i></template>
-                        <template x-if="target_type === 'message'"><i class="bi bi-chat-left-text text-base"></i></template>
-                    </div>
                 </div>
 
                 <!-- Real-Time Normalization Feedback Pill -->
@@ -578,9 +578,9 @@
                     <!-- Searchable Bank Dropdown Panel -->
                     <div x-show="showBankDropdown" x-transition class="p-4 rounded-2xl bg-black/60 border border-white/10 space-y-3">
                         <div class="relative">
+                            <i class="bi bi-search absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 text-xs pointer-events-none z-10"></i>
                             <input type="text" x-model="bankSearch" placeholder="Tìm kiếm theo tên ngân hàng hoặc mã viết tắt..."
-                                class="liquid-input w-full py-2.5 pl-9 pr-4 text-xs font-medium">
-                            <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-xs"></i>
+                                class="liquid-input has-icon-left w-full py-2.5 pl-10 pr-4 text-xs font-medium">
                         </div>
                         <div class="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
                             <template x-for="b in filteredBanks" :key="b.code || b.shortName">

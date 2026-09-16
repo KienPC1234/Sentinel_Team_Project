@@ -741,6 +741,54 @@ select.liquid-select {
     box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.1);
 }
 
+/* ═══ Textbox & Input Icon Protection Utilities ═══ */
+.pl-6, input.pl-6, select.pl-6 { padding-left: 1.5rem !important; }
+.pl-7, input.pl-7, select.pl-7 { padding-left: 1.75rem !important; }
+.pl-8, input.pl-8, select.pl-8 { padding-left: 2rem !important; }
+.pl-9, input.pl-9, select.pl-9 { padding-left: 2.25rem !important; }
+.pl-10, input.pl-10, select.pl-10 { padding-left: 2.5rem !important; }
+.pl-11, input.pl-11, select.pl-11 { padding-left: 2.75rem !important; }
+.pl-12, input.pl-12, select.pl-12 { padding-left: 3rem !important; }
+.pl-14, input.pl-14, select.pl-14 { padding-left: 3.5rem !important; }
+.pl-16, input.pl-16, select.pl-16 { padding-left: 4rem !important; }
+.pl-20, input.pl-20, select.pl-20 { padding-left: 5rem !important; }
+
+.pr-6, input.pr-6, select.pr-6 { padding-right: 1.5rem !important; }
+.pr-7, input.pr-7, select.pr-7 { padding-right: 1.75rem !important; }
+.pr-8, input.pr-8, select.pr-8 { padding-right: 2rem !important; }
+.pr-9, input.pr-9, select.pr-9 { padding-right: 2.25rem !important; }
+.pr-10, input.pr-10, select.pr-10 { padding-right: 2.5rem !important; }
+.pr-12, input.pr-12, select.pr-12 { padding-right: 3rem !important; }
+.pr-14, input.pr-14, select.pr-14 { padding-right: 3.5rem !important; }
+.pr-16, input.pr-16, select.pr-16 { padding-right: 4rem !important; }
+.pr-20, input.pr-20, select.pr-20 { padding-right: 5rem !important; }
+.pr-24, input.pr-24, select.pr-24 { padding-right: 6rem !important; }
+.pr-28, input.pr-28, select.pr-28 { padding-right: 7rem !important; }
+.pr-32, input.pr-32, select.pr-32 { padding-right: 8rem !important; }
+
+/* Dedicated helper classes for inputs with left/right icons */
+.has-icon-left, input.has-icon-left, select.has-icon-left {
+    padding-left: 3.25rem !important;
+}
+.has-icon-right, input.has-icon-right, select.has-icon-right {
+    padding-right: 3.25rem !important;
+}
+
+/* Automatic protection for input container with absolute icon on the left */
+.relative:has(> [class*="absolute"][class*="left-"]) > input,
+.relative:has(> [class*="absolute"][class*="left-"]) > select {
+    padding-left: 3.25rem !important;
+}
+
+/* Automatic protection for input container with absolute icon or action button on the right */
+.relative:has(> [class*="absolute"][class*="right-"]:not(button)) > input {
+    padding-right: 3.25rem !important;
+}
+.relative:has(> button[class*="absolute"][class*="right-"]) > input {
+    padding-right: 7rem !important;
+}
+
+
 /* Specific Select Fix */
 input.liquid-input,
 select.liquid-input {
