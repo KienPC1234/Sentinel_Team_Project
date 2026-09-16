@@ -1223,7 +1223,8 @@ def generate_response(
                             f"reply_len={len(reply)}, exiting loop")
                 break
             else:
-                logger.warning(f"[generate_response iter={iteration}] ⚠️ empty content and no tool calls")
+                logger.warning(f"[generate_response iter={iteration}] ⚠️ empty content and no tool calls - exiting loop")
+                break
 
         if iteration >= max_loop_iterations:
             logger.warning(f"[generate_response] hit max_loop_iterations={max_loop_iterations}, returning best content so far")
