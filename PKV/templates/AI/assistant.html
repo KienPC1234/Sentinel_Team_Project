@@ -989,17 +989,20 @@
 
             cleanText = cleanText.trim();
             if (!cleanText) return '';
-            try { 
+            const _san = (typeof window.sanitizeHtml === 'function') ? window.sanitizeHtml : null;
+            const _esc = (typeof window.escapeHtml === 'function') ? window.escapeHtml : ((s) => String(s == null ? '' : s));
+            try {
                 if (typeof marked !== 'undefined' && marked.parse) {
-                    return marked.parse(cleanText, { 
-                        breaks: true, 
+                    const raw = marked.parse(cleanText, {
+                        breaks: true,
                         gfm: true
-                    }); 
+                    });
+                    return _san ? _san(raw) : raw;
                 }
-                return cleanText;
-            } catch(e) { 
+                return _esc(cleanText);
+            } catch(e) {
                 console.error('Markdown rendering error:', e);
-                return cleanText; 
+                return _esc(cleanText);
             }
         };
 
@@ -1657,7 +1660,13 @@
             const div = document.createElement('div');
             div.className = `msg-group flex ${role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`;
             if (messageId) div.dataset.messageId = messageId;
-            
+
+            // JS-string-safe escaping for inline handler interpolation (prevents
+            // quote/`</script>` breakout from message text stored in history).
+            const escJs = String(text == null ? '' : text)
+                .replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$')
+                .replace(/</g, '\\x3c').replace(/>/g, '\\x3e')
+                .replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             const userDisplayName = CURRENT_USER;
             const bubbleClass = role === 'user' ? 'msg-user' : 'msg-assistant';
             const label = role === 'user' ? 
@@ -1702,13 +1711,13 @@
                                                 <i class="bi bi-card-text"></i> Xem nội dung trích xuất từ ảnh
                                             </summary>
                                             <div class="px-4 py-3 text-[11px] text-slate-400 italic border-t border-white/5 bg-black/20">
-                                                ${typeof window.renderMd === 'function' ? window.renderMd(ocrPart) : (typeof marked !== 'undefined' ? marked.parse(ocrPart) : ocrPart)}
+                                                ${typeof window.renderMd === 'function' ? window.renderMd(ocrPart) : (typeof window.escapeHtml === 'function' ? window.escapeHtml(ocrPart) : ocrPart)}
                                             </div>
                                         </details>
-                                        ${typeof window.renderMd === 'function' ? window.renderMd(content || "[Gửi ảnh]") : (typeof marked !== 'undefined' ? marked.parse(content || "[Gửi ảnh]") : (content || "[Gửi ảnh]"))}
+                                        ${typeof window.renderMd === 'function' ? window.renderMd(content || "[Gửi ảnh]") : (typeof window.escapeHtml === 'function' ? window.escapeHtml(content || "[Gửi ảnh]") : (content || "[Gửi ảnh]"))}
                                     `;
                                 }
-                                return typeof window.renderMd === 'function' ? window.renderMd(content) : (typeof marked !== 'undefined' ? marked.parse(content) : content);
+                                return typeof window.renderMd === 'function' ? window.renderMd(content) : (typeof window.escapeHtml === 'function' ? window.escapeHtml(content) : content);
                             })()}
                         </div>
                         <div class="search-results-container mt-4 space-y-2 empty:hidden"></div>
@@ -1716,7 +1725,7 @@
                     <div class="msg-actions ${role === 'user' ? 'msg-actions-user' : 'msg-actions-assistant'}" data-raw-text="${encodeURIComponent(text)}">
                         <button onclick="copyToClipboard(this)" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-xs" title="Sao chép"><i class="bi bi-clipboard"></i></button>
                         ${(IS_AUTHENTICATED && messageId) ? `<button onclick="toggleBookmark(this, ${messageId})" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-amber-400 transition-all flex items-center justify-center text-xs bookmark-btn" title="Lưu tin nhắn"><i class="bi bi-bookmark"></i></button>` : ''}
-                        ${role === 'user' ? `<button onclick="editMessage(this, ${messageId}, \`${text.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-xs" title="Chỉnh sửa"><i class="bi bi-pencil"></i></button>` : ''}
+                        ${role === 'user' ? `<button onclick="editMessage(this, ${messageId}, \`${escJs}\`)" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-xs" title="Chỉnh sửa"><i class="bi bi-pencil"></i></button>` : ''}
                     </div>
                 </div>
             `;
@@ -2048,7 +2057,7 @@
         function throttleRender(el, text) {
             const now = Date.now();
             if (now - lastRenderedTime > RENDER_THROTTLE_MS) {
-                const html = typeof window.renderMd === 'function' ? window.renderMd(text) : (typeof marked !== 'undefined' ? marked.parse(text) : text);
+                const html = typeof window.renderMd === 'function' ? window.renderMd(text) : (typeof window.escapeHtml === 'function' ? window.escapeHtml(text) : text);
                 el.innerHTML = html + '<span class="typing-cursor"></span>';
                 lastRenderedTime = now;
             }
@@ -2063,12 +2072,19 @@
                 if (pendingImages.length >= 4) return;
                 const r = new FileReader();
                 r.onload = ev => {
-                    pendingImages.push(ev.target.result);
+                    const dataUrl = ev.target.result;
+                    pendingImages.push(dataUrl);
                     const p = document.createElement('div');
                     p.className = 'relative w-16 h-16 rounded-xl overflow-hidden border border-white/10 group';
-                    p.innerHTML = `<img src="${ev.target.result}" class="w-full h-full object-cover">
-                        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onclick="this.parentElement.remove(); pendingImages=pendingImages.filter(i=>i!=='${ev.target.result}'); updateSendBtnState(); updateComposerSafeSpace();">
-                        <i class="bi bi-x-circle text-white"></i></div>`;
+                    const thumb = document.createElement('img');
+                    thumb.src = dataUrl;
+                    thumb.className = 'w-full h-full object-cover';
+                    p.appendChild(thumb);
+                    const rm = document.createElement('div');
+                    rm.className = 'absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer';
+                    rm.textContent = '✕';
+                    rm.onclick = () => { const i = pendingImages.indexOf(dataUrl); if (i >= 0) pendingImages.splice(i, 1); p.remove(); updateSendBtnState(); updateComposerSafeSpace(); };
+                    p.appendChild(rm);
                     imagePreviews.appendChild(p);
                     updateSendBtnState();
                     updateComposerSafeSpace();

@@ -278,6 +278,36 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "search_custom_reports",
+            "description": "Tìm kiếm báo cáo tuỳ biến nội bộ ShieldCall: thủ đoạn độc lạ, lừa đảo MXH/Telegram/Zalo, deepfake, crypto, APK mã độc, biến thể mới. Hỗ trợ lọc theo danh mục, loại đối tượng, có bằng chứng.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Từ khóa (tổ chức giả mạo, ví crypto, hash file, kênh Telegram...)"},
+                    "scam_category": {"type": "string", "description": "Danh mục thủ đoạn (deepfake, malware_app, crypto_scam, social_engineering, gov_impersonation...)"},
+                    "target_type": {"type": "string", "description": "Loại đối tượng (file, social, crypto, audio, phone, domain...)"},
+                    "has_evidence": {"type": "boolean", "description": "Chỉ lấy báo cáo có ảnh bằng chứng/OCR"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "scan_file_threat",
+            "description": "Tra cứu tệp tin/APK độc hại: lịch sử quét Sandbox mã độc và báo cáo file theo tên file, đuôi mở rộng, mã băm SHA256/MD5 hoặc chữ ký ClamAV.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Tên file, đuôi mở rộng (.apk), hash SHA256/MD5 hoặc chữ ký ClamAV"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "web_search",
             "description": "Tìm kiếm trên Internet qua đa nguồn về các thủ đoạn lừa đảo mới, tin tức cảnh báo an ninh mạng.",
             "parameters": {
@@ -890,6 +920,9 @@ def sanitize_user_facing_tool_text(text: str, preserve_edges: bool = False) -> s
         'scan_phone': 'kiểm tra số điện thoại',
         'scan_url': 'kiểm tra website / URL',
         'scan_bank_account': 'kiểm tra tài khoản ngân hàng',
+        'search_custom_reports': 'tra cứu báo cáo nội bộ tuỳ biến',
+        'scan_file_threat': 'tra cứu tệp tin độc hại',
+        'query_threat_database': 'tra cứu cơ sở dữ liệu cảnh báo',
         'web_search': 'tra cứu nguồn công khai',
         'web_fetch': 'đọc nội dung trang web',
     }
@@ -1795,9 +1828,26 @@ def _assistant_stealth_browse(url: str, inspect_security: bool = True) -> Dict[s
     and extract live page structure, rendered text, final redirects, and security indicators.
     """
     from api.utils.puppeteer_host_client import fetch_with_puppeteer_host
-    full_url = url.strip()
+    full_url = (url or '').strip()[:2000]
     if not re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', full_url):
         full_url = f"https://{full_url}"
+
+    try:
+        from api.utils.security import is_safe_url
+        if not is_safe_url(full_url):
+            return {
+                'engine': 'stealth_headless_chromium',
+                'url': full_url,
+                'ok': False,
+                'error': 'URL nội bộ/không an toàn bị chặn (SSRF protection).',
+            }
+    except Exception:
+        return {
+            'engine': 'stealth_headless_chromium',
+            'url': full_url,
+            'ok': False,
+            'error': 'URL validation failed (SSRF protection).',
+        }
 
     pup_res = fetch_with_puppeteer_host(full_url, timeout_ms=20000)
     if not pup_res.get('ok'):
@@ -1840,6 +1890,16 @@ def _assistant_stealth_browse(url: str, inspect_security: bool = True) -> Dict[s
     }
 
 
+def _sanitize_tool_query(value: Any, limit: int = 500) -> str:
+    """Sanitize AI tool input: strip prompt-injection markers, control chars, cap length."""
+    text = str(value or '')[:limit]
+    # Neutralize common prompt-injection / role-hijack patterns (data != instructions).
+    text = re.sub(r'(?i)\b(ignore|bypass|override)\s+(previous|prior|all|system)\s+(instructions?|prompts?|rules?)', '[filtered]', text)
+    text = re.sub(r'(?i)\byou\s+are\s+now\b', '[filtered]', text)
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    return text.strip()
+
+
 def _assistant_query_threat_database(query: str, target_type: str = "all") -> Dict[str, Any]:
     """
     Search Sentinel / ShieldCall VN threat database across:
@@ -1854,7 +1914,8 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
     from django.db.models import Q
     import hashlib
 
-    cleaned = str(query).strip()
+    cleaned = _sanitize_tool_query(query)
+    target_type = _sanitize_tool_query(target_type, limit=30).lower() or 'all'
     result = {
         'query': cleaned,
         'matched_reports_count': 0,
@@ -1880,6 +1941,10 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
             'email': 'email',
             'qr': 'qr',
             'message': 'message',
+            'file': 'file',
+            'audio': 'audio',
+            'social': 'social',
+            'crypto': 'crypto',
         }
         report_filter = (
             Q(target_value__icontains=cleaned) |
@@ -1887,15 +1952,26 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
             Q(scammer_name__icontains=cleaned) |
             Q(scammer_phone__icontains=cleaned) |
             Q(scammer_bank_account__icontains=cleaned) |
-            Q(scammer_bank_name__icontains=cleaned)
+            Q(scammer_bank_name__icontains=cleaned) |
+            Q(scammer_social__icontains=cleaned) |
+            Q(ocr_text__icontains=cleaned) |
+            Q(ai_analysis__icontains=cleaned)
         )
+        # custom_fields is JSON — match textually on serialized value for flexibility
+        # across backends (SQLite/Postgres) without backend-specific lookups.
+        if cleaned:
+            report_filter |= Q(custom_fields__icontains=cleaned)
         if target_type and target_type != 'all':
             resolved_type = type_map.get(target_type.lower(), target_type)
             report_filter &= Q(target_type=resolved_type)
 
         matched = Report.objects.filter(report_filter).order_by('-created_at')[:10]
+        approved_count = Report.objects.filter(report_filter, status='approved').count()
         result['matched_reports_count'] = matched.count()
+        result['approved_reports_count'] = approved_count
+        result['confidence'] = 'high' if approved_count >= 3 else ('medium' if approved_count >= 1 else 'low')
         for r in matched:
+            custom = r.custom_fields if isinstance(getattr(r, 'custom_fields', None), dict) else {}
             result['reports'].append({
                 'id': r.id,
                 'target_type': r.target_type,
@@ -1906,7 +1982,15 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
                 'scammer_name': r.scammer_name,
                 'scammer_phone': r.scammer_phone,
                 'scammer_bank': f"{r.scammer_bank_name} {r.scammer_bank_account}".strip(),
+                'scammer_social': getattr(r, 'scammer_social', ''),
+                'custom_fields': custom,
+                'impersonated_org': (custom.get('impersonated_org') or custom.get('org') or '') if custom else '',
+                'loss_amount_vnd': (custom.get('loss_amount_vnd') or custom.get('loss') or '') if custom else '',
+                'crypto_wallet': (custom.get('crypto_wallet') or custom.get('wallet') or '') if custom else '',
+                'file_hash': (custom.get('file_hash') or custom.get('sha256') or '') if custom else '',
                 'description': r.description[:600] if r.description else '',
+                'ocr_excerpt': (r.ocr_text or '')[:400],
+                'ai_excerpt': str(r.ai_analysis or '')[:400],
                 'created_at': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
             })
 
@@ -1970,6 +2054,107 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
         logger.warning(f"_assistant_query_threat_database error: {e}")
 
     return result
+
+
+def _assistant_search_custom_reports(query: str = "", scam_category: str = "",
+                                     target_type: str = "", has_evidence: bool = False) -> Dict[str, Any]:
+    """Tìm kiếm báo cáo tuỳ biến: thủ đoạn độc lạ, MXH/deepfake/crypto, biến thể mới.
+
+    Args:
+        query: Từ khóa (tổ chức giả mạo, ví crypto, hash file, kênh Telegram...).
+        scam_category: Danh mục ScamType (deepfake, malware_app, crypto_scam, ...).
+        target_type: Loại đối tượng (file, social, crypto, audio, ...).
+        has_evidence: True để chỉ lấy báo cáo có ảnh bằng chứng / OCR.
+    """
+    from api.core.models import Report
+    from django.db.models import Q
+    q = _sanitize_tool_query(query)
+    cat = _sanitize_tool_query(scam_category, limit=40).lower()
+    ttype = _sanitize_tool_query(target_type, limit=20).lower()
+    flt = Q()
+    if q:
+        flt &= (Q(target_value__icontains=q) | Q(description__icontains=q)
+                | Q(scammer_name__icontains=q) | Q(scammer_social__icontains=q)
+                | Q(scammer_phone__icontains=q) | Q(scammer_bank_account__icontains=q)
+                | Q(ocr_text__icontains=q) | Q(ai_analysis__icontains=q)
+                | Q(custom_fields__icontains=q))
+    if cat and cat not in ('all', 'any'):
+        flt &= Q(scam_type=cat)
+    if ttype and ttype not in ('all', 'any'):
+        flt &= Q(target_type=ttype)
+    if has_evidence:
+        flt &= (Q(ocr_text__isnull=False) & ~Q(ocr_text='')) | ~Q(evidence_file='')
+    qs = Report.objects.filter(flt).order_by('-created_at')[:10] if flt else \
+        Report.objects.order_by('-created_at')[:10]
+    out = {'query': q, 'scam_category': cat, 'target_type': ttype,
+           'matched_count': qs.count(), 'reports': []}
+    for r in qs:
+        custom = r.custom_fields if isinstance(getattr(r, 'custom_fields', None), dict) else {}
+        out['reports'].append({
+            'id': r.id, 'target_type': r.target_type, 'target_value': r.target_value,
+            'scam_type': r.scam_type, 'severity': r.severity, 'status': r.status,
+            'scammer_social': getattr(r, 'scammer_social', ''),
+            'custom_fields': custom,
+            'description': (r.description or '')[:600],
+            'has_ocr': bool(r.ocr_text), 'has_evidence_file': bool(r.evidence_file),
+            'created_at': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
+        })
+    return out
+
+
+def _assistant_scan_file_threat(query: str = "") -> Dict[str, Any]:
+    """Tra cứu tệp tin/APK độc hại: lịch sử quét Sandbox + báo cáo file theo tên,
+    phần mở rộng, mã băm SHA256/MD5 hoặc chữ ký ClamAV.
+
+    Args:
+        query: Tên file, đuôi mở rộng (.apk), hash SHA256/MD5, hoặc signature.
+    """
+    from api.core.models import Report, ScanEvent
+    from django.db.models import Q
+    q = _sanitize_tool_query(query)
+    out = {'query': q, 'file_reports': [], 'sandbox_scans': []}
+    if not q:
+        return out
+    try:
+        reps = Report.objects.filter(
+            Q(target_type='file') &
+            (Q(target_value__icontains=q) | Q(description__icontains=q)
+             | Q(ocr_text__icontains=q) | Q(ai_analysis__icontains=q)
+             | Q(custom_fields__icontains=q))
+        ).order_by('-created_at')[:10]
+        for r in reps:
+            custom = r.custom_fields if isinstance(getattr(r, 'custom_fields', None), dict) else {}
+            out['file_reports'].append({
+                'id': r.id, 'target_value': r.target_value, 'scam_type': r.scam_type,
+                'severity': r.severity, 'status': r.status,
+                'file_hash': (custom.get('file_hash') or custom.get('sha256') or ''),
+                'clamav_signature': (custom.get('clamav') or custom.get('signature') or ''),
+                'description': (r.description or '')[:600],
+                'created_at': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
+            })
+    except Exception as e:
+        logger.warning(f"_assistant_scan_file_threat report query error: {e}")
+    try:
+        scans = ScanEvent.objects.filter(
+            scan_type='file',
+            raw_input__icontains=q,
+        ).order_by('-created_at')[:10]
+        # Also match normalized input / result payload textually for hash lookups.
+        if not scans.exists():
+            scans = ScanEvent.objects.filter(
+                Q(scan_type='file') &
+                (Q(normalized_input__icontains=q) | Q(result_json__icontains=q))
+            ).order_by('-created_at')[:10]
+        for s in scans:
+            out['sandbox_scans'].append({
+                'id': s.id, 'risk_level': s.risk_level, 'risk_score': s.risk_score,
+                'status': s.status,
+                'date': s.created_at.strftime('%d/%m/%Y %H:%M') if s.created_at else '',
+            })
+    except Exception as e:
+        logger.warning(f"_assistant_scan_file_threat scan query error: {e}")
+    out['matched_count'] = len(out['file_reports']) + len(out['sandbox_scans'])
+    return out
 
 
 def _assistant_lookup_company(query: str) -> Dict[str, Any]:
@@ -2052,6 +2237,8 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
         'scan_bank_account': _assistant_scan_bank_account,
         'stealth_browse': _assistant_stealth_browse,
         'query_threat_database': _assistant_query_threat_database,
+        'search_custom_reports': _assistant_search_custom_reports,
+        'scan_file_threat': _assistant_scan_file_threat,
         'lookup_company': _assistant_lookup_company,
         'get_latest_threat_trends': _assistant_get_latest_threat_trends,
     }

@@ -193,14 +193,18 @@ class ReportCreateView(APIView):
 
 
 class ReportDetailView(generics.RetrieveAPIView):
-    """GET /api/report/<pk>/ — Get detail of a report"""
+    """GET /api/report/<pk>/ — Get detail of a report (public for approved)."""
     queryset = Report.objects.all()
     serializer_class = ReportDetailSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
         instance = self.get_object()
-        if not request.user.is_staff and instance.reporter_id != request.user.id:
+        if instance.status == 'approved':
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data)
+        if not (request.user.is_authenticated and (
+                request.user.is_staff or instance.reporter_id == request.user.id)):
             return Response({'error': 'Không có quyền truy cập báo cáo này.'}, status=403)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)

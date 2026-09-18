@@ -367,7 +367,7 @@ def manage_reports(request):
         "reports": reports_page,
         "page_obj": reports_page,
         "query_no_page": query_no_page,
-        "reports_json": json.dumps(reports_list, ensure_ascii=False, default=str),
+        "reports_json": reports_list,
         "stats": stats,
         "current_sort": sort_by,
         "status_filter": status_filter,

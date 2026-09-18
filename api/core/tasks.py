@@ -1055,12 +1055,25 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         
         # 1. Fetch Content - TRY PUPPETEER FIRST then requests fallback
         send_progress(f"Đang thu thập nội dung từ {domain}...", step="scraping")
-        
+
         # Build full URL if scheme not provided
         if '://' not in url:
             target_url = f"https://{url}"
         else:
             target_url = url
+
+        # SSRF guard BEFORE any outbound fetch (puppeteer or requests).
+        from api.utils.security import is_safe_url
+        if not is_safe_url(target_url):
+            send_progress("⛔ URL nội bộ/unsafe bị chặn vì lý do an toàn.", step="scraping_blocked")
+            logger.warning(f"[WebScan] Event {scan_event_id}: Blocked unsafe URL (SSRF guard): {target_url}")
+            scan_event.status = ScanStatus.FAILED
+            scan_event.result_json = {
+                'error': 'URL nội bộ/không an toàn bị chặn (SSRF protection).',
+                'domain': domain,
+            }
+            scan_event.save(update_fields=['status', 'result_json'])
+            return {'error': 'blocked_unsafe_url', 'scan_id': scan_event_id}
 
         fetch_success = False
         page_title = ""

@@ -3,6 +3,7 @@ ShieldCall VN – Core Serializers
 DRF serializers for all MVP models + auth
 """
 import re
+import json
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.utils.text import slugify
@@ -122,6 +123,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return ''
         return normalized
 
+    def validate_display_name(self, value):
+        # Strip HTML — display_name is interpolated into mention dropdowns/notifications.
+        from api.utils.sanitize import sanitize_plain_text
+        return sanitize_plain_text(value, limit=100)
+
 class UserSerializer(serializers.ModelSerializer):
     display_name = serializers.CharField(source='profile.display_name', read_only=True)
     avatar = serializers.ImageField(source='profile.avatar', read_only=True)
@@ -178,12 +184,31 @@ class BankAccountSerializer(serializers.ModelSerializer):
 # ─── Report Serializers ─────────────────────────────────────────────────────
 
 class ReportCreateSerializer(serializers.ModelSerializer):
+    custom_fields = serializers.JSONField(required=False, default=dict)
+    scammer_social = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
     class Meta:
         model = Report
         fields = ['target_type', 'target_value', 'scam_type', 'severity',
-                  'description', 'evidence_file', 'scammer_phone', 
+                  'description', 'evidence_file', 'scammer_phone',
                   'scammer_bank_account', 'scammer_bank_name', 'scammer_name',
+                  'scammer_social', 'custom_fields',
                   'ocr_text', 'ai_analysis']
+
+    def to_internal_value(self, data):
+        # FormData sends custom_fields as JSON string — parse it first.
+        if hasattr(data, 'copy'):
+            data = data.copy()
+        elif isinstance(data, dict):
+            data = dict(data)
+        raw_custom = data.get('custom_fields') if isinstance(data, dict) else None
+        if isinstance(raw_custom, str) and raw_custom.strip():
+            try:
+                import json as _json
+                data['custom_fields'] = _json.loads(raw_custom)
+            except Exception:
+                pass
+        return super().to_internal_value(data)
 
     def validate(self, attrs):
         target_type = attrs.get('target_type')
@@ -222,6 +247,37 @@ class ReportCreateSerializer(serializers.ModelSerializer):
                     'target_value': 'Số tài khoản ngân hàng không hợp lệ (ít nhất 4 ký tự số).'
                 })
             attrs['target_value'] = norm_acc
+        elif target_type == 'file':
+            # Chuẩn hóa tên file / hash SHA256/MD5 — giữ nguyên, chỉ trim + giới hạn.
+            cleaned = re.sub(r'\s+', ' ', target_value).strip()[:500]
+            if len(cleaned) < 2:
+                raise serializers.ValidationError({
+                    'target_value': 'Tên file hoặc mã băm không hợp lệ.'
+                })
+            attrs['target_value'] = cleaned
+        elif target_type == 'social':
+            # Chuẩn hóa username / URL MXH: bỏ khoảng trắng thừa, giữ link.
+            cleaned = re.sub(r'\s+', ' ', target_value).strip()[:500]
+            if len(cleaned) < 2:
+                raise serializers.ValidationError({
+                    'target_value': 'Username / link mạng xã hội không hợp lệ.'
+                })
+            attrs['target_value'] = cleaned
+        elif target_type == 'crypto':
+            # Chuẩn hóa địa chỉ ví: 0x..., bc1..., base58... — trim, bỏ khoảng trắng.
+            cleaned = re.sub(r'\s+', '', target_value).strip()[:200]
+            if len(cleaned) < 10:
+                raise serializers.ValidationError({
+                    'target_value': 'Địa chỉ ví tiền mã hóa không hợp lệ.'
+                })
+            attrs['target_value'] = cleaned
+        elif target_type in ('audio', 'qr', 'message'):
+            cleaned = target_value.strip()[:2000]
+            if not cleaned:
+                raise serializers.ValidationError({
+                    'target_value': 'Thông tin đối tượng không được để trống.'
+                })
+            attrs['target_value'] = cleaned
 
         # Normalize auxiliary scammer details if provided
         scammer_phone = (attrs.get('scammer_phone') or '').strip()
@@ -241,6 +297,23 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         if attrs.get('scammer_bank_name'):
             attrs['scammer_bank_name'] = attrs['scammer_bank_name'].strip()
 
+        if attrs.get('scammer_social'):
+            attrs['scammer_social'] = re.sub(r'\s+', ' ', attrs['scammer_social']).strip()[:255]
+
+        custom = attrs.get('custom_fields')
+        if custom is None:
+            attrs['custom_fields'] = {}
+        elif not isinstance(custom, dict):
+            raise serializers.ValidationError({
+                'custom_fields': 'custom_fields phải là object JSON (VD: {"loss_amount_vnd": 5000000}).'
+            })
+        else:
+            # Giới hạn kích thước để chống abuse.
+            if len(json.dumps(custom, ensure_ascii=False)) > 20000:
+                raise serializers.ValidationError({
+                    'custom_fields': 'custom_fields quá lớn (tối đa ~20KB).'
+                })
+
         return attrs
 
     def create(self, validated_data):
@@ -257,6 +330,7 @@ class ReportListSerializer(serializers.ModelSerializer):
         model = Report
         fields = ['id', 'target_type', 'target_value', 'scam_type', 'severity',
                   'description', 'status', 'reporter_email', 'moderation_note',
+                  'scammer_social', 'custom_fields',
                   'ocr_text', 'ai_analysis', 'created_at']
 
     @extend_schema_field(serializers.CharField())
@@ -294,6 +368,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'target_type', 'target_value', 'scam_type', 'scam_type_display', 'severity',
                   'description', 'status', 'created_at', 'reporter_email',
                   'scammer_name', 'scammer_phone', 'scammer_bank_account', 'scammer_bank_name',
+                  'scammer_social', 'custom_fields',
                   'scammer_info',
                   'evidence_file', 'evidence_url', 'evidence_images_data', 'ocr_text', 'ai_analysis', 'moderation_note']
 
@@ -313,8 +388,10 @@ class ReportDetailSerializer(serializers.ModelSerializer):
         return {
             "name": obj.scammer_name,
             "phone": obj.scammer_phone,
-            "bank_account": obj.scammer_bank_account, 
-            "bank_name": obj.scammer_bank_name
+            "bank_account": obj.scammer_bank_account,
+            "bank_name": obj.scammer_bank_name,
+            "social": getattr(obj, 'scammer_social', ''),
+            "custom_fields": getattr(obj, 'custom_fields', {}) or {},
         }
 
     @extend_schema_field(serializers.URLField(allow_null=True))

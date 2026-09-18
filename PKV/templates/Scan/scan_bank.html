@@ -25,7 +25,7 @@
     <div class="liquid-card p-6 sm:p-8">
         <form @submit.prevent="
             if(!bank.trim()||!account.trim()){showToast('Vui lòng điền đầy đủ', 'warning');return}
-            const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+            const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value || '';
             if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
             loading=true;result=null;aiText='';aiLoading=false;
             fetch('/api/v1/scan/account/', {

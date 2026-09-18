@@ -344,6 +344,8 @@ class ScanLookupView(APIView):
         'audio': ['audio'],
         'file': ['file'],
         'qr': ['qr'],
+        'social': ['message'],
+        'crypto': ['message'],
     }
 
     def get(self, request):
@@ -400,7 +402,10 @@ class ScanLookupView(APIView):
         if q:
             report_qs = report_qs.filter(
                 Q(target_value__icontains=q) | Q(description__icontains=q) |
-                Q(scammer_phone__icontains=q) | Q(scammer_bank_account__icontains=q)
+                Q(scammer_phone__icontains=q) | Q(scammer_bank_account__icontains=q) |
+                Q(scammer_bank_name__icontains=q) | Q(scammer_name__icontains=q) |
+                Q(scammer_social__icontains=q) | Q(ocr_text__icontains=q) |
+                Q(ai_analysis__icontains=q) | Q(custom_fields__icontains=q)
             )
         if type_filter != 'all':
             mapped = type_filter
@@ -419,6 +424,8 @@ class ScanLookupView(APIView):
             'phone': 'Số điện thoại', 'domain': 'Website/URL',
             'account': 'Tài khoản ngân hàng', 'message': 'Tin nhắn',
             'qr': 'QR Code', 'email': 'Email',
+            'file': 'Tệp tin / APK độc hại', 'audio': 'Audio / Deepfake',
+            'social': 'Mạng xã hội', 'crypto': 'Ví Crypto / Web3',
         }
         type_to_page = {
             'phone': '/scan/phone/',
@@ -427,6 +434,10 @@ class ScanLookupView(APIView):
             'email': '/scan/email/',
             'message': '/scan/message/',
             'qr': '/scan/qr/',
+            'file': '/scan/file/',
+            'audio': '/scan/audio/',
+            'social': '/scan/lookup/',
+            'crypto': '/scan/lookup/',
         }
 
         for report in report_qs.order_by('-created_at')[:200]:

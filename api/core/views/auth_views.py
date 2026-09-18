@@ -491,10 +491,10 @@ class PasswordChangeView(APIView):
         new_password = request.data.get('new_password')
         otp_token = request.data.get('token')
 
-        if not user.check_password(old_password):
+        if not old_password or not user.check_password(old_password):
             return Response({'error': 'Mật khẩu cũ không chính xác.'}, status=400)
 
-        if len(new_password) < 8:
+        if not isinstance(new_password, str) or len(new_password) < 8:
             return Response({'error': 'Mật khẩu mới phải có ít nhất 8 ký tự.'}, status=400)
 
         from django_otp.plugins.otp_email.models import EmailDevice

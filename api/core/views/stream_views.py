@@ -39,6 +39,20 @@ class ScanAnalyzeSSEView(APIView):
             from api.core.models import ScanEvent
             try:
                 ev = ScanEvent.objects.get(id=scan_id)
+                active_scans = request.session.get('active_scan_ids', []) if hasattr(request, 'session') else []
+                try:
+                    sid = int(scan_id)
+                except (TypeError, ValueError):
+                    sid = scan_id
+                is_in_session = sid in (active_scans or []) or str(sid) in [str(x) for x in (active_scans or [])]
+                can_view = bool(
+                    getattr(request.user, 'is_staff', False)
+                    or (getattr(request.user, 'is_authenticated', False) and ev.user_id == request.user.id)
+                    or ev.is_public_referable
+                    or is_in_session
+                )
+                if not can_view:
+                    return Response({'error': 'Bạn không có quyền truy cập kết quả quét này.'}, status=403)
                 scan_type = scan_type or ev.scan_type
                 scan_data = scan_data or ev.result_json or {}
                 raw_input = raw_input or ev.raw_input or ''

@@ -323,10 +323,11 @@
     {% endif %}
 
     <!-- Report Data JSON (serialized in view) -->
+    {{ reports_json|json_script:"reports-data-json" }}
     <script>
         let REPORTS_DATA = {};
         try {
-            const arr = {{ reports_json|safe }};
+            const arr = JSON.parse(document.getElementById('reports-data-json').textContent || '[]');
             arr.forEach(r => REPORTS_DATA[r.id] = r);
         } catch(e) { console.error('Parse reports data error:', e); }
 

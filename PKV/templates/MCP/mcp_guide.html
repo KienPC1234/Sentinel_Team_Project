@@ -1282,14 +1282,19 @@
 </div>
 
 <!-- Alpine.js Application Logic -->
+{{ user_api_keys_json|json_script:"mcp-user-keys-json" }}
 <script>
 function mcpGuideApp() {
+    let initialKeys = [];
+    try {
+        initialKeys = JSON.parse(document.getElementById('mcp-user-keys-json').textContent || '[]');
+    } catch (e) { initialKeys = []; }
     return {
         activePlatform: 'claude_chat',
-        userKeys: {{ user_api_keys_json|default:"[]"|safe }},
+        userKeys: initialKeys,
         selectedKey: '',
-        siteUrl: '{{ site_url }}',
-        apiUrl: '{{ api_url }}',
+        siteUrl: '{{ site_url|escapejs }}',
+        apiUrl: '{{ api_url|escapejs }}',
         pythonPath: 'python',
         scriptPath: 'shieldcall_mcp.py',
 

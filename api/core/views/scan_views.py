@@ -71,8 +71,8 @@ def _scan_to_target_type(scan_type: str) -> str:
         'message': 'message',
         'qr': 'qr',
         'email': 'email',
-        'file': 'message',
-        'audio': 'message',
+        'file': 'file',
+        'audio': 'audio',
     }
     return mapping.get(scan_type, 'message')
 
@@ -1029,9 +1029,21 @@ def _analyze_network(url: str, domain: str) -> dict:
         'cert_details': {}
     }
     
-    # 0. Basic DNS resolution (Sync)
+    # 0. Basic DNS resolution (Sync) + private-IP guard (SSRF protection)
     try:
-        network_info['ip_address'] = socket.gethostbyname(domain)
+        resolved_ip = socket.gethostbyname(domain)
+        try:
+            import ipaddress as _ipaddress
+            _ip_obj = _ipaddress.ip_address(resolved_ip)
+            if (_ip_obj.is_private or _ip_obj.is_loopback or _ip_obj.is_link_local
+                    or _ip_obj.is_multicast or _ip_obj.is_reserved or _ip_obj.is_unspecified):
+                network_info['ip_address'] = resolved_ip
+                network_info['error'] = 'Địa chỉ IP nội bộ bị chặn vì lý do an toàn.'
+                return network_info
+        except ValueError:
+            network_info['error'] = 'DNS resolution failed'
+            return network_info
+        network_info['ip_address'] = resolved_ip
     except socket.gaierror:
         network_info['error'] = 'DNS resolution failed'
         return network_info
@@ -1633,6 +1645,10 @@ class ScanImageView(APIView):
     """
     permission_classes = [AllowAny]
 
+    MAX_IMAGES = 5
+    MAX_IMAGE_SIZE = 8 * 1024 * 1024  # 8 MB per image
+    ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'}
+
     def post(self, request):
         serializer = ScanImageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1645,6 +1661,17 @@ class ScanImageView(APIView):
         if not images:
             return Response({'error': 'Vui lòng cung cấp ít nhất một hình ảnh.'},
                             status=status.HTTP_400_BAD_REQUEST)
+
+        if len(images) > self.MAX_IMAGES:
+            return Response({'error': f'Tối đa {self.MAX_IMAGES} ảnh mỗi lượt quét.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        for img in images:
+            if getattr(img, 'content_type', '') not in self.ALLOWED_IMAGE_TYPES:
+                return Response({'error': 'Chỉ chấp nhận ảnh JPG/PNG/WEBP/GIF/BMP.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if getattr(img, 'size', 0) > self.MAX_IMAGE_SIZE:
+                return Response({'error': 'Mỗi ảnh tối đa 8MB.'},
+                                status=status.HTTP_400_BAD_REQUEST)
 
         # Turnstile Verification
         ts_err = _verify_turnstile_or_api_key(request)
@@ -1688,21 +1715,21 @@ class ScanImageView(APIView):
 class ScanFileView(APIView):
     """
     POST /api/scan/file — Zero-Trust Docker Sandbox file analysis.
-    Accepts any file up to 500 MB, stores temporarily, offloads to Celery.
+    Accepts any file up to 100 MB, stores temporarily, offloads to Celery.
     """
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
 
-    MAX_SIZE = 500 * 1024 * 1024  # 500 MB
+    MAX_SIZE = 100 * 1024 * 1024  # 100 MB
 
     def post(self, request):
         uploaded_file = request.FILES.get('file')
         if not uploaded_file:
             return Response({'error': 'Vui lòng cung cấp tệp tin.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check maximum file size (500MB)
+        # Check maximum file size (100MB)
         if uploaded_file.size > self.MAX_SIZE:
-            return Response({'error': 'Tệp quá lớn. Dung lượng tối đa là 500 MB.'}, status=400)
+            return Response({'error': 'Tệp quá lớn. Dung lượng tối đa là 100 MB.'}, status=400)
 
         # Turnstile Verification
         ts_err = _verify_turnstile_or_api_key(request)
@@ -1850,19 +1877,18 @@ class ScanStatusView(APIView):
             )
 
             # Allow access if:
-            # 1. Anonymous scan (no user attached)
-            # 2. Staff / Admin
-            # 3. Authenticated owner of the scan
-            # 4. Creator within active session
-            # 5. Publicly referable
-            # 6. Actively running scan (PENDING / PROCESSING)
+            # 1. Staff / Admin
+            # 2. Authenticated owner of the scan
+            # 3. Creator within active session (active_scan_ids)
+            # 4. Publicly referable (owner opted-in via is_public_referable)
+            # NOTE: anonymous scans (user_id None) are NOT publicly visible by
+            # default — fixes IDOR/data-leakage. Actively running scans are
+            # visible only to their session owner, staff, or referable scans.
             can_view = bool(
-                event.user_id is None
-                or request.user.is_staff
+                request.user.is_staff
                 or (request.user.is_authenticated and event.user_id == request.user.id)
                 or event.is_public_referable
                 or is_in_session
-                or (event.status in (ScanStatus.PENDING, ScanStatus.PROCESSING))
             )
             if not can_view:
                 return Response({'error': 'Bạn không có quyền truy cập kết quả quét này.'}, status=status.HTTP_403_FORBIDDEN)

@@ -16,8 +16,35 @@ def fetch_with_puppeteer_host(url: str, timeout_ms: int = 20000) -> Dict[str, An
     """
     Fetch rendered page content from a local Node Puppeteer host.
 
+    SSRF-hardened: validates URL via is_safe_url() before dispatching
+    to the headless renderer. Blocks internal IPs (127.0.0.1,
+    169.254.169.254, 10.x, 192.168.x, Redis 6379, MySQL 3306, sandbox 5005).
+
     Returns a normalized payload to keep Celery tasks resilient.
     """
+    try:
+        from api.utils.security import is_safe_url
+        if not is_safe_url(url):
+            return {
+                'ok': False,
+                'title': '',
+                'content': '',
+                'captcha_detected': False,
+                'status_code': 400,
+                'final_url': url,
+                'error': 'Invalid or blocked internal URL',
+            }
+    except Exception:
+        # If validator itself fails, fail closed.
+        return {
+            'ok': False,
+            'title': '',
+            'content': '',
+            'captcha_detected': False,
+            'status_code': 400,
+            'final_url': url,
+            'error': 'Invalid or blocked internal URL',
+        }
     endpoint = (
         getattr(settings, 'PUPPETEER_HOST_URL', None)
         if getattr(settings, 'configured', False)

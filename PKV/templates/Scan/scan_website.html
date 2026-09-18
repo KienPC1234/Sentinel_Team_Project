@@ -41,7 +41,7 @@
         this.progress = [];
         this.currentStep = 'init';
 
-        const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+        const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value || '';
         if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');this.loading=false;return}
         if(window.turnstile){try{window.turnstile.reset()}catch(e){}}
         
@@ -261,7 +261,7 @@
             <div class="flex flex-col sm:flex-row gap-4">
                 <input type="text" class="liquid-input flex-1 py-4 px-6 text-lg font-bold" 
                     placeholder="VD: vietcombank-ebanking.com, bit.ly/..." x-model="url" required>
-                <button @click="handleScan()" class="liquid-btn bg-cyan-500 text-black px-10 py-4 font-black hover:bg-cyan-400" :disabled="loading">
+                <button type="button" @click="handleScan()" class="liquid-btn bg-cyan-500 text-black px-10 py-4 font-black hover:bg-cyan-400" :disabled="loading">
                     <span x-show="!loading"><i class="bi bi-search mr-2"></i> SCAN</span>
                     <span x-show="loading" class="spinner w-5 h-5 border-black"></span>
                 </button>

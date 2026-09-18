@@ -24,8 +24,16 @@ class NotificationListView(APIView):
     @extend_schema(responses={200: serializers.DictField()}) # Using DictField as a placeholder for now
     def get(self, request):
         from api.core.models import Notification
-        page = int(request.query_params.get('page', 1))
-        per_page = int(request.query_params.get('per_page', 20))
+        try:
+            page = int(request.query_params.get('page', 1))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            per_page = int(request.query_params.get('per_page', 20))
+        except (TypeError, ValueError):
+            per_page = 20
+        page = max(1, page)
+        per_page = min(100, max(1, per_page))
         
         qs = Notification.objects.filter(user=request.user).order_by('-created_at')
         total = qs.count()

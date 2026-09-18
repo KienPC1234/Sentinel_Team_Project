@@ -11,7 +11,7 @@
     result:null, 
     error:'', 
     aiText:''
-}" x-init="if(phone) $nextTick(() => { document.querySelector('form').dispatchEvent(new Event('submit')) })">
+}" x-init="if(phone) $nextTick(() => { const f = $el.querySelector('form'); if(f && typeof f.requestSubmit === 'function') f.requestSubmit(); })">
     <!-- Page Header -->
     <div class="text-center space-y-4" data-aos="fade-up">
         <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-cyan-500/10 text-cyan-400 mb-2 border border-cyan-500/20 shadow-lg shadow-cyan-500/10" data-aos="zoom-in" data-aos-delay="100">
@@ -34,7 +34,7 @@
             /* Auto-convert VN local format: 0xxxxxxxxx → +84xxxxxxxxx */
             if(/^0\d{9}$/.test(phoneNormalized)){phoneNormalized = '+84' + phoneNormalized.substring(1);}
             if(!/^(\+\d{8,15}|0\d{9})$/.test(phoneNormalized)){showToast('Số điện thoại không hợp lệ. VD: 0978589220 hoặc +84978589220', 'warning');return}
-            const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+            const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value || '';
             if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
             loading=true;result=null;aiText='';
             fetch('/api/v1/scan/phone/', {

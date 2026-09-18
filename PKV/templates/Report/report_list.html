@@ -87,6 +87,42 @@
                 <p class="text-[10px] font-bold text-white/40 uppercase tracking-widest">Tài khoản ngân hàng</p>
             </div>
         </div>
+        <div class="liquid-card p-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                <i class="bi bi-file-earmark-binary text-xl"></i>
+            </div>
+            <div>
+                <p class="text-xl font-black text-red-400">{{ stats.file_reports|default:0 }}</p>
+                <p class="text-[10px] font-bold text-white/40 uppercase tracking-widest">File / APK độc hại</p>
+            </div>
+        </div>
+        <div class="liquid-card p-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shrink-0">
+                <i class="bi bi-telegram text-xl"></i>
+            </div>
+            <div>
+                <p class="text-xl font-black text-violet-400">{{ stats.social_reports|default:0 }}</p>
+                <p class="text-[10px] font-bold text-white/40 uppercase tracking-widest">MXH / Telegram</p>
+            </div>
+        </div>
+        <div class="liquid-card p-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <i class="bi bi-coin text-xl"></i>
+            </div>
+            <div>
+                <p class="text-xl font-black text-amber-400">{{ stats.crypto_reports|default:0 }}</p>
+                <p class="text-[10px] font-bold text-white/40 uppercase tracking-widest">Ví Crypto</p>
+            </div>
+        </div>
+        <div class="liquid-card p-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/20 flex items-center justify-center text-fuchsia-400 shrink-0">
+                <i class="bi bi-mic text-xl"></i>
+            </div>
+            <div>
+                <p class="text-xl font-black text-fuchsia-400">{{ stats.audio_reports|default:0 }}</p>
+                <p class="text-[10px] font-bold text-white/40 uppercase tracking-widest">Audio / Deepfake</p>
+            </div>
+        </div>
     </div>
 
     <!-- Search & Filter Controls -->
@@ -95,7 +131,7 @@
             <!-- Search input -->
             <div class="relative">
                 <i class="bi bi-search absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-lg pointer-events-none z-10"></i>
-                <input type="text" name="q" value="{{ q }}" placeholder="Nhập số điện thoại, link website, số tài khoản, tên scammer..."
+                <input type="text" name="q" value="{{ q }}" placeholder="Nhập SĐT, link, STK, ví crypto, hash file, Telegram/Zalo, tên scammer..."
                        class="w-full pl-12 pr-28 py-3.5 bg-black/40 border border-white/10 rounded-xl text-white placeholder-white/30 text-sm focus:outline-none focus:border-cyan-400/50 transition-colors font-medium">
                 <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-cyan-400 text-black font-black text-xs uppercase tracking-widest rounded-lg hover:bg-cyan-300 transition-colors">
                     Tìm kiếm
@@ -129,6 +165,26 @@
                    class="filter-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 {% if selected_type == 'message' %}active{% else %}text-white/50 hover:text-white bg-white/5{% endif %}">
                     <i class="bi bi-chat-left-dots mr-1"></i> Tin nhắn
                 </a>
+                <a href="?{% if q %}q={{ q }}&{% endif %}type=file{% if selected_scam_type != 'all' %}&scam_type={{ selected_scam_type }}{% endif %}{% if selected_severity != 'all' %}&severity={{ selected_severity }}{% endif %}"
+                   class="filter-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 {% if selected_type == 'file' %}active{% else %}text-white/50 hover:text-white bg-white/5{% endif %}">
+                    <i class="bi bi-file-earmark-binary mr-1"></i> Tệp tin / APK
+                </a>
+                <a href="?{% if q %}q={{ q }}&{% endif %}type=social{% if selected_scam_type != 'all' %}&scam_type={{ selected_scam_type }}{% endif %}{% if selected_severity != 'all' %}&severity={{ selected_severity }}{% endif %}"
+                   class="filter-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 {% if selected_type == 'social' %}active{% else %}text-white/50 hover:text-white bg-white/5{% endif %}">
+                    <i class="bi bi-telegram mr-1"></i> MXH / Telegram
+                </a>
+                <a href="?{% if q %}q={{ q }}&{% endif %}type=crypto{% if selected_scam_type != 'all' %}&scam_type={{ selected_scam_type }}{% endif %}{% if selected_severity != 'all' %}&severity={{ selected_severity }}{% endif %}"
+                   class="filter-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 {% if selected_type == 'crypto' %}active{% else %}text-white/50 hover:text-white bg-white/5{% endif %}">
+                    <i class="bi bi-coin mr-1"></i> Ví Crypto
+                </a>
+                <a href="?{% if q %}q={{ q }}&{% endif %}type=audio{% if selected_scam_type != 'all' %}&scam_type={{ selected_scam_type }}{% endif %}{% if selected_severity != 'all' %}&severity={{ selected_severity }}{% endif %}"
+                   class="filter-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 {% if selected_type == 'audio' %}active{% else %}text-white/50 hover:text-white bg-white/5{% endif %}">
+                    <i class="bi bi-mic mr-1"></i> Cuộc gọi / Audio
+                </a>
+                <a href="?{% if q %}q={{ q }}&{% endif %}type=qr{% if selected_scam_type != 'all' %}&scam_type={{ selected_scam_type }}{% endif %}{% if selected_severity != 'all' %}&severity={{ selected_severity }}{% endif %}"
+                   class="filter-pill px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 {% if selected_type == 'qr' %}active{% else %}text-white/50 hover:text-white bg-white/5{% endif %}">
+                    <i class="bi bi-qr-code mr-1"></i> QR Code
+                </a>
 
                 <!-- Reset button if filtering -->
                 {% if q or selected_type != 'all' or selected_scam_type != 'all' or selected_severity != 'all' %}
@@ -136,6 +192,28 @@
                     <i class="bi bi-x-circle"></i> Đặt lại bộ lọc
                 </a>
                 {% endif %}
+            </div>
+
+            <!-- Scam type + Severity dropdowns -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                <label class="flex items-center gap-2 text-xs text-white/50">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-white/30 whitespace-nowrap">Phương thức:</span>
+                    <select name="scam_type" onchange="this.form.submit()" class="flex-1 px-3 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white text-xs font-bold focus:outline-none focus:border-cyan-400/50">
+                        <option value="all" {% if selected_scam_type == 'all' %}selected{% endif %}>Tất cả thủ đoạn</option>
+                        {% for val, label in scam_types %}
+                        <option value="{{ val }}" {% if selected_scam_type == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="flex items-center gap-2 text-xs text-white/50">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-white/30 whitespace-nowrap">Mức độ:</span>
+                    <select name="severity" onchange="this.form.submit()" class="flex-1 px-3 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white text-xs font-bold focus:outline-none focus:border-cyan-400/50">
+                        <option value="all" {% if selected_severity == 'all' %}selected{% endif %}>Tất cả mức độ</option>
+                        {% for val, label in severities %}
+                        <option value="{{ val }}" {% if selected_severity == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
             </div>
         </form>
     </div>
@@ -155,11 +233,19 @@
                             {% elif report.target_type == 'domain' %}bg-blue-500/10 text-blue-400 border-blue-500/20
                             {% elif report.target_type == 'account' %}bg-yellow-500/10 text-yellow-400 border-yellow-500/20
                             {% elif report.target_type == 'email' %}bg-pink-500/10 text-pink-400 border-pink-500/20
+                            {% elif report.target_type == 'file' %}bg-red-500/10 text-red-400 border-red-500/20
+                            {% elif report.target_type == 'social' %}bg-violet-500/10 text-violet-400 border-violet-500/20
+                            {% elif report.target_type == 'crypto' %}bg-amber-500/10 text-amber-400 border-amber-500/20
+                            {% elif report.target_type == 'audio' %}bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20
                             {% else %}bg-purple-500/10 text-purple-400 border-purple-500/20{% endif %}">
                             {% if report.target_type == 'phone' %}📞 Số điện thoại
                             {% elif report.target_type == 'domain' %}🌐 Website
                             {% elif report.target_type == 'account' %}🏦 Ngân hàng
                             {% elif report.target_type == 'email' %}📧 Email
+                            {% elif report.target_type == 'file' %}📁 Tệp tin / APK
+                            {% elif report.target_type == 'social' %}🌐 MXH / Telegram
+                            {% elif report.target_type == 'crypto' %}🪙 Ví Crypto
+                            {% elif report.target_type == 'audio' %}🎙️ Audio / Deepfake
                             {% else %}💬 {{ report.get_target_type_display }}{% endif %}
                         </span>
 
@@ -190,7 +276,7 @@
                     </p>
 
                     <!-- Scammer details preview -->
-                    {% if report.scammer_name or report.scammer_bank_account or report.scammer_phone %}
+                    {% if report.scammer_name or report.scammer_bank_account or report.scammer_phone or report.scammer_social %}
                     <div class="p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-1 text-[11px]">
                         {% if report.scammer_name %}
                         <div class="text-white/60 truncate"><span class="text-white/30">Họ tên:</span> <strong class="text-white/90">{{ report.scammer_name }}</strong></div>
@@ -200,6 +286,17 @@
                         {% endif %}
                         {% if report.scammer_phone and report.scammer_phone != report.target_value %}
                         <div class="text-white/60 truncate"><span class="text-white/30">SĐT đối tượng:</span> <span class="font-mono text-yellow-300">{{ report.scammer_phone }}</span></div>
+                        {% endif %}
+                        {% if report.scammer_social %}
+                        <div class="text-white/60 truncate"><span class="text-white/30">MXH:</span> <span class="text-violet-300">{{ report.scammer_social }}</span></div>
+                        {% endif %}
+                        {% if report.custom_fields %}
+                        <div class="flex flex-wrap gap-1 pt-1">
+                            {% if report.custom_fields.loss_amount_vnd %}<span class="px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-300 font-bold">💸 {{ report.custom_fields.loss_amount_vnd }}đ</span>{% endif %}
+                            {% if report.custom_fields.impersonated_org %}<span class="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold">🏛️ {{ report.custom_fields.impersonated_org }}</span>{% endif %}
+                            {% if report.custom_fields.crypto_wallet %}<span class="px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 font-mono">🪙 ví crypto</span>{% endif %}
+                            {% if report.custom_fields.file_hash or report.custom_fields.sha256 %}<span class="px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-300 font-mono">🦠 mã độc</span>{% endif %}
+                        </div>
                         {% endif %}
                     </div>
                     {% endif %}
@@ -265,15 +362,127 @@
         </div>
         {% endif %}
     </div>
+
+    <!-- Report detail modal (inside Alpine scope) -->
+    <div x-show="modalOpen" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4" @keydown.escape.window="closeModal()">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeModal()"></div>
+        <div class="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto liquid-card rounded-2xl p-6 space-y-5">
+            <div class="flex items-start justify-between gap-3">
+                <h2 class="text-lg font-black text-white">Chi tiết báo cáo <span x-text="detail ? '#' + detail.id : ''"></span></h2>
+                <button @click="closeModal()" class="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 text-xs font-bold hover:bg-white/10">✕ Đóng</button>
+            </div>
+            <template x-if="modalLoading"><p class="text-sm text-white/50">Đang tải chi tiết...</p></template>
+            <template x-if="modalError"><p class="text-sm text-red-400" x-text="modalError"></p></template>
+            <template x-if="detail">
+                <div class="space-y-5 text-sm">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 text-cyan-300 border-cyan-500/20" x-text="detail.target_type"></span>
+                        <span class="px-2.5 py-1 rounded-lg border text-[10px] font-bold bg-yellow-500/10 text-yellow-300 border-yellow-500/20" x-text="detail.severity"></span>
+                        <span class="px-2.5 py-1 rounded-lg border text-[10px] font-bold bg-white/5 text-white/60 border-white/10" x-text="detail.scam_type_display || detail.scam_type"></span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between gap-2">
+                        <span class="font-black text-white break-all" x-text="detail.target_value"></span>
+                        <button @click="copyText(detail.target_value)" class="px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-bold shrink-0">⧉ Copy</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-white/30">Hồ sơ kẻ gian</p>
+                            <p class="text-white/70">Tên: <strong class="text-white" x-text="detail.scammer_info?.name || '—'"></strong></p>
+                            <p class="text-white/70">SĐT: <span class="font-mono text-yellow-300" x-text="detail.scammer_info?.phone || '—'"></span></p>
+                            <p class="text-white/70">STK: <span class="font-mono text-cyan-300" x-text="detail.scammer_info?.bank_account || '—'"></span> <span x-text="detail.scammer_info?.bank_name || ''"></span></p>
+                            <p class="text-white/70">MXH: <span class="text-violet-300" x-text="detail.scammer_info?.social || detail.scammer_social || '—'"></span></p>
+                            <p class="text-white/70">Ví Crypto: <span class="font-mono text-amber-300" x-text="detail.scammer_info?.custom_fields?.crypto_wallet || detail.custom_fields?.crypto_wallet || '—'"></span></p>
+                        </div>
+                        <div class="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-white/30">Thiệt hại & tuỳ biến</p>
+                            <template x-if="detail.custom_fields && Object.keys(detail.custom_fields).length">
+                                <div class="space-y-1">
+                                    <template x-for="(v, k) in detail.custom_fields" :key="k">
+                                        <p class="text-white/70"><span class="text-white/40" x-text="k + ':'"></span> <strong class="text-white" x-text="typeof v === 'object' ? JSON.stringify(v) : v"></strong></p>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="!detail.custom_fields || !Object.keys(detail.custom_fields).length">
+                                <p class="text-white/40">Không có thông tin tuỳ biến.</p>
+                            </template>
+                        </div>
+                    </div>
+                    <p class="text-white/70 text-[13px] leading-relaxed whitespace-pre-line" x-text="detail.description"></p>
+                    <template x-if="detail.evidence_images_data && detail.evidence_images_data.length">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-white/30 mb-2">Ảnh bằng chứng</p>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                <template x-for="img in detail.evidence_images_data" :key="img.id">
+                                    <img :src="img.url" @click="lightbox = img.url" class="w-full h-24 object-cover rounded-xl border border-white/10 cursor-zoom-in" loading="lazy">
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="detail.ocr_text">
+                        <div class="p-3 rounded-xl bg-black/40 border border-white/10">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-white/30 mb-1">OCR trích xuất</p>
+                            <p class="text-xs text-white/60 whitespace-pre-line" x-text="detail.ocr_text"></p>
+                        </div>
+                    </template>
+                    <template x-if="detail.ai_analysis">
+                        <div class="p-3 rounded-xl bg-black/40 border border-white/10">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-white/30 mb-1">Kết luận AI</p>
+                            <p class="text-xs text-white/60 whitespace-pre-line" x-text="typeof detail.ai_analysis === 'object' ? JSON.stringify(detail.ai_analysis, null, 2) : detail.ai_analysis"></p>
+                        </div>
+                    </template>
+                    <div class="flex gap-2 flex-wrap">
+                        <a :href="scanUrlFor(detail)" class="px-4 py-2.5 rounded-xl bg-cyan-400 text-black font-black text-xs uppercase tracking-widest hover:bg-cyan-300">Quét ngay đối tượng này</a>
+                        <button @click="copyText(detail.target_value)" class="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 font-bold text-xs">Sao chép đối tượng</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+    <div x-show="lightbox" x-cloak class="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/90" @click="lightbox = null">
+        <img :src="lightbox" class="max-h-[90vh] max-w-full rounded-2xl border border-white/20" @click.stop>
+    </div>
 </div>
 
 <script>
 function reportListApp() {
     return {
+        modalOpen: false,
+        modalLoading: false,
+        modalError: '',
+        detail: null,
+        lightbox: null,
         openReportDetail(id) {
-            // Can be expanded to view full report modal or redirect
-            window.location.href = `/report/?target_preview=${id}`;
-        }
+            this.modalOpen = true;
+            this.modalLoading = true;
+            this.modalError = '';
+            this.detail = null;
+            fetch(`/api/v1/report/${id}/`)
+                .then(async (r) => {
+                    if (!r.ok) throw new Error('Không tải được chi tiết báo cáo.');
+                    this.detail = await r.json();
+                })
+                .catch((e) => { this.modalError = e.message || 'Lỗi tải chi tiết.'; })
+                .finally(() => { this.modalLoading = false; });
+        },
+        closeModal() { this.modalOpen = false; this.detail = null; this.lightbox = null; },
+        copyText(t) {
+            if (!t) return;
+            navigator.clipboard?.writeText(t);
+        },
+        scanUrlFor(d) {
+            if (!d) return '/scan/';
+            const t = d.target_type || '';
+            const v = encodeURIComponent(d.target_value || '');
+            if (t === 'phone') return `/scan/phone/?phone=${v}`;
+            if (t === 'domain') return `/scan/?url=${v}`;
+            if (t === 'account') return `/scan/bank/?account=${v}`;
+            if (t === 'email') return `/scan/email/?email=${v}`;
+            if (t === 'file') return `/scan/file/?file=${v}`;
+            if (t === 'audio') return `/scan/audio/?q=${v}`;
+            if (t === 'qr') return `/scan/qr/?q=${v}`;
+            if (t === 'social' || t === 'crypto') return `/scan/lookup/?q=${v}`;
+            return `/scan/lookup/?q=${v}`;
+        },
     };
 }
 </script>

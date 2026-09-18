@@ -1013,9 +1013,9 @@ document.addEventListener('alpine:init', () => {
 });
 
 function getCSRFToken() {
-    return document.cookie.split('; ')
+    return (document.cookie.split('; ')
         .find(row => row.startsWith('csrftoken='))
-        ?.split('=')[1];
+        ?.split('=')[1]) || '';
 }
 </script>
 {% endblock %}

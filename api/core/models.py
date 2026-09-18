@@ -85,13 +85,20 @@ def save_user_profile(sender, instance, **kwargs):
 class ScamType(models.TextChoices):
     POLICE_IMPERSONATION = 'police_impersonation', 'Giả danh công an'
     BANK_IMPERSONATION = 'bank_impersonation', 'Giả mạo ngân hàng'
-    RECRUITMENT_SCAM = 'recruitment_scam', 'Lừa tuyển dụng'
-    INVESTMENT_SCAM = 'investment_scam', 'Lừa đầu tư'
-    DELIVERY_SCAM = 'delivery_scam', 'Giả mạo giao hàng'
-    LOAN_SCAM = 'loan_scam', 'Lừa vay tiền'
+    GOV_IMPERSONATION = 'gov_impersonation', 'Giả mạo cơ quan Thuế / Dịch vụ công / VNeID'
+    RECRUITMENT_SCAM = 'recruitment_scam', 'Lừa tuyển dụng / Việc nhẹ lương cao'
+    INVESTMENT_SCAM = 'investment_scam', 'Lừa đầu tư tài chính / Sàn ảo'
+    DELIVERY_SCAM = 'delivery_scam', 'Giả mạo giao hàng / Bưu cục'
+    LOAN_SCAM = 'loan_scam', 'Lừa vay tiền / Tín dụng đen'
     OTP_STEAL = 'otp_steal', 'Chiêu trò OTP/2FA'
-    PHISHING = 'phishing', 'Phishing link'
-    ROMANCE_SCAM = 'romance_scam', 'Lừa tình cảm'
+    PHISHING = 'phishing', 'Phishing link / Trang web giả mạo'
+    ROMANCE_SCAM = 'romance_scam', 'Lừa tình cảm / Bẫy lợn béo (Pig Butchering)'
+    DEEPFAKE = 'deepfake', 'Deepfake âm thanh / Video AI mạo danh'
+    MALWARE_APP = 'malware_app', 'Mã độc / Ứng dụng APK đánh cắp tài khoản'
+    CRYPTO_SCAM = 'crypto_scam', 'Lừa đảo Tiền điện tử / Ví Crypto / Airdrop'
+    SOCIAL_ENGINEERING = 'social_engineering', 'Lừa đảo hội nhóm Telegram / Zalo / Fanpage'
+    PRIZE_SCAM = 'prize_scam', 'Trúng thưởng / Quà tri ân / Đơn hàng ảo'
+    EMERGENCY_SCAM = 'emergency_scam', 'Báo nạn cấp cứu / Tống tiền người thân'
     OTHER = 'other', 'Khác'
 
 
@@ -140,6 +147,10 @@ class TargetType(models.TextChoices):
     MESSAGE = 'message', 'Tin nhắn'
     QR = 'qr', 'QR Code'
     EMAIL = 'email', 'Email'
+    FILE = 'file', 'Tệp tin / Ứng dụng APK độc hại'
+    AUDIO = 'audio', 'Cuộc gọi / Âm thanh Deepfake'
+    SOCIAL = 'social', 'Mạng xã hội (Telegram/Zalo/FB)'
+    CRYPTO = 'crypto', 'Địa chỉ ví Crypto / Web3'
 
 
 # ─── Domain Model ───────────────────────────────────────────────────────────
@@ -236,6 +247,12 @@ class Report(models.Model):
     scammer_bank_account = models.CharField(max_length=50, blank=True)
     scammer_bank_name = models.CharField(max_length=100, blank=True)
     scammer_name = models.CharField(max_length=200, blank=True)
+    scammer_social = models.CharField(
+        max_length=255, blank=True,
+        help_text='Kênh MXH của kẻ lừa đảo (link Telegram, nhóm Zalo, username FB, Fanpage)')
+    custom_fields = models.JSONField(
+        default=dict, blank=True,
+        help_text='Thông tin tuỳ biến có cấu trúc: thiệt hại, ví crypto, hash file, đơn vị giả mạo...')
     status = models.CharField(max_length=10, choices=ReportStatus.choices,
                               default=ReportStatus.PENDING, db_index=True)
     moderator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
@@ -510,6 +527,18 @@ class ForumPost(models.Model):
         verbose_name = 'Forum Post'
         verbose_name_plural = 'Forum Posts'
 
+    def save(self, *args, **kwargs):
+        # Server-side XSS defense: sanitize user HTML before storing.
+        try:
+            from api.utils.sanitize import sanitize_forum_content, sanitize_plain_text
+            if self.content:
+                self.content = sanitize_forum_content(self.content)
+            if self.title:
+                self.title = sanitize_plain_text(self.title, limit=300)
+        except Exception:
+            pass
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"[{self.category}] {self.title[:50]}"
 
@@ -531,6 +560,16 @@ class ForumComment(models.Model):
         ordering = ['created_at']
         verbose_name = 'Forum Comment'
         verbose_name_plural = 'Forum Comments'
+
+    def save(self, *args, **kwargs):
+        # Server-side XSS defense: sanitize user HTML before storing.
+        try:
+            from api.utils.sanitize import sanitize_forum_content
+            if self.content:
+                self.content = sanitize_forum_content(self.content)
+        except Exception:
+            pass
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Comment by {self.author} on {self.post.title[:30]}"

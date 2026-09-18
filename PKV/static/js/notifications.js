@@ -314,12 +314,60 @@ window.NotificationManager = {
             this._log('Service worker state:', activeWorker?.state, 'Scope:', registration.scope);
 
             let subscription = await registration.pushManager.getSubscription();
+            const _keyMatches = (sub) => {
+                try {
+                    if (!sub || !sub.options) return false;
+                    const existing = sub.options.applicationServerKey;
+                    if (!existing) return false;
+                    const norm = (buf) => {
+                        const arr = new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer || buf);
+                        let s = '';
+                        for (let i = 0; i < arr.length; i++) s += String.fromCharCode(arr[i]);
+                        return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                    };
+                    const cur = (window.WEBPUSH_PUBLIC_KEY || '').replace(/=+$/, '');
+                    return norm(existing) === cur;
+                } catch (e) { return false; }
+            };
+            const _subscribeOnce = async () => registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: this.urlBase64ToUint8Array(window.WEBPUSH_PUBLIC_KEY),
+            });
+            const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+            if (subscription && !_keyMatches(subscription)) {
+                // Stale subscription from a previous VAPID key rotation — drop it first.
+                try { await subscription.unsubscribe(); } catch (e) { /* ignore */ }
+                try { await this._unsubscribeBrowserPush(subscription); } catch (e) { /* ignore */ }
+                subscription = null;
+            }
             if (!subscription) {
                 this._log('Starting new subscription with public key:', window.WEBPUSH_PUBLIC_KEY ? `${window.WEBPUSH_PUBLIC_KEY.slice(0, 10)}...` : 'NONE');
-                subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: this.urlBase64ToUint8Array(window.WEBPUSH_PUBLIC_KEY),
-                });
+                let lastErr = null;
+                for (let attempt = 1; attempt <= 2; attempt++) {
+                    try {
+                        subscription = await _subscribeOnce();
+                        lastErr = null;
+                        break;
+                    } catch (e) {
+                        lastErr = e;
+                        const isAbort = e && (e.name === 'AbortError' || e.code === 20);
+                        this._log(`pushManager.subscribe attempt ${attempt} failed`, e && e.name, e && e.message);
+                        try {
+                            const stale = await registration.pushManager.getSubscription();
+                            if (stale) await stale.unsubscribe();
+                        } catch (cleanupErr) { /* ignore */ }
+                        if (attempt < 2 && isAbort) {
+                            await _sleep(1500);
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                if (!subscription) {
+                    // Push is auxiliary — never block main UX.
+                    console.warn('[WebPush] Subscription failed after retry, continuing without push:', lastErr && lastErr.message);
+                    return;
+                }
                 this._log('Created new browser subscription');
             } else {
                 this._log('Reusing existing browser subscription');

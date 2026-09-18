@@ -16,7 +16,7 @@ from datetime import timedelta
 from api.core.models import (
     ScanEvent, Report, Domain, TrendDaily,
     UserAlert, ScamType, RiskLevel,
-    ScanType,
+    ScanType, ScanStatus,
     ForumPost, ForumComment,
     Article, ArticleCategory, ReportStatus,
     LearnLesson, LearnQuiz, LearnScenario,
@@ -202,12 +202,10 @@ def scan_status_view(request, scan_id):
         or str(scan_id) in [str(x) for x in active_scans]
     )
     can_view = bool(
-        scan.user_id is None
-        or request.user.is_staff
+        request.user.is_staff
         or (request.user.is_authenticated and scan.user_id == request.user.id)
         or scan.is_public_referable
         or is_in_session
-        or (scan.status in (ScanStatus.PENDING, ScanStatus.PROCESSING))
     )
     if not can_view:
         raise Http404("Scan không tồn tại")
@@ -276,7 +274,11 @@ def community_reports_view(request):
             Q(scammer_phone__icontains=q) |
             Q(scammer_bank_account__icontains=q) |
             Q(scammer_bank_name__icontains=q) |
-            Q(scammer_name__icontains=q)
+            Q(scammer_name__icontains=q) |
+            Q(scammer_social__icontains=q) |
+            Q(ocr_text__icontains=q) |
+            Q(ai_analysis__icontains=q) |
+            Q(custom_fields__icontains=q)
         )
 
     if target_type and target_type != 'all':
@@ -294,6 +296,10 @@ def community_reports_view(request):
     phone_reports = Report.objects.filter(status='approved', target_type='phone').count()
     domain_reports = Report.objects.filter(status='approved', target_type='domain').count()
     bank_reports = Report.objects.filter(status='approved', target_type='account').count()
+    file_reports = Report.objects.filter(status='approved', target_type='file').count()
+    social_reports = Report.objects.filter(status='approved', target_type='social').count()
+    crypto_reports = Report.objects.filter(status='approved', target_type='crypto').count()
+    audio_reports = Report.objects.filter(status='approved', target_type='audio').count()
 
     paginator = Paginator(queryset, 12)
     page_number = request.GET.get('page', 1)
@@ -316,6 +322,10 @@ def community_reports_view(request):
             "phone_reports": phone_reports,
             "domain_reports": domain_reports,
             "bank_reports": bank_reports,
+            "file_reports": file_reports,
+            "social_reports": social_reports,
+            "crypto_reports": crypto_reports,
+            "audio_reports": audio_reports,
             "matched_count": queryset.count(),
         }
     })
@@ -1197,7 +1207,7 @@ def mcp_guide_view(request):
     return render(request, "MCP/mcp_guide.html", {
         "title": "ShieldCall MCP Server | Tích Hợp Chatbot & AI IDEs",
         "user_api_keys": user_api_keys,
-        "user_api_keys_json": json.dumps(user_api_keys),
+        "user_api_keys_json": user_api_keys,
         "site_url": site_url,
         "api_url": api_url,
     })

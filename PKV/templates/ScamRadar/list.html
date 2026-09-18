@@ -106,6 +106,8 @@
 <!-- SweetAlert2 handled via JS -->
 
 <script>
+    const _esc = (typeof window.escapeHtml === 'function') ? window.escapeHtml : ((s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
+    const _safeImgUrl = (u) => { const s = String(u || ''); return /^(https?:\/\/|\/media\/|\/static\/)/i.test(s) ? s : ''; };
     function showReportDetail(id) {
         // Show loading state
         Swal.fire({
@@ -149,7 +151,7 @@
                             aiRaw = String(aiRaw);
                         }
                     }
-                    const safeAnalysis = (aiRaw || '').replace(/\n/g, '<br>');
+                    const safeAnalysis = _esc(aiRaw || '').replace(/\n/g, '<br>');
                     aiAnalysisBlock = `
                         <div class="mt-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
                             <div class="flex items-center gap-2 mb-2">
@@ -165,12 +167,13 @@
 
                 // Evidence Image
                 let evidenceBlock = '';
-                if (data.evidence_url) {
+                const safeEvidenceUrl = _safeImgUrl(data.evidence_url);
+                if (safeEvidenceUrl) {
                     evidenceBlock = `
                         <div class="mt-4">
                             <h4 class="text-xs uppercase text-white/40 font-bold mb-2">Bằng chứng</h4>
-                            <div class="rounded-lg overflow-hidden border border-white/10 group cursor-pointer" onclick="window.open('${data.evidence_url}', '_blank')">
-                                <img src="${data.evidence_url}" class="w-full h-32 object-cover transition-transform group-hover:scale-105" alt="Evidence">
+                            <div class="rounded-lg overflow-hidden border border-white/10 group cursor-pointer" onclick="window.open('${_esc(safeEvidenceUrl)}', '_blank')">
+                                <img src="${_esc(safeEvidenceUrl)}" class="w-full h-32 object-cover transition-transform group-hover:scale-105" alt="Evidence">
                                 <div class="bg-black/50 p-1 text-center text-xs text-white/60">Nhấn để xem ảnh gốc</div>
                             </div>
                         </div>
@@ -191,7 +194,7 @@
                             <div>
                                 <div class="text-xs text-white/50 uppercase mb-1">Loại lừa đảo</div>
                                 <div class="font-bold text-white flex items-center gap-2">
-                                    ${data.scam_type_display || data.scam_type || 'Khác'}
+                                    ${_esc(data.scam_type_display || data.scam_type || 'Khác')}
                                     ${severityBadge}
                                 </div>
                             </div>
@@ -210,15 +213,15 @@
                                     <ul class="space-y-2 text-sm">
                                         <li class="flex justify-between">
                                             <span class="text-white/50">Tên:</span>
-                                            <span class="text-white font-medium text-right">${scammerName}</span>
+                                            <span class="text-white font-medium text-right">${_esc(scammerName)}</span>
                                         </li>
                                         <li class="flex justify-between">
                                             <span class="text-white/50">SĐT:</span>
-                                            <span class="text-white font-mono text-right">${scammerPhone}</span>
+                                            <span class="text-white font-mono text-right">${_esc(scammerPhone)}</span>
                                         </li>
                                         <li class="flex justify-between">
                                             <span class="text-white/50">Ngân hàng:</span>
-                                            <span class="text-white font-mono text-right truncate ml-2" title="${bankInfo}">${bankInfo}</span>
+                                            <span class="text-white font-mono text-right truncate ml-2" title="${_esc(bankInfo)}">${_esc(bankInfo)}</span>
                                         </li>
                                     </ul>
                                 </div>
@@ -229,7 +232,7 @@
                                 <div class="bg-white/5 p-3 rounded-lg border border-white/10 h-full">
                                     <h4 class="text-xs uppercase text-white/40 font-bold mb-2 border-b border-white/5 pb-1">Mô tả sự việc</h4>
                                     <p class="text-sm text-white/80 leading-relaxed max-h-[120px] overflow-y-auto custom-scrollbar">
-                                        ${data.description || 'Không có mô tả chi tiết.'}
+                                        ${_esc(data.description || 'Không có mô tả chi tiết.')}
                                     </p>
                                 </div>
                             </div>

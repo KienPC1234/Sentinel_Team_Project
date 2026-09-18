@@ -5,7 +5,7 @@
     document.addEventListener('alpine:init', () => {
         Alpine.data('reportManager', () => ({
             target_type: new URLSearchParams(window.location.search).get('target_type') || 'phone',
-            target_value: new URLSearchParams(window.location.search).get('target_value') || new URLSearchParams(window.location.search).get('phone') || new URLSearchParams(window.location.search).get('bank_account') || '',
+            target_value: new URLSearchParams(window.location.search).get('target_value') || new URLSearchParams(window.location.search).get('phone') || new URLSearchParams(window.location.search).get('bank_account') || new URLSearchParams(window.location.search).get('file') || new URLSearchParams(window.location.search).get('q') || new URLSearchParams(window.location.search).get('url') || new URLSearchParams(window.location.search).get('email') || '',
             scam_type: new URLSearchParams(window.location.search).get('scam_type') || '',
             scam_type_other: '',
             severity: 'medium',
@@ -15,6 +15,14 @@
             scammer_bank_account: new URLSearchParams(window.location.search).get('bank_account') || '',
             scammer_bank_name: new URLSearchParams(window.location.search).get('bank_name') || '',
             scammer_name: new URLSearchParams(window.location.search).get('scammer_name') || '',
+            scammer_social: new URLSearchParams(window.location.search).get('scammer_social') || '',
+            loss_amount_vnd: '',
+            impersonated_org: '',
+            crypto_wallet: '',
+            file_hash: '',
+            custom_pairs: [],
+            new_custom_key: '',
+            new_custom_value: '',
             showAdvancedDetails: false,
             banks: [],
             bankSearch: '',
@@ -173,7 +181,36 @@
                     return v.toLowerCase().replace(/\s+/g, '');
                 }
 
+                if (this.target_type === 'crypto') {
+                    return v.replace(/\s+/g, '');
+                }
+
                 return v;
+            },
+
+            addCustomPair() {
+                const k = (this.new_custom_key || '').trim();
+                const val = (this.new_custom_value || '').trim();
+                if (!k || !val) return;
+                this.custom_pairs.push({ key: k, value: val });
+                this.new_custom_key = '';
+                this.new_custom_value = '';
+            },
+
+            removeCustomPair(index) {
+                this.custom_pairs.splice(index, 1);
+            },
+
+            get customFieldsPayload() {
+                const out = {};
+                if ((this.loss_amount_vnd || '').trim()) out.loss_amount_vnd = this.loss_amount_vnd.trim();
+                if ((this.impersonated_org || '').trim()) out.impersonated_org = this.impersonated_org.trim();
+                if ((this.crypto_wallet || '').trim()) out.crypto_wallet = this.crypto_wallet.trim();
+                if ((this.file_hash || '').trim()) out.file_hash = this.file_hash.trim();
+                for (const p of (this.custom_pairs || [])) {
+                    if (p.key && p.value) out[p.key] = p.value;
+                }
+                return out;
             },
 
             get targetValidationStatus() {
@@ -211,6 +248,26 @@
                     return { valid: false, message: 'Định dạng email chưa đúng (VD: name@domain.com)' };
                 }
 
+                if (this.target_type === 'file') {
+                    if (val.length >= 2) return { valid: true, message: `Tệp tin: ${val.slice(0, 60)}` };
+                    return { valid: false, message: 'Nhập tên file hoặc mã băm SHA256' };
+                }
+
+                if (this.target_type === 'social') {
+                    if (val.length >= 2) return { valid: true, message: `Kênh MXH: ${val.slice(0, 60)}` };
+                    return { valid: false, message: 'Nhập username / link Telegram, Zalo, FB' };
+                }
+
+                if (this.target_type === 'crypto') {
+                    if (norm.length >= 10) return { valid: true, message: `Ví crypto: ${norm.slice(0, 24)}...` };
+                    return { valid: false, message: 'Địa chỉ ví chưa hợp lệ (tối thiểu 10 ký tự)' };
+                }
+
+                if (this.target_type === 'audio') {
+                    if (val.length >= 2) return { valid: true, message: 'Đã sẵn sàng (audio / deepfake)' };
+                    return { valid: false, message: 'Mô tả cuộc gọi / file audio nghi ngờ' };
+                }
+
                 return { valid: true, message: 'Đã sẵn sàng' };
             },
 
@@ -220,7 +277,11 @@
                     time_channel: '• Thời gian xảy ra: \n• Kênh tiếp cận: (Zalo / Telegram / Cuộc gọi trực tiếp)',
                     scenario: '• Thủ đoạn: (Giả danh cán bộ công an / Giả mạo ngân hàng báo khóa thẻ / Dụ dỗ đầu tư)',
                     loss: '• Số tiền thiệt hại: ... VNĐ',
-                    request: '• Yêu cầu của kẻ gian: (Yêu cầu chuyển tiền / Yêu cầu đọc mã OTP / Cài đặt app độc hại)'
+                    request: '• Yêu cầu của kẻ gian: (Yêu cầu chuyển tiền / Yêu cầu đọc mã OTP / Cài đặt app độc hại)',
+                    vneid_apk: '• Thủ đoạn: Giả mạo VNeID / Dịch vụ công, dụ cài app APK chiếm đoạt tiền\n• Link/app: \n• Số tiền thiệt hại: ... VNĐ',
+                    deepfake_call: '• Thủ đoạn: Deepfake giả giọng người thân gọi video kêu cấp cứu, chuyển tiền gấp\n• Số gọi đến: \n• Số tiền yêu cầu: ... VNĐ',
+                    telegram_task: '• Thủ đoạn: Nhóm Telegram làm nhiệm vụ đơn hàng, hoàn tiền + thưởng\n• Link nhóm Telegram: \n• Số tiền đã nạp: ... VNĐ',
+                    romance_crypto: '• Thủ đoạn: Lừa tình cảm kết hợp dụ đầu tư tiền điện tử / sàn ảo\n• Nickname / kênh liên lạc: \n• Ví crypto nhận tiền: '
                 };
 
                 const insertText = snippets[tag] || tag;
@@ -368,6 +429,13 @@
                 if (this.scammer_name.trim()) {
                     fd.append('scammer_name', this.scammer_name.trim());
                 }
+                if (this.scammer_social.trim()) {
+                    fd.append('scammer_social', this.scammer_social.trim());
+                }
+                const customPayload = this.customFieldsPayload;
+                if (customPayload && Object.keys(customPayload).length) {
+                    fd.append('custom_fields', JSON.stringify(customPayload));
+                }
 
                 // Images: First is main evidence (OCR priority), rest are additional
                 if (this.allImages.length > 0) {
@@ -435,6 +503,14 @@
                 this.scammer_bank_account = '';
                 this.scammer_bank_name = '';
                 this.scammer_name = '';
+                this.scammer_social = '';
+                this.loss_amount_vnd = '';
+                this.impersonated_org = '';
+                this.crypto_wallet = '';
+                this.file_hash = '';
+                this.custom_pairs = [];
+                this.new_custom_key = '';
+                this.new_custom_value = '';
                 this.showAdvancedDetails = false;
                 this.error = '';
             }
@@ -525,10 +601,40 @@
                     <span>Email</span>
                 </button>
                 <button type="button" @click="target_type = 'message'"
-                    class="col-span-2 sm:col-span-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
                     :class="target_type === 'message' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20 font-black' : 'text-white/60 hover:text-white hover:bg-white/5'">
                     <i class="bi bi-chat-dots-fill text-xs"></i>
-                    <span>Tin nhắn/Khác</span>
+                    <span>Tin nhắn</span>
+                </button>
+                <button type="button" @click="target_type = 'file'"
+                    class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    :class="target_type === 'file' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20 font-black' : 'text-white/60 hover:text-white hover:bg-white/5'">
+                    <i class="bi bi-file-earmark-binary text-xs"></i>
+                    <span>📁 File / APK</span>
+                </button>
+                <button type="button" @click="target_type = 'social'"
+                    class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    :class="target_type === 'social' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20 font-black' : 'text-white/60 hover:text-white hover:bg-white/5'">
+                    <i class="bi bi-telegram text-xs"></i>
+                    <span>🌐 MXH / Telegram</span>
+                </button>
+                <button type="button" @click="target_type = 'crypto'"
+                    class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    :class="target_type === 'crypto' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20 font-black' : 'text-white/60 hover:text-white hover:bg-white/5'">
+                    <i class="bi bi-coin text-xs"></i>
+                    <span>🪙 Ví Crypto</span>
+                </button>
+                <button type="button" @click="target_type = 'audio'"
+                    class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    :class="target_type === 'audio' ? 'bg-fuchsia-500 text-white shadow-lg shadow-fuchsia-500/20 font-black' : 'text-white/60 hover:text-white hover:bg-white/5'">
+                    <i class="bi bi-mic-fill text-xs"></i>
+                    <span>🎙️ Audio / Call</span>
+                </button>
+                <button type="button" @click="target_type = 'qr'"
+                    class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    :class="target_type === 'qr' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20 font-black' : 'text-white/60 hover:text-white hover:bg-white/5'">
+                    <i class="bi bi-qr-code text-xs"></i>
+                    <span>QR Code</span>
                 </button>
             </div>
 
@@ -550,6 +656,10 @@
                                       target_type === 'domain' ? 'Nhập đường dẫn website (VD: https://bank-phish.com/login)' :
                                       target_type === 'account' ? 'Nhập số tài khoản ngân hàng...' :
                                       target_type === 'email' ? 'Nhập địa chỉ email giả mạo (VD: support@scam.vn)' :
+                                      target_type === 'file' ? 'Nhập tên file / mã băm SHA256 (VD: vneid.apk)' :
+                                      target_type === 'social' ? 'Nhập link Telegram / nhóm Zalo / username FB...' :
+                                      target_type === 'crypto' ? 'Nhập địa chỉ ví crypto (VD: 0x...)' :
+                                      target_type === 'audio' ? 'Mô tả cuộc gọi / file audio nghi ngờ...' :
                                       'Nhập số điện thoại gửi tin nhắn, link hoặc thông tin đối tượng...'">
                 </div>
 
@@ -665,6 +775,60 @@
                         <i class="bi bi-link-45deg text-base text-blue-400"></i>
                         <span>Đánh cắp tài khoản / Phishing Link</span>
                     </button>
+                    <button type="button" @click="scam_type = 'gov_impersonation'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'gov_impersonation' ? 'bg-amber-500/20 border-amber-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-building text-base text-amber-400"></i>
+                        <span>Giả mạo Thuế / Dịch vụ công / VNeID</span>
+                    </button>
+                    <button type="button" @click="scam_type = 'deepfake'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'deepfake' ? 'bg-fuchsia-500/20 border-fuchsia-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-person-video3 text-base text-fuchsia-400"></i>
+                        <span>Deepfake âm thanh / Video AI mạo danh</span>
+                    </button>
+                    <button type="button" @click="scam_type = 'malware_app'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'malware_app' ? 'bg-red-500/20 border-red-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-file-earmark-binary text-base text-red-400"></i>
+                        <span>Mã độc / App APK chiếm đoạt tài khoản</span>
+                    </button>
+                    <button type="button" @click="scam_type = 'crypto_scam'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'crypto_scam' ? 'bg-yellow-500/20 border-yellow-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-coin text-base text-yellow-400"></i>
+                        <span>Lừa Crypto / Ví Web3 / Airdrop</span>
+                    </button>
+                    <button type="button" @click="scam_type = 'social_engineering'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'social_engineering' ? 'bg-violet-500/20 border-violet-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-telegram text-base text-violet-400"></i>
+                        <span>Hội nhóm Telegram / Zalo / Fanpage</span>
+                    </button>
+                    <button type="button" @click="scam_type = 'prize_scam'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'prize_scam' ? 'bg-pink-500/20 border-pink-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-gift text-base text-pink-400"></i>
+                        <span>Trúng thưởng / Quà tri ân / Đơn ảo</span>
+                    </button>
+                    <button type="button" @click="scam_type = 'emergency_scam'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'emergency_scam' ? 'bg-orange-500/20 border-orange-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-telephone-x text-base text-orange-400"></i>
+                        <span>Báo nạn cấp cứu / Tống tiền người thân</span>
+                    </button>
+                    <button type="button" @click="scam_type = 'romance_scam'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'romance_scam' ? 'bg-rose-500/20 border-rose-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-heart-fill text-base text-rose-400"></i>
+                        <span>Lừa tình cảm / Pig Butchering</span>
+                    </button>
+                    <button type="button" @click="scam_type = 'otp_steal'"
+                        class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
+                        :class="scam_type === 'otp_steal' ? 'bg-cyan-500/20 border-cyan-500 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
+                        <i class="bi bi-key text-base text-cyan-400"></i>
+                        <span>Chiêu trò OTP / 2FA</span>
+                    </button>
                     <button type="button" @click="scam_type = 'other'"
                         class="p-3 rounded-xl text-xs font-bold border text-left transition-all flex items-center gap-3"
                         :class="scam_type === 'other' ? 'bg-white/20 border-white/40 text-white font-black' : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/5'">
@@ -749,6 +913,26 @@
                         class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] border border-white/10 text-white/70 hover:text-cyan-400 hover:border-cyan-500/30 transition-all flex items-center gap-1.5">
                         <i class="bi bi-exclamation-triangle text-orange-400"></i>
                         <span>+ Yêu cầu của đối tượng</span>
+                    </button>
+                    <button type="button" @click="insertTemplate('vneid_apk')"
+                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] border border-white/10 text-white/70 hover:text-red-400 hover:border-red-500/30 transition-all flex items-center gap-1.5">
+                        <i class="bi bi-phone-fill text-red-400"></i>
+                        <span>+ VNeID / APK giả mạo</span>
+                    </button>
+                    <button type="button" @click="insertTemplate('deepfake_call')"
+                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] border border-white/10 text-white/70 hover:text-fuchsia-400 hover:border-fuchsia-500/30 transition-all flex items-center gap-1.5">
+                        <i class="bi bi-person-video3 text-fuchsia-400"></i>
+                        <span>+ Deepfake người thân</span>
+                    </button>
+                    <button type="button" @click="insertTemplate('telegram_task')"
+                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] border border-white/10 text-white/70 hover:text-violet-400 hover:border-violet-500/30 transition-all flex items-center gap-1.5">
+                        <i class="bi bi-telegram text-violet-400"></i>
+                        <span>+ Nhóm Telegram đơn hàng</span>
+                    </button>
+                    <button type="button" @click="insertTemplate('romance_crypto')"
+                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.03] border border-white/10 text-white/70 hover:text-amber-400 hover:border-amber-500/30 transition-all flex items-center gap-1.5">
+                        <i class="bi bi-coin text-amber-400"></i>
+                        <span>+ Tình cảm + Crypto</span>
                     </button>
                 </div>
             </div>
@@ -876,6 +1060,55 @@
                                 class="liquid-input w-full py-3 px-4 text-xs font-medium">
                         </div>
                     </template>
+                    <div class="space-y-1.5 sm:col-span-2">
+                        <label class="text-[11px] font-bold text-white/60">Kênh MXH của kẻ lừa đảo (Telegram / Zalo / FB)</label>
+                        <input type="text" x-model="scammer_social" placeholder="VD: t.me/..., nhóm Zalo..., facebook.com/..."
+                            class="liquid-input w-full py-3 px-4 text-xs font-medium">
+                    </div>
+                </div>
+
+                <!-- Custom detail fields -->
+                <div class="pt-3 border-t border-white/5 space-y-3">
+                    <p class="text-[11px] font-black text-cyan-400 uppercase tracking-wider">Thông tin chi tiết tuỳ biến</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-bold text-white/60">Số tiền thiệt hại (VNĐ)</label>
+                            <input type="text" x-model="loss_amount_vnd" placeholder="VD: 5000000"
+                                class="liquid-input w-full py-3 px-4 text-xs font-medium">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-bold text-white/60">Tổ chức bị mạo danh</label>
+                            <input type="text" x-model="impersonated_org" placeholder="VD: Cục Thuế, VNeID, Vietcombank, Shopee..."
+                                class="liquid-input w-full py-3 px-4 text-xs font-medium">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-bold text-white/60">Ví Crypto / Mã băm file</label>
+                            <input type="text" x-model="crypto_wallet" placeholder="Địa chỉ ví (nếu có)"
+                                class="liquid-input w-full py-3 px-4 text-xs font-medium">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-bold text-white/60">SHA256 / ClamAV signature</label>
+                            <input type="text" x-model="file_hash" placeholder="Hash file độc hại (nếu có)"
+                                class="liquid-input w-full py-3 px-4 text-xs font-medium">
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <template x-for="(p, idx) in custom_pairs" :key="idx">
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/80 font-bold" x-text="p.key"></span>
+                                <span class="flex-1 px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/10 text-white/70 truncate" x-text="p.value"></span>
+                                <button type="button" @click="removeCustomPair(idx)" class="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 font-bold">✕</button>
+                            </div>
+                        </template>
+                        <div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+                            <input type="text" x-model="new_custom_key" placeholder="Tên trường (VD: kênh tiếp cận)"
+                                class="liquid-input py-2.5 px-3 text-xs">
+                            <input type="text" x-model="new_custom_value" placeholder="Giá trị..."
+                                class="liquid-input py-2.5 px-3 text-xs">
+                            <button type="button" @click="addCustomPair()"
+                                class="px-4 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-black whitespace-nowrap">+ Thêm trường</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

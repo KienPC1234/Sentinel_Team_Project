@@ -92,13 +92,15 @@ document.addEventListener('alpine:init', () => {
 
         renderMd(text) {
             if (!text) return '';
+            const esc = (typeof window.escapeHtml === 'function')
+                ? window.escapeHtml
+                : (s) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
             if (window.marked && window.marked.parse) {
-                return window.marked.parse(text, { breaks: true, gfm: true });
+                const raw = window.marked.parse(text, { breaks: true, gfm: true });
+                return (typeof window.sanitizeHtml === 'function') ? window.sanitizeHtml(raw) : esc(raw);
             }
             // Fallback: escape HTML
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+            return esc(text);
         },
 
         stripMd(text) {
@@ -121,22 +123,27 @@ document.addEventListener('alpine:init', () => {
 
         async openNotification(n) {
             await this.markRead(n);
+            const esc = (typeof window.escapeHtml === 'function')
+                ? window.escapeHtml
+                : (s) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
             const iconMap = { info: 'info', success: 'success', warning: 'warning', error: 'error' };
             const renderedMsg = this.renderMd(n.message);
+            const safeUrl = String(n.url || '');
+            const urlOk = /^(https?:\/\/|\/(?!\/))/i.test(safeUrl);
             const result = await Swal.fire({
-                title: n.title,
+                title: esc(n.title),
                 html: `<div class="notif-md-content" style="text-align:left;line-height:1.7;color:#fff;font-size:14px;">${renderedMsg}</div>`
-                    + (n.url ? `<div style="margin-top:12px;"><a href="${n.url}" style="color:#18ffff;font-size:12px;"><i class="bi bi-box-arrow-up-right"></i> ${n.url}</a></div>` : '')
+                    + (urlOk ? `<div style="margin-top:12px;"><a href="${esc(safeUrl)}" style="color:#18ffff;font-size:12px;"><i class="bi bi-box-arrow-up-right"></i> ${esc(safeUrl)}</a></div>` : '')
                     + `<div style="margin-top:10px;font-size:10px;color:rgba(255,255,255,0.3);">${this.formatDate(n.created_at)}</div>`,
                 icon: iconMap[n.notification_type] || 'info',
                 background: '#161235',
                 color: '#fff',
-                confirmButtonText: n.url ? 'Mở liên kết' : 'Đóng',
-                showCancelButton: !!n.url,
+                confirmButtonText: urlOk ? 'Mở liên kết' : 'Đóng',
+                showCancelButton: !!urlOk,
                 cancelButtonText: 'Đóng',
                 confirmButtonColor: '#18ffff',
             });
-            if (result.isConfirmed && n.url) {
+            if (result.isConfirmed && urlOk) {
                 window.location.href = n.url;
             }
         },

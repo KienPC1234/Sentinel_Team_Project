@@ -85,7 +85,7 @@
         this.aiLoading = false;
         this.progress = [];
 
-        const tsToken = document.querySelector('[name=cf-turnstile-response]').value;
+        const tsToken = document.querySelector('[name=cf-turnstile-response]')?.value || '';
         if(!tsToken){showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');return}
 
         let fd = new FormData();
