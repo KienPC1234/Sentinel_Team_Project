@@ -276,7 +276,7 @@
                                 <button onclick="showReportDetails({{ report.id }})" class="w-9 h-9 rounded-xl bg-white/5 text-white/40 flex items-center justify-center hover:bg-cyan-500 hover:text-black transition-all border border-white/10 hover:border-cyan-500" title="Xem chi tiết">
                                     <i class="bi bi-eye-fill text-sm"></i>
                                 </button>
-                                <button onclick="runAIAnalysis({{ report.id }})" class="w-9 h-9 rounded-xl bg-white/5 text-white/40 flex items-center justify-center hover:bg-purple-500 hover:text-white transition-all border border-white/10 hover:border-purple-500" title="AI Phân tích">
+                                <button onclick="runAIAnalysis({{ report.id }}, this)" class="w-9 h-9 rounded-xl bg-white/5 text-white/40 flex items-center justify-center hover:bg-purple-500 hover:text-white transition-all border border-white/10 hover:border-purple-500" title="AI Phân tích">
                                     <i class="bi bi-robot text-sm"></i>
                                 </button>
                                 {% if report.status == 'pending' %}
@@ -336,8 +336,9 @@
                 || document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1] || '';
         }
 
-        function runAIAnalysis(reportId) {
-            const btn = event.currentTarget;
+        function runAIAnalysis(reportId, el) {
+            const btn = el || (typeof event !== 'undefined' && event.currentTarget) || document.activeElement;
+            if (!btn || !btn.innerHTML) return;
             const origHTML = btn.innerHTML;
             btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin text-sm"></i>';
             btn.disabled = true;
@@ -371,7 +372,7 @@
         }
 
         function saveModNote(reportId) {
-            const note = document.getElementById(`mod-note-${reportId}`).value;
+            const note = document.getElementById(`mod-note-${reportId}`)?.value ?? '';
             fetch(`/admin-cp/reports/${reportId}/note/`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': getCSRF(), 'Content-Type': 'application/json' },
@@ -541,7 +542,7 @@
                         ${aiHtml}
 
                         <div class="flex justify-center">
-                            <button onclick="Swal.close(); runAIAnalysis(${data.id})" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-purple-500/20 transition-all">
+                            <button onclick="Swal.close(); runAIAnalysis(${data.id}, this)" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-purple-500/20 transition-all">
                                 <i class="bi bi-robot"></i> ${aiHtml ? 'Phân tích lại AI' : 'Chạy AI Phân tích'}
                             </button>
                         </div>

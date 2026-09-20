@@ -859,9 +859,9 @@ document.addEventListener('alpine:init', () => {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken()},
                     body: JSON.stringify({ reaction_type: 'share' })
-                }).then(r => r.json()).then(data => {
-                    this.post.shares_count = data.shares_count;
-                });
+                }).then(r => { if (!r.ok) throw new Error('share failed'); return r.json(); }).then(data => {
+                    if (data && data.shares_count !== undefined) this.post.shares_count = data.shares_count;
+                }).catch(() => {});
             }).catch(() => {
                 // Fallback for browsers without clipboard API
                 Swal.fire({
@@ -989,7 +989,7 @@ document.addEventListener('alpine:init', () => {
 {{ post_data|json_script:"forum-post-data" }}
 {{ comments_data|json_script:"forum-comments-data" }}
 
-<div class="max-w-7xl mx-auto px-4 py-8" x-data="forumDetail()">
+<div class="max-w-7xl mx-auto px-4 py-8" x-data="forumDetail">
     
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-sm mb-5 text-white/40" data-aos="fade-right">

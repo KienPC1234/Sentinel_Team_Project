@@ -9,6 +9,7 @@ from api.utils.security import verify_turnstile_token
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.core.cache import cache
+from django.db import IntegrityError, transaction
 
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Count, Sum, F, Q
@@ -49,6 +50,23 @@ logger = logging.getLogger(__name__)
 
 from api.core.models import ForumPost, ForumComment, ForumLike, ForumCommentLike, ForumPostReaction, ForumPostReport, ForumCommentReport, ForumReactionType, ForumCommentReaction, ForumPostView
 from api.core.serializers import ForumPostSerializer, ForumCommentSerializer, ForumPostReportSerializer, ForumCommentReportSerializer
+
+
+def _safe_get_or_create(model, **kwargs):
+    """get_or_create that survives concurrent double-clicks (IntegrityError → fetch existing)."""
+    try:
+        return model.objects.get_or_create(**kwargs)
+    except IntegrityError:
+        lookup = {k: v for k, v in kwargs.items() if k != 'defaults'}
+        try:
+            return model.objects.get(**lookup), False
+        except model.DoesNotExist:
+            return model.objects.get_or_create(**kwargs)
+
+
+def _dec_counter(model, obj_id, field):
+    """Decrement a counter column, floored at 0 (prevents negative drift)."""
+    model.objects.filter(id=obj_id, **{f'{field}__gt': 0}).update(**{field: F(field) - 1})
 
 
 def _extract_mentioned_usernames(text: str) -> list[str]:
@@ -358,10 +376,10 @@ class ForumCommentLikeView(APIView):
         except ForumComment.DoesNotExist:
             return Response({'error': 'Bình luận không tồn tại'}, status=404)
 
-        like, created = ForumCommentLike.objects.get_or_create(user=request.user, comment=comment)
+        like, created = _safe_get_or_create(ForumCommentLike, user=request.user, comment=comment)
         if not created:
             like.delete()
-            ForumComment.objects.filter(id=comment_id).update(likes_count=F('likes_count') - 1)
+            _dec_counter(ForumComment, comment_id, 'likes_count')
             action = 'unliked'
         else:
             ForumComment.objects.filter(id=comment_id).update(likes_count=F('likes_count') + 1)
@@ -385,10 +403,10 @@ class ForumPostLikeView(APIView):
         except ForumPost.DoesNotExist:
             return Response({'error': 'Bài viết không tồn tại'}, status=404)
 
-        like, created = ForumLike.objects.get_or_create(user=request.user, post=post)
+        like, created = _safe_get_or_create(ForumLike, user=request.user, post=post)
         if not created:
             like.delete()
-            ForumPost.objects.filter(id=post_id).update(likes_count=F('likes_count') - 1)
+            _dec_counter(ForumPost, post_id, 'likes_count')
             action = 'unliked'
         else:
             ForumPost.objects.filter(id=post_id).update(likes_count=F('likes_count') + 1)
@@ -415,18 +433,19 @@ class ForumPostReactionView(APIView):
         except ForumPost.DoesNotExist:
             return Response({'error': 'Bài viết không tồn tại'}, status=404)
 
-        reaction, created = ForumPostReaction.objects.get_or_create(
+        reaction, created = _safe_get_or_create(
+            ForumPostReaction,
             user=request.user, post=post, reaction_type=rtype
         )
 
         if not created:
             reaction.delete()
             if rtype == ForumReactionType.HELPFUL:
-                ForumPost.objects.filter(id=post_id).update(helpful_count=F('helpful_count') - 1)
+                _dec_counter(ForumPost, post_id, 'helpful_count')
             elif rtype == ForumReactionType.SHARE:
-                ForumPost.objects.filter(id=post_id).update(shares_count=F('shares_count') - 1)
+                _dec_counter(ForumPost, post_id, 'shares_count')
             else:
-                ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') - 1)
+                _dec_counter(ForumPost, post_id, 'dislikes_count')
             action = 'removed'
         else:
             if rtype == ForumReactionType.HELPFUL:
@@ -585,7 +604,8 @@ class ForumCommentReactionView(APIView):
                     comment=comment, user=user
                 ).delete()[0]
                 if up_deleted or like_deleted:
-                    self._update_count(comment, 'upvote', -1)
+                    for _ in range((1 if up_deleted else 0) + (1 if like_deleted else 0)):
+                        self._update_count(comment, 'upvote', -1)
                 if help_deleted:
                     self._update_count(comment, 'helpful', -1)
                     
@@ -625,12 +645,14 @@ class ForumCommentReactionView(APIView):
         })
 
     def _update_count(self, comment, reaction_type, delta):
-        if reaction_type == 'upvote':
-            ForumComment.objects.filter(id=comment.id).update(likes_count=F('likes_count') + delta)
-        elif reaction_type == 'downvote':
-            ForumComment.objects.filter(id=comment.id).update(dislikes_count=F('dislikes_count') + delta)
-        elif reaction_type == 'helpful':
-            ForumComment.objects.filter(id=comment.id).update(helpful_count=F('helpful_count') + delta)
+        field_map = {'upvote': 'likes_count', 'downvote': 'dislikes_count', 'helpful': 'helpful_count'}
+        field = field_map.get(reaction_type)
+        if not field:
+            return
+        if delta < 0:
+            _dec_counter(ForumComment, comment.id, field)
+        else:
+            ForumComment.objects.filter(id=comment.id).update(**{field: F(field) + delta})
 
 
 class ForumPostReactionMutualView(APIView):
@@ -661,11 +683,11 @@ class ForumPostReactionMutualView(APIView):
             # Toggle off
             existing.delete()
             if rtype == ForumReactionType.HELPFUL:
-                ForumPost.objects.filter(id=post_id).update(helpful_count=F('helpful_count') - 1)
+                _dec_counter(ForumPost, post_id, 'helpful_count')
             elif rtype == ForumReactionType.SHARE:
-                ForumPost.objects.filter(id=post_id).update(shares_count=F('shares_count') - 1)
+                _dec_counter(ForumPost, post_id, 'shares_count')
             else:
-                ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') - 1)
+                _dec_counter(ForumPost, post_id, 'dislikes_count')
             action = 'removed'
             reacted = False
         else:
@@ -674,13 +696,13 @@ class ForumPostReactionMutualView(APIView):
                 # Remove like and helpful
                 like_deleted = ForumLike.objects.filter(post=post, user=user).delete()[0]
                 if like_deleted:
-                    ForumPost.objects.filter(id=post_id).update(likes_count=F('likes_count') - 1)
-                    
+                    _dec_counter(ForumPost, post_id, 'likes_count')
+
                 helpful_deleted = ForumPostReaction.objects.filter(
                     post=post, user=user, reaction_type=ForumReactionType.HELPFUL
                 ).delete()[0]
                 if helpful_deleted:
-                    ForumPost.objects.filter(id=post_id).update(helpful_count=F('helpful_count') - 1)
+                    _dec_counter(ForumPost, post_id, 'helpful_count')
                     
             elif rtype in [ForumReactionType.HELPFUL]:
                 # Remove dislike
@@ -688,7 +710,7 @@ class ForumPostReactionMutualView(APIView):
                     post=post, user=user, reaction_type=ForumReactionType.DISLIKE
                 ).delete()[0]
                 if dislike_deleted:
-                    ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') - 1)
+                    _dec_counter(ForumPost, post_id, 'dislikes_count')
             
             # Create reaction
             ForumPostReaction.objects.create(user=user, post=post, reaction_type=rtype)
@@ -726,12 +748,12 @@ class ForumPostLikeMutualView(APIView):
             return Response({'error': 'Bài viết không tồn tại'}, status=404)
 
         user = request.user
-        like, created = ForumLike.objects.get_or_create(user=user, post=post)
-        
+        like, created = _safe_get_or_create(ForumLike, user=user, post=post)
+
         if not created:
             # Toggle off
             like.delete()
-            ForumPost.objects.filter(id=post_id).update(likes_count=F('likes_count') - 1)
+            _dec_counter(ForumPost, post_id, 'likes_count')
             action = 'unliked'
             liked = False
         else:
@@ -741,7 +763,7 @@ class ForumPostLikeMutualView(APIView):
                 post=post, user=user, reaction_type=ForumReactionType.DISLIKE
             ).delete()[0]
             if dislike_deleted:
-                ForumPost.objects.filter(id=post_id).update(dislikes_count=F('dislikes_count') - 1)
+                _dec_counter(ForumPost, post_id, 'dislikes_count')
             action = 'liked'
             liked = True
         

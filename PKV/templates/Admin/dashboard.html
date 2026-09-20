@@ -172,6 +172,7 @@
 
     <!-- Broadcast Notification Section -->
     <div class="mb-12 p-1 rounded-[2.5rem] bg-gradient-to-br from-cyan-500/20 to-purple-500/10" data-aos="fade-up" data-aos-delay="50"
+         @change="if ($event.detail !== undefined && $event.target.closest('.liquid-custom-select')) ntype = $event.detail"
          x-data="{
             title: '', message: '', ntype: 'info', url: '', sending: false, sent: false,
             async send() {
@@ -221,7 +222,7 @@
                                 { value: 'warning', label: 'Cảnh báo' },
                                 { value: 'error', label: 'Khẩn cấp' }
                             ]
-                        })" class="liquid-custom-select w-full" @change="ntype = $event.detail">
+                        })" class="liquid-custom-select w-full">
                             <div class="liquid-select-trigger py-3 px-4 text-sm w-full min-w-0" :class="{ 'active': open }" @click="open = !open">
                                 <span x-text="label" class="truncate"></span>
                                 <i class="bi bi-chevron-down liquid-select-arrow"></i>

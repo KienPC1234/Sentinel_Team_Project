@@ -795,7 +795,7 @@ def dashboard_view(request):
         "danger_scans": danger_scans,
         "total_reports": total_reports,
         "protection_score": protection_score,
-        "recent_scans_json": recent_scans_json if 'recent_scans_json' in dir() else '[]',
+        "recent_scans_json": recent_scans if 'recent_scans' in dir() else [],
         "user_reports": user_reports,
         "user_alerts": user_alerts,
         "recent_alerts": recent_alerts,

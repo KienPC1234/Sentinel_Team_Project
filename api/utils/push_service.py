@@ -164,10 +164,10 @@ class PushNotificationService:
             admins = User.objects.filter(is_staff=True, is_active=True)
             Notification.objects.bulk_create([
                 Notification(user=admin, title=title, message=message, url=url, notification_type=notification_type)
-                for admin in admins
-            ])
+                for admin in admins.iterator(chunk_size=500)
+            ], batch_size=500)
 
-            for admin in admins:
+            for admin in admins.iterator(chunk_size=500):
                 unread_count = Notification.objects.filter(user=admin, is_read=False).count()
                 if PushNotificationService._is_user_online(admin.id):
                     PushNotificationService._send_ws(admin.id, title, message, url, notification_type, unread_count)
@@ -185,19 +185,26 @@ class PushNotificationService:
 
         User = get_user_model()
         try:
-            users = User.objects.filter(is_active=True)
-            Notification.objects.bulk_create([
-                Notification(user=u, title=title, message=message, url=url, notification_type=notification_type)
-                for u in users
-            ])
+            users = User.objects.filter(is_active=True).only('id')
+            total = 0
+            batch = []
+            for u in users.iterator(chunk_size=500):
+                batch.append(Notification(user_id=u.id, title=title, message=message, url=url, notification_type=notification_type))
+                if len(batch) >= 500:
+                    Notification.objects.bulk_create(batch, batch_size=500)
+                    total += len(batch)
+                    batch = []
+            if batch:
+                Notification.objects.bulk_create(batch, batch_size=500)
+                total += len(batch)
 
-            for u in users:
-                unread_count = Notification.objects.filter(user=u, is_read=False).count()
+            for u in users.iterator(chunk_size=500):
+                unread_count = Notification.objects.filter(user_id=u.id, is_read=False).count()
                 if PushNotificationService._is_user_online(u.id):
                     PushNotificationService._send_ws(u.id, title, message, url, notification_type, unread_count)
                 else:
                     PushNotificationService._send_webpush_notification(u.id, title, message, url, notification_type)
-            return users.count()
+            return total
         except Exception as e:
             logger.error(f"Failed to broadcast to all: {e}")
             return 0

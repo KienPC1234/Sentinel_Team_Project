@@ -452,15 +452,19 @@ def manage_forum(request):
     ).order_by('-posts_count')[:200]
 
     members_json = []
+    active_bans_by_user = {}
+    for ban in ForumBan.objects.filter(user__in=forum_members, is_active=True).select_related('user'):
+        active_bans_by_user.setdefault(ban.user_id, ban)
     for u in forum_members:
-        active_ban = ForumBan.objects.filter(user=u, is_active=True).first()
+        active_ban = active_bans_by_user.get(u.id)
         is_banned = bool(active_ban and not active_ban.is_expired)
+        profile = getattr(u, 'profile', None)
         members_json.append({
             'id': u.id,
             'username': u.username,
-            'display_name': u.profile.display_name or u.username,
-            'avatar': u.profile.avatar.url if u.profile.avatar else None,
-            'rank': u.profile.rank_info,
+            'display_name': (profile.display_name if profile else None) or u.username,
+            'avatar': profile.avatar.url if (profile and profile.avatar) else None,
+            'rank': profile.rank_info if profile else None,
             'posts_count': u.posts_count,
             'comments_count': u.comments_count,
             'is_staff': u.is_staff,
@@ -687,7 +691,12 @@ def forum_ban_action(request):
         if action == 'ban':
             reason = data.get('reason', 'Vi phạm nội quy diễn đàn')
             ban_type = data.get('ban_type', 'temporary')
-            days = int(data.get('days', 7))
+            try:
+                days = int(data.get('days', 7))
+            except (TypeError, ValueError):
+                return JsonResponse({'error': 'Số ngày ban không hợp lệ.'}, status=400)
+            if ban_type != 'permanent' and days <= 0:
+                return JsonResponse({'error': 'Số ngày ban phải lớn hơn 0.'}, status=400)
 
             # Deactivate existing bans
             ForumBan.objects.filter(user=target_user, is_active=True).update(is_active=False)
@@ -969,6 +978,7 @@ def update_report_note(request, report_id):
     })
 
 @admin_required
+@transaction.atomic
 def edit_lesson(request, lesson_id=None):
     """View to create or edit a Learn Lesson with quiz and scenario"""
     lesson = None
@@ -1037,17 +1047,24 @@ def edit_lesson(request, lesson_id=None):
                 
                 if scenario_id_form:
                     try:
-                        sc = LearnScenario.objects.get(id=int(scenario_id_form))
-                        sc.title = scenario_title
-                        sc.description = scenario_desc
-                        sc.content = scenario_content
-                        sc.save()
-                    except LearnScenario.DoesNotExist:
-                        LearnScenario.objects.create(
-                            lesson=lesson,
-                            title=scenario_title,
-                            description=scenario_desc,
-                            content=scenario_content,
+                        scenario_pk = int(scenario_id_form)
+                    except (TypeError, ValueError):
+                        scenario_pk = None
+                    if scenario_pk is None:
+                        messages.error(request, 'ID tình huống không hợp lệ, bỏ qua lưu scenario.')
+                    else:
+                        try:
+                            sc = LearnScenario.objects.get(id=scenario_pk)
+                            sc.title = scenario_title
+                            sc.description = scenario_desc
+                            sc.content = scenario_content
+                            sc.save()
+                        except LearnScenario.DoesNotExist:
+                            LearnScenario.objects.create(
+                                lesson=lesson,
+                                title=scenario_title,
+                                description=scenario_desc,
+                                content=scenario_content,
                         )
                 elif scenario:
                     scenario.title = scenario_title

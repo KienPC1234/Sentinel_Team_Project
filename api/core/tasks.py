@@ -156,8 +156,12 @@ def recompute_phone_risk(phone_number: str):
         return
 
     # Calculate Score using the unified engine
-    result = _phone_risk_score(phone_number)
-    
+    try:
+        result = _phone_risk_score(phone_number)
+    except Exception as exc:
+        logger.warning(f'recompute_phone_risk failed for {phone_number}: {exc}')
+        return
+
     # Map API level string directly to Enum
     level_map = {
         'SAFE': PhoneRiskLevel.SAFE,
@@ -165,20 +169,24 @@ def recompute_phone_risk(phone_number: str):
         'YELLOW': PhoneRiskLevel.YELLOW,
         'RED': PhoneRiskLevel.RED
     }
-    risk_enum = level_map.get(result['risk_level'], PhoneRiskLevel.SAFE)
+    risk_enum = level_map.get((result or {}).get('risk_level'), PhoneRiskLevel.SAFE)
 
     # Update DB
-    PhoneNumber.objects.update_or_create(
-        phone_number=phone_number,
-        defaults={
-            'risk_level': risk_enum,
-            'reports_count': result['report_count'],
-            'trust_score': result.get('trust_score', 0),
-            'risk_label': f"Score: {result['risk_score']}",
-            # If carrier or other enriched data is available in result, save it here
-        }
-    )
-    logger.info(f'Recomputed risk for {phone_number}: score={result["risk_score"]}')
+    try:
+        PhoneNumber.objects.update_or_create(
+            phone_number=phone_number,
+            defaults={
+                'risk_level': risk_enum,
+                'reports_count': (result or {}).get('report_count', 0),
+                'trust_score': (result or {}).get('trust_score', 0),
+                'risk_label': f"Score: {(result or {}).get('risk_score', 0)}",
+                # If carrier or other enriched data is available in result, save it here
+            }
+        )
+    except Exception as exc:
+        logger.warning(f'recompute_phone_risk DB update failed for {phone_number}: {exc}')
+        return
+    logger.info(f'Recomputed risk for {phone_number}: score={(result or {}).get("risk_score")}')
 
 
 @shared_task(name='core.daily_trend_aggregation')
@@ -221,19 +229,31 @@ def scan_domain_async(url: str, user_id: int = None):
     from api.core.views.scan_views import _analyze_domain
     from api.core.models import ScanEvent
 
-    result = _analyze_domain(url)
+    try:
+        result = _analyze_domain(url)
+        if not isinstance(result, dict):
+            raise ValueError('Domain analyzer returned no result')
+        owner_id = None
+        if user_id is not None:
+            from django.contrib.auth import get_user_model
+            try:
+                owner_id = get_user_model().objects.filter(id=int(user_id)).values_list('id', flat=True).first()
+            except (TypeError, ValueError):
+                owner_id = None
 
-    ScanEvent.objects.create(
-        user_id=user_id,
-        scan_type='domain',
-        raw_input=url,
-        normalized_input=result['domain'],
-        result_json=result,
-        risk_score=result['risk_score'],
-        risk_level=result['risk_level'],
-    )
-
-    return result
+        ScanEvent.objects.create(
+            user_id=owner_id,
+            scan_type='domain',
+            raw_input=url,
+            normalized_input=result.get('domain') or url,
+            result_json=result,
+            risk_score=int(result.get('risk_score') or 0),
+            risk_level=result.get('risk_level') or 'SAFE',
+        )
+        return result
+    except Exception as exc:
+        logger.warning(f'scan_domain_async failed for {url}: {exc}')
+        return {'error': str(exc)[:300]}
 
 
 @shared_task(name='core.deduplicate_reports')
@@ -315,7 +335,11 @@ def send_webpush_chunk(self, subscription_ids: list[int], payload: dict):
     notification_type = str((payload or {}).get('notification_type') or 'info')
     tag = str((payload or {}).get('tag') or f'sc-{notification_type}-broadcast')
     icon = str((payload or {}).get('icon') or '/static/logo.png')
-    ttl = int((payload or {}).get('ttl') or 3600)
+    try:
+        ttl = int((payload or {}).get('ttl') or 3600)
+    except (TypeError, ValueError):
+        ttl = 3600
+    ttl = max(60, min(86400, ttl))
 
     sent = 0
     failed = 0

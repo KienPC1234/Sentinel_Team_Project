@@ -344,8 +344,8 @@ class ScanLookupView(APIView):
         'audio': ['audio'],
         'file': ['file'],
         'qr': ['qr'],
-        'social': ['message'],
-        'crypto': ['message'],
+        'social': ['social', 'message'],
+        'crypto': ['crypto', 'message'],
     }
 
     def get(self, request):

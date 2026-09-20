@@ -227,4 +227,11 @@ scripts/puppeteer_host/puppeteer_profile/
 sandbox/capa-rules/
 sandbox/rules/signature_base/
 sandbox/rules/*.yarc
-*.yarc
+# Evidence & Telemetry Directories (Competition Dossier)
+01_Prompt_Engineering_Logs/
+02_Git_Commit_History_Telemetry/
+03_Docker_Sandbox_Verification/
+04_Stress_Test_Performance_Reports/
+05_Educational_Field_Testing/
+06_Product_Demo_Video/
+*.docx

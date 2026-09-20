@@ -18,10 +18,10 @@
     </div>
 
     <div class="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/10 backdrop-blur-xl relative z-[220]">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3" @change="if ($event.detail !== undefined && $event.target.closest('[data-filter]')) { const f = $event.target.closest('[data-filter]').dataset.filter; if (f === 'role') roleFilter = $event.detail; if (f === 'status') statusFilter = $event.detail; }">
             <input x-model.debounce.200ms="searchQuery" type="text" placeholder="Tìm username / email..."
                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/30 transition-all">
-            <div class="dropdown-container liquid-custom-select" x-data="liquidSelect({
+            <div class="dropdown-container liquid-custom-select" data-filter="role" x-data="liquidSelect({
                 value: 'all',
                 placeholder: 'Tất cả vai trò',
                 options: [
@@ -30,7 +30,7 @@
                     { value: 'admin', label: 'Administrator' },
                     { value: 'member', label: 'Member' }
                 ]
-            })" @change="roleFilter = $event.detail">
+            })">
                 <div class="liquid-select-trigger py-2.5 px-4 text-xs" :class="{ 'active': open }" @click="open = !open">
                     <span x-text="label" class="truncate"></span>
                     <i class="bi bi-chevron-down liquid-select-arrow"></i>
@@ -43,7 +43,7 @@
                     </template>
                 </div>
             </div>
-            <div class="dropdown-container liquid-custom-select" x-data="liquidSelect({
+            <div class="dropdown-container liquid-custom-select" data-filter="status" x-data="liquidSelect({
                 value: 'all',
                 placeholder: 'Tất cả trạng thái',
                 options: [
@@ -51,7 +51,7 @@
                     { value: 'active', label: 'Hoạt động' },
                     { value: 'inactive', label: 'Vô hiệu hóa' }
                 ]
-            })" @change="statusFilter = $event.detail">
+            })">
                 <div class="liquid-select-trigger py-2.5 px-4 text-xs" :class="{ 'active': open }" @click="open = !open">
                     <span x-text="label" class="truncate"></span>
                     <i class="bi bi-chevron-down liquid-select-arrow"></i>

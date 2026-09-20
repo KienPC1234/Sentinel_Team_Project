@@ -1,7 +1,7 @@
 <div align="center">
   <h1>ShieldCall VN (Sentinel Core)</h1>
   <p><b>Advanced Multi-Modal Threat Intelligence, Zero-Trust Sandbox & Anti-Fraud Architecture</b></p>
-  <p><b>Production Endpoint:</b> <a href="https://sc.fptoj.com">https://sc.fptoj.com</a></p>
+  <p><b>Production Architecture:</b> <code>https://&lt;your-domain&gt;</code> | <b>Live Demo:</b> <a href="https://sc.fptoj.com">https://sc.fptoj.com</a></p>
 
   [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
   [![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
@@ -168,9 +168,12 @@ flowchart LR
 - **Telecommunication & Number Scoring**: Normalizes international and domestic Vietnamese MSISDN formats, cross-referencing threat telemetry, carrier assignments, and community scam reports.
 - **Financial Account Verification**: Performs programmatic lookup and beneficiary name resolution via VietQR integration, cross-referencing fraud intelligence databases.
 - **Domain & Web Intelligence**: Inspects DNS MX records, domain age (WHOIS), SSL reputation, and ScamAdviser / Trustpilot metrics via SSRF-isolated relays.
+- **Email & Messaging Forensics**: Dissects `.eml` and text messages, validating SPF, DKIM, and DMARC DNS alignment to identify spoofed corporate or government origins.
 - **Multi-Modal AI Analysis**:
   - **Audio Streams**: Acoustic transcription via `Faster-Whisper` running on NVIDIA CUDA followed by psychological manipulation and urgency indicator extraction.
   - **Visual Media**: Image OCR via `EasyOCR` (GPU accelerated) combined with QR code matrix decoding and phishing banner classification.
+- **Malware & APK Sandbox**: Dissects Windows binaries and Android APK packages in isolated Docker environments using YARA rules, PEFile, and ClamAV.
+- **Social Engineering & Crypto Forensics**: Tracks Telegram channels, Zalo groups, fake VNeID portals, and suspicious crypto wallet addresses.
 
 ### 2.2 Zero-Trust Local Malware Sandbox Engine
 Replaces third-party external dependencies with an entirely isolated on-premise containment engine:
@@ -207,13 +210,15 @@ flowchart TD
         JSONRPC["JSON-RPC Message Relay (:8001/api/v1/mcp/messages/)"]
     end
 
-    subgraph Tools["Live Forensic Tools"]
-        ToolPhone["scan_phone"]
-        ToolURL["scan_url"]
-        ToolBank["scan_bank_account"]
-        ToolThreat["query_threat_database"]
-        ToolStealth["stealth_browse"]
-        ToolSearch["web_search"]
+    subgraph Tools["Exposed Forensic MCP Tools"]
+        ToolPhone["check_phone"]
+        ToolURL["check_url_or_domain"]
+        ToolBank["check_bank_account"]
+        ToolMsg["analyze_message"]
+        ToolEmail["check_email_sender"]
+        ToolThreat["lookup_scam_db"]
+        ToolTrends["get_scam_radar_trends"]
+        ToolFull["scan_full_incident"]
     end
 
     subgraph Engine["Ollama / DeepSeek LLM"]
@@ -231,7 +236,8 @@ flowchart TD
 - **Discovery Endpoint**: `GET /api/v1/mcp/`
 - **SSE Transport Stream**: `GET /api/v1/mcp/sse/`
 - **JSON-RPC Message Relay**: `POST /api/v1/mcp/messages/`
-- **Exposed Tools**: `scan_phone`, `scan_url`, `scan_bank_account`, `query_threat_database`, `stealth_browse`, `web_search`.
+- **Exposed Tools (10)**: `check_phone`, `check_bank_account`, `check_url_or_domain`, `analyze_message`, `check_email_sender`, `get_supported_banks`, `lookup_scam_db`, `get_scam_radar_trends`, `scan_full_incident`, `report_scam`.
+- **System Prompts (3)**: `shieldcall_sentry`, `emergency_advisor`, `scam_investigator`.
 
 ---
 
@@ -243,7 +249,7 @@ flowchart TD
 | **Web & API Framework** | Django 5.2.x, Django REST Framework, Daphne ASGI, Channels 4.x |
 | **Database & Caching** | MariaDB 11.x / MySQL 8.x (`PyMySQL`), Redis 8.x (`django-redis`, `channels-redis`) |
 | **Distributed Tasks** | Celery 5.6.x (Thread Pool Worker + Periodic Beat Scheduler) |
-| **Hardware Acceleration** | NVIDIA CUDA GPU (RTX 4070 SUPER), cuDNN |
+| **Hardware Acceleration** | NVIDIA CUDA GPU (Compute Capability 7.5+), cuDNN |
 | **Malware Sandbox** | Docker Isolated Ephemeral Containers, YARA, OLETools, PEFile, PyPDF, ClamAV |
 | **Browser Cluster** | Puppeteer Extra, Chromium (Headless), Stealth Plugin, Anti-SSRF Relay |
 | **AI & Neural Computing** | Ollama SDK, PyTorch 2.x CUDA, FAISS (`nomic-embed-text-v1`), Faster-Whisper, EasyOCR |
@@ -254,36 +260,49 @@ flowchart TD
 
 ## 4. API Specification Overview
 
-Base URL: `https://sc.fptoj.com/api/v1`
+Base URL: `/api/v1` (Production: `https://<your-domain>/api/v1`)
 
 | Endpoint | Method | Purpose | Authentication |
 | :--- | :--- | :--- | :--- |
-| `/check-session` | `GET` | Validates or provisions ephemeral mobile sessions | Public |
-| `/check-phone` | `GET` | High-speed risk classification for MSISDNs | Public |
-| `/scan/phone/` | `POST` | Comprehensive telephone threat assessment | Turnstile |
-| `/scan/message/` | `POST` | SMS and social messaging fraud analysis | Turnstile |
-| `/scan/domain/` | `POST` | URL, domain reputation, and DNS/WHOIS scan | Turnstile |
-| `/scan/account/` | `POST` | Bank account fraud verification | Turnstile |
-| `/scan/image/` | `POST` | OCR extraction and visual fraud detection | Turnstile |
-| `/scan/audio/` | `POST` | Speech-to-text and voice phishing detection | Turnstile |
-| `/scan/file/` | `POST` | Zero-Trust Docker sandbox file analysis | Turnstile |
+| `/scan/phone/` | `POST` | Comprehensive telephone threat assessment | Turnstile / Token |
+| `/scan/message/` | `POST` | SMS and social messaging fraud analysis | Turnstile / Token |
+| `/scan/domain/` | `POST` | URL, domain reputation, and DNS/WHOIS scan | Turnstile / Token |
+| `/scan/account/` | `POST` | Bank account fraud verification | Turnstile / Token |
+| `/scan/banks/` | `GET` | National VietQR bank list and metadata retrieval | Public |
+| `/scan/email/` | `POST` | Email phishing and header forensics (SPF, DKIM, DMARC) | Turnstile / Token |
+| `/scan/image/` | `POST` | OCR extraction and visual fraud detection | Turnstile / Token |
+| `/scan/audio/` | `POST` | Speech-to-text and voice phishing detection | Turnstile / Token |
+| `/scan/file/` | `POST` | Zero-Trust Docker sandbox file analysis | Turnstile / Token |
+| `/scan/lookup/` | `GET` | Multi-vector threat intelligence search across reports | Public |
 | `/scan/status/<scan_id>/` | `GET` | Asynchronous scan status and result retrieval | Session / Auth |
+| `/scan/<scan_id>/report-admin/` | `POST` | Request administrator verification for scan verdict | Authenticated |
 | `/scan/analyze/stream/` | `POST` | Server-Sent Events (SSE) stream for scan events | Public / Token |
 | `/chat/stream/` | `POST` | Server-Sent Events (SSE) AI assistant stream | Session / Token |
+| `/chat/sessions/` | `GET`, `POST` | Manage chat conversation history sessions | Session / Token |
 | `/mcp/` | `GET` | Model Context Protocol discovery metadata | Public |
 | `/mcp/sse/` | `GET` | MCP Server-Sent Events endpoint for agents | Public |
 | `/mcp/messages/` | `POST` | MCP JSON-RPC message relay | Public |
-| `/report/` | `POST` | Submit community cybercrime or scam incident report | Authenticated |
+| `/report/` | `POST` | Submit community cybercrime or scam incident report | Public / Auth |
+| `/report/<id>/` | `GET` | Retrieve verified scam incident details | Public / Auth |
+| `/trends/daily/` | `GET` | Daily threat trend telemetry and regional metrics | Public |
+| `/trends/hot/` | `GET` | Emerging viral scam tactics and attack waves | Public |
+| `/trends/radar-stats/` | `GET` | Aggregated Scam Radar multi-vector statistics | Public |
+| `/push/public-key/` | `GET` | Retrieve VAPID public key for WebPush client | Public |
+| `/push/subscribe/` | `POST` | Register browser push subscription endpoint | Authenticated |
+| `/scam-iq/start/` | `POST` | Initialize dynamic Scam IQ examination session | Authenticated |
+| `/scam-iq/submit/` | `POST` | Submit Scam IQ exam responses for AI evaluation | Authenticated |
+| `/scam-iq/history/` | `GET` | Retrieve historical examination score records | Authenticated |
 | `/user/scans/` | `GET` | Historical scan telemetry for user account | Authenticated |
 | `/user/api-keys/` | `GET`, `POST` | Provision and manage developer API keys | Authenticated |
 | `/auth/register/` | `POST` | User registration with OTP validation | Public |
 | `/auth/login/` | `POST` | Credential validation and MFA challenge trigger | Public |
 | `/auth/mfa/verify/` | `POST` | Multi-Factor Authentication verification | Pre-auth Token |
+| `/auth/me/` | `GET` | Retrieve current authenticated user profile | Authenticated |
 
 Interactive OpenAPI and Swagger documentation:
-- **Swagger UI**: `https://sc.fptoj.com/api/docs/`
-- **ReDoc**: `https://sc.fptoj.com/api/redoc/`
-- **OpenAPI Schema**: `https://sc.fptoj.com/api/schema/`
+- **Swagger UI**: `/api/docs/` (or `https://<your-domain>/api/docs/`)
+- **ReDoc**: `/api/redoc/` (or `https://<your-domain>/api/redoc/`)
+- **OpenAPI Schema**: `/api/schema/` (or `https://<your-domain>/api/schema/`)
 
 ---
 
@@ -311,8 +330,8 @@ Create `.env` at the project root:
 # Core
 DEBUG=False
 SECRET_KEY='<cryptographically_secure_token>'
-ALLOWED_HOSTS=sc.fptoj.com,localhost,127.0.0.1
-SITE_URL=https://sc.fptoj.com
+ALLOWED_HOSTS=<your-domain>,localhost,127.0.0.1
+SITE_URL=https://<your-domain>
 
 # Database (MariaDB / MySQL)
 DB_ENGINE=mysql
@@ -345,12 +364,12 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET=<google_oauth2_secret>
 
 # Mail Delivery (SMTP)
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=mail.fptoj.com
+EMAIL_HOST=smtp.<your-domain>.com
 EMAIL_PORT=587
 EMAIL_USE_TLS=True
-EMAIL_HOST_USER=noreply@fptoj.com
+EMAIL_HOST_USER=noreply@<your-domain>.com
 EMAIL_HOST_PASSWORD=<smtp_password>
-DEFAULT_FROM_EMAIL=FPTOJ Support <noreply@fptoj.com>
+DEFAULT_FROM_EMAIL=ShieldCall VN Support <noreply@<your-domain>.com>
 ```
 
 ### 5.3 Build the Docker Malware Sandbox Image
@@ -378,7 +397,7 @@ cd scripts/puppeteer_host && npm install && cd ../..
 ```
 
 ### 5.5 Process Management via PM2
-The system is managed via [ecosystem.config.js](file:///data/Sentinel_Team_Project/ecosystem.config.js):
+The system is managed via [ecosystem.config.js](./ecosystem.config.js):
 
 ```bash
 # Start all microservices
@@ -392,11 +411,11 @@ pm2 status
 pm2 logs --lines 50
 ```
 
-Managed cluster processes:
-- `pkv-web`: ASGI server handling HTTP requests and WebSocket/SSE streams (`0.0.0.0:8001`).
-- `pkv-celery`: Multi-threaded Celery worker handling CUDA OCR, speech transcription, and sandbox jobs.
+Managed cluster processes (configurable via `.env` or system environment variables):
+- `pkv-web`: ASGI server handling HTTP requests and WebSocket/SSE streams (binds to `${WEB_HOST}:${WEB_PORT}`, defaults to `0.0.0.0:8001`).
+- `pkv-celery`: Multi-threaded Celery worker handling CUDA OCR, speech transcription, and sandbox jobs (concurrency configured via `CELERY_CONCURRENCY`).
 - `pkv-celery-beat`: Periodic task scheduler.
-- `pkv-puppeteer`: Headless Chromium render cluster with SSRF protection (`0.0.0.0:3010`).
+- `pkv-puppeteer`: Headless Chromium render cluster with SSRF protection (binds to `PUPPETEER_HOST_PORT`, defaults to port `3010`).
 
 ---
 

@@ -2,7 +2,7 @@
 
 - Dự án: **ShieldCall VN (Sentinel Team Project)**
 - Phiên bản: **1.0.0**
-- Ngày thẩm định và cập nhật: **16/09/2026**
+- Ngày thẩm định và cập nhật: **20/09/2026**
 - Phạm vi: Toàn bộ hệ thống mã nguồn Backend (Django/Daphne/Celery), AI Engine (LLM/Ollama/Vision/Audio/RAG), Container Sandbox (ClamAV/YARA/Capa), Trình duyệt ẩn danh (Node.js/Puppeteer) và Giao diện người dùng (Tailwind/Alpine.js).
 - Mục tiêu: Kê khai minh bạch, trung thực 100% không bỏ sót bất kỳ thành phần nào, phục vụ đánh giá liêm chính học thuật, hồ sơ kỹ thuật cuộc thi khoa học công nghệ và kiểm định an toàn thông tin.
 
@@ -10,14 +10,16 @@
 
 ## 1. TỔNG QUAN HỆ THỐNG & TRIẾT LÝ BẢO MẬT
 
-ShieldCall VN là nền tảng an toàn số toàn diện dành cho người dùng và tổ chức tại Việt Nam, tập trung giải quyết bài toán phát hiện, cảnh báo sớm và phân tích pháp chứng các hình thức lừa đảo trực tuyến đa phương thức:
+ShieldCall VN là nền tảng an toàn số toàn diện dành cho người dùng và tổ chức tại Việt Nam, tập trung giải quyết bài toán phát hiện, cảnh báo sớm và phân tích pháp chứng các hình thức lừa đảo trực tuyến đa phương thức (10 nhóm mục tiêu `TargetType` và 17 phân loại thủ đoạn `ScamType`):
 - **Số điện thoại**: Mạo danh cơ quan công an, viện kiểm sát, tòa án, nhân viên ngân hàng, lừa đảo tuyển dụng, phát hiện số ảo VoIP qua nhà mạng ảo (Virtual Providers).
 - **Tài khoản ngân hàng**: Đối soát danh sách đen gian lận tài chính, tài khoản rác/thuê mượn, chuẩn hóa theo chuẩn ngân hàng quốc gia VietQR.
 - **Tên miền & Website**: Phát hiện website phishing giả mạo ngân hàng/cổng thanh toán, kiểm tra chứng chỉ SSL/TLS thời gian thực, DNS, WHOIS, thuật toán phát hiện tên miền mạo danh (Levenshtein lookalike và Homoglyph substitution).
 - **Email & Tin nhắn**: Phân tích nội dung lừa đảo (.eml, SMS, mạng xã hội), kiểm tra tính toàn vẹn email qua bản ghi SPF, DKIM, DMARC, DNS MX; phát hiện kịch bản thao túng tâm lý (social engineering).
 - **Hình ảnh & Mã QR**: Trích xuất ký tự quang học (OCR) tiếng Việt từ ảnh chụp màn hình, phát hiện và giải mã mã QR độc hại (Quishing).
-- **Tệp tin mã độc**: Phân tích tĩnh chuyên sâu trong môi trường Docker Sandbox Zero-Trust cô lập hoàn toàn mạng, tính toán Shannon Entropy, kiểm tra chữ ký ClamAV và luật YARA.
-- **Ghi âm cuộc gọi**: Phiên âm âm thanh tiếng Việt và nhận diện bẫy kịch bản cuộc gọi mạo danh có timestamps.
+- **Tệp tin mã độc & APK**: Phân tích tĩnh chuyên sâu trong môi trường Docker Sandbox Zero-Trust cô lập hoàn toàn mạng, tính toán Shannon Entropy, kiểm tra chữ ký ClamAV và luật YARA phát hiện ứng dụng độc hại mạo danh VNeID/Dịch vụ công.
+- **Ghi âm cuộc gọi & Deepfake**: Phiên âm âm thanh tiếng Việt và nhận diện bẫy kịch bản cuộc gọi mạo danh, phân tích giọng nói giả mạo AI Deepfake có timestamps.
+- **Mạng xã hội (Social Channels)**: Nhận diện kênh lừa đảo qua hội nhóm kín Telegram, Zalo, trang Fanpage giả mạo doanh nghiệp/tổ chức.
+- **Tiền mã hóa (Crypto/Web3)**: Đối chiếu địa chỉ ví tiền mã hóa lừa đảo, các dự án lừa đảo đầu tư/sàn ảo tài chính.
 
 **Triết lý kiến trúc**: Ưu tiên **On-Premise / Zero Cloud Leakage**. Toàn bộ các tác vụ xử lý tệp tin, OCR, phiên âm âm thanh và tra cứu vector RAG đều vận hành nội bộ trên hạ tầng máy chủ của hệ thống, không chuyển tiếp dữ liệu nhạy cảm của người dùng ra dịch vụ đám mây bên thứ ba trái phép.
 
@@ -34,7 +36,7 @@ ShieldCall VN là nền tảng an toàn số toàn diện dành cho người dù
 | **Nhận dạng Giọng nói & Phiên âm (Audio AI)** | Faster-Whisper (mô hình `small`) | OpenAI / SYSTRAN (CTranslate2, MIT) | Quản lý tại `api/utils/media_utils.py`, sử dụng định dạng 8-bit int/float16, kết hợp tiện ích `ffmpeg` chuẩn hoá âm thanh về 16kHz WAV mono. | Phiên âm các tệp ghi âm cuộc gọi mạo danh (định dạng mp3, wav, m4a, webm, ogg) thành văn bản tiếng Việt có mốc thời gian (timestamps) để chuyển giao cho LLM phân tích bẫy lừa đảo. |
 | **Mô hình Nhúng Vector (Embedding Vector)** | `nomic-ai/nomic-embed-text-v1` | Nomic AI (Giấy phép Apache-2.0, Hugging Face) | Sử dụng qua `sentence-transformers` và `transformers` tại `api/utils/vector_db.py`, chiều vector $D=768$, hỗ trợ cự ly ngữ cảnh dài với rotary embedding (yêu cầu thư viện `einops`). | Chuyển đổi toàn bộ tri thức an toàn thông tin, cẩm nang phòng thủ và tình huống lừa đảo thành vector phục vụ cơ chế RAG. |
 | **Cơ sở dữ liệu Vector (Vector DB)** | FAISS (`faiss-cpu`) | Meta AI Research (Giấy phép MIT) | Quản lý chỉ mục vector tại `api/utils/vector_db.py` với tệp index nhị phân `scam_index.faiss` và metadata tương ứng. | Tìm kiếm tương đồng ngữ nghĩa (Cosine / Inner Product similarity) siêu tốc, đưa ngữ cảnh chính xác vào prompt của AI để loại bỏ hiện tượng ảo giác (hallucination). |
-| **AI Multi-Agent & Tool Calling Engine** | ReAct Pattern Agent (`ShieldCallAgent`) | Tự thiết kế và hiện thực trong `api/utils/ai_agent.py` | Mô hình tự động điều phối công cụ (tool calling loop) cho phép AI Assistant tự động gọi các tool: tìm kiếm web (SearXNG), tra cứu thực thể DB nội bộ, tra cứu ScamAdviser/Tranco, tính toán thiệt hại tài chính. | Tự động hóa quá trình điều tra đa nguồn tin tức và tổng hợp kết quả điều tra độc lập. |
+| **AI Multi-Agent & Tool Calling Engine** | ReAct Pattern Agent (`ShieldCallAgent`) | Tự thiết kế và hiện thực trong `api/utils/ai_agent.py` và `api/utils/ollama_client.py` | Mô hình tự động điều phối công cụ (tool calling loop) cho phép AI Assistant tự động gọi 11 công cụ chuyên biệt: `scan_phone`, `scan_url`, `scan_bank_account`, `stealth_browse`, `query_threat_database`, `lookup_company`, `get_latest_threat_trends`, `search_custom_reports`, `scan_file_threat`, `web_search`, `web_fetch`. | Tự động hóa quá trình điều tra đa nguồn tin tức, bóc tách trang web động, đối chiếu báo cáo nội bộ và tổng hợp kết quả điều tra độc lập. |
 | **Scam IQ AI Scoring Engine** | Hệ thống chấm điểm tương tác tự động | Hiện thực tại `api/core/views/scam_iq_views.py` | Đánh giá câu trả lời tự luận và trắc nghiệm tình huống của thí sinh, tạo phản hồi sư phạm (AI Feedback) chi tiết dựa trên ma trận rủi ro. | Tự động hóa quá trình đào tạo và kiểm tra năng lực tự vệ số của người dùng trên toàn hệ thống. |
 | **Magic Create Content Engine** | Pipeline sinh tài liệu giáo dục 5 bước | Hiện thực tại `api/core/views/admin_views.py` | Tự động bóc tách tin tức thô từ báo chí, trích xuất thực thể IOC, tóm tắt nội dung, sinh bộ câu hỏi trắc nghiệm (Quizzes) và kịch bản thực tế (Scenarios). | Giúp quản trị viên tạo nội dung giáo dục chất lượng cao trên Learn Hub chỉ từ liên kết báo chí hoặc văn bản thô. |
 
@@ -62,7 +64,7 @@ ShieldCall VN là nền tảng an toàn số toàn diện dành cho người dù
 | Tên API / Dịch vụ | Nhà cung cấp | Endpoint / Phương thức kết nối | Mục đích trong hệ thống | Ghi chú về an toàn & Bảo mật |
 | :--- | :--- | :--- | :--- | :--- |
 | **OpenAI / DeepSeek API** | DeepSeek / OpenAI | HTTPS `POST /chat/completions` (SSE Streaming) | Tạo câu trả lời AI, phân tích sâu bằng mô hình lý luận (reasoning). | Khóa API đọc từ biến môi trường `.env`, không lộ ra phía client. |
-| **SearXNG Meta Search Engine** | Tự vận hành nội bộ (`https://search.fptoj.com`) | HTTPS `GET /search?format=json` | Tìm kiếm dữ liệu web phục vụ AI Agent kiểm chứng số điện thoại, đơn vị chủ quản, tin tức cảnh báo. | Tự host, không lưu log tìm kiếm người dùng, ẩn danh hóa yêu cầu. |
+| **SearXNG Meta Search Engine** | Tự vận hành nội bộ (cấu hình qua `SEARXNG_URL`) | HTTPS `GET /search?format=json` | Tìm kiếm dữ liệu web phục vụ AI Agent kiểm chứng số điện thoại, đơn vị chủ quản, tin tức cảnh báo. | Tự host, không lưu log tìm kiếm người dùng, ẩn danh hóa yêu cầu. |
 | **VietQR Banks API** | VietQR / Napas | HTTPS `GET https://api.vietqr.io/v2/banks` | Lấy danh mục tên ngân hàng, mã chuyển khoản nhanh tại Việt Nam. | Dữ liệu công khai, lưu cache Redis 86400 giây để tối ưu băng thông. |
 | **Cloudflare Turnstile** | Cloudflare | HTTPS `POST https://challenges.cloudflare.com/turnstile/v0/siteverify` | Xác thực chống bot vô hình (Invisible CAPTCHA) trên các form quét, đăng nhập và báo cáo. | Token xác thực chỉ sử dụng một lần (single-use), hỗ trợ bảo vệ chống tấn công DDoS và cào dữ liệu. |
 | **W3C WebPush Service** | Mozilla / Google FCM / Apple APNs | HTTPS Web Push Protocol (RFC 8291/8292) | Gửi thông báo đẩy về trình duyệt khi có báo cáo được duyệt hoặc có cảnh báo khẩn cấp. | Xác thực bất đối xứng qua cặp khóa VAPID (ECDSA P-256), không cần đăng ký tài khoản bên thứ ba. |
@@ -79,7 +81,7 @@ ShieldCall VN là nền tảng an toàn số toàn diện dành cho người dù
 
 ### 5.1. Thư viện Backend Python (`requirements.txt`)
 
-Tất cả 42 thư viện dưới đây đều có mặt và tham gia trực tiếp vào luồng xử lý của mã nguồn:
+Tất cả 41 thư viện dưới đây đều có mặt và tham gia trực tiếp vào luồng xử lý của mã nguồn:
 
 | Tên thư viện | Phiên bản | Giấy phép | Vai trò & Mục đích kỹ thuật trong mã nguồn |
 | :--- | :--- | :--- | :--- |
@@ -157,6 +159,7 @@ Môi trường Zero-Trust Sandbox vận hành trong container Docker hoàn toàn
 | **flare-capa** | Mandiant (Apache-2.0) | Nhận diện các khả năng thực thi hành vi nguy hiểm của mã nhị phân. |
 | **exiftool** | Phil Harvey (GPL-1.0-or-later) | Trích xuất toàn bộ siêu dữ liệu ẩn (metadata) của tệp tin phục vụ công tác điều tra số. |
 | **p7zip-full** | Igor Pavlov (LGPL) | Hỗ trợ giải nén an toàn các định dạng nén (ZIP, RAR, 7Z) để kiểm tra các payload bên trong. |
+| **cryptography** | Cryptography Authors (Apache-2.0 / BSD) | Tính toán băm mật mã và kiểm tra chữ ký số của các tệp nhị phân trong sandbox. |
 
 ---
 
@@ -196,6 +199,7 @@ Môi trường Zero-Trust Sandbox vận hành trong container Docker hoàn toàn
 1. **Model Context Protocol (MCP)**:
    - Hệ thống triển khai đầy đủ đặc tả kỹ thuật MCP của Anthropic (JSON-RPC 2.0).
    - Cung cấp hai phương thức vận chuyển: Server-Sent Events (SSE Transport) tại `/api/v1/mcp/sse/` và Streamable JSON-RPC tại `/api/v1/mcp/`.
+   - Cung cấp 10 công cụ phân tích (`check_phone`, `check_bank_account`, `check_url_or_domain`, `analyze_message`, `check_email_sender`, `get_supported_banks`, `lookup_scam_db`, `get_scam_radar_trends`, `scan_full_incident`, `report_scam`) và 3 prompts hệ thống (`shieldcall_sentry`, `emergency_advisor`, `scam_investigator`).
    - Cho phép các công cụ phân tích an toàn số của ShieldCall VN được gọi trực tiếp bởi các ứng dụng AI hàng đầu thế giới (Claude Desktop, LibreChat, Open WebUI).
 2. **Server-Sent Events (SSE - W3C)**:
    - Toàn bộ kết quả phân tích AI và quá trình hiển thị khối suy luận (Thinking block) được truyền tải thời gian thực bằng luồng SSE, đem lại trải nghiệm phản hồi tức thì cho người dùng.

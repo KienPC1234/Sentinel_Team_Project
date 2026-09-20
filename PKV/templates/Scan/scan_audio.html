@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
-<div class="space-y-10" x-data="audioScanHandler()">
+<div class="space-y-10" x-data="audioScanHandler">
 
     <!-- Page Header -->
     <div class="text-center space-y-4" data-aos="fade-up">
@@ -520,7 +520,9 @@ document.addEventListener('alpine:init', () => {
         handleDrop(e) {
             this.dragging = false;
             const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('audio/')) {
+            const okType = !!(file && file.type && file.type.startsWith('audio/'));
+            const okExt = !!(file && file.name && /\.(mp3|m4a|wav|ogg|webm|flac|aac)$/i.test(file.name));
+            if (file && (okType || okExt)) {
                 this.setAudioFile(file);
             } else {
                 showToast('Vui lòng kéo thả file âm thanh.', 'warning');

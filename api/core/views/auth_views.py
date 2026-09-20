@@ -66,6 +66,61 @@ def _register_otp_hash(email: str, otp: str) -> str:
     material = f"{(email or '').strip().lower()}:{otp}:{settings.SECRET_KEY}"
     return hashlib.sha256(material.encode('utf-8')).hexdigest()
 
+
+def _client_ip(request) -> str:
+    forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
+    return forwarded or request.META.get('REMOTE_ADDR', 'unknown')
+
+
+# Brute-force / email-bombing throttles (cache-backed, fail-open if cache down).
+LOGIN_MAX_FAILS = 10
+LOGIN_BLOCK_SECONDS = 600
+OTP_MAX_SENDS_PER_HOUR = 5
+
+
+def _login_fail_key(ip: str) -> str:
+    return f"login_fail:{ip}"
+
+
+def _login_blocked(ip: str) -> bool:
+    try:
+        return int(cache.get(_login_fail_key(ip), 0)) >= LOGIN_MAX_FAILS
+    except Exception:
+        return False
+
+
+def _record_login_fail(ip: str) -> None:
+    try:
+        key = _login_fail_key(ip)
+        fails = int(cache.get(key, 0)) + 1
+        cache.set(key, fails, timeout=LOGIN_BLOCK_SECONDS)
+    except Exception:
+        pass
+
+
+def _clear_login_fails(ip: str) -> None:
+    try:
+        cache.delete(_login_fail_key(ip))
+    except Exception:
+        pass
+
+
+def _otp_send_allowed(email: str) -> bool:
+    try:
+        key = f"otp_send:{(email or '').strip().lower()}"
+        return int(cache.get(key, 0)) < OTP_MAX_SENDS_PER_HOUR
+    except Exception:
+        return True
+
+
+def _record_otp_send(email: str) -> None:
+    try:
+        key = f"otp_send:{(email or '').strip().lower()}"
+        sends = int(cache.get(key, 0)) + 1
+        cache.set(key, sends, timeout=3600)
+    except Exception:
+        pass
+
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTH APIs
 # ═══════════════════════════════════════════════════════════════════════════
@@ -86,6 +141,9 @@ class RegisterRequestOTPView(APIView):
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data['email']
+        if not _otp_send_allowed(email):
+            return Response({'error': 'Bạn đã yêu cầu OTP quá nhiều lần. Vui lòng thử lại sau 1 giờ.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        _record_otp_send(email)
         otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
         cache_key = _register_otp_cache_key(email)
         cache.set(
@@ -169,6 +227,10 @@ class LoginView(APIView):
 
     @extend_schema(request=LoginSerializer, responses={200: serializers.DictField()})
     def post(self, request):
+        ip = _client_ip(request)
+        if _login_blocked(ip):
+            return Response({'error': 'Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 10 phút.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
         cf_token = request.data.get('cf-turnstile-response')
         forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
         remote_ip = forwarded or request.META.get('REMOTE_ADDR')
@@ -187,8 +249,10 @@ class LoginView(APIView):
             user = None
 
         if user is None:
+            _record_login_fail(ip)
             return Response({'error': 'Email hoặc mật khẩu không đúng.'},
                             status=status.HTTP_401_UNAUTHORIZED)
+        _clear_login_fails(ip)
 
         # Check for confirmed 2FA devices
         from django_otp import user_has_device

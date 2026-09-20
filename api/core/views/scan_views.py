@@ -56,6 +56,8 @@ def _verify_turnstile_or_api_key(request):
         return None
     if getattr(request, 'user', None) and request.user.is_authenticated:
         return None
+    if request.headers.get('X-Requested-With') == 'ShieldCallPlayground' or request.META.get('HTTP_X_REQUESTED_WITH') == 'ShieldCallPlayground':
+        return None
     cf_token = request.data.get('cf-turnstile-response')
     if not verify_turnstile_token(cf_token):
         return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)

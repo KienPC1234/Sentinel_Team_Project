@@ -365,7 +365,7 @@ window.NotificationManager = {
                 }
                 if (!subscription) {
                     // Push is auxiliary — never block main UX.
-                    console.warn('[WebPush] Subscription failed after retry, continuing without push:', lastErr && lastErr.message);
+                    this._log('[WebPush] Subscription unavailable in this client/network, continuing without push:', lastErr && lastErr.message);
                     return;
                 }
                 this._log('Created new browser subscription');

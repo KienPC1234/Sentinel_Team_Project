@@ -615,7 +615,7 @@
                             <i class="bi bi-copy"></i> Copy Email
                         </button>
                         <button class="liquid-btn py-2 px-5 text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20 font-black"
-                            @click="$dispatch('start-contextual-chat', { context: 'Email: ' + displayEmail + '\nAnalysis: ' + (deepCompleted ? (result.analysis_result || []).join(' | ') : quickReportText) })">
+                            @click="$dispatch('start-contextual-chat', { context: 'Email: ' + displayEmail + '\nAnalysis: ' + (deepCompleted ? getDeepAnalysisItems().join(' | ') : quickReportText) })">
                             <i class="bi bi-chat-dots-fill"></i> CHAT VỚI AI
                         </button>
                     </div>

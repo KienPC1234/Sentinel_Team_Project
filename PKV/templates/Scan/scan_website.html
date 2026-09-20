@@ -220,7 +220,12 @@
             const decoder = new TextDecoder();
             let buf = '';
             const pump = () => reader.read().then(({ done, value }) => {
-                if (done) { this.aiLoading = false; return; }
+                if (done) {
+                    if (buf.trim() && buf.trim().startsWith('data: ')) {
+                        try { const d = JSON.parse(buf.trim().substring(6)); if (d.chunk && !d.chunk.startsWith('__STATUS__')) this.aiText += d.chunk; } catch (e) {}
+                    }
+                    this.aiLoading = false; return;
+                }
                 buf += decoder.decode(value, { stream: true });
                 const lines = buf.split('\n');
                 buf = lines.pop();

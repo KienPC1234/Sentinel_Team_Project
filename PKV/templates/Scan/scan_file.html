@@ -715,6 +715,22 @@ function fileScanHandler() {
                         }
                     }
                 }
+                // Flush any trailing chunk left in the buffer when the server
+                // closes the stream without a final blank-line delimiter.
+                try {
+                    const tail = (buffer || '').trim();
+                    if (tail.startsWith('data: ')) {
+                        const parsed = JSON.parse(tail.substring(6));
+                        if (parsed.chunk && !parsed.chunk.includes('__STATUS__:') && !parsed.chunk.includes('__THINK__:')) {
+                            this.aiExplanation += parsed.chunk;
+                        }
+                        if (parsed.done) {
+                            this.aiStreaming = false;
+                        }
+                    }
+                } catch (err) {
+                    console.error('SSE trailing parse error:', err);
+                }
             } catch (err) {
                 console.error('AI streaming error:', err);
                 this.aiExplanation = this.result.ai_explanation || 'Lỗi kết nối tới mô hình AI.';

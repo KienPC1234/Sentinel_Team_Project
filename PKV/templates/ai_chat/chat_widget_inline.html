@@ -523,11 +523,14 @@
 
                     while (true) {
                         const { done, value } = await reader.read();
-                        if (done) break;
+                        if (done) {
+                            if (buffer.trim()) buffer += '\n';
+                        } else {
+                            buffer += decoder.decode(value, { stream: true });
+                        }
 
-                        buffer += decoder.decode(value, { stream: true });
                         const lines = buffer.split('\n');
-                        buffer = lines.pop();
+                        buffer = done ? '' : (lines.pop() ?? '');
 
                         for (const line of lines) {
                             let trimmedLine = line.trim();
@@ -632,6 +635,7 @@
                                 console.warn("Parse error", e, trimmedLine);
                             }
                         }
+                        if (done) break;
                     }
                 } catch (e) {
                     botMsg.text = 'Lỗi kết nối mạng.';

@@ -65,9 +65,9 @@
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-bold text-white/70 whitespace-nowrap">Chọn khóa:</span>
                                 <select x-model="selectedKey" @change="updateConfigSnippets()" class="bg-black/80 border border-cyan-400/30 rounded-xl px-3.5 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
-                                    <template x-for="k in userKeys" :key="k.id">
-                                        <option :value="k.prefix" x-text="k.name + ' (' + k.prefix + '...)'"></option>
-                                    </template>
+                                    {% for k in user_api_keys %}
+                                        <option value="{{ k.prefix }}_secret_key_here">{{ k.name }} ({{ k.prefix }}...)</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                             <a href="/dashboard/?tab=api_keys" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 text-white hover:bg-white/20 border border-white/15 transition-all flex items-center gap-1.5 whitespace-nowrap">
@@ -930,115 +930,339 @@
     <div id="live-playground" class="space-y-6 pt-6">
         <div class="border-b border-white/10 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-400/10 text-cyan-300 text-[10px] font-black uppercase tracking-wider mb-2">
-                    <i class="bi bi-broadcast"></i> Tương tác trực tiếp
+                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-400/10 text-cyan-300 text-[10px] font-black uppercase tracking-wider mb-2 border border-cyan-400/20">
+                    <i class="bi bi-broadcast"></i> Tương tác trực tiếp • 10 MCP Tools
                 </div>
                 <h2 class="text-2xl font-black text-white tracking-tight">Thử Nghiệm Trực Tiếp Công Cụ MCP (Live Playground)</h2>
                 <p class="text-xs text-white/50">Thử nghiệm phản hồi thực tế của các API an ninh số ngay trên giao diện web trước khi cấu hình vào Chatbot.</p>
             </div>
-            <div class="text-xs text-white/60 flex items-center gap-2">
-                <span>Khóa kiểm thử:</span>
-                <span class="font-mono text-cyan-300 bg-black/50 px-2.5 py-1 rounded-lg border border-white/10" x-text="getCurrentApiKey().substring(0, 16) + '...'"></span>
+            <div class="flex items-center gap-2 text-xs flex-wrap">
+                {% if user.is_authenticated %}
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Phiên Web Xác Thực (Session Auth)
+                    </span>
+                    {% if user_api_keys %}
+                        <span class="font-mono text-cyan-300 bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/10 text-[11px]" x-text="'Mã khóa: ' + (getCurrentApiKey().startsWith('sc_live_') ? getCurrentApiKey().substring(0, 16) + '...' : 'sc_live_...')"></span>
+                    {% endif %}
+                {% else %}
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold">
+                        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                        Live Web Sandbox (Bypass Demo)
+                    </span>
+                {% endif %}
             </div>
         </div>
 
-        <div class="liquid-card p-6 border-cyan-500/20 bg-gradient-to-b from-cyan-500/[0.03] to-transparent space-y-6">
+        <div class="liquid-card p-6 border-cyan-500/20 bg-gradient-to-b from-cyan-500/[0.04] to-transparent space-y-6">
             <!-- Tool Selection & Presets -->
-            <div class="space-y-3">
+            <div class="space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <label class="text-xs font-bold text-white uppercase tracking-wider">Chọn công cụ cần thử nghiệm:</label>
+                    <label class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="bi bi-tools text-cyan-400"></i> Chọn công cụ cần thử nghiệm:
+                    </label>
                     <div class="flex items-center gap-2 flex-wrap text-xs">
                         <span class="text-white/40 text-[11px]">Mẫu dữ liệu nhanh:</span>
-                        <button @click="setPreset('sms_otp')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px]">
-                            Mẫu SMS đòi OTP
+                        <button @click="setPreset('sms_otp')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px] transition-all cursor-pointer">
+                            SMS đòi OTP
                         </button>
-                        <button @click="setPreset('bank_scam')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px]">
-                            Mẫu STK ngân hàng
+                        <button @click="setPreset('bank_scam')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px] transition-all cursor-pointer">
+                            STK ngân hàng
                         </button>
-                        <button @click="setPreset('phishing_link')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px]">
-                            Mẫu link ngân hàng giả
+                        <button @click="setPreset('phishing_link')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px] transition-all cursor-pointer">
+                            Link DVC giả
                         </button>
-                        <button @click="setPreset('fake_email')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px]">
-                            Mẫu email lừa đảo
+                        <button @click="setPreset('fake_email')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px] transition-all cursor-pointer">
+                            Email lừa đảo
+                        </button>
+                        <button @click="setPreset('full_incident')" class="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border border-cyan-400/30 text-[11px] transition-all cursor-pointer font-bold">
+                            Vụ việc đa nguồn
+                        </button>
+                        <button @click="setPreset('db_lookup')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px] transition-all cursor-pointer">
+                            Tra cứu kho đen
+                        </button>
+                        <button @click="setPreset('radar_trends')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-cyan-300 border border-white/10 text-[11px] transition-all cursor-pointer">
+                            Xu hướng radar
                         </button>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                    <button @click="playgroundTool = 'check_phone'" :class="playgroundTool === 'check_phone' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
-                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
-                        check_phone
+                <!-- 10 MCP Tools Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <button @click="selectTool('check_phone')" :class="playgroundTool === 'check_phone' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-telephone-fill text-xs shrink-0" :class="playgroundTool === 'check_phone' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">check_phone</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'check_phone' ? 'bg-black/20 text-black' : 'bg-white/10 text-cyan-300/80'">POST</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'check_phone' ? 'text-black/80' : 'text-white/50'">Quét SĐT, VoIP, nhà mạng</p>
                     </button>
-                    <button @click="playgroundTool = 'check_bank_account'" :class="playgroundTool === 'check_bank_account' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
-                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
-                        check_bank_account
+
+                    <button @click="selectTool('check_bank_account')" :class="playgroundTool === 'check_bank_account' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-credit-card-2-front-fill text-xs shrink-0" :class="playgroundTool === 'check_bank_account' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">check_bank_account</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'check_bank_account' ? 'bg-black/20 text-black' : 'bg-white/10 text-cyan-300/80'">POST</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'check_bank_account' ? 'text-black/80' : 'text-white/50'">Đối soát STK lừa đảo</p>
                     </button>
-                    <button @click="playgroundTool = 'check_url_or_domain'" :class="playgroundTool === 'check_url_or_domain' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
-                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
-                        check_url_or_domain
+
+                    <button @click="selectTool('check_url_or_domain')" :class="playgroundTool === 'check_url_or_domain' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-globe2 text-xs shrink-0" :class="playgroundTool === 'check_url_or_domain' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">check_url_or_domain</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'check_url_or_domain' ? 'bg-black/20 text-black' : 'bg-white/10 text-cyan-300/80'">POST</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'check_url_or_domain' ? 'text-black/80' : 'text-white/50'">Phishing & chứng chỉ SSL</p>
                     </button>
-                    <button @click="playgroundTool = 'analyze_message'" :class="playgroundTool === 'analyze_message' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
-                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
-                        analyze_message
+
+                    <button @click="selectTool('analyze_message')" :class="playgroundTool === 'analyze_message' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-chat-left-dots-fill text-xs shrink-0" :class="playgroundTool === 'analyze_message' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">analyze_message</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'analyze_message' ? 'bg-black/20 text-black' : 'bg-white/10 text-cyan-300/80'">POST</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'analyze_message' ? 'text-black/80' : 'text-white/50'">Bẫy tâm lý, SMS đòi OTP</p>
                     </button>
-                    <button @click="playgroundTool = 'check_email_sender'" :class="playgroundTool === 'check_email_sender' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
-                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
-                        check_email_sender
+
+                    <button @click="selectTool('check_email_sender')" :class="playgroundTool === 'check_email_sender' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-envelope-at-fill text-xs shrink-0" :class="playgroundTool === 'check_email_sender' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">check_email_sender</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'check_email_sender' ? 'bg-black/20 text-black' : 'bg-white/10 text-cyan-300/80'">POST</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'check_email_sender' ? 'text-black/80' : 'text-white/50'">SPF, DKIM, DMARC mail</p>
                     </button>
-                    <button @click="playgroundTool = 'get_supported_banks'" :class="playgroundTool === 'get_supported_banks' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/20' : 'bg-white/5 text-white/70 hover:bg-white/10 font-bold'"
-                        class="p-3 rounded-xl text-xs text-center border border-white/10 transition-all">
-                        get_supported_banks
+
+                    <button @click="selectTool('scan_full_incident')" :class="playgroundTool === 'scan_full_incident' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-shield-check text-xs shrink-0" :class="playgroundTool === 'scan_full_incident' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">scan_full_incident</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'scan_full_incident' ? 'bg-black/20 text-black' : 'bg-cyan-300/80'">POST</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'scan_full_incident' ? 'text-black/80' : 'text-white/50'">Quét tổng hợp đa nguồn</p>
+                    </button>
+
+                    <button @click="selectTool('lookup_scam_db')" :class="playgroundTool === 'lookup_scam_db' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-search text-xs shrink-0" :class="playgroundTool === 'lookup_scam_db' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">lookup_scam_db</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'lookup_scam_db' ? 'bg-black/20 text-black' : 'bg-emerald-500/20 text-emerald-300'">GET</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'lookup_scam_db' ? 'text-black/80' : 'text-white/50'">Tra cứu kho hồ sơ đen</p>
+                    </button>
+
+                    <button @click="selectTool('get_scam_radar_trends')" :class="playgroundTool === 'get_scam_radar_trends' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-radar text-xs shrink-0" :class="playgroundTool === 'get_scam_radar_trends' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">get_scam_radar_trends</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'get_scam_radar_trends' ? 'bg-black/20 text-black' : 'bg-emerald-500/20 text-emerald-300'">GET</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'get_scam_radar_trends' ? 'text-black/80' : 'text-white/50'">Radar xu hướng thực</p>
+                    </button>
+
+                    <button @click="selectTool('get_supported_banks')" :class="playgroundTool === 'get_supported_banks' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-bank text-xs shrink-0" :class="playgroundTool === 'get_supported_banks' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">get_supported_banks</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'get_supported_banks' ? 'bg-black/20 text-black' : 'bg-emerald-500/20 text-emerald-300'">GET</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'get_supported_banks' ? 'text-black/80' : 'text-white/50'">65+ ngân hàng VietQR</p>
+                    </button>
+
+                    <button @click="selectTool('report_scam')" :class="playgroundTool === 'report_scam' ? 'bg-cyan-400 text-black font-black shadow-lg shadow-cyan-400/25 border-cyan-300 ring-2 ring-cyan-400/40' : 'bg-white/5 text-white/80 hover:bg-white/10 border-white/10 hover:border-white/20'"
+                        class="p-3 rounded-2xl text-left border transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="bi bi-flag-fill text-xs shrink-0" :class="playgroundTool === 'report_scam' ? 'text-black' : 'text-cyan-400'"></i>
+                                <span class="font-mono text-xs font-bold truncate">report_scam</span>
+                            </div>
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0" :class="playgroundTool === 'report_scam' ? 'bg-black/20 text-black' : 'bg-white/10 text-cyan-300/80'">POST</span>
+                        </div>
+                        <p class="text-[11px] leading-tight" :class="playgroundTool === 'report_scam' ? 'text-black/80' : 'text-white/50'">Gửi báo cáo lừa đảo</p>
                     </button>
                 </div>
             </div>
 
-            <!-- Input Fields for Selected Tool -->
-            <div class="flex flex-col lg:flex-row gap-6 items-start w-full">
-                <!-- Left Input Panel -->
-                <div class="w-full lg:w-5/12 space-y-4 shrink-0">
+            <!-- Scoped Layout Safeguard (prevents grid collapse under any browser cache) -->
+            <style>
+                .mcp-grid-container {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1.5rem;
+                    width: 100%;
+                    min-width: 0;
+                }
+                @media (min-width: 1024px) {
+                    .mcp-grid-container {
+                        display: grid !important;
+                        grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+                        gap: 1.5rem !important;
+                        align-items: start !important;
+                    }
+                    .mcp-col-5 {
+                        grid-column: span 5 / span 5 !important;
+                        width: 100% !important;
+                        min-width: 0 !important;
+                    }
+                    .mcp-col-7 {
+                        grid-column: span 7 / span 7 !important;
+                        width: 100% !important;
+                        min-width: 0 !important;
+                    }
+                }
+            </style>
+
+            <!-- Input Form & Output Console Section -->
+            <div class="mcp-grid-container grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full min-w-0">
+                <!-- Left Panel: Input Parameters -->
+                <div class="mcp-col-5 lg:col-span-5 w-full space-y-4 bg-[#0a0f1d] border border-white/10 p-5 rounded-2xl shadow-xl">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                        <span class="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="bi bi-sliders text-cyan-400"></i> Tham Số Đầu Vào
+                        </span>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-white/10 text-white/70 uppercase"
+                                x-text="['lookup_scam_db', 'get_scam_radar_trends', 'get_supported_banks'].includes(playgroundTool) ? 'GET' : 'POST'"></span>
+                            <span class="font-mono text-[11px] text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20" x-text="playgroundTool"></span>
+                        </div>
+                    </div>
+
+                    <!-- Optional Custom API Key accordion -->
+                    <div x-data="{ showKeyInput: false }" class="border border-white/10 rounded-xl p-2.5 bg-white/[0.02]">
+                        <button @click="showKeyInput = !showKeyInput" type="button" class="w-full flex items-center justify-between text-[11px] text-white/60 hover:text-white transition-all cursor-pointer font-sans">
+                            <span class="flex items-center gap-1.5"><i class="bi bi-key text-cyan-400"></i> Tùy chọn: Nhập API Key kiểm thử</span>
+                            <i class="bi" :class="showKeyInput ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                        </button>
+                        <div x-show="showKeyInput" x-transition class="pt-2 space-y-1.5">
+                            <input type="text" x-model="playgroundCustomKey" placeholder="sc_live_xxxxxxxxxxxxxxxxxxxxxxxx..."
+                                class="w-full bg-[#030712] border border-white/15 rounded-lg px-3 py-2 text-[11px] font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400">
+                            <p class="text-[10px] text-white/40">Để trống để sử dụng phiên đăng nhập web hoặc sandbox mặc định.</p>
+                        </div>
+                    </div>
+
                     <!-- check_phone inputs -->
-                    <div x-show="playgroundTool === 'check_phone'" class="space-y-2">
-                        <label class="text-xs font-bold text-white/80">Số điện thoại cần quét:</label>
-                        <input type="text" x-model="playgroundPhone" placeholder="Ví dụ: 0912345678 hoặc +84988776655"
-                            class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-3 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
-                        <p class="text-[11px] text-white/50 leading-relaxed">Hệ thống sẽ tra cứu nhà mạng, dấu hiệu số ảo VoIP và danh sách đen viễn thông.</p>
+                    <div x-show="playgroundTool === 'check_phone'" class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-white/80">Số điện thoại cần quét:</label>
+                            <div class="flex items-center gap-1 text-[10px]">
+                                <span class="text-white/40">Gợi ý:</span>
+                                <button type="button" @click="playgroundPhone = '0912345678'" class="text-cyan-400 hover:underline">0912345678</button>
+                                <span class="text-white/20">|</span>
+                                <button type="button" @click="playgroundPhone = '+84988776655'" class="text-cyan-400 hover:underline">+84988776655</button>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-white/40 text-xs"><i class="bi bi-telephone"></i></span>
+                            <input type="text" x-model="playgroundPhone" @keydown.enter.prevent="runPlayground()" placeholder="Ví dụ: 0912345678 hoặc +84988776655"
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl pl-9 pr-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        </div>
+                        <p class="text-[11px] text-white/50 leading-relaxed">Hệ thống tra cứu nhà mạng, dấu hiệu số ảo VoIP và danh sách đen viễn thông.</p>
                     </div>
 
                     <!-- check_bank_account inputs -->
                     <div x-show="playgroundTool === 'check_bank_account'" class="space-y-3">
-                        <div class="space-y-1.5">
-                            <label class="text-xs font-bold text-white/80">Tên ngân hàng (hoặc mã viết tắt):</label>
-                            <input type="text" x-model="playgroundBank" placeholder="Ví dụ: MB, Techcombank, VCB, ACB"
-                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-white/80">Thông tin tài khoản:</label>
+                            <div class="flex items-center gap-1 text-[10px]">
+                                <span class="text-white/40">Gợi ý:</span>
+                                <button type="button" @click="playgroundBank = 'MB'; playgroundAccount = '0987654321'" class="text-cyan-400 hover:underline">MB 0987654321</button>
+                                <span class="text-white/20">|</span>
+                                <button type="button" @click="playgroundBank = 'VCB'; playgroundAccount = '1012345678'" class="text-cyan-400 hover:underline">VCB</button>
+                            </div>
                         </div>
-                        <div class="space-y-1.5">
-                            <label class="text-xs font-bold text-white/80">Số tài khoản ngân hàng:</label>
-                            <input type="text" x-model="playgroundAccount" placeholder="Ví dụ: 0987654321"
-                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-white/70">Ngân hàng:</label>
+                                <input type="text" x-model="playgroundBank" @keydown.enter.prevent="runPlayground()" placeholder="MB, VCB, ACB..."
+                                    list="mcp-bank-suggestions"
+                                    class="w-full bg-[#030712] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                                <datalist id="mcp-bank-suggestions">
+                                    <option value="MB">MBBank</option>
+                                    <option value="VCB">Vietcombank</option>
+                                    <option value="TCB">Techcombank</option>
+                                    <option value="VPB">VPBank</option>
+                                    <option value="ACB">ACB</option>
+                                    <option value="BIDV">BIDV</option>
+                                    <option value="VBA">Agribank</option>
+                                    <option value="TPB">TPBank</option>
+                                </datalist>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-white/70">Số tài khoản:</label>
+                                <input type="text" x-model="playgroundAccount" @keydown.enter.prevent="runPlayground()" placeholder="0987654321"
+                                    class="w-full bg-[#030712] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                            </div>
                         </div>
+                        <p class="text-[11px] text-white/50 leading-relaxed">Đối soát tài khoản trong danh sách đen tài chính và các vụ án lừa đảo đã ghi nhận.</p>
                     </div>
 
                     <!-- check_url_or_domain inputs -->
-                    <div x-show="playgroundTool === 'check_url_or_domain'" class="space-y-2">
-                        <label class="text-xs font-bold text-white/80">Đường link hoặc tên miền (URL):</label>
-                        <input type="text" x-model="playgroundUrl" placeholder="Ví dụ: http://phishing-vietcombank-login.xyz"
-                            class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-3 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
-                        <p class="text-[11px] text-white/50 leading-relaxed">Hệ thống phân tích SSL, khoảng cách Levenshtein nhận diện tên miền nhái thương hiệu.</p>
+                    <div x-show="playgroundTool === 'check_url_or_domain'" class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-white/80">Đường link hoặc tên miền (URL):</label>
+                            <div class="flex items-center gap-1 text-[10px]">
+                                <span class="text-white/40">Gợi ý:</span>
+                                <button type="button" @click="playgroundUrl = 'http://dichvucong-vn.top/login'" class="text-cyan-400 hover:underline">dichvucong-vn.top</button>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-white/40 text-xs"><i class="bi bi-globe"></i></span>
+                            <input type="text" x-model="playgroundUrl" @keydown.enter.prevent="runPlayground()" placeholder="Ví dụ: http://dichvucong-vn.top/login"
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl pl-9 pr-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                        </div>
+                        <p class="text-[11px] text-white/50 leading-relaxed">Phân tích SSL, khoảng cách Levenshtein nhận diện tên miền nhái thương hiệu.</p>
                     </div>
 
                     <!-- analyze_message inputs -->
-                    <div x-show="playgroundTool === 'analyze_message'" class="space-y-2">
-                        <label class="text-xs font-bold text-white/80">Nội dung tin nhắn / SMS / đoạn chat:</label>
+                    <div x-show="playgroundTool === 'analyze_message'" class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-white/80">Nội dung tin nhắn / SMS:</label>
+                            <div class="flex items-center gap-1 text-[10px]">
+                                <button type="button" @click="setPreset('sms_otp')" class="text-cyan-400 hover:underline">Điền mẫu OTP</button>
+                            </div>
+                        </div>
                         <textarea x-model="playgroundMessage" rows="4" placeholder="Dán nội dung tin nhắn đáng ngờ vào đây..."
                             class="w-full bg-[#030712] border border-white/15 rounded-xl p-3 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all"></textarea>
+                        <p class="text-[11px] text-white/50 leading-relaxed">Phân tích bẫy thao túng tâm lý, mạo danh công an, đe dọa hoặc giục giã nạp tiền.</p>
                     </div>
 
                     <!-- check_email_sender inputs -->
                     <div x-show="playgroundTool === 'check_email_sender'" class="space-y-3">
                         <div class="space-y-1.5">
                             <label class="text-xs font-bold text-white/80">Địa chỉ email người gửi:</label>
-                            <input type="text" x-model="playgroundEmail" placeholder="Ví dụ: fraud@phishing-fake-bank.top"
-                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-white/40 text-xs"><i class="bi bi-envelope-at"></i></span>
+                                <input type="text" x-model="playgroundEmail" @keydown.enter.prevent="runPlayground()" placeholder="Ví dụ: fraud@phishing-fake-bank.top"
+                                    class="w-full bg-[#030712] border border-white/15 rounded-xl pl-9 pr-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all">
+                            </div>
                         </div>
                         <div class="space-y-1.5">
                             <label class="text-xs font-bold text-white/80">Nội dung thư điện tử (tùy chọn):</label>
@@ -1047,76 +1271,540 @@
                         </div>
                     </div>
 
-                    <!-- get_supported_banks inputs -->
-                    <div x-show="playgroundTool === 'get_supported_banks'" class="p-4 rounded-xl bg-white/[0.03] border border-white/10 text-xs text-white/70 space-y-1">
-                        <p class="font-bold text-white mb-1">Công cụ không cần tham số đầu vào.</p>
-                        <p>Hệ thống sẽ truy vấn danh mục 65+ ngân hàng thành viên VietQR tại Việt Nam kèm mã BIN, tên giao dịch chuẩn.</p>
+                    <!-- scan_full_incident inputs -->
+                    <div x-show="playgroundTool === 'scan_full_incident'" class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold text-cyan-300">Quét tổng hợp đa nguồn:</span>
+                            <button type="button" @click="setPreset('full_incident')" class="text-[10px] text-cyan-400 hover:underline">Điền mẫu vụ việc</button>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-bold text-white/70">Số điện thoại:</label>
+                            <input type="text" x-model="playgroundPhone" @keydown.enter.prevent="runPlayground()" placeholder="0912345678"
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-white/70">Ngân hàng:</label>
+                                <input type="text" x-model="playgroundBank" @keydown.enter.prevent="runPlayground()" placeholder="MB"
+                                    class="w-full bg-[#030712] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-white/70">Số tài khoản:</label>
+                                <input type="text" x-model="playgroundAccount" @keydown.enter.prevent="runPlayground()" placeholder="0987654321"
+                                    class="w-full bg-[#030712] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-bold text-white/70">Đường link / URL:</label>
+                            <input type="text" x-model="playgroundUrl" @keydown.enter.prevent="runPlayground()" placeholder="http://dichvucong-vn.top"
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-bold text-white/70">Nội dung tin nhắn / kịch bản:</label>
+                            <textarea x-model="playgroundMessage" rows="2" placeholder="Kịch bản kẻ lừa đảo nói..."
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl p-2.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400"></textarea>
+                        </div>
                     </div>
 
-                    <button @click="runPlayground()" :disabled="playgroundLoading"
-                        class="w-full py-3.5 px-6 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-cyan-400/25 transition-all cursor-pointer select-none active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
-                        <template x-if="playgroundLoading">
-                            <span class="inline-flex items-center gap-2"><i class="bi bi-arrow-repeat animate-spin text-sm"></i> Đang phân tích...</span>
-                        </template>
-                        <template x-if="!playgroundLoading">
-                            <span class="inline-flex items-center gap-2"><i class="bi bi-play-fill text-base"></i> Chạy Thử Nghiệm Ngay</span>
-                        </template>
-                    </button>
+                    <!-- lookup_scam_db inputs -->
+                    <div x-show="playgroundTool === 'lookup_scam_db'" class="space-y-3">
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-bold text-white/80">Từ khóa hoặc chỉ số tra cứu:</label>
+                                <div class="flex items-center gap-1 text-[10px]">
+                                    <button type="button" @click="playgroundQuery = '0912345678'" class="text-cyan-400 hover:underline">0912345678</button>
+                                    <span class="text-white/20">|</span>
+                                    <button type="button" @click="playgroundQuery = 'MBBank'" class="text-cyan-400 hover:underline">MBBank</button>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-white/40 text-xs"><i class="bi bi-search"></i></span>
+                                <input type="text" x-model="playgroundQuery" @keydown.enter.prevent="runPlayground()" placeholder="Ví dụ: 0912345678, MBBank, dịch vụ công..."
+                                    class="w-full bg-[#030712] border border-white/15 rounded-xl pl-9 pr-4 py-2.5 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400">
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-bold text-white/80">Lọc theo loại thực thể:</label>
+                            <select x-model="playgroundEntityType" class="w-full bg-[#030712] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                                <option value="all">Tất cả danh mục (all)</option>
+                                <option value="phone">Số điện thoại (phone)</option>
+                                <option value="account">Tài khoản ngân hàng (account)</option>
+                                <option value="domain">Tên miền website (domain)</option>
+                                <option value="email">Hộp thư điện tử (email)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- get_scam_radar_trends info -->
+                    <div x-show="playgroundTool === 'get_scam_radar_trends'" class="p-4 rounded-xl bg-cyan-500/[0.04] border border-cyan-500/20 text-xs text-white/70 space-y-2">
+                        <p class="font-bold text-white flex items-center gap-1.5"><i class="bi bi-radar text-cyan-400"></i> Công cụ truy vấn thống kê thời gian thực</p>
+                        <p class="leading-relaxed">Không cần tham số đầu vào. Hệ thống sẽ truy xuất số lượng vụ việc trong tuần, biến động tỷ lệ phần trăm, các số điện thoại và tên miền phishing đang nóng nhất.</p>
+                        <div class="pt-1 flex items-center gap-2 text-[11px] text-cyan-300">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>Sẵn sàng truy xuất dữ liệu radar</span>
+                        </div>
+                    </div>
+
+                    <!-- get_supported_banks info -->
+                    <div x-show="playgroundTool === 'get_supported_banks'" class="p-4 rounded-xl bg-cyan-500/[0.04] border border-cyan-500/20 text-xs text-white/70 space-y-2">
+                        <p class="font-bold text-white flex items-center gap-1.5"><i class="bi bi-bank text-cyan-400"></i> Danh mục thành viên VietQR</p>
+                        <p class="leading-relaxed">Không cần tham số đầu vào. Hệ thống sẽ truy vấn danh mục 65+ ngân hàng tại Việt Nam kèm mã BIN chuẩn và tên viết tắt.</p>
+                        <div class="pt-1 flex items-center gap-2 text-[11px] text-cyan-300">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>Sẵn sàng tải danh mục ngân hàng</span>
+                        </div>
+                    </div>
+
+                    <!-- report_scam inputs -->
+                    <div x-show="playgroundTool === 'report_scam'" class="space-y-2.5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-white/70">Loại mục tiêu:</label>
+                                <select x-model="playgroundReportTargetType" class="w-full bg-[#030712] border border-white/15 rounded-xl px-2.5 py-2 text-xs font-mono text-cyan-300">
+                                    <option value="phone">phone (Số điện thoại)</option>
+                                    <option value="account">account (STK ngân hàng)</option>
+                                    <option value="domain">domain (Tên miền / URL)</option>
+                                    <option value="other">other (Khác)</option>
+                                </select>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-white/70">Hình thức lừa đảo:</label>
+                                <select x-model="playgroundReportScamType" class="w-full bg-[#030712] border border-white/15 rounded-xl px-2.5 py-2 text-xs font-mono text-cyan-300">
+                                    <option value="phishing">phishing</option>
+                                    <option value="police_impersonation">police_impersonation</option>
+                                    <option value="bank_impersonation">bank_impersonation</option>
+                                    <option value="otp_steal">otp_steal</option>
+                                    <option value="recruitment_scam">recruitment_scam</option>
+                                    <option value="investment_scam">investment_scam</option>
+                                    <option value="other">other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-bold text-white/70">Giá trị mục tiêu:</label>
+                            <input type="text" x-model="playgroundReportTargetValue" @keydown.enter.prevent="runPlayground()" placeholder="0988776655 hoặc URL..."
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-bold text-white/70">Mô tả vụ việc:</label>
+                            <textarea x-model="playgroundReportDescription" rows="2" placeholder="Chi tiết thủ đoạn..."
+                                class="w-full bg-[#030712] border border-white/15 rounded-xl p-2.5 text-xs font-mono text-cyan-300"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Run Playground Button -->
+                    <div class="pt-1 space-y-1.5">
+                        <button @click="runPlayground()" :disabled="playgroundLoading"
+                            class="w-full py-3 px-6 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-cyan-400/25 transition-all cursor-pointer select-none active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
+                            <template x-if="playgroundLoading">
+                                <span class="inline-flex items-center gap-2"><i class="bi bi-arrow-repeat animate-spin text-sm"></i> Đang thực thi phân tích...</span>
+                            </template>
+                            <template x-if="!playgroundLoading">
+                                <span class="inline-flex items-center gap-2">
+                                    <i class="bi bi-play-fill text-base"></i>
+                                    <span>Chạy Thử Nghiệm:</span>
+                                    <span class="font-mono bg-black/15 px-1.5 py-0.5 rounded text-[11px]" x-text="playgroundTool"></span>
+                                </span>
+                            </template>
+                        </button>
+                        <p class="text-[10px] text-center text-white/40">Nhấn Enter trong ô nhập liệu để chạy nhanh</p>
+                    </div>
                 </div>
 
-                <!-- Right JSON Output Display Window -->
-                <div class="w-full lg:w-7/12 space-y-2 min-w-0 flex-1">
-                    <div class="flex items-center justify-between gap-3 flex-wrap">
-                        <div class="flex items-center gap-2">
-                            <span class="w-2.5 h-2.5 rounded-full" :class="playgroundLoading ? 'bg-yellow-400 animate-ping' : (playgroundResult ? 'bg-green-400' : 'bg-white/30')"></span>
-                            <span class="text-xs font-bold text-white/80">Phản hồi JSON từ MCP Server:</span>
+                <!-- Right Panel: High-contrast Developer Console -->
+                <div id="playground-console" class="mcp-col-7 lg:col-span-7 w-full space-y-3 min-w-0 flex flex-col">
+                    <!-- Console Header & Tab Switcher -->
+                    <div class="bg-black/60 border border-white/10 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-2.5 h-2.5 rounded-full"
+                                :class="{
+                                    'bg-yellow-400 animate-ping': playgroundLoading,
+                                    'bg-emerald-400': playgroundResult && !playgroundLoading && !playgroundError,
+                                    'bg-red-500': playgroundError,
+                                    'bg-white/20': !playgroundResult && !playgroundLoading && !playgroundError
+                                }"></span>
+                            <span class="text-xs font-bold text-white/90">Console MCP Server</span>
+                            <span x-show="playgroundHttpStatus" class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/70" x-text="'HTTP ' + playgroundHttpStatus"></span>
+                            <span x-show="playgroundLatency > 0" class="font-mono text-[10px] text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20" x-text="playgroundLatency + ' ms'"></span>
                         </div>
-                        <div class="flex items-center gap-3 text-[11px] font-mono">
-                            <span x-show="playgroundLatency > 0" class="text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20" x-text="playgroundLatency + ' ms'"></span>
-                            <template x-if="playgroundResult && playgroundResult.risk_level">
-                                <span class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider"
-                                    :class="{
-                                        'bg-red-500/20 text-red-400 border border-red-500/30': playgroundResult.risk_level.toLowerCase() === 'red',
-                                        'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30': playgroundResult.risk_level.toLowerCase() === 'yellow',
-                                        'bg-green-500/20 text-green-300 border border-green-500/30': playgroundResult.risk_level.toLowerCase() === 'green',
-                                        'bg-blue-500/20 text-blue-300 border border-blue-500/30': playgroundResult.risk_level.toLowerCase() === 'safe'
-                                    }"
-                                    x-text="'RỦI RO: ' + playgroundResult.risk_level"></span>
-                            </template>
+
+                        <div class="flex items-center gap-2">
+                            <!-- View Tab Switcher -->
+                            <div class="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10 text-xs">
+                                <button @click="playgroundTab = 'visual'"
+                                    :class="playgroundTab === 'visual' ? 'bg-cyan-400 text-black font-black' : 'text-white/60 hover:text-white'"
+                                    class="px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 text-[11px]">
+                                    <i class="bi bi-eye-fill"></i> Trực Quan
+                                </button>
+                                <button @click="playgroundTab = 'json'"
+                                    :class="playgroundTab === 'json' ? 'bg-cyan-400 text-black font-black' : 'text-white/60 hover:text-white'"
+                                    class="px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 text-[11px]">
+                                    <i class="bi bi-code-slash"></i> JSON Chi Tiết
+                                </button>
+                            </div>
+
+                            <!-- Copy JSON button -->
                             <button @click="copyText(JSON.stringify(playgroundResult, null, 2), 'pg-copy-btn')" id="pg-copy-btn"
                                 x-show="playgroundResult && !playgroundLoading"
-                                class="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer">
-                                <i class="bi bi-clipboard"></i> Sao chép JSON
+                                class="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all">
+                                <i class="bi bi-clipboard"></i> Chép JSON
                             </button>
                         </div>
                     </div>
 
-                    <div class="relative bg-[#030712] rounded-2xl border border-white/15 p-4 font-mono text-xs overflow-x-auto min-h-[300px] max-h-[440px]">
+                    <!-- Console Body Container -->
+                    <div class="relative bg-[#020617] rounded-2xl border border-white/15 p-5 min-h-[460px] max-h-[620px] overflow-y-auto font-sans">
+                        <!-- State 1: Initial Empty State -->
                         <template x-if="!playgroundResult && !playgroundLoading && !playgroundError">
-                            <div class="h-full flex flex-col items-center justify-center text-white/35 space-y-3 py-16">
-                                <div class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/50 text-2xl">
-                                    <i class="bi bi-terminal"></i>
+                            <div class="h-full min-h-[400px] flex flex-col items-center justify-center text-center text-white/40 space-y-4 py-16">
+                                <div class="w-16 h-16 rounded-3xl bg-cyan-500/5 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-3xl shadow-inner">
+                                    <i class="bi bi-terminal-split"></i>
                                 </div>
-                                <p class="text-xs font-sans">Chọn công cụ và nhấn "Chạy Thử Nghiệm Ngay" để xem phản hồi thực tế.</p>
+                                <div class="max-w-md space-y-1">
+                                    <p class="text-sm font-bold text-white/80">Sẵn Sàng Tiếp Nhận Lệnh Thử Nghiệm</p>
+                                    <p class="text-xs text-white/50 leading-relaxed">Chọn một công cụ bên trên hoặc nhấn nhanh vào các "Mẫu dữ liệu nhanh" rồi nhấn "Chạy Thử Nghiệm" để xem kết quả phân tích thời gian thực.</p>
+                                </div>
                             </div>
                         </template>
 
+                        <!-- State 2: Loading State -->
                         <template x-if="playgroundLoading">
-                            <div class="h-full flex flex-col items-center justify-center text-cyan-300/80 space-y-3 py-16">
-                                <div class="w-10 h-10 border-2 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin"></div>
-                                <p class="text-xs font-sans">Hệ thống đang truy vấn cơ sở dữ liệu và phân tích an ninh...</p>
+                            <div class="h-full min-h-[400px] flex flex-col items-center justify-center text-center text-cyan-300 space-y-4 py-16">
+                                <div class="relative w-14 h-14">
+                                    <div class="w-14 h-14 border-2 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin"></div>
+                                    <div class="absolute inset-0 flex items-center justify-center text-cyan-400 text-lg">
+                                        <i class="bi bi-shield"></i>
+                                    </div>
+                                </div>
+                                <div class="space-y-1">
+                                    <p class="text-sm font-bold text-white">Đang Truy Vấn Hạ Tầng An Ninh ShieldCall</p>
+                                    <p class="text-xs text-white/50">Đang phân tích chỉ số rủi ro, danh sách đen viễn thông và cơ sở dữ liệu gian lận...</p>
+                                </div>
                             </div>
                         </template>
 
-                        <template x-if="playgroundError">
-                            <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs space-y-1">
-                                <p class="font-bold"><i class="bi bi-x-circle mr-1"></i> Lỗi thực thi:</p>
-                                <p x-text="playgroundError"></p>
+                        <!-- State 3: Execution Error -->
+                        <template x-if="playgroundError && !playgroundLoading">
+                            <div class="p-5 rounded-2xl bg-red-950/40 border border-red-500/30 text-red-200 text-xs space-y-3">
+                                <div class="flex items-center gap-2 text-red-400 font-bold text-sm">
+                                    <i class="bi bi-exclamation-octagon-fill text-base"></i> Lỗi thực thi công cụ
+                                </div>
+                                <div class="bg-black/60 p-3.5 rounded-xl font-mono text-[11px] text-red-300 border border-red-500/20 break-words" x-text="playgroundError"></div>
+                                <div class="text-[11px] text-white/60 space-y-1">
+                                    <p class="font-bold text-white/80">Gợi ý khắc phục:</p>
+                                    <p>• Kiểm tra lại định dạng tham số đầu vào của công cụ.</p>
+                                    <p>• Đảm bảo hệ thống backend đang hoạt động bình thường.</p>
+                                    <p>• Nếu dùng Custom API Key, hãy đảm bảo khóa có dạng <code class="text-cyan-300">sc_live_...</code> và còn hạn ngạch.</p>
+                                </div>
                             </div>
                         </template>
 
+                        <!-- State 4: Successful Result -->
                         <template x-if="playgroundResult && !playgroundLoading">
-                            <pre class="text-cyan-300 select-all leading-relaxed whitespace-pre" x-text="JSON.stringify(playgroundResult, null, 2)"></pre>
+                            <div>
+                                <!-- TAB 1: VISUAL ASSESSMENT -->
+                                <div x-show="playgroundTab === 'visual'" class="space-y-5">
+                                    <!-- SPECIAL CASE 1: get_supported_banks -->
+                                    <template x-if="playgroundTool === 'get_supported_banks' && Array.isArray(playgroundResult)">
+                                        <div class="space-y-3">
+                                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                                                    <span class="text-xs font-bold text-white uppercase tracking-wider">Danh Sách Ngân Hàng VietQR</span>
+                                                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 font-bold" x-text="playgroundResult.length + ' thành viên'"></span>
+                                                </div>
+                                                <input type="text" x-model="bankSearchFilter" placeholder="Tìm tên, mã, BIN..."
+                                                    class="bg-black/50 border border-white/15 rounded-lg px-2.5 py-1 text-xs font-mono text-cyan-300 placeholder-white/30 focus:outline-none focus:border-cyan-400 w-full sm:w-44">
+                                            </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                <template x-for="bank in getFilteredBanks()" :key="bank.bin || bank.code">
+                                                    <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 flex items-center justify-between gap-3 hover:bg-white/[0.04] transition-all">
+                                                        <div class="flex items-center gap-2.5 min-w-0">
+                                                            <div class="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center shrink-0">
+                                                                <img :src="bank.logo" :alt="bank.shortName" class="max-h-full max-w-full object-contain" onerror="this.style.display='none'">
+                                                            </div>
+                                                            <div class="min-w-0">
+                                                                <div class="flex items-center gap-1.5">
+                                                                    <span class="font-bold text-white text-xs truncate" x-text="bank.shortName || bank.code"></span>
+                                                                    <span class="text-[9px] font-mono px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-bold" x-text="bank.code"></span>
+                                                                </div>
+                                                                <p class="text-[10px] text-white/50 truncate" x-text="bank.name"></p>
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-right shrink-0">
+                                                            <span class="text-[10px] font-mono text-white/40 block">BIN</span>
+                                                            <span class="text-xs font-mono font-bold text-cyan-300" x-text="bank.bin"></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                            <p x-show="getFilteredBanks().length === 0" class="text-xs text-white/40 text-center py-6">Không tìm thấy ngân hàng nào khớp với từ khóa tìm kiếm.</p>
+                                        </div>
+                                    </template>
+
+                                    <!-- SPECIAL CASE 2: get_scam_radar_trends -->
+                                    <template x-if="playgroundTool === 'get_scam_radar_trends' && !Array.isArray(playgroundResult) && playgroundResult.reports_this_week !== undefined">
+                                        <div class="space-y-4">
+                                            <div class="flex items-center justify-between border-b border-white/10 pb-2">
+                                                <span class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                    <i class="bi bi-radar text-cyan-400"></i> Thống Kê Radar An Ninh Số
+                                                </span>
+                                                <span class="text-[10px] text-emerald-400 font-mono">Dữ liệu thời gian thực</span>
+                                            </div>
+                                            <!-- KPI Grid -->
+                                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                                <div class="p-3 rounded-xl bg-cyan-500/[0.04] border border-cyan-500/20 space-y-1">
+                                                    <span class="text-[10px] text-white/50 uppercase font-bold tracking-wider block">Báo cáo tuần</span>
+                                                    <span class="text-xl font-black font-mono text-cyan-300" x-text="playgroundResult.reports_this_week || 0"></span>
+                                                </div>
+                                                <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                                    <span class="text-[10px] text-white/50 uppercase font-bold tracking-wider block">Biến động</span>
+                                                    <span class="text-xl font-black font-mono" :class="(playgroundResult.pct_change || 0) >= 0 ? 'text-red-400' : 'text-emerald-400'"
+                                                        x-text="((playgroundResult.pct_change || 0) > 0 ? '+' : '') + (playgroundResult.pct_change || 0) + '%'"></span>
+                                                </div>
+                                                <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                                    <span class="text-[10px] text-white/50 uppercase font-bold tracking-wider block">SĐT mới</span>
+                                                    <span class="text-xl font-black font-mono text-amber-300" x-text="playgroundResult.new_phones || 0"></span>
+                                                </div>
+                                                <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                                    <span class="text-[10px] text-white/50 uppercase font-bold tracking-wider block">Web Phishing</span>
+                                                    <span class="text-xl font-black font-mono text-red-400" x-text="playgroundResult.phishing_domains || 0"></span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Hot Targets Lists -->
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                                <div class="p-3.5 rounded-xl bg-white/[0.02] border border-white/10 space-y-2">
+                                                    <span class="text-[11px] font-bold text-white/90 flex items-center gap-1.5">
+                                                        <i class="bi bi-fire text-red-400"></i> Mục tiêu bị phản ánh nóng:
+                                                    </span>
+                                                    <template x-if="playgroundResult.hot_phones && playgroundResult.hot_phones.length > 0">
+                                                        <div class="space-y-1.5 max-h-48 overflow-y-auto">
+                                                            <template x-for="(hp, idx) in playgroundResult.hot_phones" :key="idx">
+                                                                <div class="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-black/40 border border-white/5">
+                                                                    <span class="font-mono text-cyan-300 truncate" x-text="hp.target_value || hp.masked || hp"></span>
+                                                                    <span class="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded bg-red-500/20 text-red-300" x-text="(hp.count || 1) + ' tin'"></span>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!playgroundResult.hot_phones || playgroundResult.hot_phones.length === 0">
+                                                        <p class="text-[10px] text-white/40 py-2">Không ghi nhận điểm nóng đột biến.</p>
+                                                    </template>
+                                                </div>
+
+                                                <div class="p-3.5 rounded-xl bg-white/[0.02] border border-white/10 space-y-2">
+                                                    <span class="text-[11px] font-bold text-white/90 flex items-center gap-1.5">
+                                                        <i class="bi bi-pie-chart text-cyan-400"></i> Thủ đoạn lừa đảo hàng đầu:
+                                                    </span>
+                                                    <template x-if="playgroundResult.top_scam_types && playgroundResult.top_scam_types.length > 0">
+                                                        <div class="space-y-1.5 max-h-48 overflow-y-auto">
+                                                            <template x-for="(st, idx) in playgroundResult.top_scam_types" :key="idx">
+                                                                <div class="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-black/40 border border-white/5">
+                                                                    <span class="text-white/80 truncate text-[11px]" x-text="st.scam_type || st.label || st"></span>
+                                                                    <span class="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300" x-text="st.count || st.value || 0"></span>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!playgroundResult.top_scam_types || playgroundResult.top_scam_types.length === 0">
+                                                        <p class="text-[10px] text-white/40 py-2">Dữ liệu đang được tổng hợp.</p>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- SPECIAL CASE 3: lookup_scam_db -->
+                                    <template x-if="playgroundTool === 'lookup_scam_db' && playgroundResult.results !== undefined">
+                                        <div class="space-y-3">
+                                            <div class="flex items-center justify-between border-b border-white/10 pb-2">
+                                                <span class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                    <i class="bi bi-database-check text-cyan-400"></i> Kết Quả Tra Cứu Kho Hồ Sơ Đen
+                                                </span>
+                                                <span class="text-[11px] font-mono text-cyan-300" x-text="(playgroundResult.total || (playgroundResult.results ? playgroundResult.results.length : 0)) + ' bản ghi'"></span>
+                                            </div>
+                                            <template x-if="playgroundResult.results && playgroundResult.results.length > 0">
+                                                <div class="space-y-2">
+                                                    <template x-for="(item, idx) in playgroundResult.results" :key="idx">
+                                                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 space-y-1.5 hover:bg-white/[0.04] transition-all">
+                                                            <div class="flex items-center justify-between gap-2">
+                                                                <div class="flex items-center gap-2 min-w-0">
+                                                                    <span class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-white/10 text-white/70" x-text="item.type_display || item.type || 'Chỉ số'"></span>
+                                                                    <span class="font-mono text-xs font-bold text-cyan-300 truncate" x-text="item.target || item.title"></span>
+                                                                </div>
+                                                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                                                                    :class="item.risk_level === 'RED' ? 'bg-red-500/20 text-red-300' : (item.risk_level === 'YELLOW' ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300')"
+                                                                    x-text="item.risk_display || item.risk_level || 'Cảnh báo'"></span>
+                                                            </div>
+                                                            <p class="text-[11px] text-white/70 leading-relaxed" x-text="item.title || item.scam_type_display || item.description || ''"></p>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                            <template x-if="!playgroundResult.results || playgroundResult.results.length === 0">
+                                                <div class="p-6 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 text-center space-y-2 py-8">
+                                                    <i class="bi bi-shield-check text-emerald-400 text-3xl block"></i>
+                                                    <p class="text-xs font-bold text-white">Không ghi nhận chỉ số trong kho dữ liệu đen</p>
+                                                    <p class="text-[11px] text-white/50 max-w-sm mx-auto">Từ khóa tra cứu hiện chưa có tiền án hoặc báo cáo lừa đảo đã xác thực trong hệ thống ShieldCall.</p>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <!-- SPECIAL CASE 4: report_scam -->
+                                    <template x-if="playgroundTool === 'report_scam' && playgroundResult.report_id !== undefined">
+                                        <div class="p-6 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 text-center space-y-3 py-10">
+                                            <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-2xl flex items-center justify-center mx-auto">
+                                                <i class="bi bi-check2-circle"></i>
+                                            </div>
+                                            <div class="space-y-1">
+                                                <p class="text-sm font-black text-white">Báo Cáo Đã Tiếp Nhận Thành Công!</p>
+                                                <p class="text-xs text-emerald-300 font-mono" x-text="'Mã hồ sơ: #' + playgroundResult.report_id + ' • Trạng thái: ' + (playgroundResult.status || 'pending')"></p>
+                                            </div>
+                                            <p class="text-xs text-white/70 max-w-md mx-auto leading-relaxed" x-text="playgroundResult.message || 'Hồ sơ đã được đưa vào luồng thẩm định tự động và kiểm duyệt an ninh.'"></p>
+                                        </div>
+                                    </template>
+
+                                    <!-- DEFAULT CASE: THREAT SCANNERS (check_phone, check_bank_account, check_url_or_domain, analyze_message, check_email_sender, scan_full_incident) -->
+                                    <template x-if="!['get_supported_banks', 'get_scam_radar_trends', 'lookup_scam_db', 'report_scam'].includes(playgroundTool) || (!Array.isArray(playgroundResult) && playgroundResult.risk_score !== undefined || playgroundResult.overall_risk_score !== undefined)">
+                                        <div class="space-y-5">
+                                            <!-- Verdict Banner Card -->
+                                            <div class="p-4 rounded-2xl border transition-all"
+                                                :class="{
+                                                    'bg-red-950/30 border-red-500/40 text-red-300': getResultRiskLevel() === 'CRITICAL',
+                                                    'bg-amber-950/30 border-amber-500/40 text-amber-300': getResultRiskLevel() === 'WARNING',
+                                                    'bg-blue-950/30 border-blue-500/40 text-blue-300': getResultRiskLevel() === 'LOW',
+                                                    'bg-emerald-950/30 border-emerald-500/40 text-emerald-300': getResultRiskLevel() === 'SAFE'
+                                                }">
+                                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                    <div class="space-y-1">
+                                                        <div class="flex items-center gap-2">
+                                                            <i class="bi text-lg"
+                                                                :class="{
+                                                                    'bi-shield-fill-x text-red-400': getResultRiskLevel() === 'CRITICAL',
+                                                                    'bi-shield-fill-exclamation text-amber-400': getResultRiskLevel() === 'WARNING',
+                                                                    'bi-shield-fill-check text-blue-400': getResultRiskLevel() === 'LOW',
+                                                                    'bi-shield-fill-check text-emerald-400': getResultRiskLevel() === 'SAFE'
+                                                                }"></i>
+                                                            <span class="text-xs font-black uppercase tracking-wider"
+                                                                :class="{
+                                                                    'text-red-400': getResultRiskLevel() === 'CRITICAL',
+                                                                    'text-amber-400': getResultRiskLevel() === 'WARNING',
+                                                                    'text-blue-400': getResultRiskLevel() === 'LOW',
+                                                                    'text-emerald-400': getResultRiskLevel() === 'SAFE'
+                                                                }"
+                                                                x-text="'MỨC ĐỘ: ' + getResultRiskLevel()"></span>
+                                                        </div>
+                                                        <p class="text-xs text-white/80 font-sans" x-text="playgroundResult.suggested_action ? 'Hành động khuyến nghị: ' + playgroundResult.suggested_action : 'Đã hoàn tất đối soát chỉ số an ninh.'"></p>
+                                                    </div>
+
+                                                    <div class="text-right flex sm:flex-col items-center sm:items-end justify-between">
+                                                        <span class="text-[10px] text-white/50 uppercase font-bold tracking-wider">Điểm Rủi Ro</span>
+                                                        <div class="text-2xl font-black font-mono"
+                                                            :class="{
+                                                                'text-red-400': getResultRiskLevel() === 'CRITICAL',
+                                                                'text-amber-400': getResultRiskLevel() === 'WARNING',
+                                                                'text-blue-400': getResultRiskLevel() === 'LOW',
+                                                                'text-emerald-400': getResultRiskLevel() === 'SAFE'
+                                                            }">
+                                                            <span x-text="getResultRiskScore()"></span><span class="text-xs text-white/40">/100</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Progress Bar Gauge -->
+                                                <div class="w-full h-1.5 rounded-full bg-black/40 mt-3 overflow-hidden">
+                                                    <div class="h-full rounded-full transition-all duration-500"
+                                                        :class="{
+                                                            'bg-red-500': getResultRiskLevel() === 'CRITICAL',
+                                                            'bg-amber-400': getResultRiskLevel() === 'WARNING',
+                                                            'bg-blue-400': getResultRiskLevel() === 'LOW',
+                                                            'bg-emerald-400': getResultRiskLevel() === 'SAFE'
+                                                        }"
+                                                        :style="'width: ' + Math.min(100, Math.max(5, getResultRiskScore())) + '%'"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Detected Threats List -->
+                                            <div class="space-y-2">
+                                                <label class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                    <i class="bi bi-exclamation-triangle text-amber-400"></i> Dấu hiệu phát hiện:
+                                                </label>
+                                                <template x-if="getResultThreats().length > 0">
+                                                    <div class="space-y-1.5">
+                                                        <template x-for="(threat, idx) in getResultThreats()" :key="idx">
+                                                            <div class="flex items-start gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-xs text-white/90">
+                                                                <i class="bi bi-arrow-right-circle text-cyan-400 shrink-0 mt-0.5"></i>
+                                                                <span class="leading-relaxed" x-text="threat"></span>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <template x-if="getResultThreats().length === 0">
+                                                    <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                                                        <i class="bi bi-check-circle-fill text-emerald-400"></i>
+                                                        <span>Không ghi nhận dấu hiệu độc hại hoặc cảnh báo gian lận nào trong cơ sở dữ liệu.</span>
+                                                    </div>
+                                                </template>
+                                            </div>
+
+                                            <!-- Key Telemetry Cards Grid -->
+                                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                                <!-- Card 1 -->
+                                                <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                                    <span class="text-[10px] text-white/40 uppercase font-bold tracking-wider block">Thực thể</span>
+                                                    <span class="font-mono text-xs font-bold text-cyan-300 truncate block"
+                                                        x-text="playgroundResult.phone || playgroundResult.domain || playgroundResult.bank || playgroundResult.email || playgroundTool"></span>
+                                                </div>
+                                                <!-- Card 2 -->
+                                                <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                                    <span class="text-[10px] text-white/40 uppercase font-bold tracking-wider block">Hình thức</span>
+                                                    <span class="font-mono text-xs font-bold text-white/80 truncate block"
+                                                        x-text="playgroundResult.scam_type || playgroundResult.line_type || (playgroundResult.entities_count ? playgroundResult.entities_count + ' thực thể' : 'Tiêu chuẩn')"></span>
+                                                </div>
+                                                <!-- Card 3 -->
+                                                <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                                    <span class="text-[10px] text-white/40 uppercase font-bold tracking-wider block">Cộng đồng</span>
+                                                    <span class="font-mono text-xs font-bold text-white/80 block"
+                                                        x-text="typeof playgroundResult.report_count === 'number' ? playgroundResult.report_count + ' báo cáo' : (playgroundResult.reports_this_week ? playgroundResult.reports_this_week + ' tuần này' : 'Chưa có báo cáo')"></span>
+                                                </div>
+                                                <!-- Card 4 -->
+                                                <div class="p-3 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                                    <span class="text-[10px] text-white/40 uppercase font-bold tracking-wider block">Trạng thái</span>
+                                                    <span class="font-mono text-xs font-bold text-emerald-400 block"
+                                                        x-text="playgroundResult.status || 'Hoàn tất'"></span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Explanation / AI Analysis Box -->
+                                            <div class="space-y-2" x-show="getResultExplanation() || (playgroundResult.recommended_actions && playgroundResult.recommended_actions.length)">
+                                                <label class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                    <i class="bi bi-lightbulb-fill text-cyan-400"></i> Phân tích chi tiết & Hành động khuyến nghị:
+                                                </label>
+                                                <div class="p-4 rounded-xl bg-black/50 border border-white/10 text-xs space-y-3 leading-relaxed text-white/80">
+                                                    <div x-show="getResultExplanation()" class="font-sans text-white/90" x-html="getResultExplanation()"></div>
+                                                    <template x-if="playgroundResult.recommended_actions && playgroundResult.recommended_actions.length">
+                                                        <div class="space-y-1.5 pt-2 border-t border-white/10">
+                                                            <template x-for="(act, aIdx) in playgroundResult.recommended_actions" :key="aIdx">
+                                                                <div class="flex items-start gap-2 text-white/70">
+                                                                    <i class="bi bi-shield-check text-cyan-400 shrink-0 mt-0.5"></i>
+                                                                    <span x-text="act"></span>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <!-- TAB 2: RAW JSON CODE -->
+                                <div x-show="playgroundTab === 'json'" class="space-y-2">
+                                    <pre class="text-cyan-300 text-xs font-mono select-all leading-relaxed whitespace-pre overflow-x-auto" x-text="JSON.stringify(playgroundResult, null, 2)"></pre>
+                                </div>
+                            </div>
                         </template>
                     </div>
                 </div>
@@ -1310,16 +1998,26 @@ function mcpGuideApp() {
         },
 
         playgroundTool: 'check_phone',
+        playgroundTab: 'visual',
+        playgroundCustomKey: '',
         playgroundPhone: '0912345678',
         playgroundBank: 'MB',
         playgroundAccount: '0987654321',
         playgroundUrl: 'http://dichvucong-vn.top',
-        playgroundMessage: 'Ngân hàng MBBank thông báo tài khoản của quý khách bị phong tỏa. Vui lòng truy cập link http://dichvucong-vn.top hoặc gửi mã OTP để xác minh.',
-        playgroundEmail: 'support@dichvucong-vn.top',
+        playgroundMessage: 'Ngân hàng MB thông báo tài khoản của quý khách bị phong tỏa do nghi ngờ gian lận. Vui lòng gửi mã OTP xác minh ngay hoặc truy cập http://dichvucong-vn.top để mở khóa.',
+        playgroundEmail: 'fraud@phishing-fake-bank.top',
+        playgroundQuery: '0912345678',
+        playgroundEntityType: 'all',
+        playgroundReportTargetType: 'phone',
+        playgroundReportTargetValue: '0988776655',
+        playgroundReportScamType: 'phishing',
+        playgroundReportDescription: 'Giả mạo nhân viên ngân hàng gọi điện yêu cầu cung cấp mã OTP để nâng cấp hạn mức tín dụng.',
         playgroundLoading: false,
         playgroundResult: null,
         playgroundLatency: 0,
+        playgroundHttpStatus: null,
         playgroundError: null,
+        bankSearchFilter: '',
 
         promptSentry: `You are ShieldCall Sentry, an automated cybersecurity assistant and scam detection copilot integrated with the ShieldCall VN platform.
 
@@ -1351,15 +2049,102 @@ TECHNICAL INVESTIGATION PROTOCOL:
 - Correlate indicators using 'scan_full_incident' to output a structured technical risk analysis report.`,
 
         init() {
-            if (this.userKeys && this.userKeys.length > 0) {
+            if (this.userKeys && this.userKeys.length > 0 && this.userKeys[0] && this.userKeys[0].prefix) {
                 this.selectedKey = this.userKeys[0].prefix + '_secret_key_here';
             } else {
                 this.selectedKey = 'sc_live_your_api_key_here';
             }
+            this.selectTool(this.playgroundTool || 'check_phone');
+        },
+
+        selectTool(tool) {
+            this.playgroundTool = tool;
+            this.playgroundError = null;
+            this.playgroundResult = null;
+            this.playgroundHttpStatus = null;
+            this.playgroundLatency = 0;
+            // Pre-fill sample values if field is currently empty
+            if (tool === 'check_phone' && !this.playgroundPhone) {
+                this.playgroundPhone = '0912345678';
+            } else if (tool === 'check_bank_account') {
+                if (!this.playgroundBank) this.playgroundBank = 'MB';
+                if (!this.playgroundAccount) this.playgroundAccount = '0987654321';
+            } else if (tool === 'check_url_or_domain' && !this.playgroundUrl) {
+                this.playgroundUrl = 'http://dichvucong-vn.top/login';
+            } else if (tool === 'analyze_message' && !this.playgroundMessage) {
+                this.playgroundMessage = 'Ngân hàng MB thông báo tài khoản của quý khách bị tạm khóa do giao dịch bất thường. Vui lòng cung cấp mã OTP để mở khóa.';
+            } else if (tool === 'check_email_sender') {
+                if (!this.playgroundEmail) this.playgroundEmail = 'support@mbbank-security.top';
+                if (!this.playgroundMessage) this.playgroundMessage = 'Yêu cầu nộp lệ phí 500,000 VND để giải ngân khoản vay trực tuyến.';
+            } else if (tool === 'scan_full_incident') {
+                if (!this.playgroundPhone) this.playgroundPhone = '0912345678';
+                if (!this.playgroundBank) this.playgroundBank = 'MB';
+                if (!this.playgroundAccount) this.playgroundAccount = '0987654321';
+                if (!this.playgroundUrl) this.playgroundUrl = 'http://dichvucong-vn.top';
+                if (!this.playgroundMessage) this.playgroundMessage = 'Đối tượng gọi mạo danh cán bộ công an yêu cầu chuyển tiền vào STK MBBank 0987654321.';
+            } else if (tool === 'lookup_scam_db' && !this.playgroundQuery) {
+                this.playgroundQuery = '0912345678';
+            } else if (tool === 'report_scam') {
+                if (!this.playgroundReportTargetValue) this.playgroundReportTargetValue = '0988776655';
+                if (!this.playgroundReportDescription) this.playgroundReportDescription = 'Số điện thoại gọi mạo danh công an yêu cầu chuyển tiền bảo lãnh điều tra.';
+            }
+        },
+
+        getFilteredBanks() {
+            if (!Array.isArray(this.playgroundResult)) return [];
+            const q = (this.bankSearchFilter || '').trim().toLowerCase();
+            if (!q) return this.playgroundResult.slice(0, 40);
+            return this.playgroundResult.filter(b => {
+                return (b.shortName || '').toLowerCase().includes(q) ||
+                       (b.name || '').toLowerCase().includes(q) ||
+                       (b.code || '').toLowerCase().includes(q) ||
+                       (b.bin || '').includes(q);
+            });
         },
 
         getCurrentApiKey() {
-            return this.selectedKey || 'sc_live_your_api_key_here';
+            if (!this.selectedKey || this.selectedKey.includes('undefined')) {
+                if (this.userKeys && this.userKeys.length > 0 && this.userKeys[0] && this.userKeys[0].prefix) {
+                    return this.userKeys[0].prefix + '_secret_key_here';
+                }
+                return 'sc_live_your_api_key_here';
+            }
+            return this.selectedKey;
+        },
+
+        getResultRiskScore() {
+            if (!this.playgroundResult) return 0;
+            const r = this.playgroundResult;
+            if (typeof r.risk_score === 'number') return r.risk_score;
+            if (typeof r.overall_risk_score === 'number') return r.overall_risk_score;
+            return 0;
+        },
+
+        getResultRiskLevel() {
+            if (!this.playgroundResult) return 'SAFE';
+            const r = this.playgroundResult;
+            const raw = (r.risk_level || r.overall_risk_level || '').toUpperCase();
+            if (['RED', 'CRITICAL', 'HIGH'].includes(raw)) return 'CRITICAL';
+            if (['YELLOW', 'MEDIUM', 'WARN', 'WARNING', 'ORANGE'].includes(raw)) return 'WARNING';
+            if (['LOW'].includes(raw)) return 'LOW';
+            return 'SAFE';
+        },
+
+        getResultThreats() {
+            if (!this.playgroundResult) return [];
+            const r = this.playgroundResult;
+            if (Array.isArray(r.detected_threats) && r.detected_threats.length > 0) return r.detected_threats;
+            if (Array.isArray(r.details) && r.details.length > 0) return r.details;
+            if (Array.isArray(r.reasons) && r.reasons.length > 0) return r.reasons;
+            if (Array.isArray(r.patterns_found) && r.patterns_found.length > 0) return r.patterns_found;
+            if (Array.isArray(r.security_checks) && r.security_checks.length > 0) return r.security_checks;
+            return [];
+        },
+
+        getResultExplanation() {
+            if (!this.playgroundResult) return '';
+            const r = this.playgroundResult;
+            return r.explanation || r.analysis_result || r.message || '';
         },
 
         updateConfigSnippets() {
@@ -1367,6 +2152,8 @@ TECHNICAL INVESTIGATION PROTOCOL:
         },
 
         setPreset(type) {
+            this.playgroundResult = null;
+            this.playgroundError = null;
             if (type === 'sms_otp') {
                 this.playgroundTool = 'analyze_message';
                 this.playgroundMessage = 'Ngân hàng MB thông báo tài khoản của quý khách bị phong tỏa do nghi ngờ gian lận. Vui lòng gửi mã OTP xác minh ngay hoặc truy cập http://dichvucong-vn.top để mở khóa.';
@@ -1379,8 +2166,21 @@ TECHNICAL INVESTIGATION PROTOCOL:
                 this.playgroundUrl = 'http://dichvucong-vn.top/login';
             } else if (type === 'fake_email') {
                 this.playgroundTool = 'check_email_sender';
-                this.playgroundEmail = 'support@dichvucong-vn.top';
+                this.playgroundEmail = 'fraud@phishing-fake-bank.top';
                 this.playgroundMessage = 'Thông báo yêu cầu nộp tiền bảo lãnh tài khoản ngân hàng khẩn cấp.';
+            } else if (type === 'full_incident') {
+                this.playgroundTool = 'scan_full_incident';
+                this.playgroundPhone = '0912345678';
+                this.playgroundBank = 'MB';
+                this.playgroundAccount = '0987654321';
+                this.playgroundUrl = 'http://dichvucong-vn.top';
+                this.playgroundMessage = 'Đối tượng gọi mạo danh cơ quan công an yêu cầu chuyển tiền vào STK 0987654321 MB Bank và truy cập http://dichvucong-vn.top.';
+            } else if (type === 'db_lookup') {
+                this.playgroundTool = 'lookup_scam_db';
+                this.playgroundQuery = '0912345678';
+                this.playgroundEntityType = 'all';
+            } else if (type === 'radar_trends') {
+                this.playgroundTool = 'get_scam_radar_trends';
             }
         },
 
@@ -1389,6 +2189,7 @@ TECHNICAL INVESTIGATION PROTOCOL:
             this.playgroundResult = null;
             this.playgroundError = null;
             this.playgroundLatency = 0;
+            this.playgroundHttpStatus = null;
             const startTime = performance.now();
 
             let endpoint = '';
@@ -1448,14 +2249,38 @@ TECHNICAL INVESTIGATION PROTOCOL:
             } else if (this.playgroundTool === 'get_supported_banks') {
                 endpoint = '/api/v1/scan/banks/';
                 method = 'GET';
+            } else if (this.playgroundTool === 'lookup_scam_db') {
+                const q = encodeURIComponent((this.playgroundQuery || '').trim());
+                const t = encodeURIComponent(this.playgroundEntityType || 'all');
+                endpoint = `/api/v1/scan/lookup/?q=${q}&type=${t}`;
+                method = 'GET';
+            } else if (this.playgroundTool === 'get_scam_radar_trends') {
+                endpoint = '/api/v1/trends/radar-stats/';
+                method = 'GET';
+            } else if (this.playgroundTool === 'report_scam') {
+                endpoint = '/api/v1/report/';
+                payload = {
+                    target_type: this.playgroundReportTargetType || 'phone',
+                    target_value: (this.playgroundReportTargetValue || '').trim(),
+                    scam_type: this.playgroundReportScamType || 'other',
+                    description: (this.playgroundReportDescription || '').trim()
+                };
+                if (!payload.target_value || !payload.description) {
+                    this.playgroundError = 'Vui lòng nhập mục tiêu bị báo cáo và nội dung mô tả chi tiết.';
+                    this.playgroundLoading = false;
+                    return;
+                }
+            } else if (this.playgroundTool === 'scan_full_incident') {
+                return await this.runFullIncident(startTime);
             }
 
             const headers = {
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'X-Requested-With': 'ShieldCallPlayground'
             };
-            const apiKey = this.getCurrentApiKey();
-            if (apiKey && !apiKey.includes('_your_api_key_here') && !apiKey.endsWith('...')) {
-                headers['X-API-Key'] = apiKey;
+            const customKey = (this.playgroundCustomKey || '').trim();
+            if (customKey && customKey.startsWith('sc_live_') && !customKey.includes('_secret_') && !customKey.includes('your_api_key')) {
+                headers['X-API-Key'] = customKey;
             }
             const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
             if (csrfCookie) {
@@ -1465,7 +2290,8 @@ TECHNICAL INVESTIGATION PROTOCOL:
             try {
                 const options = {
                     method: method,
-                    headers: headers
+                    headers: headers,
+                    credentials: 'same-origin'
                 };
                 if (method === 'POST') {
                     headers['Content-Type'] = 'application/json';
@@ -1473,19 +2299,155 @@ TECHNICAL INVESTIGATION PROTOCOL:
                 }
 
                 const res = await fetch(endpoint, options);
+                this.playgroundHttpStatus = res.status;
                 const data = await res.json();
                 this.playgroundLatency = Math.round(performance.now() - startTime);
 
                 if (!res.ok) {
-                    this.playgroundError = data.error || data.detail || ('HTTP ' + res.status + ': Yêu cầu thất bại');
+                    this.playgroundError = data.error || data.detail || ('HTTP ' + res.status + ': Yêu cầu không thành công');
                 } else {
                     this.playgroundResult = data;
                 }
             } catch (err) {
                 this.playgroundLatency = Math.round(performance.now() - startTime);
-                this.playgroundError = err.message || 'Lỗi kết nối tới máy chủ ShieldCall.';
+                this.playgroundError = err.message || 'Lỗi kết nối máy chủ ShieldCall.';
             } finally {
                 this.playgroundLoading = false;
+                if (window.innerWidth < 1024) {
+                    this.$nextTick(() => {
+                        const consoleEl = document.getElementById('playground-console');
+                        if (consoleEl) {
+                            consoleEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    });
+                }
+            }
+        },
+
+        async runFullIncident(startTime) {
+            const headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'ShieldCallPlayground'
+            };
+            const customKey = (this.playgroundCustomKey || '').trim();
+            if (customKey && customKey.startsWith('sc_live_') && !customKey.includes('_secret_') && !customKey.includes('your_api_key')) {
+                headers['X-API-Key'] = customKey;
+            }
+            const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+            if (csrfCookie) {
+                headers['X-CSRFToken'] = csrfCookie.split('=')[1];
+            }
+
+            const entitiesScanned = {};
+            const allThreats = [];
+            let maxScore = 0;
+
+            const pVal = (this.playgroundPhone || '').trim();
+            const bName = (this.playgroundBank || '').trim();
+            const aVal = (this.playgroundAccount || '').trim();
+            const uVal = (this.playgroundUrl || '').trim();
+            const mVal = (this.playgroundMessage || '').trim();
+
+            if (!pVal && !aVal && !uVal && !mVal) {
+                this.playgroundError = 'Vui lòng cung cấp ít nhất một thông tin: Số điện thoại, Tài khoản ngân hàng, URL hoặc Tin nhắn.';
+                this.playgroundLoading = false;
+                return;
+            }
+
+            try {
+                const tasks = [];
+                if (pVal) {
+                    tasks.push(
+                        fetch('/api/v1/scan/phone/', { method: 'POST', headers, credentials: 'same-origin', body: JSON.stringify({ phone: pVal }) })
+                            .then(r => r.json())
+                            .then(d => {
+                                entitiesScanned.phone = d;
+                                const sc = parseInt(d.risk_score || 0, 10);
+                                if (sc > maxScore) maxScore = sc;
+                                if (d.reasons && d.reasons.length) allThreats.push(...d.reasons.map(r => `[Số điện thoại ${pVal}] ${r}`));
+                            }).catch(() => {})
+                    );
+                }
+                if (aVal) {
+                    tasks.push(
+                        fetch('/api/v1/scan/account/', { method: 'POST', headers, credentials: 'same-origin', body: JSON.stringify({ bank: bName || 'MB', account: aVal }) })
+                            .then(r => r.json())
+                            .then(d => {
+                                entitiesScanned.bank_account = d;
+                                const sc = parseInt(d.risk_score || 0, 10);
+                                if (sc > maxScore) maxScore = sc;
+                                if (d.details && d.details.length) allThreats.push(...d.details.map(r => `[Ngân hàng ${bName} ${aVal}] ${r}`));
+                            }).catch(() => {})
+                    );
+                }
+                if (uVal) {
+                    tasks.push(
+                        fetch('/api/v1/scan/domain/', { method: 'POST', headers, credentials: 'same-origin', body: JSON.stringify({ url: uVal }) })
+                            .then(r => r.json())
+                            .then(d => {
+                                entitiesScanned.url = d;
+                                const sc = parseInt(d.risk_score || 0, 10);
+                                if (sc > maxScore) maxScore = sc;
+                                if (d.details && d.details.length) allThreats.push(...d.details.map(r => `[Tên miền ${uVal}] ${r}`));
+                            }).catch(() => {})
+                    );
+                }
+                if (mVal) {
+                    tasks.push(
+                        fetch('/api/v1/scan/message/', { method: 'POST', headers, credentials: 'same-origin', body: JSON.stringify({ message: mVal, sync: true }) })
+                            .then(r => r.json())
+                            .then(d => {
+                                entitiesScanned.message = d;
+                                const sc = parseInt(d.risk_score || 0, 10);
+                                if (sc > maxScore) maxScore = sc;
+                                if (d.patterns_found && d.patterns_found.length) allThreats.push(...d.patterns_found.map(r => `[Tin nhắn] ${r}`));
+                            }).catch(() => {})
+                    );
+                }
+
+                await Promise.all(tasks);
+
+                let overallLevel = 'SAFE';
+                if (maxScore >= 80) overallLevel = 'CRITICAL';
+                else if (maxScore >= 50) overallLevel = 'MEDIUM';
+                else if (maxScore >= 20) overallLevel = 'LOW';
+
+                const recommendedActions = [];
+                if (maxScore >= 80) {
+                    recommendedActions.push('CHẶN KHẨN CẤP: Tuyệt đối không chuyển tiền hoặc cung cấp mã OTP/thông tin cá nhân.');
+                    recommendedActions.push('Liên hệ đường dây nóng ngân hàng để tạm khóa tài khoản hoặc thẻ thanh toán nếu đã cung cấp thông tin.');
+                    recommendedActions.push('Thu thập bằng chứng và gửi báo cáo lừa đảo qua công cụ report_scam.');
+                } else if (maxScore >= 50) {
+                    recommendedActions.push('CẢNH GIÁC CAO ĐỘ: Phát hiện tín hiệu bất thường về hạ tầng hoặc dấu hiệu bẫy tâm lý mạo danh.');
+                    recommendedActions.push('Xác minh độc lập qua kênh tổng đài chính thức của đơn vị trước khi giao dịch.');
+                } else {
+                    recommendedActions.push('Không ghi nhận chỉ số đe dọa trực tiếp. Tiếp tục duy trì nguyên tắc an toàn thông tin cơ bản.');
+                }
+
+                this.playgroundHttpStatus = 200;
+                this.playgroundLatency = Math.round(performance.now() - startTime);
+                this.playgroundResult = {
+                    overall_risk_score: maxScore,
+                    overall_risk_level: overallLevel,
+                    entities_scanned: entitiesScanned,
+                    detected_threats: allThreats,
+                    recommended_actions: recommendedActions,
+                    entities_count: Object.keys(entitiesScanned).length
+                };
+            } catch (err) {
+                this.playgroundLatency = Math.round(performance.now() - startTime);
+                this.playgroundError = err.message || 'Lỗi phân tích tổng hợp vụ việc.';
+            } finally {
+                this.playgroundLoading = false;
+                if (window.innerWidth < 1024) {
+                    this.$nextTick(() => {
+                        const consoleEl = document.getElementById('playground-console');
+                        if (consoleEl) {
+                            consoleEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    });
+                }
             }
         },
 

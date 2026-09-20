@@ -165,7 +165,12 @@ class ResetRAGView(APIView):
         try:
             if os.path.exists(index_dir):
                 for f in os.listdir(index_dir):
-                    os.remove(os.path.join(index_dir, f))
+                    fp = os.path.join(index_dir, f)
+                    try:
+                        if os.path.isfile(fp) or os.path.islink(fp):
+                            os.remove(fp)
+                    except FileNotFoundError:
+                        pass
             
             # Trigger task
             rebuild_vector_index.delay(trigger='FORCE_RESET')

@@ -153,12 +153,17 @@ def _authenticate_mcp(request) -> Tuple[Optional[APIKey], Optional[str], Optiona
             }
         )
 
-    # Increment request usage
-    api_key.requests_today += 1
-    api_key.requests_this_month += 1
-    api_key.total_requests += 1
-    api_key.last_used_at = timezone.now()
-    api_key.save(update_fields=['requests_today', 'requests_this_month', 'total_requests', 'last_used_at', 'last_reset_date'])
+    # Increment request usage atomically (avoids lost updates under concurrency).
+    from django.db.models import F
+    from django.utils import timezone as _tz
+    APIKey.objects.filter(id=api_key.id).update(
+        requests_today=F('requests_today') + 1,
+        requests_this_month=F('requests_this_month') + 1,
+        total_requests=F('total_requests') + 1,
+        last_used_at=_tz.now(),
+        last_reset_date=today,
+    )
+    api_key.refresh_from_db(fields=['requests_today', 'requests_this_month', 'total_requests', 'last_used_at', 'last_reset_date'])
 
     return (api_key, raw_token, None)
 

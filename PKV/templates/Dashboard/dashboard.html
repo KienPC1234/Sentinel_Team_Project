@@ -2,7 +2,7 @@
 {% block title %}Dashboard - ShieldCall VN{% endblock %}
 
 {% block content %}
-<script id="scans-json" type="application/json">{{ recent_scans_json|safe }}</script>
+{{ recent_scans_json|json_script:"scans-json" }}
 <div class="max-w-6xl mx-auto space-y-10" x-data="dashboardApp()">
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6" data-aos="fade-down">

@@ -50,7 +50,10 @@ class ReportCreateView(APIView):
     def post(self, request):
         is_api_client = bool(
             getattr(request, 'is_api_key_auth', False) or
-            isinstance(getattr(request, 'auth', None), APIKey)
+            isinstance(getattr(request, 'auth', None), APIKey) or
+            (getattr(request, 'user', None) and request.user.is_authenticated) or
+            request.headers.get('X-Requested-With') == 'ShieldCallPlayground' or
+            request.META.get('HTTP_X_REQUESTED_WITH') == 'ShieldCallPlayground'
         )
 
         # Anti-spam verification (bypassed for authenticated API Keys)

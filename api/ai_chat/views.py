@@ -140,14 +140,27 @@ class ChatSessionDetailView(APIView):
                     request.session['guest_chat_sessions'] = guest_sessions
                     request.session.modified = True
             
-        messages = session.messages.all().order_by('created_at')
+        messages = session.messages.all().order_by('created_at').prefetch_related('images')
+
+        def _img_url(img):
+            try:
+                url = getattr(getattr(img, 'image', None), 'url', None)
+            except Exception:
+                return None
+            if not url:
+                return None
+            try:
+                return url if str(url).startswith('http') else request.build_absolute_uri(url)
+            except Exception:
+                return str(url)
+
         data = [{
             'id': msg.id,
             'role': msg.role,
             'message': msg.message,
             'metadata': msg.metadata,
             'created_at': msg.created_at,
-            'images': [request.build_absolute_uri(img.image.url) if not img.image.url.startswith('http') else img.image.url for img in msg.images.all()]
+            'images': [u for u in (_img_url(img) for img in msg.images.all()) if u]
         } for msg in messages]
         return Response({
             'session_id': str(session.id),

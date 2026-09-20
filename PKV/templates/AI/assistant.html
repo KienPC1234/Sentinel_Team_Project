@@ -1438,12 +1438,18 @@
 
                 while (true) {
                     const { value, done } = await reader.read();
-                    if (done) break;
 
-                    buffer += decoder.decode(value, { stream: true });
+                    if (done) {
+                        // Flush any remaining data in buffer that did not end with \n
+                        if (buffer.trim()) buffer += '\n';
+                    } else {
+                        buffer += decoder.decode(value, { stream: true });
+                    }
+
                     const lines = buffer.split('\n');
-                    buffer = lines.pop();
-                    
+                    // Keep last incomplete line in buffer; empty on done
+                    buffer = done ? '' : (lines.pop() ?? '');
+
                     for (const line of lines) {
                         const trimmedLine = line.trim();
                         if (trimmedLine.startsWith('data: ')) {
@@ -1539,6 +1545,7 @@
                         }
                     }
                     scrollToBottom();
+                    if (done) break;
                 }
                 if (isStreaming) {
                     finishStream(contentDiv, assistantMsgDiv, fullContent);
@@ -1661,26 +1668,18 @@
             div.className = `msg-group flex ${role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`;
             if (messageId) div.dataset.messageId = messageId;
 
-            // JS-string-safe escaping for inline handler interpolation (prevents
-            // quote/`</script>` breakout from message text stored in history).
-            const escJs = String(text == null ? '' : text)
-                .replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$')
-                .replace(/</g, '\\x3c').replace(/>/g, '\\x3e')
-                .replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             const userDisplayName = CURRENT_USER;
             const bubbleClass = role === 'user' ? 'msg-user' : 'msg-assistant';
             const label = role === 'user' ? 
                 `<div class="text-[9px] font-black uppercase text-slate-500 mb-1.5 px-2 text-right">${userDisplayName}</div>` : 
                 `<div class="text-[9px] font-black uppercase text-cyan-500 mb-1.5 px-2 flex items-center gap-1.5"><i class="bi bi-shield-check"></i> ShieldCall AI</div>`;
 
-            let imgHtml = '';
-            if (images && images.length > 0) {
-                imgHtml = `<div class="flex flex-wrap gap-2 mb-3">`;
-                images.forEach(src => {
-                    imgHtml += `<img src="${src}" class="w-32 h-32 object-cover rounded-xl border border-white/10 hover:scale-105 transition-transform cursor-zoom-in" onclick="window.open(this.src)">`;
-                });
-                imgHtml += `</div>`;
-            }
+            // Images are injected after innerHTML is set to avoid base64 data URIs
+            // being truncated when embedded directly in attribute strings.
+            const imageDataList = (images && images.length > 0) ? images : [];
+            const imgHtml = imageDataList.length > 0
+                ? '<div class="flex flex-wrap gap-2 mb-3 js-img-placeholder"></div>'
+                : '';
 
             div.innerHTML = `
                 <div class="max-w-[85%] relative">
@@ -1725,7 +1724,7 @@
                     <div class="msg-actions ${role === 'user' ? 'msg-actions-user' : 'msg-actions-assistant'}" data-raw-text="${encodeURIComponent(text)}">
                         <button onclick="copyToClipboard(this)" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-xs" title="Sao chép"><i class="bi bi-clipboard"></i></button>
                         ${(IS_AUTHENTICATED && messageId) ? `<button onclick="toggleBookmark(this, ${messageId})" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-amber-400 transition-all flex items-center justify-center text-xs bookmark-btn" title="Lưu tin nhắn"><i class="bi bi-bookmark"></i></button>` : ''}
-                        ${role === 'user' ? `<button onclick="editMessage(this, ${messageId}, \`${escJs}\`)" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-xs" title="Chỉnh sửa"><i class="bi bi-pencil"></i></button>` : ''}
+                        ${role === 'user' ? `<button onclick="editMessage(this, ${messageId || 'null'})" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-xs" title="Chỉnh sửa"><i class="bi bi-pencil"></i></button>` : ''}
                     </div>
                 </div>
             `;
@@ -1734,6 +1733,22 @@
             }
 
             messagesContainer.appendChild(div);
+
+            // Inject images via DOM (not innerHTML) to correctly handle base64 data URIs
+            // that may contain characters which break HTML attribute parsing.
+            if (imageDataList.length > 0) {
+                const placeholder = div.querySelector('.js-img-placeholder');
+                if (placeholder) {
+                    imageDataList.forEach(src => {
+                        const img = document.createElement('img');
+                        img.src = src;
+                        img.className = 'w-32 h-32 object-cover rounded-xl border border-white/10 hover:scale-105 transition-transform cursor-zoom-in';
+                        img.addEventListener('click', () => window.open(img.src));
+                        placeholder.appendChild(img);
+                    });
+                }
+            }
+
             return div;
         }
 
@@ -2106,7 +2121,10 @@
 
         function editMessage(btn, id, text) {
             editModeMessageId = id;
-            userInput.value = text;
+            const messageText = typeof text === 'string' && text !== ''
+                ? text
+                : decodeURIComponent(btn?.closest('.msg-actions')?.dataset?.rawText || '');
+            userInput.value = messageText;
             userInput.focus();
             userInput.style.height = 'auto';
             userInput.style.height = userInput.scrollHeight + 'px';
@@ -2119,7 +2137,11 @@
             const bubble = assistantMsgDiv.querySelector('.msg-bubble');
             const imgDiv = document.createElement('div');
             imgDiv.className = 'mt-3 mb-4 rounded-xl overflow-hidden border border-cyan-500/30 shadow-lg';
-            imgDiv.innerHTML = `<img src="${base64}" class="w-full h-auto cursor-zoom-in" onclick="window.open(this.src)">`;
+            const img = document.createElement('img');
+            img.src = base64;
+            img.className = 'w-full h-auto cursor-zoom-in';
+            img.addEventListener('click', () => window.open(img.src));
+            imgDiv.appendChild(img);
             bubble.appendChild(imgDiv);
         }
 
