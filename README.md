@@ -1,7 +1,7 @@
 <div align="center">
   <h1>ShieldCall VN (Sentinel Core)</h1>
   <p><b>Advanced Multi-Modal Threat Intelligence, Zero-Trust Sandbox & Anti-Fraud Architecture</b></p>
-  <p><b>Production Architecture:</b> <code>https://&lt;your-domain&gt;</code> | <b>Live Demo:</b> <a href="https://sc.fptoj.com">https://sc.fptoj.com</a></p>
+  <p><b>Live Demo:</b> <a href="https://sc.fptoj.com">https://sc.fptoj.com</a></p>
 
   [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
   [![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
@@ -12,6 +12,37 @@
   [![Hardware](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900.svg)](https://developer.nvidia.com/cuda-zone)
   [![Orchestration](https://img.shields.io/badge/Process-PM2-lightgrey.svg)](https://pm2.keymetrics.io/)
 </div>
+
+---
+
+## 0. Cấu trúc thư mục (Repository layout)
+
+```
+Sentinel_Team_Project/
+├── backend/                 # Toàn bộ backend Django (PKV, api, manage.py, theme, scripts, sandbox, helps, static, media…)
+├── frontend/                # Toàn bộ frontend Next.js (app router, src, public)
+├── docs/                    # Tài liệu (phản biện, cải tiến, API…)
+├── ecosystem.config.js      # Cấu hình PM2 (chạy backend từ backend/, frontend từ frontend/)
+├── README.md
+└── _minhchung/              # Minh chứng nộp bài (gitignored)
+```
+
+> Lệnh backend chạy từ trong `backend/` (ví dụ `cd backend && python manage.py check`).
+
+---
+
+## 0.1 Cập nhật gần nhất — Cải tiến theo góp ý Hội đồng (2026-10-15)
+
+Năm cải tiến trọng tâm (chi tiết + kiểm chứng: [`docs/CAI_TIEN_THEO_HOI_DONG.md`](docs/CAI_TIEN_THEO_HOI_DONG.md)):
+
+1. **Guardrail độ bất định** — khi chưa đủ bằng chứng, hệ thống **KHÔNG kết luận "an toàn"** mà trả nhãn *"CHƯA ĐỦ CƠ SỞ XÁC MINH"*, kèm cảnh báo và kênh xác minh chính thức.
+2. **Bằng chứng cho mọi nhận định** — mỗi kết quả quét kèm `evidence[]` (nguồn, độ tin cậy, mức độ, liên kết tham chiếu).
+3. **Minh bạch nguồn & giới hạn** — danh mục nguồn tại `/api/v1/trust/sources/` nêu rõ độ tin cậy và hạn chế của từng công cụ (kể cả mô hình AI).
+4. **Dữ liệu nguồn Việt Nam** — kênh chính thức (NCSC 156, Công an 113, VNCERT), tổng đài ngân hàng, từ điển dấu hiệu lừa đảo tiếng Việt (`/api/v1/trust/channels/`).
+5. **Bảo mật dữ liệu** — ẩn PII (SĐT/email/STK/CCCD/thẻ/khoá) trước khi ghi log hoặc gửi mô hình cloud (`/api/v1/trust/privacy/`).
+
+> **Hạn chế & lộ trình:** xem [`docs/REBUTTAL_QA.md`](docs/REBUTTAL_QA.md). Các chỉ số định lượng
+> được công bố ở mức *"kết quả nội bộ sơ bộ"*, không tuyên bố tuyệt đối.
 
 ---
 
@@ -180,9 +211,12 @@ Replaces third-party external dependencies with an entirely isolated on-premise 
 - **Containment Model**: Every suspicious file is mounted read-only inside an ephemeral container (`sentinel-sandbox:latest`) with strict enforcement:
   - `--network none`: Complete network isolation. Zero external telemetry or outbound egress.
   - `--read-only`: Read-only root filesystem prevents modification or persistent writes.
+  - `--tmpfs /tmp:rw,size=256m,mode=1777`: Bounded writable scratch space (needed for archive unpacking / AV temp files) that never persists.
   - `--cap-drop ALL`: Drops all Linux kernel capabilities.
   - `--security-opt=no-new-privileges:true`: Prevents privilege escalation.
   - `--memory 1g --cpus 2.0 --pids-limit 64`: Throttles resource abuse and prevents fork bombs.
+
+  > The long-running daemon (`sentinel-sandbox-daemon`, port 5005) runs with `--read-only`, `--security-opt=no-new-privileges:true`, and tmpfs mounts (`mode=1777`) for `/tmp` + `/var/run/clamav` (the latter lets the ClamAV daemon bind its socket); because it must accept inbound HTTP it keeps the default bridge network (no egress is performed by the analyzer).
 - **Multi-Engine Static & Heuristic Dissection**:
   - **YARA Engine**: Scans binary patterns for ransomware extortion notes, process injection calls, and obfuscated droppers.
   - **OLETools (`olevba`)**: Dissects VBA macro streams in `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm` files to detect `Auto_Open`, `Shell()`, and `WScript.Shell`.
@@ -324,7 +358,7 @@ sudo chmod 666 /var/run/docker.sock
 ```
 
 ### 5.2 Environment Configuration (`.env`)
-Create `.env` at the project root:
+Create `backend/.env`:
 
 ```bash
 # Core
@@ -372,9 +406,69 @@ EMAIL_HOST_PASSWORD=<smtp_password>
 DEFAULT_FROM_EMAIL=ShieldCall VN Support <noreply@<your-domain>.com>
 ```
 
+### 5.2.1 Object storage (S3-compatible)
+
+Lưu media (ảnh cover, avatar, biên lai…) lên object storage để **an toàn & dễ mở rộng**.
+Backend dùng `django-storages` + `boto3` (đã có trong `backend/requirements.txt`). Bật bằng env:
+
+```bash
+USE_S3_MEDIA=true
+USE_S3_STATIC=true
+AWS_ACCESS_KEY_ID=<key>
+AWS_SECRET_ACCESS_KEY=<secret>
+AWS_STORAGE_BUCKET_NAME=shieldcall
+AWS_S3_REGION_NAME=us-east-1
+AWS_S3_ENDPOINT_URL=http://100.124.226.59:30900   # endpoint API (nhanh qua Tailscale)
+AWS_S3_CUSTOM_DOMAIN=s3.fptoj.com/shieldcall       # domain công khai cho URL media/static
+AWS_S3_ADDRESSING_STYLE=path
+AWS_S3_URL_PROTOCOL=https:
+AWS_QUERYSTRING_AUTH=false
+AWS_DEFAULT_ACL=public-read
+```
+
+- **100% object storage**: khi bật, **media & static đều lưu trên S3** — upload mới **không ghi file cục bộ**
+  (`MEDIA_URL`/`STATIC_URL` trỏ `https://s3.fptoj.com/shieldcall/…`).
+- Chỉ mục RAG (FAISS) là artifact hệ thống, lưu tại `backend/vector_store/` (không phải media).
+- `USE_S3_MEDIA=false`/`USE_S3_STATIC=false` → quay về `FileSystemStorage`/Whitenoise (không phá vận hành).
+- **Đồng bộ media lên S3** (backfill + chạy định kỳ qua Celery Beat `sync-media-to-s3-daily`):
+
+```bash
+cd backend && python manage.py sync_media_to_s3 --dry-run   # xem trước
+cd backend && python manage.py collectstatic --noinput       # đẩy static lên S3
+```
+
+- Trạng thái storage: `GET /api/v1/trust/storage/` · Trang công khai: `/trust/`.
+- **Backup chỉ mục RAG lên S3** (quan trọng, tự khôi phục khi thiếu file cục bộ):
+
+```bash
+cd backend && python manage.py backup_vector_store    # sao lưu vector_store/ lên S3
+# Tự động: sau mỗi rebuild RAG + Celery Beat 'backup-vector-store-6h'
+```
+
+- **Tối ưu RAG/vector DB**: cache truy vấn LRU, embedding tăng dần (chỉ embed tài liệu mới/đổi),
+  thread-safe + tự nạp lại khi index đổi, dedup kết quả. Cấu hình: `VECTOR_DB_QUERY_CACHE`, `VECTOR_DB_SCORE_THRESHOLD`, `VECTOR_DB_EMBED_BATCH`.
+- **Quản trị S3 từ xa bằng rclone** (client chuẩn):
+
+```bash
+sudo apt-get install -y rclone
+# ~/.config/rclone/rclone.conf
+# [acm-s3]
+# type = s3
+# provider = Other
+# access_key_id = acm
+# secret_access_key = <secret>
+# endpoint = http://127.0.0.1:30900
+# region = us-east-1
+# force_path_style = true
+rclone lsd acm-s3:                 # liệt kê bucket
+rclone sync backend/media acm-s3:shieldcall   # đồng bộ media lên S3
+```
+
+> `python manage.py seed_vn_knowledge` sẽ đẩy ảnh cover (nếu có trong `backend/static/knowledge_images/`) lên S3.
+
 ### 5.3 Build the Docker Malware Sandbox Image
 ```bash
-docker build -t sentinel-sandbox:latest ./sandbox
+docker build -t sentinel-sandbox:latest ./backend/sandbox
 ```
 
 ### 5.4 Install Dependencies & Build Assets
@@ -382,9 +476,10 @@ docker build -t sentinel-sandbox:latest ./sandbox
 # Python Virtual Environment
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # Database Migrations & Static Files
+cd backend
 python manage.py migrate
 python manage.py collectstatic --noinput
 
@@ -431,11 +526,24 @@ Execute test suites to validate database integrity, LLM reasoning, sandbox analy
 .venv/bin/python scripts/test_api.py
 
 # 3. Execute Django Unit Tests
-.venv/bin/python manage.py test api.ai_chat.tests
+.venv/bin/python backend/manage.py test api.ai_chat.tests
+
+# 4. Threshold/ROC evaluation on the labelled VN dataset (reproducible)
+.venv/bin/python backend/scripts/eval/evaluate_thresholds.py   # → docs/EVAL_THRESHOLDS.md
+
+# 5. Generic evaluator + labelling tooling (phone/domain/AI)
+.venv/bin/python backend/scripts/eval/evaluate_generic.py --dataset <file.jsonl> --scorer <message|domain_lookalike|field>
+.venv/bin/python backend/scripts/eval/cohen_kappa.py --csv backend/scripts/eval/labels_agreement.csv
+#    Hướng dẫn từng bước: docs/EVAL_GUIDE.md
 ```
 
 ---
 
 ## 7. License & Authorship
 
-Developed by **Sentinel Team**. Proprietary and Confidential. Distributed under standard project terms.
+Copyright (c) 2026 **Sentinel Team**. This project is free software licensed under the
+**GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)** — see `LICENSE`.
+Anyone running a modified version on a public server must offer the Corresponding Source
+to remote users (AGPL §13); the canonical source is this repository.
+Third-party components keep their own licenses — full compatibility matrix in
+`docs/LEGAL_AND_LICENSE.md`.

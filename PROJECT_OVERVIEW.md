@@ -1,6 +1,6 @@
 # ShieldCall VN -- Project Overview
 
-**ShieldCall VN** là nền tảng an toàn số toàn diện, được xây dựng để bảo vệ người dùng Việt Nam khỏi lừa đảo (scam, phishing, malware) thông qua trí tuệ nhân tạo chạy hoàn toàn nội bộ (on-premise). Hệ thống không phụ thuộc bất kỳ dịch vụ cloud AI bên ngoài nào.
+**ShieldCall VN** là nền tảng an toàn số toàn diện, được xây dựng để bảo vệ người dùng Việt Nam khỏi lừa đảo (scam, phishing, malware). Kiến trúc **hybrid local-first**: OCR, Whisper, FAISS, sandbox phân tích mã độc và scoring chạy hoàn toàn nội bộ (on-premise); LLM cloud chỉ là **fallback tùy chọn** theo cấu hình `LLM_PROVIDER`, không phải đường xử lý mặc định của dữ liệu nhạy cảm.
 
 ---
 
@@ -10,7 +10,7 @@
 | :--- | :--- | :--- |
 | **Backend Core** | Django 5.x + Django REST Framework | ASGI, Monolith-first, API RESTful chuẩn |
 | **Frontend UI** | Tailwind CSS v4 + Alpine.js | Liquid Glass Aesthetic, SSE streaming |
-| **AI Engine** | Ollama (local LLM, reasoning model) | Chạy on-premise, không cloud |
+| **AI Engine** | Ollama (local LLM) + Cloud LLM fallback tùy chọn | Local-first; cloud chỉ khi cấu hình, có consent/log |
 | **AI Vision** | EasyOCR | Trích xuất văn bản từ ảnh/screenshot |
 | **AI Audio** | Faster-Whisper | Phiên âm âm thanh cuộc gọi |
 | **Rich Text Editor** | CKEditor 5 Community (GPL) | Không cần license thương mại |

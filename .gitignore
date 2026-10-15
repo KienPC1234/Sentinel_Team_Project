@@ -14,8 +14,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
+!frontend/src/lib/
 parts/
 sdist/
 var/
@@ -58,8 +59,8 @@ cover/
 # Django stuff:
 *.log
 local_settings.py
-db.sqlite3
-db.sqlite3-journal
+*.sqlite3
+*.sqlite3-journal
 
 # Flask stuff:
 instance/
@@ -171,7 +172,6 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
-PKV/settings.py
 
 # Pyre type checker
 .pyre/
@@ -220,6 +220,10 @@ staticfiles/
 celerybeat-schedule.*
 scripts/puppeteer_host/node_modules/
 scripts/puppeteer_host/chrome/
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
+frontend/out/
 scripts/puppeteer_host/puppeteer_profile/
 *.zip
 
@@ -227,11 +231,17 @@ scripts/puppeteer_host/puppeteer_profile/
 sandbox/capa-rules/
 sandbox/rules/signature_base/
 sandbox/rules/*.yarc
-# Evidence & Telemetry Directories (Competition Dossier)
-01_Prompt_Engineering_Logs/
-02_Git_Commit_History_Telemetry/
-03_Docker_Sandbox_Verification/
-04_Stress_Test_Performance_Reports/
-05_Educational_Field_Testing/
-06_Product_Demo_Video/
-*.docx
+# Competition dossier evidence — TRACKED on purpose so judges can verify on remote.
+# Only large/raw binaries are ignored below; reports, logs and docs stay versioned.
+*.mp4
+*.mov
+*.avi
+*.mkv
+frontend/.env.local
+frontend/.env.*.local
+
+# Thư mục minh chứng cải tiến (tổng hợp log session + kiểm chứng) — KHÔNG commit;
+# nội dung được nộp qua Google Drive theo yêu cầu cuộc thi.
+_minhchung/
+backend/PKV/settings.py
+backend/vector_store

@@ -1,0 +1,88 @@
+{"text": "Công an phường yêu cầu bạn chuyển khoản 20 triệu để phong tỏa tài khoản điều tra, giữ bí mật không nói với ai.", "label": 1, "tactic": "impersonation"}
+{"text": "Chúc mừng bạn trúng thưởng xe SH, nộp phí 2 triệu để nhận giải, bấm link này ngay.", "label": 1, "tactic": "prize"}
+{"text": "Tài khoản ngân hàng của bạn bị khóa, vui lòng bấm vào link xác minh lại: vcb-xacminh.top", "label": 1, "tactic": "phishing"}
+{"text": "Anh ơi cài app Dịch Vụ Công để cập nhật VNeID mức 2, em gửi file apk cài giúp nhé.", "label": 1, "tactic": "vneid"}
+{"text": "Việc nhẹ lương cao, chỉ cần chốt đơn online, thu nhập 20tr/tháng, đóng phí đặt cọc trước.", "label": 1, "tactic": "job"}
+{"text": "Đầu tư sàn forex lợi nhuận 30%/tháng, cam kết bao lời, nạp tiền để tham gia nhóm.", "label": 1, "tactic": "investment"}
+{"text": "Em chuyển khoản nhầm vào tài khoản anh, anh chuyển lại giúp em số tiền 50 triệu nhé.", "label": 1, "tactic": "wrong_transfer"}
+{"text": "Thông báo: tài khoản quý khách có giao dịch bất thường, cung cấp mã OTP để hủy giao dịch.", "label": 1, "tactic": "otp"}
+{"text": "Bưu phẩm của bạn đang bị giữ ở hải quan, nộp phí 5 triệu để nhận hàng.", "label": 1, "tactic": "shipping"}
+{"text": "Chị ơi em là shipper, đơn của chị cần thanh toán thêm phí giao hàng, chuyển vào STK này.", "label": 1, "tactic": "shipping"}
+{"text": "Cán bộ bảo hiểm xã hội thông báo cập nhật sổ BHXH, yêu cầu cung cấp CCCD và mã OTP.", "label": 1, "tactic": "bhxh"}
+{"text": "Hoàn thuế thu nhập cá nhân, bấm link khai báo để nhận tiền hoàn gấp trước ngày 20.", "label": 1, "tactic": "tax"}
+{"text": "Tài khoản Facebook của em bị hack và đang nhắn vay tiền mọi người, mọi người đừng chuyển nhé.", "label": 1, "tactic": "hacked_account"}
+{"text": "Anh kết bạn với em nhé, em ở nước ngoài gửi tặng anh quà, đóng phí hải quan giúp em.", "label": 1, "tactic": "romance"}
+{"text": "Cài app vay tiền nhanh, giải ngân trong 5 phút, lãi suất 0%, chỉ cần CCCD.", "label": 1, "tactic": "loan_app"}
+{"text": "Đăng kiểm xe của bạn sắp hết hạn, nộp phí đường bộ qua link này để tránh bị phạt nguội.", "label": 1, "tactic": "registration"}
+{"text": "Bạn được tặng voucher 5 triệu, đăng nhập lại tài khoản để nhận thưởng, bấm link.", "label": 1, "tactic": "prize"}
+{"text": "Cơ quan điều tra thông báo bạn liên quan đường dây rửa tiền, nộp tiền bảo lãnh để tại ngoại.", "label": 1, "tactic": "impersonation"}
+{"text": "Trúng tuyển việc làm online, nộp phí đào tạo 1 triệu, hoa hồng hấp dẫn mỗi đơn.", "label": 1, "tactic": "job"}
+{"text": "Con của bạn bị tai nạn đang cấp cứu, chuyển gấp viện phí vào tài khoản bác sĩ điều trị.", "label": 1, "tactic": "accident"}
+{"text": "Mã OTP của bạn là 123456, vui lòng đọc lại cho nhân viên ngân hàng để xác minh.", "label": 1, "tactic": "otp"}
+{"text": "Vay vốn không cần thế chấp, chứng minh tài chính đơn giản, liên hệ zalo để được giải ngân.", "label": 1, "tactic": "loan"}
+{"text": "Ủng hộ quỹ từ thiện cho trẻ em vùng lũ, chuyển khoản vào số tài khoản cá nhân này.", "label": 1, "tactic": "charity"}
+{"text": "Số điện thoại của bạn chưa định danh SIM chính chủ, sẽ bị khóa sau 24h, bấm link xác nhận.", "label": 1, "tactic": "sim"}
+{"text": "Quý khách được mời tham gia nhóm đầu tư chứng khoán quốc tế, lợi nhuận khủng, rút tiền dễ.", "label": 1, "tactic": "investment"}
+{"text": "Đây là video deepfake giọng nói của lãnh đạo, hãy chuyển tiền gấp theo chỉ đạo.", "label": 1, "tactic": "deepfake"}
+{"text": "Anh giả làm người yêu quen qua mạng, xin tiền đóng phí xuất khẩu lao động sang Hàn Quốc.", "label": 1, "tactic": "romance"}
+{"text": "Thông báo khóa tài khoản do nợ xấu, nộp tiền vào số tài khoản này để xử lý ngay.", "label": 1, "tactic": "debt"}
+{"text": "Cần gấp, đặt cọc thuê nhà trước khi xem, chuyển 5 triệu giữ chỗ trong hôm nay.", "label": 1, "tactic": "deposit"}
+{"text": "Đơn hàng của bạn bị lỗi, hoàn tiền nhanh cần cung cấp thông tin thẻ và mã OTP.", "label": 1, "tactic": "refund"}
+{"text": "Mời tham gia cộng tác viên chốt đơn shopee, nhận hoa hồng cao, đóng phí tham gia.", "label": 1, "tactic": "ctv"}
+{"text": "Link nhận thưởng trúng thưởng iPhone, nhập thông tin thẻ để nhận quà.", "label": 1, "tactic": "prize"}
+{"text": "Tôi là cán bộ thuế, yêu cầu cung cấp CCCD để hoàn thuế online cho bạn.", "label": 1, "tactic": "tax"}
+{"text": "Bấm vào link này để xác minh danh tính kẻo bị khóa tài khoản vĩnh viễn.", "label": 1, "tactic": "phishing"}
+{"text": "Chuyển tiền gấp cho tài khoản tạm giữ của viện kiểm sát theo yêu cầu điều tra.", "label": 1, "tactic": "impersonation"}
+{"text": "Cài UltraViewer để nhân viên ngân hàng hỗ trợ, sau đó cung cấp mã OTP cho họ.", "label": 1, "tactic": "remote"}
+{"text": "Tuyển dụng xuất khẩu lao động Hàn Quốc, đóng phí visa 30 triệu để giữ chỗ.", "label": 1, "tactic": "labor_export"}
+{"text": "Tôi nhận được quà từ nước ngoài, bạn nộp phí thông quan giúp tôi nhé.", "label": 1, "tactic": "romance"}
+{"text": "Tài khoản của bạn sẽ bị phong tỏa, nộp tiền để mở khóa ngay lập tức.", "label": 1, "tactic": "threat"}
+{"text": "Nhóm zalo đầu tư tiền ảo USDT, cam kết lợi nhuận 20% mỗi tuần, nạp vốn ngay.", "label": 1, "tactic": "crypto"}
+{"text": "Tôi là nhân viên giao hàng, đơn hàng của bạn cần đóng thêm phí, chuyển khoản vào tài khoản này.", "label": 1, "tactic": "shipping"}
+{"text": "Chị ơi em bị kẹt tiền, cho em vay ít tiền, em hứa trả trong tuần này.", "label": 1, "tactic": "hard_fn_no_keyword"}
+{"text": "Anh có thể giúp em một khoản nhỏ không, em đang rất cần, lát em trả.", "label": 1, "tactic": "hard_fn_no_keyword"}
+{"text": "Nạp thẻ game giúp em nhé, em gửi mệnh giá sau.", "label": 1, "tactic": "game_card"}
+{"text": "Chúc mừng quý khách đã may mắn nhận giải đặc biệt, liên hệ ngay để nhận thưởng.", "label": 1, "tactic": "prize"}
+{"text": "Anh ơi chiều nay đi cà phê không?", "label": 0, "tactic": "chat"}
+{"text": "Mẹ nhớ mua rau và thịt về nấu cơm nhé.", "label": 0, "tactic": "chat"}
+{"text": "Cuộc họp lúc 3h chiều nay tại phòng họp tầng 5.", "label": 0, "tactic": "work"}
+{"text": "Cảm ơn bạn đã giúp mình hôm qua, hẹn gặp lại.", "label": 0, "tactic": "chat"}
+{"text": "Mình gửi bạn file báo cáo, xem qua giúp mình nhé.", "label": 0, "tactic": "work"}
+{"text": "Thời tiết hôm nay đẹp, đi chơi không?", "label": 0, "tactic": "chat"}
+{"text": "Đơn hàng của bạn đã được giao thành công, cảm ơn đã mua hàng.", "label": 0, "tactic": "ecommerce"}
+{"text": "Số dư tài khoản của bạn là 5.000.000 VND.", "label": 0, "tactic": "bank_notice"}
+{"text": "Sinh nhật vui vẻ nhé, chúc bạn nhiều sức khỏe.", "label": 0, "tactic": "chat"}
+{"text": "Mã xác thực đăng nhập của bạn là 482913, không chia sẻ cho bất kỳ ai.", "label": 0, "tactic": "real_otp_hard"}
+{"text": "Chúc mừng năm mới, vạn sự như ý.", "label": 0, "tactic": "chat"}
+{"text": "Bạn có muốn đăng ký lớp học tiếng Anh không?", "label": 0, "tactic": "chat"}
+{"text": "Hóa đơn tiền điện tháng này là 850.000đ, thanh toán trước ngày 20.", "label": 0, "tactic": "utility"}
+{"text": "Xe bus tuyến 32 sẽ tạm dừng hoạt động để sửa đường.", "label": 0, "tactic": "news"}
+{"text": "Mình vừa xem bộ phim hay lắm, giới thiệu cho bạn.", "label": 0, "tactic": "chat"}
+{"text": "Nhớ mang theo áo mưa vì chiều nay có mưa.", "label": 0, "tactic": "chat"}
+{"text": "Bạn đã đặt lịch khám bệnh vào 9h sáng mai.", "label": 0, "tactic": "health"}
+{"text": "Cảm ơn đã đăng ký nhận bản tin, chúc bạn ngày tốt lành.", "label": 0, "tactic": "marketing"}
+{"text": "Giá vé máy bay đi Hà Nội tháng sau khá rẻ.", "label": 0, "tactic": "chat"}
+{"text": "Bài tập về nhà nộp trước thứ 6 nhé.", "label": 0, "tactic": "school"}
+{"text": "Shop giao hàng dự kiến trong 2-3 ngày tới.", "label": 0, "tactic": "ecommerce"}
+{"text": "Mình đang ở quê, mai lên thành phố.", "label": 0, "tactic": "chat"}
+{"text": "Bạn tải app của công ty qua CH Play để chấm công nhé.", "label": 0, "tactic": "work"}
+{"text": "Nhóm học tập tối nay ôn chương 3.", "label": 0, "tactic": "school"}
+{"text": "Đăng ký thành viên phòng gym giảm giá 20%.", "label": 0, "tactic": "marketing"}
+{"text": "Chị chuyển khoản tiền điện giúp em với, em gửi stk sau nhé.", "label": 0, "tactic": "pay_help_hard"}
+{"text": "Ngân hàng thông báo giao dịch 200.000đ tại siêu thị.", "label": 0, "tactic": "bank_notice"}
+{"text": "Hôm nay là ngày nghỉ, mình đi dã ngoại.", "label": 0, "tactic": "chat"}
+{"text": "Mẹ ơi con được điểm cao môn Toán.", "label": 0, "tactic": "family"}
+{"text": "Công ty thông báo nghỉ lễ ngày mai.", "label": 0, "tactic": "work"}
+{"text": "Bạn nhớ uống thuốc đúng giờ nhé.", "label": 0, "tactic": "health"}
+{"text": "Đặt cơm trưa chung không mọi người?", "label": 0, "tactic": "chat"}
+{"text": "Link bài hát này hay nè, nghe thử đi.", "label": 0, "tactic": "chat"}
+{"text": "Tài liệu họp ở trong thư mục share chung.", "label": 0, "tactic": "work"}
+{"text": "Mình sẽ đến muộn 15 phút, cứ bắt đầu trước nhé.", "label": 0, "tactic": "chat"}
+{"text": "Cảm ơn bạn đã phản hồi, mình sẽ kiểm tra lại.", "label": 0, "tactic": "work"}
+{"text": "Cửa hàng mở cửa từ 8h đến 22h.", "label": 0, "tactic": "info"}
+{"text": "Sinh viên đăng ký môn học trước ngày 15.", "label": 0, "tactic": "school"}
+{"text": "Bố mẹ đang đợi con về ăn cơm.", "label": 0, "tactic": "family"}
+{"text": "Hôm qua mình đi khám sức khỏe định kỳ.", "label": 0, "tactic": "health"}
+{"text": "Tài khoản của bạn đã được cập nhật thành công.", "label": 0, "tactic": "bank_notice"}
+{"text": "Chương trình khuyến mãi giảm giá mùa hè bắt đầu.", "label": 0, "tactic": "marketing"}
+{"text": "Ứng dụng của chúng tôi vừa có bản cập nhật mới, tải trên App Store.", "label": 0, "tactic": "app_notice"}

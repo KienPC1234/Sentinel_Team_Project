@@ -1,0 +1,9 @@
+# Template đánh giá độ trung thực của tầng AI (RAG grounding / hallucination).
+# Mỗi dòng: câu hỏi → AI trả lời → các NHẬN ĐỊNH có thể kiểm chứng + bằng chứng RAG truy xuất.
+# Người chấm (hoặc LLM-as-judge) gán "supported": true/false cho từng claim.
+{"id": 1, "question": "Tổng đài phòng chống lừa đảo quốc gia là số nào?", "retrieved": ["Tổng đài 156 (NCSC, khonggianmang.vn)"], "answer": "Tổng đài quốc gia phòng chống lừa đảo là 156.", "claims": [{"text": "Tổng đài là 156", "supported": true}]}
+{"id": 2, "question": "Tên miền vietcombank.com.vn có an toàn không?", "retrieved": ["vietcombank.com.vn là tên miền chính thức của Vietcombank"], "answer": "Đây là tên miền chính thức, nhưng luôn cần cảnh giác.", "claims": [{"text": "vietcombank.com.vn là chính thức", "supported": true}]}
+# Điền ~30-50 dòng. Chỉ số cần tính:
+#  - Faithfulness = (# claims supported) / (# claims)
+#  - Answer relevancy (thủ công 1-5)
+#  - Hallucination rate = 1 - Faithfulness

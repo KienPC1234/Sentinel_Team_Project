@@ -1,0 +1,4 @@
+id,phone,label,tactic,source,notes
+1,0912345678,1,impersonation,"Báo cáo cộng đồng #123","Công an giả gọi đòi tiền"
+2,02873001234,0,legit,"Website công ty A","Tổng đài chăm sóc khách hàng thật"
+3,+84987654321,1,prize,"Tin nhắn người dùng gửi","Trúng thưởng"

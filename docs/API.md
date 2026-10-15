@@ -76,13 +76,51 @@ Used to determine the risk level of an incoming call.
 }
 ```
 
-### 3.2 Streaming Chat (SSE)
-Used for real-time text generation.
+### 3.2 Streaming Chat (SSE) — giao thức event có `type`
 
-- **URL:** `/chat-ai-stream`
-- **Method:** `POST`
-- **Body:** Same as 3.1
-- **Response:** `text/event-stream` or raw chunks. Each line should contain a portion of the AI response.
+- **URL:** `POST /api/v1/chat/stream/`
+- **Body:**
+```json
+{
+  "user_message": "Kiểm tra SĐT 0373821456",
+  "session_id": "uuid-v4 | null",
+  "images": ["data:image/png;base64,..."],
+  "preview_ocr": false,
+  "safe_mode": false,
+  "scan_context": ""
+}
+```
+- **Response:** `text/event-stream`. Mỗi dòng `data:` là **một JSON có `type`**:
+
+| `type` | Payload | Ý nghĩa |
+|---|---|---|
+| `status` | `{"value":"searching_knowledge"\|"thinking"\|"answering"\|"processing_images"\|"executing_tool:<tool>"}` | Trạng thái đang xử lý |
+| `thinking` | `{"text":"..."}` | Nội dung suy luận (hiển thị trong khối "Đã suy nghĩ") |
+| `delta` | `{"text":"..."}` | Một mẩu nội dung trả lời |
+| `metadata` | `{"metadata":{"internal_knowledge":[...],"web_search":[...]}}` | Nguồn tham khảo (RAG / web) |
+| `tool_calls` | `{"calls":[{"function":{"name":"scan_url","arguments":{...}}}]}` | AI bắt đầu gọi công cụ |
+| `tool_result` | `{"tool":"scan_url","status":"done","args":{...},"result":{...}}` | Kết quả công cụ |
+| `image` | `{"annotated_image":"data:image/png;base64,..."}` | Ảnh OCR đã khoanh vùng |
+| `title` | `{"value":"..."}` | Tiêu đề phiên vừa được sinh tự động |
+| `error` | `{"message":"..."}` | Lỗi (hiển thị toast, luồng vẫn kết thúc bằng `done`) |
+| `done` | `{"session_id":"...","title":"...","action_suggested":"NONE"}` | Kết thúc luồng |
+
+Ví dụ:
+```
+data: {"type":"status","value":"searching_knowledge"}
+
+data: {"type":"metadata","metadata":{"internal_knowledge":[{"title":"...","url":"..."}]}}
+
+data: {"type":"delta","text":"Số điện thoại này "}
+
+data: {"type":"done","session_id":"...","title":"Tra cứu SĐT","action_suggested":"NONE"}
+```
+
+- **Client:** dùng `openSseStream()` trong `frontend/src/lib/chat/stream.ts`; callback `onEvent` nhận union `StreamEvent` đã chuẩn hoá. Hàm `normalizeStreamEvent()` vẫn map được payload cũ (`{"chunk": ...}`) nên endpoint nào chưa chuyển cũng chạy được.
+- **Endpoints cùng giao thức:** `POST /api/v1/chat/stream/` (Trợ lý AI + chat box + Emergency), `POST /api/v1/scan/analyze-sse/` và `/scan/analyze/stream/` (chỉ phát `delta`/`error`/`done`).
+
+> Ghi chú nội bộ: tầng vận chuyển LLM (`api/utils/ollama_client.stream_chat_ai`) vẫn dùng marker chuỗi nội bộ (`__THINK__`, `__TOOL_CALLS__`, …). `AIAgent.chat_stream` là ranh giới chuyển chúng thành event có `type`; **marker không bao giờ ra tới client**.
+
 
 ---
 

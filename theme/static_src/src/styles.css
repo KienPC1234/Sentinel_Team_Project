@@ -1,7 +1,0 @@
-@import "tailwindcss";
-
-@source "../../..";
-@source "../../../PKV/templates";
-@source "../../../PKV/templates/**/*.html";
-@source "../../../PKV/**/*.py";
-@source "../../../api/**/*.py";

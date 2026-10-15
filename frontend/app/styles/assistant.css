@@ -1,0 +1,167 @@
+/* ════════════════════════════════════════════════════════════════════
+   AI Assistant — stylesheet riêng (tách khỏi app/globals.css).
+
+   Phong cách ChatGPT: trung tính (zinc/neutral), KHÔNG dùng liquid-glass
+   hay bảng màu brand/brand2 của trang chính → không "ô nhiễm màu".
+
+   Nguyên tắc:
+   - Mọi rule nằm dưới scope .gpt nên không rò rỉ ra các trang khác.
+   - Bảng màu khai báo bằng biến --gpt-* để JSX chỉ tham chiếu token,
+     không viết màu cứng trong page/component.
+   - Component tương tác dùng shadcn/ui (src/components/ui/*), không tự chế.
+   ════════════════════════════════════════════════════════════════════ */
+
+.gpt {
+  --gpt-bg: #1c1c1f;
+  --gpt-bg-2: #212126;
+  --gpt-side: #171719;
+  --gpt-bubble: #303036;
+  --gpt-text: #ededf0;
+  --gpt-muted: #c4c4cc;
+  --gpt-faint: #9a9aa4;
+  --gpt-line: rgba(255, 255, 255, 0.09);
+  --gpt-hover: rgba(255, 255, 255, 0.06);
+  --gpt-active: rgba(255, 255, 255, 0.09);
+  /* Một accent duy nhất để trang có sức sống (không dùng dàn màu của site). */
+  --gpt-accent: #22d3ee;
+  --gpt-accent-2: #2dd4bf;
+  --gpt-accent-soft: rgba(34, 211, 238, 0.14);
+  --gpt-accent-line: rgba(34, 211, 238, 0.38);
+  --gpt-safe: #f472b6;
+  --gpt-safe-soft: rgba(244, 114, 182, 0.14);
+  --gpt-safe-line: rgba(244, 114, 182, 0.38);
+  background-color: var(--gpt-bg);
+  /* Lưới mờ + quầng accent ở đỉnh (rõ hơn nhưng vẫn dịu để không rối chữ). */
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    radial-gradient(120% 90% at 50% -10%, rgba(34, 211, 238, 0.10), transparent 62%),
+    linear-gradient(180deg, var(--gpt-bg-2), var(--gpt-bg));
+  background-size: 26px 26px, 26px 26px, 100% 100%, 100% 100%;
+  background-repeat: repeat, repeat, no-repeat, no-repeat;
+  color: var(--gpt-text);
+}
+
+.gpt ::-webkit-scrollbar { width: 6px; height: 6px; }
+.gpt ::-webkit-scrollbar-track { background: transparent; }
+.gpt ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 8px; }
+.gpt ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
+
+/* ── Markdown trong tin nhắn ── */
+.gpt .md { font-size: 15px; line-height: 1.75; word-break: break-word; }
+.gpt .md p { margin: 0 0 0.75em; }
+.gpt .md p:last-child { margin-bottom: 0; }
+.gpt .md ul, .gpt .md ol { margin: 0 0 0.75em; padding-left: 1.4em; }
+.gpt .md ul { list-style: disc; }
+.gpt .md ol { list-style: decimal; }
+.gpt .md li { margin: 0.25em 0; }
+.gpt .md h1, .gpt .md h2, .gpt .md h3, .gpt .md h4 { font-weight: 600; margin: 1em 0 0.5em; line-height: 1.4; }
+.gpt .md h1 { font-size: 1.25em; }
+.gpt .md h2 { font-size: 1.15em; }
+.gpt .md h3 { font-size: 1.05em; }
+.gpt .md a { color: var(--gpt-accent); text-decoration: underline; text-underline-offset: 2px; }
+.gpt .md a:hover { color: var(--gpt-accent-2); }
+.gpt .md code:not(pre code) {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 0.85em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.gpt .md table { width: 100%; border-collapse: collapse; margin: 0.75em 0; font-size: 0.9em; }
+.gpt .md th, .gpt .md td { border: 1px solid var(--gpt-line); padding: 8px 12px; text-align: left; }
+.gpt .md th { background: rgba(255, 255, 255, 0.04); font-weight: 600; }
+.gpt .md blockquote { border-left: 3px solid rgba(255, 255, 255, 0.2); padding-left: 12px; margin: 0.75em 0; color: var(--gpt-muted); }
+.gpt .md hr { border: 0; border-top: 1px solid var(--gpt-line); margin: 1em 0; }
+.gpt .md img { max-width: 100%; border-radius: 12px; }
+
+/* ── Code box: khung riêng có header (tên ngôn ngữ + nút copy) ── */
+.gpt .md pre { background: #0d0d0d; border: 1px solid var(--gpt-line); border-radius: 0 0 12px 12px; margin: 0 0 0.75em; overflow-x: auto; }
+.gpt .md pre code {
+  display: block;
+  background: transparent !important;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.gpt .gpt-code { margin: 0 0 0.75em; border: 1px solid var(--gpt-line); border-radius: 12px; overflow: hidden; background: #0d0d0d; }
+.gpt .gpt-code-head { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px 5px 16px; background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--gpt-line); }
+.gpt .gpt-code-lang { font-size: 12px; color: var(--gpt-muted); font-family: ui-monospace, monospace; }
+.gpt .gpt-code .gpt-code-copy { height: 26px; }
+.gpt .gpt-code-copy.is-copied { color: #4ade80; }
+.gpt .gpt-code pre { border: 0 !important; border-radius: 0 !important; margin: 0 !important; }
+
+/* ── Chấm "đang gõ" ── */
+.gpt .gpt-dots { display: inline-flex; gap: 5px; padding: 6px 0; }
+.gpt .gpt-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--gpt-accent); animation: gpt-blink 1.2s infinite; }
+.gpt .gpt-dots span:nth-child(2) { animation-delay: 0.2s; }
+.gpt .gpt-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes gpt-blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+/* ── Thiết bị KHÔNG có con trỏ (điện thoại/máy tính bảng) ──
+   Tailwind bọc các biến thể hover/group-hover trong @media (hover: hover),
+   nên trên cảm ứng chúng không bao giờ chạy → nút hành động (sao chép, thích,
+   tạo lại, lưu, menu hội thoại, xoá ảnh…) sẽ vô hình và không bấm được.
+   Cho các phần tử .hover-reveal luôn hiện khi thiết bị không hỗ trợ hover. */
+@media (hover: none) {
+  .gpt .hover-reveal { opacity: 1 !important; }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Tối ưu cho thiết bị cảm ứng / điện thoại
+   ════════════════════════════════════════════════════════════════════ */
+.gpt { -webkit-tap-highlight-color: transparent; }
+.gpt .gpt-scroll { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* Chừa vùng an toàn (tai thỏ iPhone) cho composer */
+.gpt .gpt-composer { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+@media (min-width: 640px) {
+  .gpt .gpt-composer { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
+}
+
+/* iOS tự zoom khi focus ô nhập có font < 16px -> nâng lên 16px trên mobile */
+@media (max-width: 767px) {
+  .gpt textarea, .gpt input { font-size: 16px; }
+}
+
+/* Nút bấm to hơn cho ngón tay (~40px) */
+@media (pointer: coarse) {
+  .gpt [data-size^="icon"] {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Chế độ dễ đọc (người cao tuổi): chữ lớn, nút to, tương phản cao
+   ════════════════════════════════════════════════════════════════════ */
+.gpt.gpt-elder {
+  --gpt-text: #ffffff;
+  --gpt-muted: #e6e6ee;
+  --gpt-faint: #c2c2cf;
+  /* Bỏ lưới nền cho đỡ rối mắt */
+  background-image:
+    radial-gradient(120% 90% at 50% -10%, rgba(34, 211, 238, 0.08), transparent 62%),
+    linear-gradient(180deg, var(--gpt-bg-2), var(--gpt-bg));
+}
+.gpt.gpt-elder {
+  /* 2 mức cỡ chữ: large (mặc định của chế độ dễ đọc) và xlarge */
+  --gpt-fs-msg: 18.5px;
+  --gpt-fs-input: 17.5px;
+  --gpt-lh-msg: 1.9;
+}
+.gpt.gpt-size-xlarge {
+  --gpt-fs-msg: 21.5px;
+  --gpt-fs-input: 19px;
+  --gpt-lh-msg: 2.05;
+}
+.gpt.gpt-elder .md { font-size: var(--gpt-fs-msg); line-height: var(--gpt-lh-msg); }
+.gpt.gpt-elder .gpt-user-bubble { font-size: calc(var(--gpt-fs-msg) - 1px); line-height: calc(var(--gpt-lh-msg) - 0.15); }
+.gpt.gpt-elder .gpt-code pre code { font-size: 15px; }
+.gpt.gpt-elder textarea { font-size: var(--gpt-fs-input); line-height: 1.7; }
+.gpt.gpt-elder [data-size^="icon"] { min-width: 2.5rem; min-height: 2.5rem; }
+.gpt.gpt-elder [data-slot="tabs-trigger"] { font-size: 13px; }
+.gpt.gpt-elder .gpt-dots span { width: 9px; height: 9px; }
+.gpt.gpt-size-xlarge [data-size^="icon"] { min-width: 3rem; min-height: 3rem; }
+.gpt.gpt-size-xlarge [data-slot="tabs-trigger"] { font-size: 14px; }

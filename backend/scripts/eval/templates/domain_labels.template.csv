@@ -1,0 +1,4 @@
+id,url,label,tactic,source,notes
+1,vietcombanl.com,1,typosquat,"PhishTank","Đổi 1 ký tự so với vietcombank"
+2,vietcombank.com.vn,0,legit,"Trang chính thức","Ngân hàng thật"
+3,techcombank-login.top,1,brand_plus_word,"OpenPhish","Thêm 'login' + đuôi .top"

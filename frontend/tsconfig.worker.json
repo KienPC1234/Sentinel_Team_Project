@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["webworker", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "rootDir": "src",
+    "outDir": "public",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "removeComments": false
+  },
+  "include": ["src/sw.ts"]
+}

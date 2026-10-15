@@ -1,0 +1,1191 @@
+"""
+ShieldCall VN – Core Models
+Implements MVP spec Section 4: Database Schema
+"""
+import hashlib
+import uuid
+import logging
+from django.db import models
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+from django.utils import timezone
+from django.contrib.auth.models import User
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+class Gender(models.TextChoices):
+    MALE = 'male', 'Nam'
+    FEMALE = 'female', 'Nữ'
+    NON_BINARY = 'non_binary', 'Phi nhị nguyên giới (Non-binary)'
+    TRANSGENDER = 'transgender', 'Người chuyển giới (Transgender)'
+    GENDER_FLUID = 'gender_fluid', 'Linh hoạt giới (Genderfluid)'
+    BIGENDER = 'bigender', 'Song giới (Bigender)'
+    GENDERQUEER = 'genderqueer', 'Giới phi chuẩn (Genderqueer)'
+    AGENDER = 'agender', 'Vô giới (Agender)'
+    INTERSEX = 'intersex', 'Liên giới tính (Intersex)'
+    OTHER = 'other', 'Khác'
+    PREFER_NOT_TO_SAY = 'prefer_not_to_say', 'Tôi không muốn tiết lộ'
+
+# ─── User Profile Model ──────────────────────────────────────────────────────
+
+class UserProfile(models.Model):
+    """Extended user data including avatar and preferences"""
+    MFA_METHOD_CHOICES = [
+        ('totp', 'Authenticator app (TOTP)'),
+        ('email', 'Email OTP'),
+    ]
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    display_name = models.CharField(max_length=100, blank=True)
+    gender = models.CharField(max_length=30, choices=Gender.choices, default=Gender.PREFER_NOT_TO_SAY)
+    avatar = models.ImageField(upload_to='profiles/avatars/', null=True, blank=True)
+    rank_points = models.IntegerField(default=0)
+    bio = models.TextField(max_length=500, blank=True)
+    about = models.TextField(blank=True, help_text="Markdown supported bio/about section")
+    messenger_link = models.URLField(max_length=500, blank=True, null=True, help_text="Link to Facebook Messenger, Zalo, etc.")
+    
+    # Accolades for gender diversity and special recognition
+    accolade_title = models.CharField(max_length=200, blank=True, help_text="Danh hiệu vinh danh")
+    accolade_description = models.TextField(blank=True, help_text="Mô tả vinh danh đặc biệt")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_super_admin = models.BooleanField(default=False)
+    mfa_preferred_method = models.CharField(max_length=10, choices=MFA_METHOD_CHOICES, blank=True, null=True)
+    
+    @property
+    def rank_info(self):
+        """Returns rank name and icon based on points"""
+        p = self.rank_points
+        if p >= 5000: return {'name': 'Kim Cương', 'level': 'diamond', 'icon': 'bi-gem', 'color': 'text-cyan-400'}
+        if p >= 2000: return {'name': 'Bạch Kim', 'level': 'platinum', 'icon': 'bi-trophy-fill', 'color': 'text-purple-400'}
+        if p >= 1000: return {'name': 'Vàng', 'level': 'gold', 'icon': 'bi-award-fill', 'color': 'text-yellow-400'}
+        if p >= 300: return {'name': 'Bạc', 'level': 'silver', 'icon': 'bi-shield-shaded', 'color': 'text-slate-300'}
+        return {'name': 'Đồng', 'level': 'bronze', 'icon': 'bi-shield-fill', 'color': 'text-orange-400'}
+
+    def __str__(self):
+        return f"Profile of {self.user.username}"
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.get_or_create(user=instance)
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def save_user_profile(sender, instance, **kwargs):
+    if hasattr(instance, 'profile'):
+        instance.profile.save()
+    else:
+        UserProfile.objects.get_or_create(user=instance)
+
+
+# ─── Scam type & severity enums ─────────────────────────────────────────────
+
+class ScamType(models.TextChoices):
+    POLICE_IMPERSONATION = 'police_impersonation', 'Giả danh công an'
+    BANK_IMPERSONATION = 'bank_impersonation', 'Giả mạo ngân hàng'
+    GOV_IMPERSONATION = 'gov_impersonation', 'Giả mạo cơ quan Thuế / Dịch vụ công / VNeID'
+    RECRUITMENT_SCAM = 'recruitment_scam', 'Lừa tuyển dụng / Việc nhẹ lương cao'
+    INVESTMENT_SCAM = 'investment_scam', 'Lừa đầu tư tài chính / Sàn ảo'
+    DELIVERY_SCAM = 'delivery_scam', 'Giả mạo giao hàng / Bưu cục'
+    LOAN_SCAM = 'loan_scam', 'Lừa vay tiền / Tín dụng đen'
+    OTP_STEAL = 'otp_steal', 'Chiêu trò OTP/2FA'
+    PHISHING = 'phishing', 'Phishing link / Trang web giả mạo'
+    ROMANCE_SCAM = 'romance_scam', 'Lừa tình cảm / Bẫy lợn béo (Pig Butchering)'
+    DEEPFAKE = 'deepfake', 'Deepfake âm thanh / Video AI mạo danh'
+    MALWARE_APP = 'malware_app', 'Mã độc / Ứng dụng APK đánh cắp tài khoản'
+    CRYPTO_SCAM = 'crypto_scam', 'Lừa đảo Tiền điện tử / Ví Crypto / Airdrop'
+    SOCIAL_ENGINEERING = 'social_engineering', 'Lừa đảo hội nhóm Telegram / Zalo / Fanpage'
+    PRIZE_SCAM = 'prize_scam', 'Trúng thưởng / Quà tri ân / Đơn hàng ảo'
+    EMERGENCY_SCAM = 'emergency_scam', 'Báo nạn cấp cứu / Tống tiền người thân'
+    OTHER = 'other', 'Khác'
+
+
+class Severity(models.TextChoices):
+    LOW = 'low', 'Thấp'
+    MEDIUM = 'medium', 'Trung bình'
+    HIGH = 'high', 'Cao'
+    CRITICAL = 'critical', 'Khẩn cấp'
+
+
+class RiskLevel(models.TextChoices):
+    SAFE = 'SAFE', 'An toàn'
+    GREEN = 'GREEN', 'Xanh'
+    YELLOW = 'YELLOW', 'Cảnh báo'
+    RED = 'RED', 'Nguy hiểm'
+
+
+class ReportStatus(models.TextChoices):
+    PENDING = 'pending', 'Chờ duyệt'
+    APPROVED = 'approved', 'Đã duyệt'
+    REJECTED = 'rejected', 'Từ chối'
+
+
+class ScanStatus(models.TextChoices):
+    PENDING = 'pending', 'Đang chờ'
+    PROCESSING = 'processing', 'Đang xử lý'
+    COMPLETED = 'completed', 'Hoàn thành'
+    FAILED = 'failed', 'Lỗi'
+
+
+class ScanType(models.TextChoices):
+    PHONE = 'phone', 'Số điện thoại'
+    MESSAGE = 'message', 'Tin nhắn'
+    DOMAIN = 'domain', 'Website/URL'
+    ACCOUNT = 'account', 'Tài khoản ngân hàng'
+    QR = 'qr', 'QR / Ảnh'
+    EMAIL = 'email', 'Email'
+    FILE = 'file', 'Tệp tin'
+    AUDIO = 'audio', 'Âm thanh'
+
+
+class TargetType(models.TextChoices):
+    PHONE = 'phone', 'Số điện thoại'
+    DOMAIN = 'domain', 'Website/URL'
+    ACCOUNT = 'account', 'Tài khoản ngân hàng'
+    MESSAGE = 'message', 'Tin nhắn'
+    QR = 'qr', 'QR Code'
+    EMAIL = 'email', 'Email'
+    FILE = 'file', 'Tệp tin / Ứng dụng APK độc hại'
+    AUDIO = 'audio', 'Cuộc gọi / Âm thanh Deepfake'
+    SOCIAL = 'social', 'Mạng xã hội (Telegram/Zalo/FB)'
+    CRYPTO = 'crypto', 'Địa chỉ ví Crypto / Web3'
+
+
+# ─── Domain Model ───────────────────────────────────────────────────────────
+
+class Domain(models.Model):
+    """Tracked domains (phishing / scam websites)"""
+    domain_name = models.CharField(max_length=255, unique=True, db_index=True)
+    risk_score = models.IntegerField(default=0, db_index=True,
+                                     help_text='0-100 risk score')
+    domain_age_days = models.IntegerField(null=True, blank=True)
+    ssl_valid = models.BooleanField(default=False)
+    whois_snapshot = models.JSONField(default=dict, blank=True)
+    report_count = models.IntegerField(default=0)
+    scam_type = models.CharField(max_length=30, choices=ScamType.choices,
+                                 default=ScamType.PHISHING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-risk_score', '-created_at']
+        verbose_name = 'Domain'
+        verbose_name_plural = 'Domains'
+
+    def __str__(self):
+        return f"{self.domain_name} (risk={self.risk_score})"
+
+
+# ─── Bank Account Model ─────────────────────────────────────────────────────
+
+class BankAccount(models.Model):
+    """Tracked bank accounts reported as scam"""
+    BANK_CHOICES = [
+        ('Vietcombank', 'Vietcombank'), ('Techcombank', 'Techcombank'),
+        ('BIDV', 'BIDV'), ('VietinBank', 'VietinBank'),
+        ('Agribank', 'Agribank'), ('MBBank', 'MBBank'),
+        ('ACB', 'ACB'), ('VPBank', 'VPBank'), ('TPBank', 'TPBank'),
+        ('Sacombank', 'Sacombank'), ('HDBank', 'HDBank'), ('SHB', 'SHB'),
+        ('MSB', 'MSB'), ('VIB', 'VIB'), ('OCB', 'OCB'),
+        ('Momo', 'Ví Momo'), ('ZaloPay', 'ZaloPay'), ('VNPay', 'VNPay'),
+        ('Other', 'Khác'),
+    ]
+
+    bank_name = models.CharField(max_length=50, choices=BANK_CHOICES, db_index=True)
+    account_number_hash = models.CharField(max_length=64, db_index=True,
+                                           help_text='SHA-256 hash of account number')
+    account_number_masked = models.CharField(max_length=20, blank=True,
+                                             help_text='Masked display, e.g. ***456789')
+    risk_score = models.IntegerField(default=0, db_index=True)
+    report_count = models.IntegerField(default=0)
+    scam_type = models.CharField(max_length=30, choices=ScamType.choices,
+                                 default=ScamType.OTHER)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-risk_score', '-created_at']
+        unique_together = ['bank_name', 'account_number_hash']
+        verbose_name = 'Bank Account'
+        verbose_name_plural = 'Bank Accounts'
+
+    def __str__(self):
+        return f"{self.bank_name} {self.account_number_masked} (risk={self.risk_score})"
+
+    @staticmethod
+    def hash_account(account_number: str) -> str:
+        return hashlib.sha256(account_number.strip().encode()).hexdigest()
+
+    @staticmethod
+    def mask_account(account_number: str) -> str:
+        s = account_number.strip()
+        if len(s) <= 4:
+            return '***' + s
+        return '***' + s[-4:]
+
+
+# ─── Report Model ───────────────────────────────────────────────────────────
+
+class Report(models.Model):
+    """Community scam reports submitted by users"""
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                 null=True, blank=True, related_name='reports')
+    target_type = models.CharField(max_length=20, choices=TargetType.choices)
+    target_value = models.CharField(max_length=500,
+                                    help_text='Normalized: phone number, domain, account info')
+    scam_type = models.CharField(max_length=30, choices=ScamType.choices)
+    severity = models.CharField(max_length=10, choices=Severity.choices,
+                                default=Severity.MEDIUM)
+    description = models.TextField()
+    evidence_file = models.ImageField(upload_to='reports/evidence/%Y/%m/',
+                                      null=True, blank=True)
+    
+    # New Scammer details fields
+    scammer_phone = models.CharField(max_length=20, blank=True)
+    scammer_bank_account = models.CharField(max_length=50, blank=True)
+    scammer_bank_name = models.CharField(max_length=100, blank=True)
+    scammer_name = models.CharField(max_length=200, blank=True)
+    scammer_social = models.CharField(
+        max_length=255, blank=True,
+        help_text='Kênh MXH của kẻ lừa đảo (link Telegram, nhóm Zalo, username FB, Fanpage)')
+    custom_fields = models.JSONField(
+        default=dict, blank=True,
+        help_text='Thông tin tuỳ biến có cấu trúc: thiệt hại, ví crypto, hash file, đơn vị giả mạo...')
+    status = models.CharField(max_length=10, choices=ReportStatus.choices,
+                              default=ReportStatus.PENDING, db_index=True)
+    moderator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                  null=True, blank=True, related_name='moderated_reports')
+    moderation_note = models.TextField(blank=True)
+    scan_event = models.ForeignKey('ScanEvent', on_delete=models.SET_NULL, 
+                                 null=True, blank=True, related_name='linked_reports')
+    
+    # AI and OCR results
+    ocr_text = models.TextField(blank=True, help_text="Text extracted from evidence_file via OCR")
+    ai_analysis = models.JSONField(default=dict, blank=True, help_text="AI analysis of the report and OCR text")
+    
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Report'
+        verbose_name_plural = 'Reports'
+        indexes = [
+            models.Index(fields=['target_type', 'target_value', 'status'],
+                         name='report_target_lookup_idx'),
+        ]
+
+    def __str__(self):
+        return f"Report #{self.pk} [{self.target_type}] {self.target_value[:30]} ({self.status})"
+
+
+class ReportEvidence(models.Model):
+    """Multiple evidence images for a Report"""
+    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='evidence_images')
+    image = models.ImageField(upload_to='reports/evidence/%Y/%m/')
+    caption = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Evidence #{self.pk} for Report #{self.report_id}"
+
+
+# ─── Scan Event Model ───────────────────────────────────────────────────────
+
+class ScanEvent(models.Model):
+    """Every scan performed by users (history + analytics)"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                             null=True, blank=True, related_name='scans')
+    scan_type = models.CharField(max_length=20, choices=ScanType.choices)
+    raw_input = models.TextField(help_text='Original user input')
+    normalized_input = models.CharField(max_length=500, blank=True, db_index=True)
+    result_json = models.JSONField(default=dict, blank=True)
+    risk_score = models.IntegerField(default=0, db_index=True)
+    risk_level = models.CharField(max_length=10, choices=RiskLevel.choices,
+                                  default=RiskLevel.SAFE)
+    status = models.CharField(max_length=20, choices=ScanStatus.choices,
+                              default=ScanStatus.COMPLETED, db_index=True)
+    job_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # Email Security Fields (Enterprise Grade)
+    sender_domain = models.CharField(max_length=255, blank=True, null=True)
+    spf_status = models.CharField(max_length=50, blank=True, null=True)
+    dkim_status = models.CharField(max_length=50, blank=True, null=True)
+    dmarc_status = models.CharField(max_length=50, blank=True, null=True)
+    detected_urls = models.JSONField(default=list, blank=True, help_text="List of URLs found in email/message")
+    is_public_referable = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Bật khi chính chủ đã refer scan ra forum để cho phép người khác xem/refer.',
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Scan Event'
+        verbose_name_plural = 'Scan Events'
+
+    def __str__(self):
+        return f"Scan #{self.pk} [{self.scan_type}] {self.risk_level} at {self.created_at:%Y-%m-%d %H:%M}"
+
+
+# ─── Trend Daily Model ──────────────────────────────────────────────────────
+
+class TrendDaily(models.Model):
+    """Pre-computed daily scam trend stats (for Scam Radar)"""
+    date = models.DateField(db_index=True)
+    region = models.CharField(max_length=50, default='VN', blank=True)
+    scam_type = models.CharField(max_length=30, choices=ScamType.choices)
+    count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date']
+        unique_together = ['date', 'region', 'scam_type']
+        verbose_name = 'Trend Daily'
+        verbose_name_plural = 'Trend Daily'
+
+    def __str__(self):
+        return f"{self.date} | {self.scam_type}: {self.count}"
+
+
+# ─── Entity Link Model (Fraud Graph) ────────────────────────────────────────
+
+class EntityLink(models.Model):
+    """Links between entities for fraud graph / scam ring detection"""
+    ENTITY_TYPE_CHOICES = [
+        ('phone', 'Phone'), ('domain', 'Domain'), ('account', 'Account'),
+    ]
+    LINK_REASON_CHOICES = [
+        ('shared_text', 'Shared text'), ('shared_report', 'Shared report'),
+        ('shared_url', 'Shared URL'), ('ocr_match', 'OCR match'),
+        ('manual', 'Manual'),
+    ]
+
+    from_type = models.CharField(max_length=10, choices=ENTITY_TYPE_CHOICES)
+    from_entity_id = models.IntegerField()
+    to_type = models.CharField(max_length=10, choices=ENTITY_TYPE_CHOICES)
+    to_entity_id = models.IntegerField()
+    link_reason = models.CharField(max_length=20, choices=LINK_REASON_CHOICES)
+    confidence = models.FloatField(default=0.5,
+                                   help_text='0.0 to 1.0 confidence')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['from_type', 'from_entity_id']),
+            models.Index(fields=['to_type', 'to_entity_id']),
+        ]
+        verbose_name = 'Entity Link'
+        verbose_name_plural = 'Entity Links'
+
+    def __str__(self):
+        return f"{self.from_type}:{self.from_entity_id} -> {self.to_type}:{self.to_entity_id}"
+
+
+# ─── User Alert (Saved warnings) ────────────────────────────────────────────
+
+class UserAlert(models.Model):
+    """Saved alerts/bookmarks by users"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                             related_name='alerts')
+    target_type = models.CharField(max_length=20, choices=TargetType.choices)
+    target_value = models.CharField(max_length=500)
+    risk_level = models.CharField(max_length=10, choices=RiskLevel.choices,
+                                  default=RiskLevel.YELLOW)
+    note = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Alert: {self.target_type} {self.target_value[:30]}"
+
+
+class ScamIQAttempt(models.Model):
+    """Persisted Scam IQ exam attempt history for each user."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='scam_iq_attempts')
+    exam_title = models.CharField(max_length=255, default='Scam IQ Exam')
+    score = models.IntegerField(default=0)
+    max_score = models.IntegerField(default=300)
+    correct_count = models.IntegerField(default=0)
+    wrong_count = models.IntegerField(default=0)
+    level_code = models.CharField(max_length=40, blank=True)
+    level_label = models.CharField(max_length=120, blank=True)
+    difficulty_breakdown = models.JSONField(default=dict, blank=True)
+    mistakes = models.JSONField(default=list, blank=True)
+    ai_feedback = models.JSONField(default=dict, blank=True, help_text="AI evaluation for simulation questions")
+    is_ai_scored = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    @staticmethod
+    def calculate_level(score: int) -> dict:
+        """Categorize score into levels (Novice to Elite)."""
+        levels = [
+            {
+                'code': 'novice',
+                'label': 'Mức 1 - Cần củng cố',
+                'min': 0,
+                'max': 89,
+                'description': 'Bạn mới ở giai đoạn làm quen. Nên luyện thêm kỹ năng nhận diện lừa đảo.',
+            },
+            {
+                'code': 'aware',
+                'label': 'Mức 2 - Nhận diện cơ bản',
+                'min': 90,
+                'max': 149,
+                'description': 'Bạn đã có nền tảng cơ bản, nhưng vẫn dễ bị đánh lừa trong các tình huống áp lực cao.',
+            },
+            {
+                'code': 'defender',
+                'label': 'Mức 3 - Người phòng thủ',
+                'min': 150,
+                'max': 209,
+                'description': 'Bạn có năng lực phòng thủ tốt trước phần lớn tình huống lừa đảo phổ biến.',
+            },
+            {
+                'code': 'analyst',
+                'label': 'Mức 4 - Chuyên gia phân tích',
+                'min': 210,
+                'max': 269,
+                'description': 'Bạn phân tích được nhiều bẫy tinh vi như deepfake, quishing và giả mạo thương hiệu.',
+            },
+            {
+                'code': 'elite',
+                'label': 'Mức 5 - Scam Hunter Elite',
+                'min': 270,
+                'max': 9999,
+                'description': 'Bạn đạt năng lực rất cao trong nhận diện và phản ứng với các hình thức lừa đảo mới nhất.',
+            },
+        ]
+        for item in levels:
+            if item['min'] <= score <= item['max']:
+                return {'current': item, 'bands': levels}
+        return {'current': levels[0], 'bands': levels}
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Scam IQ Attempt'
+        verbose_name_plural = 'Scam IQ Attempts'
+
+    def __str__(self):
+        return f"ScamIQAttempt<{self.user_id}:{self.score}/{self.max_score}>"
+
+
+class MFARecoveryCode(models.Model):
+    """One-time recovery codes for TOTP fallback login."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='mfa_recovery_codes')
+    code_hash = models.CharField(max_length=64, db_index=True)
+    hint = models.CharField(max_length=8, blank=True)
+    is_used = models.BooleanField(default=False, db_index=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        unique_together = ['user', 'code_hash']
+
+    def __str__(self):
+        state = 'used' if self.is_used else 'active'
+        return f"RecoveryCode<{self.user_id}:{self.hint}:{state}>"
+
+
+# ─── Forum Models (Community Scam Discussion) ──────────────────────────────
+
+class ForumCategory(models.TextChoices):
+    WARNING = 'warning', 'Cảnh báo'
+    DISCUSSION = 'discussion', 'Thảo luận'
+    EXPERIENCE = 'experience', 'Kinh nghiệm'
+    QUESTION = 'question', 'Hỏi đáp'
+
+
+class ForumPost(models.Model):
+    """Community forum posts for scam discussions"""
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                               related_name='forum_posts')
+    title = models.CharField(max_length=300)
+    content = models.TextField()
+    category = models.CharField(max_length=20, choices=ForumCategory.choices,
+                                default=ForumCategory.DISCUSSION)
+    image = models.ImageField(upload_to='forum_images/', null=True, blank=True)
+    views_count = models.IntegerField(default=0)
+    likes_count = models.IntegerField(default=0)
+    helpful_count = models.IntegerField(default=0)
+    shares_count = models.IntegerField(default=0)
+    dislikes_count = models.IntegerField(default=0)
+    reports_count = models.IntegerField(default=0)
+    comments_count = models.IntegerField(default=0)
+    is_pinned = models.BooleanField(default=False)
+    is_locked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_pinned', '-created_at']
+        verbose_name = 'Forum Post'
+        verbose_name_plural = 'Forum Posts'
+
+    def save(self, *args, **kwargs):
+        # Server-side XSS defense: sanitize user HTML before storing.
+        try:
+            from api.utils.sanitize import sanitize_forum_content, sanitize_plain_text
+            if self.content:
+                self.content = sanitize_forum_content(self.content)
+            if self.title:
+                self.title = sanitize_plain_text(self.title, limit=300)
+        except Exception:
+            pass
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"[{self.category}] {self.title[:50]}"
+
+
+class ForumComment(models.Model):
+    """Comments on forum posts"""
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE,
+                             related_name='comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                               related_name='forum_comments')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    content = models.TextField()
+    likes_count = models.IntegerField(default=0)
+    dislikes_count = models.IntegerField(default=0)
+    helpful_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Forum Comment'
+        verbose_name_plural = 'Forum Comments'
+
+    def save(self, *args, **kwargs):
+        # Server-side XSS defense: sanitize user HTML before storing.
+        try:
+            from api.utils.sanitize import sanitize_forum_content
+            if self.content:
+                self.content = sanitize_forum_content(self.content)
+        except Exception:
+            pass
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.post.title[:30]}"
+
+
+class ForumLike(models.Model):
+    """Track user likes on forum posts (prevent duplicates)"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE,
+                             related_name='likes')
+
+    class Meta:
+        unique_together = ['user', 'post']
+
+    def __str__(self):
+        return f"{self.user.username} liked {self.post.id}"
+
+class ForumCommentLike(models.Model):
+    """Track user likes on forum comments"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    comment = models.ForeignKey(ForumComment, on_delete=models.CASCADE,
+                                related_name='likes')
+
+    class Meta:
+        unique_together = ['user', 'comment']
+
+    def __str__(self):
+        return f"{self.user.username} liked comment {self.comment.id}"
+
+class ForumReactionType(models.TextChoices):
+    HELPFUL = 'helpful', 'Hữu ích'
+    SHARE = 'share', 'Chia sẻ'
+    DISLIKE = 'dislike', 'Không thích'
+
+
+class ForumCommentReaction(models.Model):
+    """Reactions on forum comments (upvote/downvote/helpful)"""
+    class ReactionType(models.TextChoices):
+        UPVOTE = 'upvote', 'Upvote'
+        DOWNVOTE = 'downvote', 'Downvote'
+        HELPFUL = 'helpful', 'Hữu ích'
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    comment = models.ForeignKey(ForumComment, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=10, choices=ReactionType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'comment', 'reaction_type']
+
+    def __str__(self):
+        return f"{self.user.username} {self.reaction_type} comment {self.comment.id}"
+
+
+class ForumPostView(models.Model):
+    """Track unique views per post"""
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE, related_name='unique_views')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    session_key = models.CharField(max_length=40, blank=True)
+    viewed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['post', 'user']),
+            models.Index(fields=['post', 'ip_address']),
+        ]
+
+    def __str__(self):
+        identifier = self.user.username if self.user else self.ip_address
+        return f"View on post {self.post.id} by {identifier}"
+
+
+class ForumPostReaction(models.Model):
+    """Specific reactions like Helpful or Shared"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=10, choices=ForumReactionType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'post', 'reaction_type']
+
+class ForumPostReport(models.Model):
+    """Community reports for harmful/scam content"""
+    class ReportStatus(models.TextChoices):
+        PENDING = 'pending', 'Chờ xử lý'
+        APPROVED = 'approved', 'Đã duyệt (Vi phạm)'
+        REJECTED = 'rejected', 'Từ chối (Không vi phạm)'
+        AI_FLAGGED = 'ai_flagged', 'AI gắn cờ'
+
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    post = models.ForeignKey(ForumPost, on_delete=models.CASCADE, related_name='post_reports')
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=ReportStatus.choices, default=ReportStatus.PENDING)
+    ai_analysis = models.JSONField(default=dict, blank=True)
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+class ForumCommentReport(models.Model):
+    """Community reports for harmful comments"""
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    comment = models.ForeignKey(ForumComment, on_delete=models.CASCADE, related_name='comment_reports')
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=ForumPostReport.ReportStatus.choices, default=ForumPostReport.ReportStatus.PENDING)
+    ai_analysis = models.JSONField(default=dict, blank=True)
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class ForumBan(models.Model):
+    """Ban a user from the forum"""
+    class BanType(models.TextChoices):
+        TEMPORARY = 'temporary', 'Tạm thời'
+        PERMANENT = 'permanent', 'Vĩnh viễn'
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='forum_bans')
+    banned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='forum_bans_issued')
+    reason = models.TextField()
+    ban_type = models.CharField(max_length=20, choices=BanType.choices, default=BanType.TEMPORARY)
+    expires_at = models.DateTimeField(null=True, blank=True, help_text="Null = vĩnh viễn")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Ban: {self.user.username} by {self.banned_by}"
+
+    @property
+    def is_expired(self):
+        if self.ban_type == self.BanType.PERMANENT:
+            return False
+        if self.expires_at and timezone.now() > self.expires_at:
+            return True
+        return False
+
+
+# ─── Article & Learn Model (Admin CMS) ──────────────────────────────────────
+
+class ArticleCategory(models.TextChoices):
+    NEWS = 'news', 'Tin tức'
+    GUIDE = 'guide', 'Hướng dẫn'
+    ALERT = 'alert', 'Cảnh báo mới'
+    STORY = 'story', 'Chuyện cảnh giác'
+    INCLUSIVE = 'inclusive', 'An ninh số Bao trùm'
+    EMPATHY = 'empathy', 'Góc thấu cảm'
+
+
+class Article(models.Model):
+    """Admin articles for educating users (CMS)"""
+    title = models.CharField(max_length=300)
+    slug = models.SlugField(max_length=350, unique=True, blank=True)
+    summary = models.TextField(blank=True, default='')
+    content = models.TextField()
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
+    cover_image = models.ImageField(upload_to='articles/covers/', null=True, blank=True)
+    is_published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Article'
+        verbose_name_plural = 'Articles'
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)
+
+class LearnLesson(models.Model):
+    """Educational lessons for users"""
+    title = models.CharField(max_length=300)
+    slug = models.SlugField(max_length=350, unique=True, blank=True)
+    summary = models.TextField(blank=True, default='')
+    content = models.TextField()
+    category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
+    cover_image = models.ImageField(upload_to='learn/covers/', null=True, blank=True)
+    is_published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)
+
+
+class LearnReactionType(models.TextChoices):
+    LIKE = 'like', 'Thích'
+    HELPFUL = 'helpful', 'Hữu ích'
+    INSIGHTFUL = 'insightful', 'Bổ ích'
+
+
+class LessonReaction(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=20, choices=LearnReactionType.choices, default=LearnReactionType.LIKE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'lesson']
+        ordering = ['-created_at']
+
+
+class ArticleReaction(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=20, choices=LearnReactionType.choices, default=LearnReactionType.LIKE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'article']
+        ordering = ['-created_at']
+
+
+class ArticleComment(models.Model):
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='article_comments')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    content = models.TextField()
+    is_hidden = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+
+class ArticleCommentReactionType(models.TextChoices):
+    UPVOTE = 'upvote', 'Upvote'
+    DOWNVOTE = 'downvote', 'Downvote'
+
+
+class ArticleCommentReaction(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    comment = models.ForeignKey(ArticleComment, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=10, choices=ArticleCommentReactionType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'comment']
+        ordering = ['-created_at']
+
+
+class QuizQuestionType(models.TextChoices):
+    SINGLE = 'single_choice', 'Chọn 1 đáp án'
+    MULTIPLE = 'multiple_choice', 'Chọn nhiều đáp án'
+    TRUE_FALSE = 'true_false', 'Đúng / Sai'
+
+class LearnQuiz(models.Model):
+    """Quizzes attached to lessons"""
+    lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='quizzes', null=True, blank=True)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='quizzes', null=True, blank=True)
+    question = models.TextField()
+    question_type = models.CharField(max_length=30, choices=QuizQuestionType.choices, default=QuizQuestionType.SINGLE)
+    options = models.JSONField(help_text="List of choices")
+    correct_answer = models.CharField(max_length=200)
+    correct_answers = models.JSONField(default=list, blank=True, help_text="List of correct choices for multi-select")
+    explanation = models.TextField(blank=True)
+
+class LearnScenario(models.Model):
+    """Interactive scam scenarios"""
+    title = models.CharField(max_length=300)
+    lesson = models.ForeignKey(LearnLesson, on_delete=models.CASCADE, related_name='scenarios', null=True, blank=True)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='scenarios', null=True, blank=True)
+    description = models.TextField()
+    content = models.JSONField(help_text="Scenario flow logic")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+# ─── Prestige Calculation & Signals ────────────────────────────────────────
+
+def update_user_prestige(user):
+    """Recalculate user rank points based on activity.
+
+    Công thức (chống farm/brigading):
+    - Bài viết +10, bình luận +5 (nội dung thật, đã qua kiểm duyệt antispam).
+    - Like/helpful/share/comment-like nhận được +2 mỗi cái.
+    - Báo cáo forum ĐÃ DUYỆT (approved) +5, trần +50 (chặn farm bằng report rác).
+    - Bị dislike -2 (giảm từ -5 để khó dìm hàng tập thể).
+    - Bài bị duyệt vi phạm (approved report nhắm vào mình) -50.
+    """
+    try:
+        profile = user.profile
+        points = 0
+
+        # 1. Activities by the user
+        points += ForumPost.objects.filter(author=user).count() * 10
+        points += ForumComment.objects.filter(author=user).count() * 5
+
+        # 2. Reactions received on their posts
+        post_likes = ForumLike.objects.filter(post__author=user).count()
+        helpful_count = ForumPostReaction.objects.filter(post__author=user, reaction_type=ForumReactionType.HELPFUL).count()
+        share_count = ForumPostReaction.objects.filter(post__author=user, reaction_type=ForumReactionType.SHARE).count()
+        dislike_count = ForumPostReaction.objects.filter(post__author=user, reaction_type=ForumReactionType.DISLIKE).count()
+
+        # 3. Likes received on comments
+        comment_likes = ForumCommentLike.objects.filter(comment__author=user).count()
+
+        # 4. Community contributions: CHỈ báo cáo đã duyệt mới tính (chống farm report rác)
+        approved_reports = ForumPostReport.objects.filter(
+            reporter=user, status=ForumPostReport.ReportStatus.APPROVED).count()
+
+        # 5. Post reports received (ONLY approved ones)
+        report_count = ForumPostReport.objects.filter(post__author=user, status='approved').count()
+
+        points += (post_likes * 2)
+        points += (helpful_count * 2)
+        points += (share_count * 2)
+        points += (comment_likes * 2)
+        points += min(50, approved_reports * 5)  # trần chống farm
+        points += (dislike_count * -2)  # nhẹ tay để khó brigading
+        points += (report_count * -50)  # Heavy penalty for approved violations
+
+        profile.rank_points = max(0, points)
+        profile.save(update_fields=['rank_points'])
+    except Exception as e:
+        logger.warning("Prestige update error: %s", e)
+
+@receiver([post_save, post_delete], sender=ForumPost)
+@receiver([post_save, post_delete], sender=ForumComment)
+@receiver([post_save, post_delete], sender=ForumLike)
+@receiver([post_save, post_delete], sender=ForumCommentLike)
+@receiver([post_save, post_delete], sender=ForumPostReaction)
+@receiver([post_save, post_delete], sender=ForumPostReport)
+def trigger_prestige_update(sender, instance, **kwargs):
+    if hasattr(instance, 'author'):
+        update_user_prestige(instance.author)
+    elif hasattr(instance, 'post'): # For reactions and reports
+        update_user_prestige(instance.post.author)
+    elif hasattr(instance, 'reporter'): # For reports
+        update_user_prestige(instance.reporter)
+        if instance.post: update_user_prestige(instance.post.author)
+
+
+@receiver([post_save, post_delete], sender=Article)
+@receiver([post_save, post_delete], sender=LearnQuiz)
+@receiver([post_save, post_delete], sender=LearnScenario)
+@receiver([post_save, post_delete], sender=LearnLesson)
+def sync_vector_db(sender, instance, **kwargs):
+    """
+    Automatically re-build the FAISS index when learning content changes via Celery.
+    Debounced: bulk imports/seeds enqueue at most one rebuild per 5 minutes.
+    """
+    try:
+        from django.core.cache import cache
+        from api.maintenance.tasks import rebuild_vector_index
+        if not cache.add('vector_rebuild_queued', 1, timeout=300):
+            return
+        rebuild_vector_index.delay(trigger='AUTO')
+        logger.info(f"Vector DB sync task queued by {sender.__name__} update.")
+    except Exception as e:
+        logger.error(f"Vector DB auto-sync error: {e}")
+
+# ─── Notification Model ───────────────────────────────────────────────────
+
+class Notification(models.Model):
+    """Stores persistent notifications for users"""
+    NOTIFICATION_TYPES = [
+        ('info', 'Thông tin'),
+        ('warning', 'Cảnh báo'),
+        ('success', 'Thành công'),
+        ('error', 'Lỗi'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES, default='info')
+    url = models.URLField(max_length=500, blank=True, null=True)
+    is_read = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Notification'
+        verbose_name_plural = 'Notifications'
+
+    def __str__(self):
+        return f"[{self.notification_type}] {self.title} for {self.user.username}"
+
+
+class WebPushSubscription(models.Model):
+    """Web Push subscription per browser/device."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='webpush_subscriptions',
+        null=True,
+        blank=True,
+    )
+    endpoint = models.CharField(max_length=700, unique=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    user_agent = models.CharField(max_length=500, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    fail_count = models.PositiveSmallIntegerField(default=0)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"WebPush({self.user_id}) {self.endpoint[:60]}..."
+
+
+# ─── Announcement Model (Admin-only posts, no comments, reactions only) ────
+
+class Announcement(models.Model):
+    """Admin-only announcements — no comments, only reactions."""
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='announcements')
+    title = models.CharField(max_length=300)
+    content = models.TextField()
+    is_pinned = models.BooleanField(default=False)
+    likes_count = models.IntegerField(default=0)
+    views_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_pinned', '-created_at']
+        verbose_name = 'Announcement'
+
+    def __str__(self):
+        return f"[Announcement] {self.title[:50]}"
+
+
+class AnnouncementReaction(models.Model):
+    """Reactions on announcements (like / dislike / helpful)."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name='reactions')
+    reaction_type = models.CharField(max_length=10, choices=[('like', 'Like'), ('dislike', 'Dislike'), ('helpful', 'Helpful')])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'announcement', 'reaction_type']
+
+
+# ─── Direct Message Model ─────────────────────────────────────────────────
+
+class DirectMessage(models.Model):
+    """Private messages between users."""
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_messages')
+    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_messages')
+    content = models.TextField()
+    is_read = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Direct Message'
+
+    def __str__(self):
+        return f"DM: {self.sender.username} → {self.receiver.username}"
+
+
+# ─── Support Ticket Model (Bug Reports) ──────────────────────────────────
+
+class SupportTicket(models.Model):
+    """User bug reports / support tickets."""
+    class TicketStatus(models.TextChoices):
+        OPEN = 'open', 'Mở'
+        IN_PROGRESS = 'in_progress', 'Đang xử lý'
+        RESOLVED = 'resolved', 'Đã giải quyết'
+        CLOSED = 'closed', 'Đóng'
+
+    class TicketPriority(models.TextChoices):
+        LOW = 'low', 'Thấp'
+        MEDIUM = 'medium', 'Trung bình'
+        HIGH = 'high', 'Cao'
+        CRITICAL = 'critical', 'Nghiêm trọng'
+
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tickets')
+    title = models.CharField(max_length=300)
+    description = models.TextField()
+    category = models.CharField(max_length=30, choices=[
+        ('bug', 'Lỗi hệ thống'),
+        ('feature', 'Yêu cầu tính năng'),
+        ('account', 'Vấn đề tài khoản'),
+        ('other', 'Khác'),
+    ], default='bug')
+    priority = models.CharField(max_length=10, choices=TicketPriority.choices, default=TicketPriority.MEDIUM)
+    status = models.CharField(max_length=20, choices=TicketStatus.choices, default=TicketStatus.OPEN)
+    admin_reply = models.TextField(blank=True)
+    replied_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ticket_replies')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Support Ticket'
+
+    def __str__(self):
+        return f"[{self.status}] {self.title[:50]} by {self.author.username}"
+
+
+def _get_utc_today():
+    return timezone.now().date()
+
+
+class APIKey(models.Model):
+    """
+    API Keys with quotas and rate limits for MCP Server, Chatbot integrations,
+    and third-party developer access.
+    """
+    class Tier(models.TextChoices):
+        FREE = 'FREE', 'Gói Miễn Phí (500 req/ngày)'
+        DEVELOPER = 'DEVELOPER', 'Gói Phát Triển (2,000 req/ngày)'
+        UNLIMITED = 'UNLIMITED', 'Gói Doanh Nghiệp (Không giới hạn)'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='api_keys',
+        help_text="Người dùng sở hữu khóa API"
+    )
+    name = models.CharField(max_length=120, help_text="Tên định danh khóa (ví dụ: Claude Desktop, Cursor, Dev Bot)")
+    prefix = models.CharField(max_length=24, db_index=True, help_text="Tiền tố hiển thị (ví dụ: sc_live_abcd1234)")
+    hashed_key = models.CharField(max_length=128, unique=True, db_index=True, help_text="SHA-256 hash của API key bí mật")
+
+    tier = models.CharField(max_length=20, choices=Tier.choices, default=Tier.FREE)
+    rate_limit_per_minute = models.PositiveIntegerField(default=60)
+    daily_quota = models.PositiveIntegerField(default=500)
+    monthly_quota = models.PositiveIntegerField(default=15000)
+
+    # Usage counters
+    requests_today = models.PositiveIntegerField(default=0)
+    requests_this_month = models.PositiveIntegerField(default=0)
+    total_requests = models.PositiveIntegerField(default=0)
+    last_reset_date = models.DateField(default=_get_utc_today)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'API Key'
+        verbose_name_plural = 'API Keys'
+
+    def __str__(self):
+        return f"{self.name} ({self.prefix}...) - {self.user.username}"
+
+    @classmethod
+    def hash_token(cls, raw_token: str) -> str:
+        return hashlib.sha256(raw_token.strip().encode('utf-8')).hexdigest()
+
+    @classmethod
+    def generate(cls, user, name: str, tier: str = Tier.FREE):
+        """
+        Creates and returns (api_key_instance, raw_secret_token).
+        The raw_secret_token is returned only once at creation time.
+        """
+        import secrets
+        tier_limits = {
+            cls.Tier.FREE: {'rpm': 60, 'daily': 500, 'monthly': 15000},
+            cls.Tier.DEVELOPER: {'rpm': 120, 'daily': 2000, 'monthly': 50000},
+            cls.Tier.UNLIMITED: {'rpm': 1000, 'daily': 100000, 'monthly': 1000000},
+        }
+        limits = tier_limits.get(tier, tier_limits[cls.Tier.FREE])
+
+        token_prefix_part = secrets.token_hex(4)
+        token_secret_part = secrets.token_hex(20)
+        raw_token = f"sc_live_{token_prefix_part}_{token_secret_part}"
+        display_prefix = f"sc_live_{token_prefix_part}"
+
+        hashed = cls.hash_token(raw_token)
+
+        key_instance = cls.objects.create(
+            user=user,
+            name=name.strip() or "Default Key",
+            prefix=display_prefix,
+            hashed_key=hashed,
+            tier=tier,
+            rate_limit_per_minute=limits['rpm'],
+            daily_quota=limits['daily'],
+            monthly_quota=limits['monthly'],
+            last_reset_date=_get_utc_today(),
+        )
+        return key_instance, raw_token
+
+    def regenerate(self) -> str:
+        """Regenerates the secret token and updates hash/prefix."""
+        import secrets
+        token_prefix_part = secrets.token_hex(4)
+        token_secret_part = secrets.token_hex(20)
+        raw_token = f"sc_live_{token_prefix_part}_{token_secret_part}"
+        display_prefix = f"sc_live_{token_prefix_part}"
+
+        self.prefix = display_prefix
+        self.hashed_key = self.hash_token(raw_token)
+        self.save(update_fields=['prefix', 'hashed_key', 'updated_at'])
+        return raw_token
+

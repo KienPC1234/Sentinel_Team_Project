@@ -1,0 +1,928 @@
+@import "tailwindcss";
+@import "bootstrap-icons/font/bootstrap-icons.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Stylesheet riêng cho AI Assistant (scope .gpt, phong cách ChatGPT). */
+@import "./styles/assistant.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ShieldCall VN Global Theme - Build 2026.10.15 */
+
+@theme {
+  --font-sans: var(--font-inter), "Inter", "Segoe UI", system-ui, sans-serif;
+  --color-night-1: #0d0d1f;
+  --color-night-2: #161235;
+  --color-night-3: #111128;
+  --color-accent-cyan: #22d3ee;
+  --color-accent-purple: #a78bfa;
+  --color-accent-pink: #f472b6;
+  --color-accent-blue: #38bdf8;
+  --color-risk-green: #34d399;
+  --color-risk-yellow: #fbbf24;
+  --color-risk-red: #ef4444;
+}
+
+/* ── Thang màu NGỮ NGHĨA (dùng thay cho tên họ màu) ── */
+@theme {
+  --color-brand-50: #ecfeff;
+  --color-brand-100: #cffafe;
+  --color-brand-200: #a5f3fc;
+  --color-brand-300: #67e8f9;
+  --color-brand-400: #22d3ee;
+  --color-brand-500: #06b6d4;
+  --color-brand-600: #0891b2;
+  --color-brand-700: #0e7490;
+  --color-brand-800: #155e75;
+  --color-brand-900: #164e63;
+  --color-brand-950: #083344;
+  --color-brand2-50: #f5f3ff;
+  --color-brand2-100: #ede9fe;
+  --color-brand2-200: #ddd6fe;
+  --color-brand2-300: #c4b5fd;
+  --color-brand2-400: #a78bfa;
+  --color-brand2-500: #8b5cf6;
+  --color-brand2-600: #7c3aed;
+  --color-brand2-700: #6d28d9;
+  --color-brand2-800: #5b21b6;
+  --color-brand2-900: #4c1d95;
+  --color-brand2-950: #2e1065;
+  --color-safe-50: #ecfdf5;
+  --color-safe-100: #d1fae5;
+  --color-safe-200: #a7f3d0;
+  --color-safe-300: #6ee7b7;
+  --color-safe-400: #34d399;
+  --color-safe-500: #10b981;
+  --color-safe-600: #059669;
+  --color-safe-700: #047857;
+  --color-safe-800: #065f46;
+  --color-safe-900: #064e3b;
+  --color-safe-950: #022c22;
+  --color-warn-50: #fffbeb;
+  --color-warn-100: #fef3c7;
+  --color-warn-200: #fde68a;
+  --color-warn-300: #fcd34d;
+  --color-warn-400: #fbbf24;
+  --color-warn-500: #f59e0b;
+  --color-warn-600: #d97706;
+  --color-warn-700: #b45309;
+  --color-warn-800: #92400e;
+  --color-warn-900: #78350f;
+  --color-warn-950: #451a03;
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-200: #fecaca;
+  --color-danger-300: #fca5a5;
+  --color-danger-400: #f87171;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+  --color-danger-800: #991b1b;
+  --color-danger-900: #7f1d1d;
+  --color-danger-950: #450a0a;
+}
+
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+  --accent-cyan: #22d3ee;
+  --accent-blue: #38bdf8;
+  --risk-green: #34d399;
+  --risk-yellow: #fbbf24;
+  --risk-red: #ef4444;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --body-bg: #020617;
+  /* ── shadcn/ui tokens (Dark Tech / Cybersecurity Cyan) ──
+   * Thiết lập hệ token dark sắc nét cho shadcn/ui phù hợp phong cách an ninh mạng. */
+  --background: oklch(0.12 0.02 260);
+  --foreground: oklch(0.985 0 0);
+  --card: rgba(15, 23, 42, 0.6);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: rgba(15, 23, 42, 0.92);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: #06b6d4;
+  --primary-foreground: #020617;
+  --secondary: rgba(255, 255, 255, 0.08);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: rgba(6, 182, 212, 0.12);
+  --accent-foreground: #22d3ee;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #22d3ee;
+  --chart-1: #22d3ee;
+  --chart-2: #818cf8;
+  --chart-3: #34d399;
+  --chart-4: #fbbf24;
+  --chart-5: #f43f5e;
+  --radius: 0.75rem;
+  --sidebar: rgba(15, 23, 42, 0.9);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: #06b6d4;
+  --sidebar-primary-foreground: #020617;
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #22d3ee;
+}
+
+html, body {
+  background: var(--body-bg);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: var(--font-inter), "Inter", "Segoe UI", system-ui, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(24, 255, 255, 0.42) rgba(255, 255, 255, 0.04);
+  color-scheme: dark;
+}
+
+body {
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(1200px 700px at 50% -10%, rgba(6, 182, 212, 0.08), transparent 70%),
+    radial-gradient(900px 600px at 85% 60%, rgba(139, 92, 246, 0.05), transparent 60%);
+  opacity: 0.8;
+}
+
+/* ============ Icon alignment normalization ============ */
+i.bi, .bi, [class^="bi-"], [class*=" bi-"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  vertical-align: -0.125em;
+}
+i.bi::before, .bi::before, [class^="bi-"]::before, [class*=" bi-"]::before {
+  vertical-align: 0;
+  line-height: 1;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 999px;
+}
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.35);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.6);
+}
+
+/* ============ Modern Glass System ============ */
+.liquid-glass {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.liquid-card {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, rgba(34, 211, 238, 0.4) 30%, rgba(255, 255, 255, 0.6) 50%, rgba(168, 85, 247, 0.4) 70%, transparent 95%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+a.liquid-card:hover, .liquid-card.hoverable:hover, .liquid-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(34, 211, 238, 0.35);
+  box-shadow: 0 24px 60px -10px rgba(0, 0, 0, 0.7), 0 0 35px rgba(34, 211, 238, 0.12);
+}
+
+.liquid-btn {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  padding: 0.6rem 1.5rem;
+  color: #fff;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(34, 211, 238, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -3px rgba(34, 211, 238, 0.2);
+}
+
+.liquid-input {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.875rem;
+  padding: 0.75rem 1.25rem;
+  color: #fff;
+  outline: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.liquid-input:focus {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.liquid-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.glow-text {
+  background: linear-gradient(135deg, #22d3ee, #38bdf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============ Nav premium (port từ base.html + liquid-glass.css) ============ */
+.nav-premium {
+  background: rgba(13, 13, 31, 0.72);
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.nav-premium::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.4), transparent);
+  opacity: 0.4;
+  animation: navShimmer 6s linear infinite;
+}
+
+@keyframes navShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.nav-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-scan-menu {
+  background: linear-gradient(145deg, rgba(16, 22, 46, 0.86) 0%, rgba(10, 14, 30, 0.94) 100%) !important;
+  backdrop-filter: blur(36px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(36px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 0 20px rgba(34, 211, 238, 0.03) !important;
+}
+
+.nav-scan-item:hover {
+  background: rgba(34, 211, 238, 0.08);
+}
+
+/* ============ Mesh background ============ */
+.mesh-bg {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  top: 0;
+  left: 0;
+  background-color: #020617;
+  background-image:
+    radial-gradient(at 15% 10%, rgba(6, 182, 212, 0.07) 0px, transparent 50%),
+    radial-gradient(at 85% 90%, rgba(30, 58, 138, 0.07) 0px, transparent 50%);
+  z-index: -10;
+  pointer-events: none;
+}
+
+/* ============ Hero breakout (port từ Home/home.html) ============ */
+.hero-breakout {
+  position: relative;
+  width: 100%;
+  left: auto;
+  right: auto;
+  margin-left: 0;
+  margin-right: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  isolation: isolate;
+}
+
+@supports not (overflow: clip) {
+  .hero-breakout {
+    overflow-x: hidden;
+  }
+}
+
+/* ============ Risk badge ============ */
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid;
+}
+.risk-badge-safe { color: var(--risk-green); background: rgba(0, 230, 118, 0.1); border-color: rgba(0, 230, 118, 0.3); }
+.risk-badge-warning { color: var(--risk-yellow); background: rgba(255, 215, 64, 0.1); border-color: rgba(255, 215, 64, 0.3); }
+.risk-badge-critical { color: var(--risk-red); background: rgba(255, 23, 68, 0.12); border-color: rgba(255, 23, 68, 0.35); }
+
+/* ============ Markdown (ai-markdown, port từ chat-widget.css) ============ */
+.ai-markdown { width: 100%; overflow-x: auto; font-size: 0.85rem; line-height: 1.65; color: rgba(255, 255, 255, 0.85); }
+.ai-markdown h1, .ai-markdown h2, .ai-markdown h3, .ai-markdown h4 { font-weight: 700; margin: 1.15rem 0 0.6rem; color: #fff; line-height: 1.4; }
+.ai-markdown p { margin-bottom: 0.75rem; }
+.ai-markdown ul, .ai-markdown ol { margin: 0.75rem 0 0.95rem 1.25rem; }
+.ai-markdown li { margin-bottom: 0.4rem; }
+.ai-markdown a { color: var(--accent-cyan); text-decoration: underline; }
+.ai-markdown code { background: rgba(255, 255, 255, 0.08); padding: 0.1rem 0.35rem; border-radius: 0.35rem; font-size: 0.8em; }
+.ai-markdown pre { background: rgba(0, 0, 0, 0.4); padding: 1rem; border-radius: 0.75rem; overflow-x: auto; margin: 0.75rem 0; }
+.ai-markdown pre code { background: none; padding: 0; }
+.ai-markdown table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; font-size: 0.8rem; }
+.ai-markdown th, .ai-markdown td { border: 1px solid rgba(255, 255, 255, 0.12); padding: 0.45rem 0.7rem; }
+.ai-markdown th { background: rgba(255, 255, 255, 0.06); font-weight: 700; }
+.ai-markdown .callout-box { display: block; margin: 1rem 0; padding: 0.95rem 1.15rem; border-radius: 10px; line-height: 1.6; }
+
+/* ============ Thinking block + streaming cursor ============ */
+.thinking-container { margin-bottom: 0.75rem; background: rgba(255, 255, 255, 0.03); border-radius: 0.75rem; border: 1px solid rgba(255, 255, 255, 0.05); overflow: hidden; }
+.thinking-header { padding: 0.5rem 0.75rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none; background: rgba(255, 255, 255, 0.02); }
+.thinking-header:hover { background: rgba(255, 255, 255, 0.05); }
+.thinking-content { padding: 0.75rem; font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); border-top: 1px solid rgba(255, 255, 255, 0.03); white-space: pre-wrap; line-height: 1.6; }
+.thinking-container.collapsed .thinking-content { display: none; }
+.streaming-cursor { display: inline-block; width: 2px; height: 1em; background: var(--accent-cyan); margin-left: 2px; animation: blink 0.8s infinite; vertical-align: middle; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ============ Scrollbar ============ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: linear-gradient(to bottom, transparent, rgba(6, 182, 212, 0.2), transparent); border-radius: 10px; }
+
+/* ============ Shared enter animations (thay cho Alpine x-transition) ============ */
+:root {
+  /* Biến bản gốc dùng ở chat widget nhưng chưa từng được định nghĩa. */
+  --subtle-bg: rgba(255, 255, 255, 0.04);
+  --subtle-border: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes sc-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.sc-pop-in { animation: sc-pop-in 0.18s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+@keyframes sc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.sc-fade-in { animation: sc-fade-in 0.2s ease-out both; }
+
+@keyframes sc-slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.sc-slide-down { animation: sc-slide-down 0.18s ease-out both; }
+
+/* Panel chat: nền gần đặc, blur nhẹ để chữ rõ (không bị "mờ/xuyên"). */
+.sc-chat-panel {
+  background: rgba(9, 11, 26, 0.995);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+}
+
+/* ============================================================================
+ * Port từ PKV/templates/base.html \3c style> (global) — để khớp bản HTML gốc.
+ * ========================================================================== */
+
+/* --- Rich text (CKEditor output + Markdown) --- */
+.richtext-content ul, .rich-text-content ul, .ai-markdown ul { list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0; }
+.richtext-content ol, .rich-text-content ol, .ai-markdown ol { list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+.richtext-content li, .rich-text-content li, .ai-markdown li { margin: 0.25em 0; }
+.richtext-content ul ul, .rich-text-content ul ul, .ai-markdown ul ul { list-style-type: circle; }
+.richtext-content ul ul ul, .rich-text-content ul ul ul, .ai-markdown ul ul ul { list-style-type: square; }
+.richtext-content h1, .rich-text-content h1, .ai-markdown h1 { font-size: 1.75em; font-weight: 800; margin: 0.8em 0 0.4em; }
+.richtext-content h2, .rich-text-content h2, .ai-markdown h2 { font-size: 1.5em; font-weight: 700; margin: 0.7em 0 0.35em; }
+.richtext-content h3, .rich-text-content h3, .ai-markdown h3 { font-size: 1.25em; font-weight: 700; margin: 0.6em 0 0.3em; }
+.richtext-content h4, .rich-text-content h4, .ai-markdown h4 { font-size: 1.1em; font-weight: 600; margin: 0.5em 0 0.25em; }
+.richtext-content blockquote, .rich-text-content blockquote, .ai-markdown blockquote { border-left: 3px solid rgba(24,255,255,0.3); padding-left: 1em; margin: 0.75em 0; color: rgba(255,255,255,0.6); font-style: italic; }
+.richtext-content pre, .rich-text-content pre, .ai-markdown pre { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; padding: 1em; overflow-x: auto; margin: 0.75em 0; }
+.richtext-content code, .rich-text-content code, .ai-markdown code { background: rgba(255,255,255,0.08); padding: 0.15em 0.4em; border-radius: 0.3em; font-size: 0.9em; }
+.richtext-content pre code, .rich-text-content pre code, .ai-markdown pre code { background: transparent; padding: 0; }
+.richtext-content a, .rich-text-content a, .ai-markdown a { color: #18ffff; text-decoration: underline; text-underline-offset: 2px; }
+.richtext-content a:hover, .rich-text-content a:hover, .ai-markdown a:hover { color: #fff; }
+.richtext-content table, .rich-text-content table, .ai-markdown table { width: 100%; border-collapse: collapse; margin: 0.75em 0; table-layout: auto; min-width: 100%; }
+.ai-markdown { overflow-x: auto; scrollbar-width: thin; }
+.richtext-content th, .richtext-content td, .rich-text-content th, .rich-text-content td, .ai-markdown th, .ai-markdown td { border: 1px solid rgba(255,255,255,0.1); padding: 0.5em 0.75em; text-align: left; }
+.richtext-content th, .rich-text-content th, .ai-markdown th { background: rgba(255,255,255,0.05); font-weight: 700; }
+.richtext-content p, .rich-text-content p, .ai-markdown p { margin: 0.4em 0; }
+.richtext-content img, .rich-text-content img { max-width: 100%; height: auto; border-radius: 0.75rem; margin: 0.5em 0; }
+.richtext-content hr, .rich-text-content hr, .ai-markdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1em 0; }
+
+/* --- Avatars tròn --- */
+.avatar-circle, img.avatar-circle { border-radius: 50% !important; }
+
+
+/* --- Scrollbar toàn cục (gradient cyan→purple như gốc) --- */
+html, body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(24,255,255,0.42) rgba(255,255,255,0.04);
+  color-scheme: dark;
+}
+body { position: relative; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px),
+    radial-gradient(1200px 700px at 50% -10%, rgba(255,255,255,0.05), transparent 70%);
+  background-size: 30px 30px, 30px 30px, 100% 100%;
+  background-position: 0 0, 0 0, center top;
+  opacity: 0.12;
+}
+html::-webkit-scrollbar, body::-webkit-scrollbar { width: 10px; height: 10px; }
+html::-webkit-scrollbar-track, body::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 999px; }
+html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(24,255,255,0.5), rgba(179,136,255,0.45));
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(24,255,255,0.65), rgba(179,136,255,0.6));
+}
+
+/* --- Native select (liquid-like fallback) --- */
+select:not([data-plain-select="true"]):not(.liquid-select-native-off) {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 0.85rem;
+  color: rgba(255,255,255,0.92);
+  font-weight: 700;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  padding: 0.72rem 2.15rem 0.72rem 0.95rem;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(24,255,255,0.65) 50%),
+    linear-gradient(135deg, rgba(24,255,255,0.65) 50%, transparent 50%);
+  background-position: calc(100% - 16px) calc(50% - 3px), calc(100% - 10px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+select:not([data-plain-select="true"]):not(.liquid-select-native-off):hover { border-color: rgba(24,255,255,0.35); background-color: rgba(255,255,255,0.07); }
+select:not([data-plain-select="true"]):not(.liquid-select-native-off):focus { outline: none; border-color: rgba(24,255,255,0.55); box-shadow: 0 0 0 3px rgba(24,255,255,0.12); }
+select:not([data-plain-select="true"]):not(.liquid-select-native-off) option,
+select:not([data-plain-select="true"]):not(.liquid-select-native-off) optgroup { background: #11152b; color: #f8fafc; }
+
+/* --- Callout boxes & markdown alert containers --- */
+.callout-box,
+.markdown-content .callout-box,
+.ai-markdown .callout-box,
+div[class*="callout-"],
+.markdown-content div[style*="background"],
+.ai-markdown div[style*="background"] {
+  display: block !important;
+  margin-top: 1.15rem !important;
+  margin-bottom: 1.15rem !important;
+  padding: 1.1rem 1.35rem !important;
+  border-radius: 12px !important;
+  line-height: 1.65 !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+  backdrop-filter: blur(8px) !important;
+}
+.callout-box + .callout-box,
+.markdown-content .callout-box + .callout-box,
+.ai-markdown .callout-box + .callout-box,
+.markdown-content div[style*="background"] + div[style*="background"],
+.ai-markdown div[style*="background"] + div[style*="background"],
+.markdown-content .callout-box + div[style*="background"],
+.markdown-content div[style*="background"] + .callout-box,
+.ai-markdown .callout-box + div[style*="background"],
+.ai-markdown div[style*="background"] + .callout-box { margin-top: 1.25rem !important; }
+.callout-box + ul, .callout-box + ol,
+.markdown-content .callout-box + ul, .markdown-content .callout-box + ol,
+.ai-markdown .callout-box + ul, .ai-markdown .callout-box + ol,
+.markdown-content div[style*="background"] + ul, .markdown-content div[style*="background"] + ol,
+.ai-markdown div[style*="background"] + ul, .ai-markdown div[style*="background"] + ol { margin-top: 1.25rem !important; }
+.callout-box + p, .markdown-content .callout-box + p, .ai-markdown .callout-box + p,
+.markdown-content div[style*="background"] + p, .ai-markdown div[style*="background"] + p { margin-top: 1.15rem !important; }
+
+.callout-safe, .markdown-content .callout-safe, .ai-markdown .callout-safe,
+.markdown-content div[style*="34, 197, 94"], .markdown-content div[style*="34,197,94"],
+.ai-markdown div[style*="34, 197, 94"], .ai-markdown div[style*="34,197,94"] {
+  background: rgba(34, 197, 94, 0.14) !important;
+  border: 1px solid rgba(34, 197, 94, 0.35) !important;
+  color: #dcfce7 !important;
+}
+.callout-safe strong, .markdown-content .callout-safe strong, .ai-markdown .callout-safe strong,
+.markdown-content div[style*="34, 197, 94"] strong, .ai-markdown div[style*="34, 197, 94"] strong { color: #4ade80 !important; }
+
+.callout-danger, .markdown-content .callout-danger, .ai-markdown .callout-danger,
+.markdown-content div[style*="239, 68, 68"], .markdown-content div[style*="239,68,68"],
+.ai-markdown div[style*="239, 68, 68"], .ai-markdown div[style*="239,68,68"] {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  color: #fee2e2 !important;
+}
+.callout-danger strong, .markdown-content .callout-danger strong, .ai-markdown .callout-danger strong,
+.markdown-content div[style*="239, 68, 68"] strong, .ai-markdown div[style*="239, 68, 68"] strong { color: #f87171 !important; }
+
+.callout-warning, .markdown-content .callout-warning, .ai-markdown .callout-warning,
+.markdown-content div[style*="234, 179, 8"], .markdown-content div[style*="234,179,8"],
+.ai-markdown div[style*="234, 179, 8"], .ai-markdown div[style*="234,179,8"] {
+  background: rgba(234, 179, 8, 0.14) !important;
+  border: 1px solid rgba(234, 179, 8, 0.35) !important;
+  color: #fef9c3 !important;
+}
+.callout-warning strong, .markdown-content .callout-warning strong, .ai-markdown .callout-warning strong,
+.markdown-content div[style*="234, 179, 8"] strong, .ai-markdown div[style*="234, 179, 8"] strong { color: #facc15 !important; }
+
+/* --- Google Translate widgets --- */
+#google_translate_element { display: none; }
+.goog-te-banner-frame { display: none !important; }
+.goog-te-balloon-frame { display: none !important; }
+body { top: 0 !important; }
+.skiptranslate iframe { display: none !important; }
+.goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
+font { background-color: transparent !important; box-shadow: none !important; color: inherit !important; }
+
+/* --- Chat widget: nguồn tham khảo (chat-widget.css) --- */
+.sc-chat-widget .search-results-container {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.sc-chat-widget .search-item {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  text-decoration: none !important;
+  transition: all 0.2s ease;
+}
+.sc-chat-widget .search-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+/* --- Assistant: tool widget + title reveal (assistant.css) --- */
+.tool-widget {
+  background: linear-gradient(135deg, rgba(8, 145, 178, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  border-radius: 1.25rem;
+  padding: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+body.safe-mode .tool-widget {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(236, 72, 153, 0.2);
+}
+body.safe-mode .tool-widget i { color: #ec4899; }
+
+@keyframes title-reveal {
+  from { opacity: 0; transform: translateY(-8px); filter: blur(3px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.title-reveal { animation: title-reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+/* --- Shims cho animate.css (bản gốc nạp CDN) — dùng lại keyframes fadeInUp --- */
+.animate__animated { animation-duration: 1s; animation-fill-mode: both; }
+.animate__fadeInUp { animation-name: fadeInUp; }
+
+/* ============ AI Assistant page (port từ PKV/static/css/assistant.css) ============ */
+.msg-group { position: relative; padding: 0.35rem 0.5rem; width: 100%; }
+.msg-actions { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.35rem; opacity: 0; transition: opacity 0.2s ease-in-out; pointer-events: auto; }
+.msg-actions-user { justify-content: flex-end; padding-right: 0.25rem; }
+.msg-actions-assistant { justify-content: flex-start; padding-left: 0.25rem; }
+.msg-group:hover .msg-actions,
+.msg-group:focus-within .msg-actions { opacity: 1; }
+.msg-bubble { padding: 1rem 1.25rem; border-radius: 1.5rem; max-width: 85%; line-height: 1.6; position: relative; box-shadow: var(--glass-shadow, 0 8px 32px 0 rgba(0, 0, 0, 0.37)); }
+.msg-user { background: linear-gradient(135deg, rgba(6, 182, 212, 0.4) 0%, rgba(37, 99, 235, 0.4) 100%); border: 1px solid rgba(6, 182, 212, 0.3); margin-left: auto; border-bottom-right-radius: 0.25rem; color: #fff !important; }
+.msg-assistant { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); margin-right: auto; border-bottom-left-radius: 0.25rem; backdrop-filter: blur(40px) saturate(180%); color: #fff; }
+.typing-cursor { display: inline-block; width: 3px; height: 15px; background: #06b6d4; margin-left: 2px; animation: blink 0.8s infinite; vertical-align: middle; border-radius: 10px; }
+body.safe-mode .typing-cursor { background: #ec4899; }
+
+/* Tool execution cards */
+.tool-card { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 1rem; margin: 0.75rem 0; overflow: hidden; transition: all 0.3s ease; }
+.tool-card.executing { border-color: rgba(6, 182, 212, 0.3); animation: assistant-tool-pulse 2s ease-in-out infinite; }
+.tool-card.done { border-color: rgba(34, 197, 94, 0.2); }
+.tool-card.error { border-color: rgba(239, 68, 68, 0.2); }
+@keyframes assistant-tool-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); } 50% { box-shadow: 0 0 12px 0 rgba(6, 182, 212, 0.1); } }
+.tool-card-header { padding: 0.6rem 0.85rem; display: flex; align-items: center; gap: 0.6rem; background: rgba(255, 255, 255, 0.02); }
+.tool-card-icon { width: 28px; height: 28px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.tool-card-spinner { width: 14px; height: 14px; border: 2px solid rgba(6, 182, 212, 0.2); border-top-color: #06b6d4; border-radius: 50%; animation: assistant-spin 0.8s linear infinite; flex-shrink: 0; }
+@keyframes assistant-spin { to { transform: rotate(360deg); } }
+.tool-card-body { padding: 0; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
+.tool-card-body.open { max-height: 900px; padding: 0.6rem 0.85rem; border-top: 1px solid rgba(255, 255, 255, 0.04); }
+.tool-result-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0; font-size: 11px; color: rgba(203, 213, 225, 0.8); border-bottom: 1px solid rgba(255, 255, 255, 0.02); }
+.tool-result-row:last-child { border-bottom: none; }
+.tool-result-label { font-weight: 700; color: rgba(148, 163, 184, 0.7); min-width: 80px; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; padding-top: 2px; flex-shrink: 0; }
+.tool-result-val { flex: 1; word-break: break-word; line-height: 1.5; }
+
+/* Search sources accordion */
+.search-sources-accordion { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+.sources-chevron { transition: transform 0.2s ease; }
+
+/* Session loading overlay */
+.session-loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.58); backdrop-filter: blur(6px); z-index: 15; }
+.session-loading-card { display: flex; align-items: center; gap: 0.75rem; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(15, 23, 42, 0.8); border-radius: 0.9rem; padding: 0.7rem 1rem; color: rgba(226, 232, 240, 0.95); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+.session-loading-spinner { width: 16px; height: 16px; border-radius: 9999px; border: 2px solid rgba(6, 182, 212, 0.18); border-top-color: #06b6d4; animation: assistant-spin 0.7s linear infinite; }
+
+/* SafeTalk mode */
+body.safe-mode { background-color: #0d0217 !important; }
+body.safe-mode .mesh-bg { background-image: radial-gradient(at 0% 0%, rgba(236, 72, 153, 0.1) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%), radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.05) 0px, transparent 50%) !important; }
+body.safe-mode .msg-assistant { background: rgba(236, 72, 153, 0.05); border: 1px solid rgba(236, 72, 153, 0.15); }
+.safetalk-toggle { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.safetalk-toggle.active { background: rgba(236, 72, 153, 0.15) !important; border-color: rgba(236, 72, 153, 0.4) !important; color: #ec4899 !important; box-shadow: 0 0 20px rgba(236, 72, 153, 0.2); }
+.safetalk-badge { display: none; padding: 2px 8px; border-radius: 99px; background: #ec4899; color: #fff; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 8px; }
+body.safe-mode .safetalk-badge { display: inline-block; animation: assistant-pulse-pink 2s infinite; }
+@keyframes assistant-pulse-pink { 0% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0); } }
+
+/* ============ Animation Keyframes & Parity Classes ============ */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+@keyframes pulse-red {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 23, 68, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 23, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 23, 68, 0); }
+}
+.animate-pulse-red {
+  animation: pulse-red 2s infinite;
+}
+
+/* User Card Popup */
+.user-card-popup {
+  position: fixed;
+  z-index: 9999;
+  width: 280px;
+  background: rgba(13, 13, 31, 0.97);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(24, 255, 255, 0.05);
+  padding: 1rem;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.user-card-popup.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Emergency custom scrollbar and chat bubbles */
+.emg-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.35) rgba(255, 255, 255, 0.03);
+}
+.emg-scroll::-webkit-scrollbar { width: 8px; }
+.emg-scroll::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.03); border-radius: 999px; }
+.emg-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.45), rgba(168, 85, 247, 0.45));
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.emg-chat-window {
+  min-height: 320px;
+  max-height: 420px;
+}
+.emg-chat-bubble {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.emg-chat-bubble .ai-markdown {
+  overflow-x: auto;
+}
+
+/* ── Token màu dùng chung (không hardcode màu trong trang nữa) ── */
+:root {
+  /* Nền tối */
+  --sc-night-1: #0d0d1f;
+  --sc-night-2: #161235;
+  --sc-night-3: #111128;
+  --sc-ink-deep: #03030b;
+  --sc-panel: #0a0f1d;
+  --sc-slate-950: #020617;
+  --sc-gray-950: #030712;
+  --sc-slate-900: #0f172a;
+  /* Chữ */
+  --sc-white: #ffffff;
+  --sc-slate-300: #cbd5e1;
+  --sc-slate-400: #94a3b8;
+  /* Brand (cyan primary / violet secondary) */
+  --sc-brand: #22d3ee;
+  --sc-brand2: #a78bfa;
+  --sc-brand-400: #22d3ee;
+  --sc-brand-500: #06b6d4;
+  --sc-brand-600: #0891b2;
+  --sc-brand2-400: #a78bfa;
+  --sc-brand2-500: #8b5cf6;
+  /* Ngữ nghĩa rủi ro */
+  --sc-risk-green: #34d399;
+  --sc-risk-yellow: #fbbf24;
+  --sc-risk-red: #ef4444;
+  --sc-safe-400: #34d399;
+  --sc-safe-500: #10b981;
+  --sc-warn-400: #fbbf24;
+  --sc-warn-500: #f59e0b;
+  --sc-danger-400: #f87171;
+  --sc-danger-500: #ef4444;
+  --sc-danger-600: #dc2626;
+  /* Google brand (nút đăng nhập) */
+  --sc-google-blue: #4285f4;
+  --sc-google-red: #ea4335;
+  --sc-google-yellow: #fbbc05;
+  --sc-google-green: #34a853;
+}
+
+/* Token bổ sung */
+:root {
+  --sc-warn-400: #fb923c;
+  --sc-warn-500: #f97316;
+  --sc-safe-300: #86efac;
+  --sc-brand-300: #67e8f9;
+  --sc-brand2-300: #c4b5fd;
+  --sc-brand2-500: #ec4899;
+  --sc-slate-800: #1e293b;
+  --sc-gray-500: #6b7280;
+  --sc-mac-red: #ff5f56;
+  --sc-mac-yellow: #ffbd2e;
+  --sc-mac-green: #27c93f;
+  --sc-brand-500-20: #06b6d420;
+}
+
+@theme inline {
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
