@@ -29,6 +29,9 @@ export default function EditArticle() {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  const [sourceType, setSourceType] = useState('internal');
+  const [sourceUrl, setSourceUrl] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEditing);
@@ -45,6 +48,8 @@ export default function EditArticle() {
       content: string;
       is_published: boolean;
       cover_image: string | null;
+      source_type?: string;
+      source_url?: string;
     }>(`/admin/articles/${articleId}/`)
       .then((d) => {
         if (!alive) return;
@@ -53,6 +58,8 @@ export default function EditArticle() {
         setSummary(d.summary || '');
         setContent(d.content || '');
         setIsPublished(d.is_published ?? true);
+        setSourceType(d.source_type || 'internal');
+        setSourceUrl(d.source_url || '');
         if (d.cover_image) setExistingCover(d.cover_image);
       })
       .catch((err: unknown) => {
@@ -101,6 +108,10 @@ export default function EditArticle() {
     const formData = new FormData();
     formData.append('title', title);
     formData.append('category', category);
+    formData.append('source_type', sourceType);
+    if (sourceUrl) {
+      formData.append('source_url', sourceUrl);
+    }
     formData.append('summary', summary);
     formData.append('content', content);
     formData.append('is_published', isPublished ? 'true' : 'false');
@@ -183,6 +194,44 @@ export default function EditArticle() {
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-white/70">Nguồn bài viết</label>
+              <select
+                value={sourceType}
+                onChange={(e) => setSourceType(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/40"
+              >
+                <option value="internal" className="bg-slate-900 text-white">Nội bộ ShieldCall VN</option>
+                <option value="tinnhiemmang" className="bg-slate-900 text-white">Tín nhiệm mạng (tinnhiemmang.vn)</option>
+                <option value="press" className="bg-slate-900 text-white">Báo chí chính thống</option>
+                <option value="community" className="bg-slate-900 text-white">Cộng đồng đóng góp</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-white/70">
+                Link nguồn gốc bài viết
+                {sourceUrl && (
+                  <a
+                    href={sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-2 text-brand-400 hover:underline font-normal text-[11px]"
+                  >
+                    (Mở trang gốc <i className="bi bi-box-arrow-up-right"></i>)
+                  </a>
+                )}
+              </label>
+              <input
+                type="url"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                placeholder="https://tinnhiemmang.vn/..."
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/40 font-mono text-xs"
+              />
             </div>
           </div>
 

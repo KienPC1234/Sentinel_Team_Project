@@ -1,48 +1,50 @@
 <div align="center">
-  <h1>ShieldCall VN (Sentinel Core)</h1>
-  <p><b>Advanced Multi-Modal Threat Intelligence, Zero-Trust Sandbox & Anti-Fraud Architecture</b></p>
-  <p><b>Live Demo:</b> <a href="https://sc.fptoj.com">https://sc.fptoj.com</a></p>
+ <h1>ShieldCall VN (Sentinel Core)</h1>
+ <p><b>Advanced Multi-Modal Threat Intelligence, Zero-Trust Sandbox & Anti-Fraud Architecture</b></p>
+ <p><b>Live Demo:</b> <a href="https://sc.fptoj.com">https://sc.fptoj.com</a></p>
 
-  [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-  [![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
-  [![Database](https://img.shields.io/badge/Database-MariaDB%2FMySQL-orange.svg)](https://mariadb.org/)
-  [![Cache/Broker](https://img.shields.io/badge/Broker-Redis%208-red.svg)](https://redis.io/)
-  [![Inference](https://img.shields.io/badge/LLM-Ollama%20(DeepSeek%20%7C%20Gemma4)-purple.svg)](https://ollama.com/)
-  [![Docker](https://img.shields.io/badge/Sandbox-Docker%20Zero--Trust-2496ED.svg)](https://www.docker.com/)
-  [![Hardware](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900.svg)](https://developer.nvidia.com/cuda-zone)
-  [![Orchestration](https://img.shields.io/badge/Process-PM2-lightgrey.svg)](https://pm2.keymetrics.io/)
+ [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+ [![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
+ [![Database](https://img.shields.io/badge/Database-MariaDB%2FMySQL-orange.svg)](https://mariadb.org/)
+ [![Cache/Broker](https://img.shields.io/badge/Broker-Redis%208-red.svg)](https://redis.io/)
+ [![Inference](https://img.shields.io/badge/LLM-Ollama%20(DeepSeek%20%7C%20Gemma4)-purple.svg)](https://ollama.com/)
+ [![Docker](https://img.shields.io/badge/Sandbox-Docker%20Zero--Trust-2496ED.svg)](https://www.docker.com/)
+ [![Hardware](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900.svg)](https://developer.nvidia.com/cuda-zone)
+ [![Orchestration](https://img.shields.io/badge/Process-PM2-lightgrey.svg)](https://pm2.keymetrics.io/)
 </div>
 
 ---
 
-## 0. Cấu trúc thư mục (Repository layout)
+## 0. Repository Layout
 
-```
+```text
 Sentinel_Team_Project/
-├── backend/                 # Toàn bộ backend Django (PKV, api, manage.py, theme, scripts, sandbox, helps, static, media…)
-├── frontend/                # Toàn bộ frontend Next.js (app router, src, public)
-├── docs/                    # Tài liệu (phản biện, cải tiến, API…)
-├── ecosystem.config.js      # Cấu hình PM2 (chạy backend từ backend/, frontend từ frontend/)
-├── README.md
-└── _minhchung/              # Minh chứng nộp bài (gitignored)
+├── backend/ # Django 5.2.5 Core (PKV, api, manage.py, vector_store, scripts, sandbox)
+├── frontend/ # Next.js 16.4.0 App Router UI (app, src, public)
+├── puppeteer_host/ # Standalone Headless Browser (TypeScript strict, multi-layer SSRF defense)
+├── docs/ # Technical specifications, defense papers, architecture guides
+├── ecosystem.config.js # PM2 process manager configuration (orchestrates 5 microservices)
+├── README.md # System documentation & deployment guide
+└── _minhchung/ # Evaluation committee dossier & test logs (gitignored)
 ```
 
-> Lệnh backend chạy từ trong `backend/` (ví dụ `cd backend && python manage.py check`).
+> Backend commands run from within `backend/` (e.g., `cd backend && python manage.py check`).
+> Frontend commands run from within `frontend/` (e.g., `cd frontend && npx tsc --noEmit`).
+> Puppeteer commands run from within `puppeteer_host/` (e.g., `cd puppeteer_host && npm test`).
 
 ---
 
-## 0.1 Cập nhật gần nhất — Cải tiến theo góp ý Hội đồng (2026-10-15)
+## 0.1 Recent Updates: Evaluation Committee Enhancements (2026-10-15)
 
-Năm cải tiến trọng tâm (chi tiết + kiểm chứng: [`docs/CAI_TIEN_THEO_HOI_DONG.md`](docs/CAI_TIEN_THEO_HOI_DONG.md)):
+Five core architectural improvements addressing evaluation committee recommendations (detailed verification dossier: [`docs/CAI_TIEN_THEO_HOI_DONG.md`](docs/CAI_TIEN_THEO_HOI_DONG.md)):
 
-1. **Guardrail độ bất định** — khi chưa đủ bằng chứng, hệ thống **KHÔNG kết luận "an toàn"** mà trả nhãn *"CHƯA ĐỦ CƠ SỞ XÁC MINH"*, kèm cảnh báo và kênh xác minh chính thức.
-2. **Bằng chứng cho mọi nhận định** — mỗi kết quả quét kèm `evidence[]` (nguồn, độ tin cậy, mức độ, liên kết tham chiếu).
-3. **Minh bạch nguồn & giới hạn** — danh mục nguồn tại `/api/v1/trust/sources/` nêu rõ độ tin cậy và hạn chế của từng công cụ (kể cả mô hình AI).
-4. **Dữ liệu nguồn Việt Nam** — kênh chính thức (NCSC 156, Công an 113, VNCERT), tổng đài ngân hàng, từ điển dấu hiệu lừa đảo tiếng Việt (`/api/v1/trust/channels/`).
-5. **Bảo mật dữ liệu** — ẩn PII (SĐT/email/STK/CCCD/thẻ/khoá) trước khi ghi log hoặc gửi mô hình cloud (`/api/v1/trust/privacy/`).
+1. **Uncertainty Guardrail**: When evidence is inconclusive (risk score 10-39 without independent confirmation), the system **NEVER concludes "safe"**. Instead, it assigns the label *"INSUFFICIENT EVIDENCE FOR VERIFICATION"*, accompanied by explicit disclaimers and verified official verification hotlines.
+2. **Evidence-Backed Findings**: Every analysis output includes structured `evidence[]` entries (source identifier, reliability tier, severity rating, and reference links).
+3. **Transparent Source Telemetry & Tool Limitations**: Comprehensive source catalog exposed via `/api/v1/trust/sources/` detailing reliability metrics and explicit operational boundaries for each engine (including LLM hallucination constraints).
+4. **Domestic Vietnamese Threat Intelligence**: Integration of official national hotlines (NCSC 156, Police 113, VNCERT), 18 commercial bank/e-wallet emergency lines, and Vietnamese scam vocabulary dictionaries (`/api/v1/trust/channels/`). A crawler library for the official **Tín nhiệm mạng** directory (`tinnhiemmang.vn`) ingests certified trusted websites plus the reported-scam domain list into the trusted-domain map and the `tinnhiem_fake` threat feed ([`docs/TINNHIEM.md`](docs/TINNHIEM.md), robots.txt-respecting by default).
+5. **Data Protection & PII Redaction**: Automated sanitization of sensitive personal data (phone numbers, email addresses, bank accounts, citizen IDs, payment cards, secret keys) prior to logging or cloud LLM transmission (`/api/v1/trust/privacy/`).
 
-> **Hạn chế & lộ trình:** xem [`docs/REBUTTAL_QA.md`](docs/REBUTTAL_QA.md). Các chỉ số định lượng
-> được công bố ở mức *"kết quả nội bộ sơ bộ"*, không tuyên bố tuyệt đối.
+> **Limitations & Roadmap:** Refer to [`docs/REBUTTAL_QA.md`](docs/REBUTTAL_QA.md). Quantitative benchmark metrics represent preliminary internal evaluation baselines.
 
 ---
 
@@ -56,82 +58,82 @@ The platform employs a hybrid asynchronous architecture combining real-time ASGI
 
 ```mermaid
 flowchart TD
-    subgraph ClientTier["Client & Integration Layer"]
-        WebUI["Web Frontend & PWA"]
-        MobileClient["Mobile Client / Native Application"]
-        MCPClient["Claude Desktop & MCP Agents"]
-        APIClient["External REST API Consumers"]
-    end
+ subgraph ClientTier["Client & Integration Layer"]
+ WebUI["Web Frontend & PWA"]
+ MobileClient["Mobile Client / Native Application"]
+ MCPClient["Claude Desktop & MCP Agents"]
+ APIClient["External REST API Consumers"]
+ end
 
-    subgraph IngressTier["Perimeter & Ingress Security"]
-        ReverseProxy["Reverse Proxy / Cloudflare WAF / TLS (:443)"]
-    end
+ subgraph IngressTier["Perimeter & Ingress Security"]
+ ReverseProxy["Reverse Proxy / Cloudflare WAF / TLS (:443)"]
+ end
 
-    subgraph AppTier["Application & Routing Tier (PM2 Cluster)"]
-        DaphneServer["Daphne ASGI Server (:8001)<br/>Django 5.2 | Channels 4 | DRF"]
-        PuppeteerCluster["Puppeteer Headless Cluster (:3010)<br/>Anti-SSRF DNS Resolver | Stealth Engine"]
-    end
+ subgraph AppTier["Application & Routing Tier (PM2 Cluster)"]
+ DaphneServer["Daphne ASGI Server (:8001)<br/>Django 5.2 | Channels 4 | DRF"]
+ PuppeteerCluster["Puppeteer Headless Cluster (:3010)<br/>Anti-SSRF DNS Resolver | Stealth Engine"]
+ end
 
-    subgraph DataTier["Storage, State & Cache Broker"]
-        RedisNode["Redis 8.x<br/>Cache | Channel Layer | Celery Broker"]
-        DatabaseNode[("MariaDB 11.x / MySQL 8.x<br/>Relational Storage & Auth")]
-    end
+ subgraph DataTier["Storage, State & Cache Broker"]
+ RedisNode["Redis 8.x<br/>Cache | Channel Layer | Celery Broker"]
+ DatabaseNode[("MariaDB 11.x / MySQL 8.x<br/>Relational Storage & Auth")]
+ end
 
-    subgraph WorkerTier["Distributed Task Engine (Celery)"]
-        CeleryWorker["Celery Worker Cluster<br/>Multi-threaded Thread Pool"]
-        CeleryBeat["Celery Beat Scheduler<br/>Periodic Threat Sync"]
-    end
+ subgraph WorkerTier["Distributed Task Engine (Celery)"]
+ CeleryWorker["Celery Worker Cluster<br/>Multi-threaded Thread Pool"]
+ CeleryBeat["Celery Beat Scheduler<br/>Periodic Threat Sync"]
+ end
 
-    subgraph NeuralTier["Hardware-Accelerated Neural Computing"]
-        EasyOCRNode["EasyOCR Engine<br/>NVIDIA CUDA GPU"]
-        WhisperNode["Faster-Whisper STT<br/>NVIDIA CUDA GPU"]
-        FAISSNode["FAISS Vector DB<br/>Nomic Embed 768-dim"]
-    end
+ subgraph NeuralTier["Hardware-Accelerated Neural Computing"]
+ VietOCRNode["VietOCR Engine<br/>NVIDIA CUDA GPU / CPU (dedicated venv)"]
+ WhisperNode["Faster-Whisper STT<br/>NVIDIA CUDA GPU"]
+ FAISSNode["FAISS Vector DB<br/>Nomic Embed 768-dim"]
+ end
 
-    subgraph SandboxTier["Zero-Trust Execution Sandbox (Docker)"]
-        DockerSandbox["sentinel-sandbox:latest<br/>--network none | --read-only | --cap-drop ALL"]
-        YARAEngine["YARA Multi-Vector Signature Rules"]
-        OLEToolsEngine["OLETools VBA Macro Dissector"]
-        PEFileEngine["PEFile Entropy & Imphash Inspector"]
-        PyPDFEngine["PyPDF Stream & Exploit Decoder"]
-        ClamAVEngine["ClamAV Antivirus Daemon"]
-    end
+ subgraph SandboxTier["Zero-Trust Execution Sandbox (Docker)"]
+ DockerSandbox["sentinel-sandbox:latest<br/>--network none | --read-only | --cap-drop ALL"]
+ YARAEngine["YARA Multi-Vector Signature Rules"]
+ OLEToolsEngine["OLETools VBA Macro Dissector"]
+ PEFileEngine["PEFile Entropy & Imphash Inspector"]
+ PyPDFEngine["PyPDF Stream & Exploit Decoder"]
+ ClamAVEngine["ClamAV Antivirus Daemon"]
+ end
 
-    subgraph InferenceTier["Large Language Model Inference"]
-        OllamaDaemon["Ollama Daemon (:11434)"]
-        PrimaryLLM["Primary: deepseek-v4.1-flash:cloud"]
-        ClassifierLLM["Classifier: gemma4"]
-    end
+ subgraph InferenceTier["Large Language Model Inference"]
+ OllamaDaemon["Ollama Daemon (:11434)"]
+ PrimaryLLM["Primary: deepseek-v4.1-flash:cloud"]
+ ClassifierLLM["Classifier: gemma4"]
+ end
 
-    WebUI --> ReverseProxy
-    MobileClient --> ReverseProxy
-    MCPClient --> ReverseProxy
-    APIClient --> ReverseProxy
+ WebUI --> ReverseProxy
+ MobileClient --> ReverseProxy
+ MCPClient --> ReverseProxy
+ APIClient --> ReverseProxy
 
-    ReverseProxy --> DaphneServer
-    DaphneServer --> PuppeteerCluster
-    DaphneServer --> RedisNode
-    DaphneServer --> DatabaseNode
+ ReverseProxy --> DaphneServer
+ DaphneServer --> PuppeteerCluster
+ DaphneServer --> RedisNode
+ DaphneServer --> DatabaseNode
 
-    RedisNode <--> CeleryWorker
-    CeleryBeat --> RedisNode
-    CeleryWorker --> DatabaseNode
+ RedisNode <--> CeleryWorker
+ CeleryBeat --> RedisNode
+ CeleryWorker --> DatabaseNode
 
-    CeleryWorker --> EasyOCRNode
-    CeleryWorker --> WhisperNode
-    CeleryWorker --> FAISSNode
+ CeleryWorker --> VietOCRNode
+ CeleryWorker --> WhisperNode
+ CeleryWorker --> FAISSNode
 
-    CeleryWorker --> DockerSandbox
-    DockerSandbox --> YARAEngine
-    DockerSandbox --> OLEToolsEngine
-    DockerSandbox --> PEFileEngine
-    DockerSandbox --> PyPDFEngine
-    DockerSandbox --> ClamAVEngine
+ CeleryWorker --> DockerSandbox
+ DockerSandbox --> YARAEngine
+ DockerSandbox --> OLEToolsEngine
+ DockerSandbox --> PEFileEngine
+ DockerSandbox --> PyPDFEngine
+ DockerSandbox --> ClamAVEngine
 
-    DaphneServer --> OllamaDaemon
-    CeleryWorker --> OllamaDaemon
-    OllamaDaemon --> PrimaryLLM
-    OllamaDaemon --> ClassifierLLM
+ DaphneServer --> OllamaDaemon
+ CeleryWorker --> OllamaDaemon
+ OllamaDaemon --> PrimaryLLM
+ OllamaDaemon --> ClassifierLLM
 ```
 
 ---
@@ -142,57 +144,57 @@ The platform evaluates artifacts across six dedicated investigation vectors, agg
 
 ```mermaid
 flowchart LR
-    subgraph Ingestion["Input Ingestion Layer"]
-        InPhone["Telephony / MSISDN"]
-        InBank["Financial Account"]
-        InWeb["Domain / URL"]
-        InMedia["Visual Media (Images)"]
-        InAudio["Acoustic Audio (.wav/.mp3)"]
-        InFile["Executable / Document File"]
-    end
+ subgraph Ingestion["Input Ingestion Layer"]
+ InPhone["Telephony / MSISDN"]
+ InBank["Financial Account"]
+ InWeb["Domain / URL"]
+ InMedia["Visual Media (Images)"]
+ InAudio["Acoustic Audio (.wav/.mp3)"]
+ InFile["Executable / Document File"]
+ end
 
-    subgraph Engines["Vector Processing Modules"]
-        ModPhone["Phone Pipeline<br/>E.164 Normalize + Blacklist"]
-        ModBank["Financial Pipeline<br/>VietQR Resolution + Fraud DB"]
-        ModWeb["Web Intelligence<br/>DNS/MX + WHOIS + Puppeteer"]
-        ModMedia["Vision Pipeline<br/>EasyOCR CUDA + QR Matrix"]
-        ModAudio["Acoustic Pipeline<br/>Faster-Whisper CUDA + Voice Intel"]
-        ModFile["Zero-Trust Sandbox<br/>Docker + YARA + PEFile + ClamAV"]
-    end
+ subgraph Engines["Vector Processing Modules"]
+ ModPhone["Phone Pipeline<br/>E.164 Normalize + Blacklist"]
+ ModBank["Financial Pipeline<br/>VietQR Resolution + Fraud DB"]
+ ModWeb["Web Intelligence<br/>DNS/MX + WHOIS + Puppeteer"]
+ ModMedia["Vision Pipeline<br/>VietOCR + QR Matrix"]
+ ModAudio["Acoustic Pipeline<br/>Faster-Whisper CUDA + Voice Intel"]
+ ModFile["Zero-Trust Sandbox<br/>Docker + YARA + PEFile + ClamAV"]
+ end
 
-    subgraph Synthesis["Intelligence Aggregation & LLM Reasoning"]
-        Aggregator["Threat Intelligence Aggregator"]
-        RAGIndex["FAISS Vector Search<br/>Local Knowledge Base"]
-        LLMEval["Ollama Reasoning Engine<br/>DeepSeek-v4.1-Flash / Gemma4"]
-    end
+ subgraph Synthesis["Intelligence Aggregation & LLM Reasoning"]
+ Aggregator["Threat Intelligence Aggregator"]
+ RAGIndex["FAISS Vector Search<br/>Local Knowledge Base"]
+ LLMEval["Ollama Reasoning Engine<br/>DeepSeek-v4.1-Flash / Gemma4"]
+ end
 
-    subgraph Verdict["Standardized Verdict"]
-        Score["Risk Score (0 - 100)"]
-        Badge["Threat Level (SAFE / WARNING / CRITICAL)"]
-        Guidance["Actionable Remediation Guidance"]
-    end
+ subgraph Verdict["Standardized Verdict"]
+ Score["Risk Score (0 - 100)"]
+ Badge["Threat Level (SAFE / WARNING / CRITICAL)"]
+ Guidance["Actionable Remediation Guidance"]
+ end
 
-    InPhone --> ModPhone
-    InBank --> ModBank
-    InWeb --> ModWeb
-    InMedia --> ModMedia
-    InAudio --> ModAudio
-    InFile --> ModFile
+ InPhone --> ModPhone
+ InBank --> ModBank
+ InWeb --> ModWeb
+ InMedia --> ModMedia
+ InAudio --> ModAudio
+ InFile --> ModFile
 
-    ModPhone --> Aggregator
-    ModBank --> Aggregator
-    ModWeb --> Aggregator
-    ModMedia --> Aggregator
-    ModAudio --> Aggregator
-    ModFile --> Aggregator
+ ModPhone --> Aggregator
+ ModBank --> Aggregator
+ ModWeb --> Aggregator
+ ModMedia --> Aggregator
+ ModAudio --> Aggregator
+ ModFile --> Aggregator
 
-    Aggregator --> RAGIndex
-    RAGIndex --> LLMEval
-    Aggregator --> LLMEval
+ Aggregator --> RAGIndex
+ RAGIndex --> LLMEval
+ Aggregator --> LLMEval
 
-    LLMEval --> Score
-    LLMEval --> Badge
-    LLMEval --> Guidance
+ LLMEval --> Score
+ LLMEval --> Badge
+ LLMEval --> Guidance
 ```
 
 ### 2.1 Vector Analysis Capabilities
@@ -201,28 +203,28 @@ flowchart LR
 - **Domain & Web Intelligence**: Inspects DNS MX records, domain age (WHOIS), SSL reputation, and ScamAdviser / Trustpilot metrics via SSRF-isolated relays.
 - **Email & Messaging Forensics**: Dissects `.eml` and text messages, validating SPF, DKIM, and DMARC DNS alignment to identify spoofed corporate or government origins.
 - **Multi-Modal AI Analysis**:
-  - **Audio Streams**: Acoustic transcription via `Faster-Whisper` running on NVIDIA CUDA followed by psychological manipulation and urgency indicator extraction.
-  - **Visual Media**: Image OCR via `EasyOCR` (GPU accelerated) combined with QR code matrix decoding and phishing banner classification.
+ - **Audio Streams**: Acoustic transcription via `Faster-Whisper` running on NVIDIA CUDA followed by psychological manipulation and urgency indicator extraction.
+ - **Visual Media**: Image OCR via `VietOCR` (Vietnamese Transformer running in dedicated venv via `ocr_bridge.py`) combined with QR code matrix decoding and phishing banner classification.
 - **Malware & APK Sandbox**: Dissects Windows binaries and Android APK packages in isolated Docker environments using YARA rules, PEFile, and ClamAV.
 - **Social Engineering & Crypto Forensics**: Tracks Telegram channels, Zalo groups, fake VNeID portals, and suspicious crypto wallet addresses.
 
 ### 2.2 Zero-Trust Local Malware Sandbox Engine
 Replaces third-party external dependencies with an entirely isolated on-premise containment engine:
 - **Containment Model**: Every suspicious file is mounted read-only inside an ephemeral container (`sentinel-sandbox:latest`) with strict enforcement:
-  - `--network none`: Complete network isolation. Zero external telemetry or outbound egress.
-  - `--read-only`: Read-only root filesystem prevents modification or persistent writes.
-  - `--tmpfs /tmp:rw,size=256m,mode=1777`: Bounded writable scratch space (needed for archive unpacking / AV temp files) that never persists.
-  - `--cap-drop ALL`: Drops all Linux kernel capabilities.
-  - `--security-opt=no-new-privileges:true`: Prevents privilege escalation.
-  - `--memory 1g --cpus 2.0 --pids-limit 64`: Throttles resource abuse and prevents fork bombs.
+ - `--network none`: Complete network isolation. Zero external telemetry or outbound egress.
+ - `--read-only`: Read-only root filesystem prevents modification or persistent writes.
+ - `--tmpfs /tmp:rw,size=256m,mode=1777`: Bounded writable scratch space (needed for archive unpacking / AV temp files) that never persists.
+ - `--cap-drop ALL`: Drops all Linux kernel capabilities.
+ - `--security-opt=no-new-privileges:true`: Prevents privilege escalation.
+ - `--memory 1g --cpus 2.0 --pids-limit 64`: Throttles resource abuse and prevents fork bombs.
 
-  > The long-running daemon (`sentinel-sandbox-daemon`, port 5005) runs with `--read-only`, `--security-opt=no-new-privileges:true`, and tmpfs mounts (`mode=1777`) for `/tmp` + `/var/run/clamav` (the latter lets the ClamAV daemon bind its socket); because it must accept inbound HTTP it keeps the default bridge network (no egress is performed by the analyzer).
+ > The long-running daemon (`sentinel-sandbox-daemon`, port 5005) runs with `--read-only`, `--security-opt=no-new-privileges:true`, and tmpfs mounts (`mode=1777`) for `/tmp` + `/var/run/clamav` (the latter lets the ClamAV daemon bind its socket); because it must accept inbound HTTP it keeps the default bridge network (no egress is performed by the analyzer).
 - **Multi-Engine Static & Heuristic Dissection**:
-  - **YARA Engine**: Scans binary patterns for ransomware extortion notes, process injection calls, and obfuscated droppers.
-  - **OLETools (`olevba`)**: Dissects VBA macro streams in `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm` files to detect `Auto_Open`, `Shell()`, and `WScript.Shell`.
-  - **PEFile Engine**: Computes `imphash`, analyzes section Shannon entropy, and flags critical injection APIs (`VirtualAllocEx`, `WriteProcessMemory`, `CreateRemoteThread`).
-  - **PyPDF Dissection**: Flags `/Launch` system execution commands, `/EmbeddedFiles` droppers, and `/JS` JavaScript streams.
-  - **ClamAV Engine**: Cross-references against updated open-source antivirus definitions.
+ - **YARA Engine**: Scans binary patterns for ransomware extortion notes, process injection calls, and obfuscated droppers.
+ - **OLETools (`olevba`)**: Dissects VBA macro streams in `.doc`, `.docx`, `.xls`, `.xlsx`, `.xlsm` files to detect `Auto_Open`, `Shell()`, and `WScript.Shell`.
+ - **PEFile Engine**: Computes `imphash`, analyzes section Shannon entropy, and flags critical injection APIs (`VirtualAllocEx`, `WriteProcessMemory`, `CreateRemoteThread`).
+ - **PyPDF Dissection**: Flags `/Launch` system execution commands, `/EmbeddedFiles` droppers, and `/JS` JavaScript streams.
+ - **ClamAV Engine**: Cross-references against updated open-source antivirus definitions.
 
 ### 2.3 Hardened Puppeteer Headless Web Cluster
 - **Anti-SSRF Isolation**: Validates all target hostnames and DNS resolutions to block access to private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.169.254`).
@@ -234,37 +236,37 @@ Exposes Sentinel threat tools directly to external AI agents, Claude Desktop, an
 
 ```mermaid
 flowchart TD
-    subgraph Clients["User & Agent Clients"]
-        WebChat["Web AI Assistant (/ai-assistant/)"]
-        ClaudeDesk["Claude Desktop / MCP Client Host"]
-    end
+ subgraph Clients["User & Agent Clients"]
+ WebChat["Web AI Assistant (/ai-assistant/)"]
+ ClaudeDesk["Claude Desktop / MCP Client Host"]
+ end
 
-    subgraph MCPGateway["Protocol Router & SSE Gateway"]
-        SSEStream["SSE Event Stream (:8001/api/v1/mcp/sse/)"]
-        JSONRPC["JSON-RPC Message Relay (:8001/api/v1/mcp/messages/)"]
-    end
+ subgraph MCPGateway["Protocol Router & SSE Gateway"]
+ SSEStream["SSE Event Stream (:8001/api/v1/mcp/sse/)"]
+ JSONRPC["JSON-RPC Message Relay (:8001/api/v1/mcp/messages/)"]
+ end
 
-    subgraph Tools["Exposed Forensic MCP Tools"]
-        ToolPhone["check_phone"]
-        ToolURL["check_url_or_domain"]
-        ToolBank["check_bank_account"]
-        ToolMsg["analyze_message"]
-        ToolEmail["check_email_sender"]
-        ToolThreat["lookup_scam_db"]
-        ToolTrends["get_scam_radar_trends"]
-        ToolFull["scan_full_incident"]
-    end
+ subgraph Tools["Exposed Forensic MCP Tools"]
+ ToolPhone["check_phone"]
+ ToolURL["check_url_or_domain"]
+ ToolBank["check_bank_account"]
+ ToolMsg["analyze_message"]
+ ToolEmail["check_email_sender"]
+ ToolThreat["lookup_scam_db"]
+ ToolTrends["get_scam_radar_trends"]
+ ToolFull["scan_full_incident"]
+ end
 
-    subgraph Engine["Ollama / DeepSeek LLM"]
-        Reasoning["Reasoning & Synthesis (DeepSeek-v4.1-Flash)"]
-    end
+ subgraph Engine["Ollama / DeepSeek LLM"]
+ Reasoning["Reasoning & Synthesis (DeepSeek-v4.1-Flash)"]
+ end
 
-    WebChat --> SSEStream
-    ClaudeDesk --> SSEStream
-    SSEStream --> JSONRPC
-    JSONRPC --> Tools
-    Tools --> Reasoning
-    Reasoning --> SSEStream
+ WebChat --> SSEStream
+ ClaudeDesk --> SSEStream
+ SSEStream --> JSONRPC
+ JSONRPC --> Tools
+ Tools --> Reasoning
+ Reasoning --> SSEStream
 ```
 
 - **Discovery Endpoint**: `GET /api/v1/mcp/`
@@ -286,7 +288,7 @@ flowchart TD
 | **Hardware Acceleration** | NVIDIA CUDA GPU (Compute Capability 7.5+), cuDNN |
 | **Malware Sandbox** | Docker Isolated Ephemeral Containers, YARA, OLETools, PEFile, PyPDF, ClamAV |
 | **Browser Cluster** | Puppeteer Extra, Chromium (Headless), Stealth Plugin, Anti-SSRF Relay |
-| **AI & Neural Computing** | Ollama SDK, PyTorch 2.x CUDA, FAISS (`nomic-embed-text-v1`), Faster-Whisper, EasyOCR |
+| **AI & Neural Computing** | Ollama SDK, PyTorch 2.x CUDA, FAISS (`nomic-embed-text-v1`), Faster-Whisper, VietOCR |
 | **Process Manager** | PM2 (Production Ecosystem with Dynamic Path Resolution) |
 | **Security & Auth** | Cloudflare Turnstile, Django-OTP (TOTP/Email MFA), Google OAuth2, WhiteNoise |
 
@@ -346,16 +348,20 @@ Interactive OpenAPI and Swagger documentation:
 ```bash
 # Ubuntu / Debian
 sudo apt-get update && sudo apt-get install -y \
-  python3.11 python3.11-venv python3-pip \
-  mariadb-server redis-server clamav clamav-daemon \
-  docker.io docker-compose-v2 \
-  chromium-browser chromium-chromedriver \
-  nodejs npm ffmpeg git
+ python3.11 python3.11-venv python3-pip \
+ mariadb-server redis-server clamav clamav-daemon \
+ docker.io docker-compose-v2 \
+ chromium-browser chromium-chromedriver \
+ nodejs npm ffmpeg git
 
 # Start core services
 sudo systemctl enable --now mariadb redis-server docker clamav-daemon
 sudo chmod 666 /var/run/docker.sock
 ```
+
+> **GPU Acceleration is Optional** (accelerates Whisper, VietOCR, and embeddings). Without GPU, set:
+> `WHISPER_DEVICE=cpu`, `VIETOCR_DEVICE=cpu`, `VECTOR_DB_USE_GPU=False`.
+> `tesseract-ocr` (optional fallback): `sudo apt-get install -y tesseract-ocr tesseract-ocr-vie`.
 
 ### 5.2 Environment Configuration (`.env`)
 Create `backend/.env`:
@@ -384,8 +390,13 @@ OLLAMA_BASE_URL=http://localhost:11434
 LLM_MODEL=deepseek-v4.1-flash:cloud
 SMALL_MODEL=gemma4:31b-cloud
 
-# GPU Acceleration
-EASYOCR_GPU=True
+# OCR engine: VietOCR runs in an ISOLATED venv (.venv-ocr) via IPC bridge/service (see 5.4)
+OCR_ENGINE=vietocr # vietocr | tesseract
+VIETOCR_DEVICE=auto # auto (GPU if available) | cpu | cuda:0
+OCR_SERVICE_URL=http://127.0.0.1:5010 # persistent OCR service (recommended); empty = subprocess bridge
+OCR_SERVICE_PORT=5010
+
+# Whisper / embeddings
 WHISPER_DEVICE=cuda
 WHISPER_MODEL_SIZE=small
 VECTOR_DB_USE_GPU=True
@@ -406,10 +417,10 @@ EMAIL_HOST_PASSWORD=<smtp_password>
 DEFAULT_FROM_EMAIL=ShieldCall VN Support <noreply@<your-domain>.com>
 ```
 
-### 5.2.1 Object storage (S3-compatible)
+### 5.2.1 Object Storage (S3-Compatible)
 
-Lưu media (ảnh cover, avatar, biên lai…) lên object storage để **an toàn & dễ mở rộng**.
-Backend dùng `django-storages` + `boto3` (đã có trong `backend/requirements.txt`). Bật bằng env:
+Store user uploads and static assets (cover images, avatars, report receipts) on object storage for high availability and elastic scalability.
+Backend uses `django-storages` with `boto3` (included in `backend/requirements.txt`). Configure via `.env`:
 
 ```bash
 USE_S3_MEDIA=true
@@ -418,36 +429,34 @@ AWS_ACCESS_KEY_ID=<key>
 AWS_SECRET_ACCESS_KEY=<secret>
 AWS_STORAGE_BUCKET_NAME=shieldcall
 AWS_S3_REGION_NAME=us-east-1
-AWS_S3_ENDPOINT_URL=http://100.124.226.59:30900   # endpoint API (nhanh qua Tailscale)
-AWS_S3_CUSTOM_DOMAIN=s3.fptoj.com/shieldcall       # domain công khai cho URL media/static
+AWS_S3_ENDPOINT_URL=http://100.124.226.59:30900 # Direct S3 API endpoint (accelerated via Tailscale)
+AWS_S3_CUSTOM_DOMAIN=s3.fptoj.com/shieldcall # Public CDN domain for media and static assets
 AWS_S3_ADDRESSING_STYLE=path
 AWS_S3_URL_PROTOCOL=https:
 AWS_QUERYSTRING_AUTH=false
 AWS_DEFAULT_ACL=public-read
 ```
 
-- **100% object storage**: khi bật, **media & static đều lưu trên S3** — upload mới **không ghi file cục bộ**
-  (`MEDIA_URL`/`STATIC_URL` trỏ `https://s3.fptoj.com/shieldcall/…`).
-- Chỉ mục RAG (FAISS) là artifact hệ thống, lưu tại `backend/vector_store/` (không phải media).
-- `USE_S3_MEDIA=false`/`USE_S3_STATIC=false` → quay về `FileSystemStorage`/Whitenoise (không phá vận hành).
-- **Đồng bộ media lên S3** (backfill + chạy định kỳ qua Celery Beat `sync-media-to-s3-daily`):
+- **100% Object Storage**: When enabled, **both media and static assets are persisted to S3**. New uploads write directly to remote storage without local filesystem persistence (`MEDIA_URL` and `STATIC_URL` resolve to `https://s3.fptoj.com/shieldcall/...`).
+- System RAG indices (FAISS) remain classified as protected internal artifacts located at `backend/vector_store/` (isolated from public media).
+- Setting `USE_S3_MEDIA=false` and `USE_S3_STATIC=false` falls back seamlessly to `FileSystemStorage` and Whitenoise without service disruption.
+- **Media Synchronization & Backfill** (scheduled periodically via Celery Beat `sync-media-to-s3-daily`):
 
 ```bash
-cd backend && python manage.py sync_media_to_s3 --dry-run   # xem trước
-cd backend && python manage.py collectstatic --noinput       # đẩy static lên S3
+cd backend && python manage.py sync_media_to_s3 --dry-run # Preview synchronization diff
+cd backend && python manage.py collectstatic --noinput # Push static assets to S3
 ```
 
-- Trạng thái storage: `GET /api/v1/trust/storage/` · Trang công khai: `/trust/`.
-- **Backup chỉ mục RAG lên S3** (quan trọng, tự khôi phục khi thiếu file cục bộ):
+- Storage Telemetry: Query endpoint `GET /api/v1/trust/storage/` or view public status page at `/trust/`.
+- **RAG Vector Store Backup to S3** (automated replication with cold-start self-recovery):
 
 ```bash
-cd backend && python manage.py backup_vector_store    # sao lưu vector_store/ lên S3
-# Tự động: sau mỗi rebuild RAG + Celery Beat 'backup-vector-store-6h'
+cd backend && python manage.py backup_vector_store # Replicate vector_store/ to private S3 bucket
+# Automated: Executed after every RAG rebuild and scheduled every 6 hours via Celery Beat
 ```
 
-- **Tối ưu RAG/vector DB**: cache truy vấn LRU, embedding tăng dần (chỉ embed tài liệu mới/đổi),
-  thread-safe + tự nạp lại khi index đổi, dedup kết quả. Cấu hình: `VECTOR_DB_QUERY_CACHE`, `VECTOR_DB_SCORE_THRESHOLD`, `VECTOR_DB_EMBED_BATCH`.
-- **Quản trị S3 từ xa bằng rclone** (client chuẩn):
+- **RAG & Vector DB Optimization**: Features LRU query cache (latency reduced from 16.7s to 0.0001s), content-hash incremental embeddings (rebuild speedup of 25x), thread-safe locks, and auto-reload on mtime changes. Configured via `VECTOR_DB_QUERY_CACHE`, `VECTOR_DB_SCORE_THRESHOLD`, `VECTOR_DB_EMBED_BATCH`.
+- **Remote S3 Management via rclone** (industry-standard CLI client):
 
 ```bash
 sudo apt-get install -y rclone
@@ -460,11 +469,11 @@ sudo apt-get install -y rclone
 # endpoint = http://127.0.0.1:30900
 # region = us-east-1
 # force_path_style = true
-rclone lsd acm-s3:                 # liệt kê bucket
-rclone sync backend/media acm-s3:shieldcall   # đồng bộ media lên S3
+rclone lsd acm-s3: # List available buckets
+rclone sync backend/media acm-s3:shieldcall # Sync local media to S3
 ```
 
-> `python manage.py seed_vn_knowledge` sẽ đẩy ảnh cover (nếu có trong `backend/static/knowledge_images/`) lên S3.
+> Executing `python manage.py seed_vn_knowledge` pushes featured article covers from `backend/static/knowledge_images/` directly to S3.
 
 ### 5.3 Build the Docker Malware Sandbox Image
 ```bash
@@ -472,24 +481,41 @@ docker build -t sentinel-sandbox:latest ./backend/sandbox
 ```
 
 ### 5.4 Install Dependencies & Build Assets
-```bash
-# Python Virtual Environment
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
 
-# Database Migrations & Static Files
+Repository structure: `backend/` (Django, Celery, Docker sandbox, OCR bridge), `frontend/` (Next.js 16), `puppeteer_host/` (TypeScript browser cluster at repository root).
+
+```bash
+# 1) Primary Python Virtual Environment (Backend). Requires Python 3.11:
+python3.11 -m venv .venv
+.venv/bin/pip install -U pip
+.venv/bin/pip install -r backend/requirements.txt
+
+# 2) Dedicated Isolated OCR Virtual Environment (VietOCR):
+# Isolates dependencies from the primary venv to eliminate conflicts (albumentations/opencv/torch).
+.venv/bin/python -m venv .venv-ocr
+.venv-ocr/bin/pip install -U pip
+# Install PyTorch: Select CPU or matching CUDA build (e.g. CUDA 13.0):
+.venv-ocr/bin/pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+.venv-ocr/bin/pip install -r backend/requirements-ocr.txt # Installs vietocr
+
+# 3) Database Migrations, Static Files & Threat Knowledge Seeding:
 cd backend
 python manage.py migrate
 python manage.py collectstatic --noinput
+python manage.py seed_vn_knowledge # Optional: Ingests 18 domestic intelligence articles into RAG
+cd ..
 
-# Build Tailwind CSS Assets
-npm --prefix theme/static_src install
-npm --prefix theme/static_src run build
+# 4) Puppeteer Headless Cluster (TypeScript v2 at repository root):
+cd puppeteer_host && npm install && npm run build && cd ..
 
-# Install Puppeteer Node Dependencies
-cd scripts/puppeteer_host && npm install && cd ../..
+# 5) Frontend Web Application (Next.js 16 App Router):
+cd frontend && npm install && npm run build && cd ..
+
+# 6) Zero-Trust Docker Malware Sandbox Container Image:
+docker build -t sentinel-sandbox:latest ./backend/sandbox
 ```
+
+> **Dedicated OCR Isolation:** The primary `.venv` does NOT install heavy computer vision stacks. OCR operations execute through `backend/scripts/ocr_bridge.py` delegating to `.venv-ocr` (auto-detects `../.venv-ocr/bin/python`; override via `OCR_BRIDGE_PY`). `.venv-ocr/` is ignored by git. Set `VIETOCR_DEVICE=auto` for automatic GPU acceleration. Technical details and CER benchmarks: `docs/OCR_VIETNAMESE.md`.
 
 ### 5.5 Process Management via PM2
 The system is managed via [ecosystem.config.js](./ecosystem.config.js):
@@ -508,9 +534,11 @@ pm2 logs --lines 50
 
 Managed cluster processes (configurable via `.env` or system environment variables):
 - `pkv-web`: ASGI server handling HTTP requests and WebSocket/SSE streams (binds to `${WEB_HOST}:${WEB_PORT}`, defaults to `0.0.0.0:8001`).
+- `pkv-frontend`: Next.js 16.4.0 App Router cluster serving production web application (binds to `0.0.0.0:3000`).
 - `pkv-celery`: Multi-threaded Celery worker handling CUDA OCR, speech transcription, and sandbox jobs (concurrency configured via `CELERY_CONCURRENCY`).
-- `pkv-celery-beat`: Periodic task scheduler.
-- `pkv-puppeteer`: Headless Chromium render cluster with SSRF protection (binds to `PUPPETEER_HOST_PORT`, defaults to port `3010`).
+- `pkv-celery-beat`: Periodic task scheduler (RAG sync, S3 backups, daily threat analytics).
+- `pkv-puppeteer`: Headless Chromium render cluster with multi-layer SSRF protection (binds to `PUPPETEER_HOST_PORT`, defaults to port `3010`).
+- `pkv-ocr`: Persistent VietOCR OCR service (runs in isolated `.venv-ocr`; binds `OCR_SERVICE_PORT`, default `5010`) — keeps the model warm to avoid ~8s reload per image.
 
 ---
 
@@ -519,22 +547,33 @@ Managed cluster processes (configurable via `.env` or system environment variabl
 Execute test suites to validate database integrity, LLM reasoning, sandbox analysis, and API endpoints:
 
 ```bash
-# 1. Validate Ollama Integration & Model Readiness
-.venv/bin/python scripts/test_ollama.py
+# --- Backend Validation ---
+.venv/bin/python backend/manage.py check
+.venv/bin/python backend/manage.py test api.ai_chat.tests # AI Chat & Session streaming tests
+.venv/bin/python backend/manage.py test api.core.tests # Core scanning & trust telemetry
 
-# 2. Execute Backend API Integration Suite
-.venv/bin/python scripts/test_api.py
+# --- Malware Sandbox (Requires Docker with sentinel-sandbox image) ---
+.venv/bin/python backend/manage.py test api.core.tests.test_sandbox_and_puppeteer
 
-# 3. Execute Django Unit Tests
-.venv/bin/python backend/manage.py test api.ai_chat.tests
+# --- Frontend Verification ---
+cd frontend && npx tsc --noEmit && npx oxlint && cd ..
 
-# 4. Threshold/ROC evaluation on the labelled VN dataset (reproducible)
-.venv/bin/python backend/scripts/eval/evaluate_thresholds.py   # → docs/EVAL_THRESHOLDS.md
+# --- Puppeteer Headless Host (26/26 Deep Test Suite) ---
+cd puppeteer_host && npm test && cd ..
 
-# 5. Generic evaluator + labelling tooling (phone/domain/AI)
-.venv/bin/python backend/scripts/eval/evaluate_generic.py --dataset <file.jsonl> --scorer <message|domain_lookalike|field>
+# --- OCR Engine (VietOCR Character Error Rate Evaluation) ---
+.venv/bin/python backend/scripts/ocr_compare.py --image shot.png --truth shot.txt
+
+# --- Decision Threshold & ROC Evaluation (Reproducible, GPU optional) ---
+.venv/bin/python backend/scripts/eval/evaluate_thresholds.py # Results output to docs/EVAL_THRESHOLDS.md
+.venv/bin/python backend/scripts/eval/evaluate_generic.py --dataset <file.jsonl> \
+ --scorer <message|domain_lookalike|field>
 .venv/bin/python backend/scripts/eval/cohen_kappa.py --csv backend/scripts/eval/labels_agreement.csv
-#    Hướng dẫn từng bước: docs/EVAL_GUIDE.md
+# Step-by-step guidance available in docs/EVAL_GUIDE.md
+
+# --- Service Readiness & Smoke Tests ---
+.venv/bin/python backend/scripts/test_ollama.py
+.venv/bin/python backend/scripts/test_api.py
 ```
 
 ---
@@ -542,8 +581,8 @@ Execute test suites to validate database integrity, LLM reasoning, sandbox analy
 ## 7. License & Authorship
 
 Copyright (c) 2026 **Sentinel Team**. This project is free software licensed under the
-**GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)** — see `LICENSE`.
+**GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)**: see `LICENSE`.
 Anyone running a modified version on a public server must offer the Corresponding Source
 to remote users (AGPL §13); the canonical source is this repository.
-Third-party components keep their own licenses — full compatibility matrix in
+Third-party components retain their respective upstream licenses: full compatibility matrix in
 `docs/LEGAL_AND_LICENSE.md`.

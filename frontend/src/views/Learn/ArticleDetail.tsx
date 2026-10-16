@@ -7,6 +7,19 @@ import {api, ApiError, mediaUrl} from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView, Spinner } from '../../components/ui';
+import { TurnstileWidget, getTsToken, resetTurnstile } from '../../components/ScanWidgets';
+import { fmtDate } from '../../lib/date';
+
+interface RelatedArticle {
+  id: number;
+  title: string;
+  slug: string;
+  category: string;
+  category_display?: string;
+  cover_image?: string | null;
+  created_at: string;
+  summary?: string;
+}
 
 interface ArticleDetail {
   id: number;
@@ -14,9 +27,16 @@ interface ArticleDetail {
   content: string;
   category: string;
   category_display?: string;
+  source_type?: string;
+  source_type_display?: string;
+  source_url?: string | null;
   cover_image?: string | null;
   author_name?: string;
   created_at: string;
+  reaction_counts?: ReactionCounts;
+  reactions_count?: number;
+  my_reaction?: string | null;
+  related_articles?: RelatedArticle[];
 }
 
 interface ReactionCounts {
@@ -52,16 +72,6 @@ interface CommentListResp {
 
 const TURNSTILE_SITEKEY = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
 
-function fmtDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  } catch {
-    return '';
-  }
-}
-
 /* Port từ PKV/templates/Learning/article_detail.html.
  * API: GET /articles/:slug/, POST /learn/articles/:slug/reaction/,
  * GET+POST /learn/articles/:slug/comments/, POST .../comments/:id/reaction/ (upvote/downvote). */
@@ -78,6 +88,7 @@ export default function ArticleDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [replyToId, setReplyToId] = useState<number | null>(null);
   const [replyToName, setReplyToName] = useState('');
+  const [commentError, setCommentError] = useState('');
 
   useEffect(() => {
     if (!slug) return;
@@ -85,7 +96,11 @@ export default function ArticleDetail() {
     api
       .get<ArticleDetail>(`/articles/${slug}/`)
       .then((d) => {
-        if (alive) setArticle(d);
+        if (alive) {
+          setArticle(d);
+          if (d.reaction_counts) setCounts(d.reaction_counts);
+          if (d.my_reaction) setMy(d.my_reaction);
+        }
       })
       .catch((e: unknown) => {
         if (alive && e instanceof ApiError && e.status === 404) setNotFound(true);
@@ -171,7 +186,19 @@ export default function ArticleDetail() {
   async function submitComment(e: FormEvent): Promise<void> {
     e.preventDefault();
     if (!slug || submitting || !body.trim()) return;
-    const ts = document.querySelector<HTMLInputElement>('[name=cf-turnstile-response]')?.value || '';
+    /* Dùng widget Turnstile dùng chung (tự nạp script + render). Trước đây form
+     * chỉ có div.cf-turnstile chết mà không nạp script nên token luôn rỗng và
+     * mọi bình luận đều 400. */
+    const ts = getTsToken();
+    if (TURNSTILE_SITEKEY && !ts) {
+      setCommentError('Vui lòng hoàn thành xác minh bảo mật (Anti-Spam).');
+      return;
+    }
+    if (!TURNSTILE_SITEKEY) {
+      setCommentError('Chưa cấu hình xác minh anti-spam (NEXT_PUBLIC_TURNSTILE_SITEKEY).');
+      return;
+    }
+    setCommentError('');
     setSubmitting(true);
     try {
       const data = await api.post<CommentItem>(`/learn/articles/${slug}/comments/`, {
@@ -190,8 +217,13 @@ export default function ArticleDetail() {
       setBody('');
       setReplyToId(null);
       setReplyToName('');
-    } catch {
-      /* ignore */
+      try {
+        resetTurnstile();
+      } catch {
+        /* ignore */
+      }
+    } catch (e: unknown) {
+      setCommentError(e instanceof Error ? e.message : 'Không gửi được bình luận.');
     } finally {
       setSubmitting(false);
     }
@@ -239,10 +271,25 @@ export default function ArticleDetail() {
       </nav>
 
       <div className="space-y-8 relative">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="px-4 py-1.5 rounded-full bg-brand-500/10 text-brand-400 text-[10px] font-black uppercase tracking-[0.2em] border border-brand-500/10">
             {article.category_display || article.category}
           </span>
+          {article.source_type === 'tinnhiemmang' && (
+            <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-[0.1em] border border-emerald-500/20 flex items-center gap-1.5">
+              <i className="bi bi-shield-check"></i> Tín nhiệm mạng (NCSC)
+            </span>
+          )}
+          {article.source_url && (
+            <a
+              href={article.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1 rounded-full bg-sky-500/10 text-sky-400 text-[10px] font-bold uppercase tracking-[0.1em] border border-sky-500/20 hover:bg-sky-500/20 transition-all flex items-center gap-1.5"
+            >
+              <span>Xem nguồn gốc</span> <i className="bi bi-box-arrow-up-right text-[8px]"></i>
+            </a>
+          )}
           <span className="text-[10px] font-bold text-white/45 uppercase tracking-[0.2em] flex items-center gap-2">
             <i className="bi bi-calendar3"></i> {fmtDate(article.created_at)}
           </span>
@@ -264,13 +311,16 @@ export default function ArticleDetail() {
               {article.author_name || 'ShieldCall Admin'}
             </div>
             <div className="text-[9px] font-bold text-white/35 uppercase tracking-[0.2em] mt-1 flex items-center gap-1.5">
-              <i className="bi bi-patch-check-fill text-brand-500/50"></i> Ban biên tập ShieldCall VN
+              <i className="bi bi-patch-check-fill text-brand-500/50"></i>{' '}
+              {article.source_type === 'tinnhiemmang'
+                ? 'Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC)'
+                : 'Ban biên tập ShieldCall VN'}
             </div>
           </div>
         </div>
       </div>
 
-      {article.cover_image && (
+      {article.cover_image && !/(<img|!\[[^\]]*\]\()/i.test(article.content || '') && (
         <div className="relative">
           <div className="absolute inset-0 bg-brand-500/10 blur-3xl opacity-30 rounded-full"></div>
           <div className="relative aspect-[21/9] rounded-[2.5rem] overflow-hidden bg-slate-900 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
@@ -351,7 +401,10 @@ export default function ArticleDetail() {
                   </button>
                 </div>
               )}
-              {TURNSTILE_SITEKEY && <div className="cf-turnstile" data-sitekey={TURNSTILE_SITEKEY}></div>}
+              <TurnstileWidget />
+              {commentError && (
+                <p className="text-danger-400 text-xs font-bold">{commentError}</p>
+              )}
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[10px] text-white/45">{body.length}/1500</div>
                 <button
@@ -392,7 +445,39 @@ export default function ArticleDetail() {
           </div>
         </div>
 
-        <div>
+        {article.related_articles && article.related_articles.length > 0 && (
+          <div className="space-y-4 pt-4">
+            <div className="text-[10px] font-black text-white/45 uppercase tracking-[0.2em] flex items-center gap-2">
+              <i className="bi bi-grid-fill text-brand-400"></i> BÀI VIẾT LIÊN QUAN
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {article.related_articles.map((rel) => (
+                <Link
+                  key={rel.id}
+                  href={`/learn/${rel.slug}/`}
+                  className="liquid-card p-4 border border-white/5 hover:border-brand-500/30 transition-all group flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-bold text-brand-400 uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20">
+                      {rel.category_display || rel.category}
+                    </span>
+                    <h4 className="text-xs font-bold text-white group-hover:text-brand-300 transition-colors line-clamp-2">
+                      {rel.title}
+                    </h4>
+                  </div>
+                  <div className="text-[10px] text-white/40 mt-3 pt-2 border-t border-white/5 flex items-center justify-between">
+                    <span>{fmtDate(rel.created_at)}</span>
+                    <span className="text-brand-400 font-bold group-hover:translate-x-1 transition-transform">
+                      Đọc tiếp &rarr;
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="pt-4">
           <Link
             href="/learn"
             className="liquid-btn py-3 px-8 text-[11px] bg-white/5 border-white/10 hover:bg-white/10 inline-flex items-center gap-2"

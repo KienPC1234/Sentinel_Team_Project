@@ -1,6 +1,6 @@
 """ShieldCall VN – Trend Views"""
 import logging
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.db.models import Count, Max, Q
 from django.utils import timezone
@@ -31,16 +31,17 @@ class TrendDailyView(APIView):
             qs = qs.filter(scam_type=scam_type)
 
         if not qs.exists():
+            cur_tz = timezone.get_current_timezone()
+            since_start = timezone.make_aware(datetime.combine(since, time.min), cur_tz)
             trends = (
-                Report.objects.filter(created_at__date__gte=since)
-                .values('created_at__date', 'scam_type')
+                Report.objects.filter(created_at__gte=since_start)
+                .values('scam_type')
                 .annotate(count=Count('id'))
-                .order_by('created_at__date')
             )
             return Response({
                 'trends': [
                     {
-                        'date': str(t['created_at__date']),
+                        'date': since.isoformat(),
                         'scam_type': t['scam_type'],
                         'count': t['count'],
                     }
@@ -60,36 +61,40 @@ class TrendHotView(APIView):
         target_filter = request.query_params.get('type', '').strip()
         types = [target_filter] if target_filter in ['phone', 'domain', 'account', 'email'] else ['phone', 'domain', 'account', 'email']
 
+        # Chi dem bao cao DA DUYET (truoc day ca pending/rejected deu len
+        # "hot" public). Gom 1 query/nhom thay vi 1 query/item (N+1).
         results = []
         for t in types:
             hot_items = (
-                Report.objects.filter(target_type=t, created_at__gte=since)
+                Report.objects.filter(target_type=t, status=ReportStatus.APPROVED, created_at__gte=since)
                 .values('target_value', 'scam_type')
                 .annotate(report_count=Count('id'), last_at=Max('created_at'))
                 .order_by('-report_count')[:50]
             )
-            for item in hot_items:
-                rep = (
-                    Report.objects.filter(
-                        target_type=t,
-                        target_value=item['target_value'],
-                        scam_type=item['scam_type'],
-                    )
-                    .select_related('reporter')
-                    .order_by('-created_at')
-                    .first()
-                )
+            hot_list = list(hot_items)
+            rep_map = {}
+            if hot_list:
+                _ors = Q()
+                for _hi in hot_list:
+                    _ors |= Q(target_type=t, target_value=_hi['target_value'], scam_type=_hi['scam_type'])
+                for _rep in Report.objects.filter(
+                    _ors, status=ReportStatus.APPROVED
+                ).select_related('reporter').order_by('-created_at'):
+                    _k = (_rep.target_value, _rep.scam_type)
+                    if _k not in rep_map:
+                        rep_map[_k] = _rep
+            for item in hot_list:
+                rep = rep_map.get((item['target_value'], item['scam_type']))
                 results.append({
                     'id': rep.id if rep else None,
                     'target_type': t,
                     'target_value': item['target_value'],
                     'report_count': item['report_count'],
-                    'risk_change': item['report_count'] * 10,
+                    'risk_change': min(100, item['report_count'] * 10),
                     'scam_type': item['scam_type'],
                     'scam_type_display': rep.get_scam_type_display() if rep else item['scam_type'],
                     'severity': rep.severity if rep else '',
                     'source': 'user' if (rep and rep.reporter_id) else 'scan_ai',
-                    'reporter_name': rep.reporter.username if (rep and rep.reporter) else 'AI Scan',
                     'created_at': item['last_at'].isoformat() if item['last_at'] else '',
                     'created_at_display': item['last_at'].strftime('%d/%m/%Y') if item['last_at'] else '—',
                 })
@@ -106,6 +111,13 @@ class ScamRadarStatsView(APIView):
         try:
             filter_type = request.query_params.get('filter', 'all')
             time_range = request.query_params.get('timeRange', '7d')
+            # Endpoint nang (~30-80 query + quet values toan cuc) ma frontend
+            # poll lien tuc -> cache 120s theo (filter, timeRange).
+            from django.core.cache import cache as _cache
+            _ck = f'radar_stats_v1:{filter_type}:{time_range}'
+            _hit = _cache.get(_ck)
+            if _hit is not None:
+                return Response(_hit)
             now = timezone.now()
 
             if time_range == '24h':
@@ -161,12 +173,14 @@ class ScamRadarStatsView(APIView):
             sensitive_scan_types = {'message', 'qr'}
             sensitive_placeholder = '[Nội dung nhạy cảm đã được ẩn]'
 
+            # Chi xet 10000 bao cao moi nhat de gioi han memory (DB lon dan
+            # ma van dung cho hau het item nong).
             reported_risky_targets = {
                 ((target_type or '').strip(), (target_value or '').strip())
                 for target_type, target_value in Report.objects.filter(
                     status=ReportStatus.APPROVED,
                     target_type__in=['phone', 'account']
-                ).values_list('target_type', 'target_value')
+                ).order_by('-created_at').values_list('target_type', 'target_value')[:10000]
                 if (target_type or '').strip() and (target_value or '').strip()
             }
 
@@ -245,7 +259,6 @@ class ScamRadarStatsView(APIView):
                     'scam_type_display': report.get_scam_type_display(),
                     'severity': report.severity,
                     'severity_display': report.get_severity_display(),
-                    'reporter_name': report.reporter.username if report.reporter else 'Ẩn danh',
                     'source': 'report',
                     'source_display': 'Báo cáo đã duyệt',
                 })
@@ -274,7 +287,6 @@ class ScamRadarStatsView(APIView):
                     'scam_type_display': 'AI phát hiện rủi ro',
                     'severity': 'high' if scan.risk_level == RiskLevel.RED else 'medium',
                     'severity_display': 'Nguy hiểm' if scan.risk_level == RiskLevel.RED else 'Cảnh báo',
-                    'reporter_name': scan.user.username if scan.user else 'Hệ thống',
                     'source': 'scan_ai',
                     'source_display': 'Kết quả quét AI',
                 })
@@ -289,17 +301,26 @@ class ScamRadarStatsView(APIView):
                 labels = [(now - timedelta(days=i)).strftime('%d/%m') for i in range(steps)][::-1]
             elif time_range == '1y':
                 labels = []
+                _base = now.replace(day=1)
                 for i in range(steps):
-                    d = (now.replace(day=1) - timedelta(days=30 * i)).replace(day=1)
-                    labels.append(d.strftime('%m/%Y'))
+                    _m = _base.month - i
+                    _y = _base.year
+                    while _m <= 0:
+                        _m += 12
+                        _y -= 1
+                    labels.append(f'{_m:02d}/{_y}')
                 labels = labels[::-1]
             else:
                 labels = [(now - timedelta(days=i)).strftime('%d/%m') for i in range(steps)][::-1]
 
             def count_interval(qs, interval_idx):
                 if time_range == '1y':
-                    month_cursor = now.replace(day=1) - timedelta(days=30 * interval_idx)
-                    month_start = month_cursor.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                    _m2 = now.month - interval_idx
+                    _y2 = now.year
+                    while _m2 <= 0:
+                        _m2 += 12
+                        _y2 -= 1
+                    month_start = now.replace(year=_y2, month=_m2, day=1, hour=0, minute=0, second=0, microsecond=0)
                     if month_start.month == 12:
                         month_end = month_start.replace(year=month_start.year + 1, month=1)
                     else:
@@ -309,8 +330,11 @@ class ScamRadarStatsView(APIView):
                     hour_end = now - timedelta(hours=interval_idx)
                     hour_start = hour_end - timedelta(hours=1)
                     return qs.filter(created_at__gte=hour_start, created_at__lt=hour_end).count()
-                target_day = (now - timedelta(days=interval_idx)).date()
-                return qs.filter(created_at__date=target_day).count()
+                cur_tz = timezone.get_current_timezone()
+                target_day = (now.astimezone(cur_tz) - timedelta(days=interval_idx)).date()
+                day_start = timezone.make_aware(datetime.combine(target_day, time.min), cur_tz)
+                day_end = timezone.make_aware(datetime.combine(target_day, time.max), cur_tz)
+                return qs.filter(created_at__range=(day_start, day_end)).count()
 
             confirmed_series = []
             ai_series = []
@@ -319,7 +343,7 @@ class ScamRadarStatsView(APIView):
                 confirmed_series.append(count_interval(reports_qs, idx))
                 ai_series.append(count_interval(scans_qs, idx))
 
-            return Response({
+            payload = {
                 'reports_this_week': reports_this_period,
                 'pct_change': pct_change,
                 'new_phones': new_phones,
@@ -333,7 +357,9 @@ class ScamRadarStatsView(APIView):
                         {'label': 'Kết quả quét AI rủi ro', 'data': ai_series, 'borderColor': '#00e5ff'},
                     ],
                 },
-            })
+            }
+            _cache.set(_ck, payload, timeout=120)
+            return Response(payload)
         except Exception as e:
             logger.error(f"Error in ScamRadarStatsView: {e}")
             return Response({'error': str(e)}, status=500)
@@ -471,7 +497,8 @@ class ScanLookupView(APIView):
                 'severity': report.severity,
                 'scam_type': scam_labels.get(report.scam_type, report.scam_type),
                 'scam_type_display': scam_labels.get(report.scam_type, report.scam_type),
-                'reporter_name': report.reporter.username if report.reporter else 'AI Scan',
+                # Khong lo username nguoi bao cao tren endpoint public (truoc day
+                # lo toan bo username; chi giu nhan an danh de dem so nguoi dong gop).
                 'description': report.description or '',
                 'scammer_name': report.scammer_name,
                 'scammer_phone': report.scammer_phone,

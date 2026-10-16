@@ -7,7 +7,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 from django.utils.html import strip_tags
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from django.db.models import Count, F
 from django.core.cache import cache
 from channels.layers import get_channel_layer
@@ -42,6 +42,11 @@ def _broadcast_forum_live_event(event_name: str, payload: dict):
         )
     except Exception as exc:
         logger.warning(f"Forum live broadcast failed ({event_name}): {exc}")
+
+def _sanitize_ai_explanation(text: str) -> str:
+    if not text:
+        return ''
+    return re.sub(r'^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+', '', str(text)).strip()
 
 
 def _soft_hide_post(post, ai_reason: str = ''):
@@ -208,9 +213,12 @@ def daily_trend_aggregation(date_str: str = None):
     else:
         target_date = (timezone.now() - timedelta(days=1)).date()
 
-    # Aggregate reports by scam_type for the given date
+    # Aggregate reports by scam_type for the given date using timezone-aware range
+    tz = timezone.get_current_timezone()
+    day_start = timezone.make_aware(datetime.combine(target_date, time.min), tz)
+    day_end = timezone.make_aware(datetime.combine(target_date, time.max), tz)
     aggregated = (
-        Report.objects.filter(created_at__date=target_date)
+        Report.objects.filter(created_at__range=(day_start, day_end))
         .values('scam_type')
         .annotate(count=Count('id'))
     )
@@ -410,6 +418,78 @@ def send_broadcast_webpush(self, payload: dict, user_ids: list[int] | None = Non
     return {'status': 'queued', 'chunks': len(chunks), 'subscriptions': len(sub_ids)}
 
 
+@shared_task(name='core.admin_broadcast_task', bind=True, max_retries=1)
+def admin_broadcast_task(self, title, message, url='', notification_type='info', send_webpush=True, send_inapp=True):
+    """Gui thong bao broadcast tu admin (bat dong bo).
+
+    Tao thong bao in-app, gui WebSocket cho user dang online, dong thoi
+    phat native WebPush den toan bo thiet bi/trinh duyet da dang ky.
+    """
+    import time
+    from django.contrib.auth import get_user_model
+    from api.core.models import Notification
+    from api.utils.push_service import push_service
+
+    User = get_user_model()
+    title = str(title or '')[:200]
+    message = str(message or '')[:2000]
+    url = str(url or '')[:500]
+    allowed = {'info', 'warning', 'success', 'error'}
+    if notification_type not in allowed:
+        notification_type = 'info'
+
+    # 1. Phat native WebPush den tat ca subscription dang hoat dong
+    webpush_dispatched = False
+    if send_webpush:
+        try:
+            webpush_payload = {
+                'title': title,
+                'body': message,
+                'message': message,
+                'url': url or '/dashboard/',
+                'notification_type': notification_type,
+                'tag': f'sc-{notification_type}-{int(time.time())}',
+                'icon': '/web-app-manifest-192x192.png',
+                'badge': '/favicon-96x96.png',
+            }
+            send_broadcast_webpush.delay(webpush_payload)
+            webpush_dispatched = True
+        except Exception as push_err:
+            logger.warning(f"Failed to dispatch broadcast webpush: {push_err}")
+
+    # 2. Tao in-app notification va ban WebSocket
+    inapp_sent = 0
+    user_ids = []
+    if send_inapp:
+        user_ids = list(User.objects.filter(is_active=True).values_list('id', flat=True))
+        if user_ids:
+            Notification.objects.bulk_create(
+                [Notification(user_id=uid, title=title, message=message,
+                              url=url, notification_type=notification_type)
+                 for uid in user_ids],
+                batch_size=500,
+            )
+            unread_map = dict(
+                Notification.objects.filter(user_id__in=user_ids, is_read=False)
+                .values('user_id').annotate(c=Count('id')).values_list('user_id', 'c')
+            )
+            for uid in user_ids:
+                try:
+                    if push_service._is_user_online(uid):
+                        push_service._send_ws(uid, title, message, url, notification_type,
+                                              unread_map.get(uid, 1))
+                    inapp_sent += 1
+                except Exception:
+                    continue
+
+    return {
+        'status': 'ok',
+        'count': len(user_ids),
+        'inapp_sent': inapp_sent,
+        'webpush_dispatched': webpush_dispatched,
+    }
+
+
 @shared_task(name='core.cleanup_webpush_subscriptions')
 def cleanup_webpush_subscriptions():
     """Maintenance job: clean stale inactive/failed subscriptions."""
@@ -441,6 +521,22 @@ def cleanup_webpush_subscriptions():
 
 # Task alias to support both task names
 shared_task(name='api.core.tasks.cleanup_webpush_subscriptions')(cleanup_webpush_subscriptions.run)
+
+
+def _attach_guardrail(result_json, kind):
+    """Gan evidence + guardrail vao ket qua truoc khi luu DB.
+
+    Chi 1 so task goi apply_guardrail; cac task con lai nho ScanStatusView gan
+    luc doc -> lookup/radar/MCP/lich su thieu bang chung. Helper nay khong bao
+    gio lam hong luong quet.
+    """
+    try:
+        from api.utils.trust_guard import apply_guardrail as _apply_guardrail
+        if isinstance(result_json, dict) and 'guardrail' not in result_json:
+            _apply_guardrail(result_json, kind=kind)
+    except Exception as exc:
+        logger.warning(f"[Guardrail] attach failed ({kind}): {exc}")
+    return result_json
 
 
 def _notify_scan_complete(scan_event, title_suffix=''):
@@ -535,7 +631,7 @@ def perform_scan_task(self, scan_event_id):
                 'ai_notice': ai_notice,
             }
 
-        scan_event.result_json = result
+        scan_event.result_json = _attach_guardrail(result, 'email')
         scan_event.risk_score = result.get('risk_score', 0)
         scan_event.risk_level = result.get('risk_level', RiskLevel.SAFE)
         scan_event.status = ScanStatus.COMPLETED
@@ -736,7 +832,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         elif score >= 20: level = RiskLevel.GREEN
 
         # Map reason to explanation if needed
-        explanation = ai_res.get('explanation') or ai_res.get('reason') or ''
+        explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
         if vision_score > int(ai_res.get('risk_score') or 0) and not ai_res.get('vision_direct') and vision_expl:
             explanation = f"[Vision trực tiếp: {vision_score}/100] {vision_expl} | {explanation}"
 
@@ -770,7 +866,10 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         }
 
         # Save to DB without large annotated images (they bloat the JSON field)
-        scan_event.result_json = {k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')}
+        scan_event.result_json = _attach_guardrail(
+            {k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')},
+            'qr',
+        )
         scan_event.risk_score = score
         scan_event.risk_level = level
         scan_event.status = ScanStatus.COMPLETED
@@ -900,7 +999,7 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
         elif score >= 20:
             level = RiskLevel.GREEN
 
-        explanation = ai_res.get('explanation') or ai_res.get('reason') or ''
+        explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
 
         result = {
             'transcript': transcript,
@@ -917,7 +1016,7 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             'web_context': ai_res.get('web_context', ''),
         }
 
-        scan_event.result_json = result
+        scan_event.result_json = _attach_guardrail(result, 'audio')
         scan_event.risk_score = score
         scan_event.risk_level = level
         scan_event.status = ScanStatus.COMPLETED
@@ -1304,7 +1403,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         final_risk_score = max(ai_res.get('risk_score', 0), network_risk_score)
         
         # Combine networks details
-        explanation = ai_res.get('explanation') or ai_res.get('reason') or ''
+        explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
         if network_details:
              explanation += f"\n\nPhát hiện từ mạng lưới: {', '.join(network_details)}"
 
@@ -1336,7 +1435,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         elif final_risk_score >= 10:
              result['risk_level'] = RiskLevel.GREEN
 
-        scan_event.result_json = result
+        scan_event.result_json = _attach_guardrail(result, 'domain')
         scan_event.risk_score = result['risk_score']
         scan_event.risk_level = result['risk_level']
         scan_event.status = ScanStatus.COMPLETED
@@ -1404,6 +1503,8 @@ def process_forum_report(report_id):
             prompt,
             format_schema=format_schema,
             system_prompt=MODERATION_SYSTEM_PROMPT,
+            # Kiem duyet can noi dung goc de thay bang chung -> allow_pii + audit.
+            allow_pii=True,
         )
         
         # Parse the JSON result
@@ -1523,6 +1624,8 @@ def process_forum_comment_report(report_id):
             prompt,
             format_schema=format_schema,
             system_prompt=MODERATION_SYSTEM_PROMPT,
+            # Kiem duyet can noi dung goc de thay bang chung -> allow_pii + audit.
+            allow_pii=True,
         )
         
         try:
@@ -1906,7 +2009,7 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
 
             if ai_result_data:
                 ai_score = ai_result_data.get('risk_score', 0) or 0
-                ai_explanation = ai_result_data.get('explanation') or ''
+                ai_explanation = _sanitize_ai_explanation(ai_result_data.get('explanation') or '')
                 ai_notice = ai_result_data.get('ai_notice')
                 if ai_notice:
                     send_progress(ai_notice, step="ai_retry_notice")
@@ -1967,7 +2070,10 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             'web_context': (ai_result_data or {}).get('web_context', ''),
         }
 
-        scan_event.result_json = {k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')}
+        scan_event.result_json = _attach_guardrail(
+            {k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')},
+            'message',
+        )
         scan_event.risk_score = final_score
         scan_event.risk_level = level
         scan_event.status = ScanStatus.COMPLETED
@@ -2148,10 +2254,10 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
                     ai_bonus = min(35, int((analysis.get('risk_score', 0) or 0) * 0.45))
                 else:
                     ai_bonus = -10 if int(analysis.get('risk_score', 0) or 0) <= 20 else 0
-                details.extend(analysis.get('indicators', []))
-                ai_explain = analysis.get('explanation', '')
-                if ai_explain:
-                    details.append(f"AI nhận định: {ai_explain}")
+                analysis_indicators = [str(x).strip() for x in (analysis.get('indicators', []) or []) if str(x).strip()]
+                details.extend(analysis_indicators)
+                ai_explain = str(analysis.get('explanation', '') or '').strip()
+                ai_explain = re.sub(r'^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+', '', ai_explain).strip()
         else:
             logger.info(f"[EmailScan] Event {scan_event_id}: Body text too short, skipping AI")
             send_progress("Nội dung email quá ngắn, bỏ qua phân tích AI.", step="ai_skipped")
@@ -2192,8 +2298,23 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
         result_json['analysis_type'] = analysis_type
         result_json['detected_urls'] = email_data.get('urls', [])
         result_json['detected_attachments'] = email_data.get('attachments', [])
+        result_json['extracted_info'] = {
+            'subject': email_data.get('subject', ''),
+            'from': email_data.get('from', ''),
+            'to': email_data.get('to', ''),
+            'url_count': len(email_data.get('urls', [])),
+            'attachment_count': len(email_data.get('attachments', [])),
+        }
         # Include grounded intelligence from AI analysis
         if analysis:
+            ai_clean_exp = str(analysis.get('explanation', '') or '').strip()
+            ai_clean_exp = re.sub(r'^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+', '', ai_clean_exp).strip()
+            result_json['explanation'] = ai_clean_exp
+            result_json['indicators'] = [str(x).strip() for x in (analysis.get('indicators', []) or []) if str(x).strip()]
+            if analysis.get('prevention_measures'):
+                result_json['prevention_measures'] = analysis['prevention_measures']
+            if analysis.get('advice'):
+                result_json['advice'] = analysis['advice']
             result_json['web_sources'] = analysis.get('web_sources', [])
             result_json['web_context'] = analysis.get('web_context', '')
             result_json['searched_urls'] = analysis.get('searched_urls', [])
@@ -2302,7 +2423,7 @@ def perform_file_scan_task(self, scan_event_id, file_path):
                 'script_snippet': script_snippet,
                 'clamav': clamav,
                 'docker_sandbox': docker_sandbox,
-                'ai_explanation': ai_explanation,
+                'ai_explanation': _sanitize_ai_explanation(ai_explanation),
                 'details': details,
                 'summary': f"Kết quả phân tích: {malicious} chỉ số độc hại, {suspicious} bất thường trên hệ thống Sandbox ClamAV.",
                 'engine': 'Sentinel Zero-Trust Local Sandbox',
@@ -3419,7 +3540,8 @@ def score_scamiq_responses_task(self, attempt_id):
                 f"3. Trả về JSON THUẦN: {{\"score\": int, \"comment\": \"string\"}}\n"
             )
             
-            res = generate_response(prompt, tools=[], skip_filter=True)
+            # Cham can cau tra loi goc cua thi sinh -> allow_pii + audit log.
+            res = generate_response(prompt, tools=[], skip_filter=True, allow_pii=True)
             parsed = {}
             try:
                 # Basic JSON extraction if not pure
@@ -3448,20 +3570,20 @@ def score_scamiq_responses_task(self, attempt_id):
             if task_id:
                 _send_task_progress(task_id, 'processing', f'Đã chấm xong {i+1}/{total_q} câu hỏi.', step=1, data={'current': i+1, 'total': total_q})
 
-        # Update attempt
-        attempt.score += additional_score
+        # Update attempt (diem tong khong vuot max_score)
+        attempt.score = min(attempt.max_score, attempt.score + additional_score)
         # Also update correct_count based on AI score (e.g. 7/10 is correct)
         correct_ai = sum(1 for f in final_feedback if f['is_correct'])
         attempt.correct_count += correct_ai
-        
-        # Update difficulty breakdown for these questions
+
+        # Cap nhat breakdown: submit view da dem 'total' cho moi cau (ke ca cau
+        # tu luan) nen o day chi cong 'correct', khong cong 'total' nua. Truoc
+        # day cong ca total lam tong so cau vuot 30 (vd 38/30).
         breakdown = attempt.difficulty_breakdown or {}
         for f in final_feedback:
             diff = str(f.get('difficulty') or 'medium').lower()
-            if diff in breakdown:
-                breakdown[diff]['total'] += 1
-                if f['is_correct']:
-                    breakdown[diff]['correct'] += 1
+            if diff in breakdown and f['is_correct']:
+                breakdown[diff]['correct'] += 1
         attempt.difficulty_breakdown = breakdown
 
         # Recalculate level

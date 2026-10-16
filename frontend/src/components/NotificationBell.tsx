@@ -244,14 +244,14 @@ export default function NotificationBell() {
       >
         <i className="bi bi-bell-fill text-sm leading-none"></i>
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-rose-500 flex items-center justify-center text-[9px] font-black text-white border-2 border-slate-950 px-1 shadow-sm leading-none">
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-rose-500 flex items-center justify-center text-[9px] font-black text-white border-2 border-[var(--sc-night-1)] px-1 shadow-sm leading-none">
             {unread > 99 ? '99+' : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-slate-950/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl z-50 overflow-hidden shadow-2xl ring-1 ring-white/10 sc-pop-in">
+        <div className="absolute right-0 top-full mt-2 w-80 border border-border bg-popover/98 backdrop-blur-xl rounded-2xl z-50 overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] sc-pop-in">
           <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
             <div>
               <p className="text-xs font-black text-white">Thông báo</p>

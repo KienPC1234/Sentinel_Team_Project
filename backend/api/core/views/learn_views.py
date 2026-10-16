@@ -84,7 +84,23 @@ def _serialize_article_comment(comment, request=None):
 
 
 class LessonReactionView(APIView):
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get(self, request, slug):
+        lesson = get_object_or_404(LearnLesson, slug=slug, is_published=True)
+        counts = {
+            k: LessonReaction.objects.filter(lesson=lesson, reaction_type=k).count()
+            for k in LearnReactionType.values
+        }
+        my_reaction = None
+        if request.user.is_authenticated:
+            my_reaction = LessonReaction.objects.filter(
+                lesson=lesson, user=request.user
+            ).values_list('reaction_type', flat=True).first()
+        return Response({'counts': counts, 'my_reaction': my_reaction, 'total': sum(counts.values())})
 
     def post(self, request, slug):
         reaction_type = request.data.get('reaction_type', LearnReactionType.LIKE)
@@ -107,11 +123,27 @@ class LessonReactionView(APIView):
             for k in LearnReactionType.values
         }
         my_reaction = LessonReaction.objects.filter(lesson=lesson, user=request.user).values_list('reaction_type', flat=True).first()
-        return Response({'action': action, 'counts': counts, 'my_reaction': my_reaction})
+        return Response({'action': action, 'counts': counts, 'my_reaction': my_reaction, 'total': sum(counts.values())})
 
 
 class ArticleReactionView(APIView):
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get(self, request, slug):
+        article = get_object_or_404(Article, slug=slug, is_published=True)
+        counts = {
+            k: ArticleReaction.objects.filter(article=article, reaction_type=k).count()
+            for k in LearnReactionType.values
+        }
+        my_reaction = None
+        if request.user.is_authenticated:
+            my_reaction = ArticleReaction.objects.filter(
+                article=article, user=request.user
+            ).values_list('reaction_type', flat=True).first()
+        return Response({'counts': counts, 'my_reaction': my_reaction, 'total': sum(counts.values())})
 
     def post(self, request, slug):
         reaction_type = request.data.get('reaction_type', LearnReactionType.LIKE)
@@ -134,7 +166,7 @@ class ArticleReactionView(APIView):
             for k in LearnReactionType.values
         }
         my_reaction = ArticleReaction.objects.filter(article=article, user=request.user).values_list('reaction_type', flat=True).first()
-        return Response({'action': action, 'counts': counts, 'my_reaction': my_reaction})
+        return Response({'action': action, 'counts': counts, 'my_reaction': my_reaction, 'total': sum(counts.values())})
 
 
 class ArticleCommentListCreateView(APIView):
@@ -246,11 +278,16 @@ class LearnLessonListView(APIView):
 
         category = request.query_params.get('category')
         qs = LearnLesson.objects.filter(is_published=True)
-        if category:
+        if category and category != 'all':
             qs = qs.filter(category=category)
 
+        qs = qs.annotate(
+            quizzes_total=Count('quizzes', distinct=True),
+            scenarios_total=Count('scenarios', distinct=True),
+            reactions_total=Count('reactions', distinct=True),
+        )
         data = []
-        for l in qs.order_by('-created_at')[:50]:
+        for l in qs.order_by('-created_at')[:100]:
             data.append({
                 'id': l.id,
                 'title': l.title,
@@ -260,8 +297,9 @@ class LearnLessonListView(APIView):
                 'summary': l.summary,
                 'cover_image': l.cover_image.url if l.cover_image else None,
                 'created_at': l.created_at.isoformat(),
-                'quizzes_count': LearnQuiz.objects.filter(lesson=l).count(),
-                'scenarios_count': LearnScenario.objects.filter(lesson=l).count(),
+                'quizzes_count': getattr(l, 'quizzes_total', 0) or 0,
+                'scenarios_count': getattr(l, 'scenarios_total', 0) or 0,
+                'reactions_count': getattr(l, 'reactions_total', 0) or 0,
             })
         return Response(data)
 
@@ -275,9 +313,9 @@ class LearnScenarioListView(APIView):
 
         qs = LearnScenario.objects.select_related('lesson', 'article').order_by('-created_at')
         data = []
-        for sc in qs[:50]:
+        for sc in qs[:100]:
             content = sc.content or {}
-            steps = content.get('steps') if isinstance(content, dict) else content
+            steps = content.get('steps') if isinstance(content, dict) else (content if isinstance(content, list) else [])
             data.append({
                 'id': sc.id,
                 'title': sc.title,
@@ -287,8 +325,9 @@ class LearnScenarioListView(APIView):
                 'lesson_slug': sc.lesson.slug if sc.lesson else None,
                 'article_id': sc.article_id,
                 'article_title': sc.article.title if sc.article else None,
+                'steps': steps or [],
                 'steps_count': len(steps or []),
-                'created_at': sc.created_at.strftime('%d/%m/%Y') if sc.created_at else '',
+                'created_at': sc.created_at.isoformat() if sc.created_at else '',
             })
         return Response(data)
 
@@ -302,14 +341,12 @@ class LearnQuizListView(APIView):
 
         qs = LearnQuiz.objects.select_related('lesson', 'article').order_by('-id')
         data = []
-        for q in qs[:50]:
+        for q in qs[:100]:
             data.append({
                 'id': q.id,
                 'question': q.question,
                 'question_type': q.question_type,
                 'options': q.options if isinstance(q.options, list) else [],
-                # KHÔNG trả đáp án/giải thích qua API công khai (chống gian lận) —
-                # dùng POST /learn/quizzes/<id>/check/ để chấm phía server.
                 'lesson': {'slug': q.lesson.slug, 'title': q.lesson.title} if q.lesson_id else None,
                 'article': {'slug': q.article.slug, 'title': q.article.title} if q.article_id else None,
             })
@@ -354,12 +391,24 @@ class LearnLessonDetailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, slug):
-        from api.core.models import LearnQuiz, LearnScenario
+        from api.core.models import LearnLesson, LearnQuiz, LearnReactionType, LearnScenario, LessonReaction
 
         try:
-            lesson = LearnLesson.objects.get(slug=slug)
+            lesson = LearnLesson.objects.get(slug=slug, is_published=True)
         except LearnLesson.DoesNotExist:
             return Response({'error': 'Bài học không tồn tại.'}, status=404)
+
+        counts = {
+            k: LessonReaction.objects.filter(lesson=lesson, reaction_type=k).count()
+            for k in LearnReactionType.values
+        }
+        reactions_count = sum(counts.values())
+
+        my_reaction = None
+        if request.user.is_authenticated:
+            my_reaction = LessonReaction.objects.filter(
+                lesson=lesson, user=request.user
+            ).values_list('reaction_type', flat=True).first()
 
         quizzes = []
         for q in LearnQuiz.objects.filter(lesson=lesson):
@@ -368,14 +417,13 @@ class LearnLessonDetailView(APIView):
                 'question': q.question,
                 'question_type': q.question_type,
                 'options': q.options or [],
-                # Đáp án/giải thích KHÔNG trả qua đây — chấm qua /learn/quizzes/<id>/check/.
             })
 
         scenario = None
         sc = LearnScenario.objects.filter(lesson=lesson).order_by('-created_at').first()
         if sc:
             content = sc.content or {}
-            steps = content.get('steps') if isinstance(content, dict) else content
+            steps = content.get('steps') if isinstance(content, dict) else (content if isinstance(content, list) else [])
             scenario = {
                 'id': sc.id,
                 'title': sc.title,
@@ -390,9 +438,13 @@ class LearnLessonDetailView(APIView):
             'summary': lesson.summary,
             'content': lesson.content,
             'category': lesson.category,
+            'category_display': lesson.get_category_display(),
             'cover_image': lesson.cover_image.url if lesson.cover_image else None,
             'is_published': lesson.is_published,
-            'created_at': lesson.created_at.strftime('%d/%m/%Y') if lesson.created_at else '',
+            'created_at': lesson.created_at.isoformat() if lesson.created_at else '',
+            'reaction_counts': counts,
+            'reactions_count': reactions_count,
+            'my_reaction': my_reaction,
             'quizzes': quizzes,
             'scenario': scenario,
         })

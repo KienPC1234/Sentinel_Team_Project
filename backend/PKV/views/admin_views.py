@@ -18,7 +18,7 @@ from django.http import HttpResponseForbidden, JsonResponse
 from django.db import transaction
 from django.utils import timezone
 from django.core.paginator import Paginator
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
@@ -233,6 +233,7 @@ def admin_stats_api(request):
         }
         
         # Chart data (last 7 days)
+        tz = timezone.get_current_timezone()
         chart_data = {
             'labels': [(seven_days_ago + timedelta(days=i)).strftime('%d/%m') for i in range(8)],
             'reports': [],
@@ -241,8 +242,10 @@ def admin_stats_api(request):
         
         for i in range(8):
             day = (seven_days_ago + timedelta(days=i)).date()
-            report_count = Report.objects.filter(created_at__date=day).count()
-            scan_count = ScanEvent.objects.filter(created_at__date=day).count()
+            day_start = timezone.make_aware(datetime.combine(day, time.min), tz)
+            day_end = timezone.make_aware(datetime.combine(day, time.max), tz)
+            report_count = Report.objects.filter(created_at__range=(day_start, day_end)).count()
+            scan_count = ScanEvent.objects.filter(created_at__range=(day_start, day_end)).count()
             chart_data['reports'].append(report_count)
             chart_data['scans'].append(scan_count)
             

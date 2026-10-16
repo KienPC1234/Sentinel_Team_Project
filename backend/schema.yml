@@ -4,6 +4,314 @@ info:
   version: 1.0.0
   description: Hệ thống API Nền tảng Phòng chống Lừa đảo & An toàn số ShieldCall VN
 paths:
+  /api/v1/admin/articles/:
+    get:
+      operationId: admin_articles_retrieve
+      description: GET/POST /api/v1/admin/articles/ — List all articles & create new
+        article
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: admin_articles_create
+      description: GET/POST /api/v1/admin/articles/ — List all articles & create new
+        article
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/articles/{article_id}/:
+    get:
+      operationId: admin_articles_retrieve_2
+      description: GET/PUT/DELETE /api/v1/admin/articles/<int:article_id>/
+      parameters:
+      - in: path
+        name: article_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: admin_articles_update
+      description: GET/PUT/DELETE /api/v1/admin/articles/<int:article_id>/
+      parameters:
+      - in: path
+        name: article_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: admin_articles_destroy
+      description: GET/PUT/DELETE /api/v1/admin/articles/<int:article_id>/
+      parameters:
+      - in: path
+        name: article_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/admin/forum/ban/:
+    post:
+      operationId: admin_forum_ban_create
+      description: 'POST /api/v1/admin/forum/ban/
+
+
+        Tạo cấm:  {user_id, reason, ban_type: ''temporary''|''permanent'', days?}
+
+        Gỡ cấm:   {ban_id, action: ''unban''}'
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/forum/bans/:
+    get:
+      operationId: admin_forum_bans_retrieve
+      description: GET /api/v1/admin/forum/bans/ (?active=1)
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/forum/comment-reports/:
+    get:
+      operationId: admin_forum_comment_reports_retrieve
+      description: GET /api/v1/admin/forum/comment-reports/ (?status=...)
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/forum/comment-reports/{report_id}/action/:
+    post:
+      operationId: admin_forum_comment_reports_action_create
+      description: POST /api/v1/admin/forum/comment-reports/<int:report_id>/action/
+      parameters:
+      - in: path
+        name: report_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/forum/moderator/:
+    post:
+      operationId: admin_forum_moderator_create
+      description: 'POST /api/v1/admin/forum/moderator/ — {user_id, action: ''grant''|''revoke''}'
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/forum/reports/:
+    get:
+      operationId: admin_forum_reports_retrieve
+      description: GET /api/v1/admin/forum/reports/ — báo cáo bài viết (?status=pending|approved|rejected|all)
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/v1/admin/forum/reports/{report_id}/action/:
+    post:
+      operationId: admin_forum_reports_action_create
+      description: POST /api/v1/admin/forum/reports/<int:report_id>/action/
+      parameters:
+      - in: path
+        name: report_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/learn/:
+    get:
+      operationId: admin_learn_retrieve
+      description: GET/POST /api/v1/admin/learn/ — List and create lessons
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: admin_learn_create
+      description: GET/POST /api/v1/admin/learn/ — List and create lessons
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/learn/{lesson_id}/:
+    get:
+      operationId: admin_learn_retrieve_2
+      description: GET/PUT/DELETE /api/v1/admin/learn/<int:lesson_id>/
+      parameters:
+      - in: path
+        name: lesson_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: admin_learn_update
+      description: GET/PUT/DELETE /api/v1/admin/learn/<int:lesson_id>/
+      parameters:
+      - in: path
+        name: lesson_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: admin_learn_destroy
+      description: GET/PUT/DELETE /api/v1/admin/learn/<int:lesson_id>/
+      parameters:
+      - in: path
+        name: lesson_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/admin/learn/{lesson_id}/notify/:
+    post:
+      operationId: admin_learn_notify_create
+      description: POST /api/v1/admin/learn/<int:lesson_id>/notify/ — Broadcast new
+        lesson
+      parameters:
+      - in: path
+        name: lesson_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/admin/notifications/broadcast/:
     post:
       operationId: admin_notifications_broadcast_create
@@ -172,6 +480,86 @@ paths:
                 additionalProperties: {}
                 description: Unspecified response body
           description: ''
+  /api/v1/admin/scenarios/:
+    get:
+      operationId: admin_scenarios_retrieve
+      description: GET/POST /api/v1/admin/scenarios/ — List and create scenarios
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: admin_scenarios_create
+      description: GET/POST /api/v1/admin/scenarios/ — List and create scenarios
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/scenarios/{scenario_id}/:
+    get:
+      operationId: admin_scenarios_retrieve_2
+      description: GET/PUT/DELETE /api/v1/admin/scenarios/<int:scenario_id>/
+      parameters:
+      - in: path
+        name: scenario_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: admin_scenarios_update
+      description: GET/PUT/DELETE /api/v1/admin/scenarios/<int:scenario_id>/
+      parameters:
+      - in: path
+        name: scenario_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: admin_scenarios_destroy
+      description: GET/PUT/DELETE /api/v1/admin/scenarios/<int:scenario_id>/
+      parameters:
+      - in: path
+        name: scenario_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/admin/stats/:
     get:
       operationId: admin_stats_retrieve
@@ -207,6 +595,38 @@ paths:
     patch:
       operationId: admin_tickets_partial_update
       description: GET — all tickets. PATCH — respond to ticket.
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/users/:
+    get:
+      operationId: admin_users_retrieve
+      description: GET /api/v1/admin/users/ — List and search users
+      tags:
+      - admin
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/users/{user_id}/action/:
+    post:
+      operationId: admin_users_action_create
+      description: POST /api/v1/admin/users/<int:user_id>/action/ — Moderate user
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
       tags:
       - admin
       security:
@@ -426,15 +846,27 @@ paths:
                 description: Unspecified response body
           description: ''
   /api/v1/auth/logout/:
-    post:
-      operationId: auth_logout_create
-      description: POST /api/auth/logout — revoke token
+    get:
+      operationId: auth_logout_retrieve
+      description: POST/GET /api/auth/logout — revoke token, flush session, delete
+        cookies
       tags:
       - auth
       security:
-      - apiKeyAuth: []
-      - cookieAuth: []
       - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: auth_logout_create
+      description: POST/GET /api/auth/logout — revoke token, flush session, delete
+        cookies
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -463,6 +895,30 @@ paths:
                 additionalProperties: {}
                 description: Unspecified response body
           description: ''
+    post:
+      operationId: auth_me_create
+      description: GET /api/me — current user info
+      tags:
+      - auth
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: auth_me_update
+      description: GET /api/me — current user info
+      tags:
+      - auth
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
     patch:
       operationId: auth_me_partial_update
       description: Update profile (avatar, bio, etc.)
@@ -736,6 +1192,41 @@ paths:
                 additionalProperties: {}
                 description: Unspecified response body
           description: ''
+  /api/v1/auth/password/reset/:
+    post:
+      operationId: auth_password_reset_create
+      description: 'POST /api/v1/auth/password/reset/ {email, cf-turnstile-response}.
+
+
+        Luôn trả 200 để không tiết lộ email có tồn tại hay không.'
+      tags:
+      - auth
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/password/reset/confirm/:
+    post:
+      operationId: auth_password_reset_confirm_create
+      description: 'POST /api/v1/auth/password/reset/confirm/ {uid, token, password1,
+        password2}.
+
+
+        `uid` = uidb36, `token` = key trong liên kết allauth (/accounts/password/reset/key/<uid>-<key>/).'
+      tags:
+      - auth
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/auth/register/:
     post:
       operationId: auth_register_create
@@ -805,9 +1296,9 @@ paths:
   /api/v1/chat/config/:
     get:
       operationId: chat_config_retrieve
-      description: |-
-        GET: Get current user's chatbot personalization config.
-        PUT: Update chatbot config.
+      description: 'GET: Get current user''s chatbot personalization config.
+
+        PUT: Update chatbot config.'
       tags:
       - chat
       security:
@@ -823,9 +1314,9 @@ paths:
           description: ''
     put:
       operationId: chat_config_update
-      description: |-
-        GET: Get current user's chatbot personalization config.
-        PUT: Update chatbot config.
+      description: 'GET: Get current user''s chatbot personalization config.
+
+        PUT: Update chatbot config.'
       tags:
       - chat
       requestBody:
@@ -853,9 +1344,9 @@ paths:
   /api/v1/chat/folders/:
     get:
       operationId: chat_folders_list
-      description: |-
-        GET: List all chat folders for the current user.
-        POST: Create a new chat folder.
+      description: 'GET: List all chat folders for the current user.
+
+        POST: Create a new chat folder.'
       tags:
       - chat
       security:
@@ -873,9 +1364,9 @@ paths:
           description: ''
     post:
       operationId: chat_folders_create
-      description: |-
-        GET: List all chat folders for the current user.
-        POST: Create a new chat folder.
+      description: 'GET: List all chat folders for the current user.
+
+        POST: Create a new chat folder.'
       tags:
       - chat
       requestBody:
@@ -954,9 +1445,10 @@ paths:
   /api/v1/chat/messages/{message_id}/delete_after/:
     delete:
       operationId: chat_messages_delete_after_destroy
-      description: |-
-        DELETE: Remove all messages in a session AFTER a specific message ID.
-        Used for history branching when editing an old message.
+      description: 'DELETE: Remove all messages in a session AFTER a specific message
+        ID.
+
+        Used for history branching when editing an old message.'
       parameters:
       - in: path
         name: message_id
@@ -978,12 +1470,55 @@ paths:
                 additionalProperties: {}
                 description: Unspecified response body
           description: ''
+  /api/v1/chat/messages/{message_id}/rating/:
+    patch:
+      operationId: chat_messages_rating_partial_update
+      description: 'PATCH /messages/<id>/rating/ {rating: 1 | -1 | 0} — thích/không
+        thích câu trả lời AI.'
+      parameters:
+      - in: path
+        name: message_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
   /api/v1/chat/saved/:
     get:
       operationId: chat_saved_list
-      description: |-
-        GET: List saved/bookmarked messages.
-        POST: Bookmark a message.
+      description: 'GET: List saved/bookmarked messages.
+
+        POST: Bookmark a message.'
       tags:
       - chat
       security:
@@ -1001,9 +1536,9 @@ paths:
           description: ''
     post:
       operationId: chat_saved_create
-      description: |-
-        GET: List saved/bookmarked messages.
-        POST: Bookmark a message.
+      description: 'GET: List saved/bookmarked messages.
+
+        POST: Bookmark a message.'
       tags:
       - chat
       requestBody:
@@ -1078,9 +1613,9 @@ paths:
   /api/v1/chat/sessions/:
     get:
       operationId: chat_sessions_list
-      description: |-
-        GET: List all chat sessions for the current user or guest.
-        POST: Create a new chat session (supports authenticated and guest users).
+      description: 'GET: List all chat sessions for the current user or guest.
+
+        POST: Create a new chat session (supports authenticated and guest users).'
       tags:
       - chat
       security:
@@ -1099,9 +1634,9 @@ paths:
           description: ''
     post:
       operationId: chat_sessions_create
-      description: |-
-        GET: List all chat sessions for the current user or guest.
-        POST: Create a new chat session (supports authenticated and guest users).
+      description: 'GET: List all chat sessions for the current user or guest.
+
+        POST: Create a new chat session (supports authenticated and guest users).'
       tags:
       - chat
       requestBody:
@@ -1129,9 +1664,9 @@ paths:
   /api/v1/chat/sessions/{session_id}/:
     get:
       operationId: chat_sessions_retrieve
-      description: |-
-        GET: Retrieve message history for a session.
-        DELETE: Remove a chat session.
+      description: 'GET: Retrieve message history for a session.
+
+        DELETE: Remove a chat session.'
       parameters:
       - in: path
         name: session_id
@@ -1157,9 +1692,9 @@ paths:
           description: ''
     patch:
       operationId: chat_sessions_partial_update
-      description: |-
-        GET: Retrieve message history for a session.
-        DELETE: Remove a chat session.
+      description: 'GET: Retrieve message history for a session.
+
+        DELETE: Remove a chat session.'
       parameters:
       - in: path
         name: session_id
@@ -1179,9 +1714,9 @@ paths:
           description: No response body
     delete:
       operationId: chat_sessions_destroy
-      description: |-
-        GET: Retrieve message history for a session.
-        DELETE: Remove a chat session.
+      description: 'GET: Retrieve message history for a session.
+
+        DELETE: Remove a chat session.'
       parameters:
       - in: path
         name: session_id
@@ -1302,6 +1837,45 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/emergency/:
+    get:
+      operationId: emergency_retrieve
+      tags:
+      - emergency
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/announcements/:
+    get:
+      operationId: forum_announcements_retrieve
+      description: GET — list, POST — admin creates announcement.
+      tags:
+      - forum
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: forum_announcements_create
+      description: GET — list, POST — admin creates announcement.
+      tags:
+      - forum
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/forum/comments/{comment_id}/like/:
     post:
       operationId: forum_comments_like_create
@@ -1324,12 +1898,14 @@ paths:
   /api/v1/forum/comments/{comment_id}/reaction/:
     post:
       operationId: forum_comments_reaction_create
-      description: |-
-        POST /api/forum/comments/<id>/reaction/ — upvote, downvote, helpful
+      description: 'POST /api/forum/comments/<id>/reaction/ — upvote, downvote, helpful
+
 
         Mutual exclusivity rules:
-        - Can't upvote AND downvote at the same time
-        - Can't have like/helpful AND downvote at the same time
+
+        - Can''t upvote AND downvote at the same time
+
+        - Can''t have like/helpful AND downvote at the same time'
       parameters:
       - in: path
         name: comment_id
@@ -1400,9 +1976,9 @@ paths:
   /api/v1/forum/posts/{post_id}/:
     get:
       operationId: v1_forum_posts_detail
-      description: |-
-        GET /api/forum/posts/<id>/ — detail with comments
-        PATCH /api/forum/posts/<id>/ — author edits post
+      description: 'GET /api/forum/posts/<id>/ — detail with comments
+
+        PATCH /api/forum/posts/<id>/ — author edits post'
       summary: Chi tiết bài viết diễn đàn cùng các bình luận
       parameters:
       - in: path
@@ -1437,6 +2013,24 @@ paths:
       - tokenAuth: []
       responses:
         '200':
+          description: No response body
+    delete:
+      operationId: forum_posts_destroy
+      description: Author or staff can delete the post.
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - forum
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '204':
           description: No response body
   /api/v1/forum/posts/{post_id}/comment/:
     post:
@@ -1518,10 +2112,10 @@ paths:
   /api/v1/forum/posts/{post_id}/reaction/mutual/:
     post:
       operationId: forum_posts_reaction_mutual_create
-      description: |-
-        POST /api/forum/posts/<id>/reaction/mutual/ — with mutual exclusivity
+      description: 'POST /api/forum/posts/<id>/reaction/mutual/ — with mutual exclusivity
 
-        Ensures like/helpful can't coexist with dislike
+
+        Ensures like/helpful can''t coexist with dislike'
       parameters:
       - in: path
         name: post_id
@@ -1553,6 +2147,70 @@ paths:
       - apiKeyAuth: []
       - cookieAuth: []
       - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/forum/stats/:
+    get:
+      operationId: forum_stats_retrieve
+      description: 'GET /api/v1/forum/stats/ — thống kê diễn đàn (public).
+
+
+        Dùng cho sidebar/thống kê trang Forum + Admin forum (thay vì suy ra cục bộ).'
+      tags:
+      - forum
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/health/:
+    get:
+      operationId: health_retrieve
+      description: GET /api/v1/health/ or /health/ — Health check probe for monitoring
+        & uptime services.
+      tags:
+      - health
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/helps/:
+    get:
+      operationId: helps_retrieve
+      tags:
+      - helps
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/helps/{slug}/:
+    get:
+      operationId: helps_retrieve_2
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - helps
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -1616,6 +2274,24 @@ paths:
         '200':
           description: No response body
   /api/v1/learn/articles/{slug}/reaction/:
+    get:
+      operationId: learn_articles_reaction_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - learn
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
     post:
       operationId: learn_articles_reaction_create
       parameters:
@@ -1633,7 +2309,60 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/learn/lessons/:
+    get:
+      operationId: learn_lessons_retrieve
+      description: GET /api/v1/learn/lessons/ — danh sách bài học đã xuất bản (LearnHub
+        tab Bài học).
+      tags:
+      - learn
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/learn/lessons/{slug}/:
+    get:
+      operationId: learn_lessons_retrieve_2
+      description: GET /api/v1/learn/lessons/<slug>/ — chi tiết bài học + quiz + scenario.
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - learn
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/learn/lessons/{slug}/reaction/:
+    get:
+      operationId: learn_lessons_reaction_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - learn
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
     post:
       operationId: learn_lessons_reaction_create
       parameters:
@@ -1644,6 +2373,77 @@ paths:
         required: true
       tags:
       - learn
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/learn/quizzes/:
+    get:
+      operationId: learn_quizzes_retrieve
+      description: GET /api/v1/learn/quizzes/ — danh sách quiz công khai (LearnHub
+        tab Quiz).
+      tags:
+      - learn
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/learn/quizzes/{quiz_id}/check/:
+    post:
+      operationId: learn_quizzes_check_create
+      description: POST /api/v1/learn/quizzes/<int:quiz_id>/check/ — chấm đáp án quiz
+        phía server.
+      parameters:
+      - in: path
+        name: quiz_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - learn
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/learn/scenarios/:
+    get:
+      operationId: learn_scenarios_retrieve
+      description: GET /api/v1/learn/scenarios/ — danh sách kịch bản mô phỏng (LearnHub
+        tab Tình huống).
+      tags:
+      - learn
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/my-reports/:
+    get:
+      operationId: my_reports_retrieve
+      description: 'GET /api/user/reports — User report history (co phan trang).
+
+
+        Truoc day cat cung 50 ban ghi dau, user gui nhieu bao cao se khong thay
+
+        het. Gio ho tro ?page=&page_size= (toi da 100) va tra envelope
+
+        {results, count, page, pages}.'
+      tags:
+      - my-reports
       security:
       - apiKeyAuth: []
       - cookieAuth: []
@@ -1755,6 +2555,56 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/profile/inbox/:
+    get:
+      operationId: profile_inbox_retrieve
+      description: GET — user's conversations. POST — send message.
+      tags:
+      - profile
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: profile_inbox_create
+      description: GET — user's conversations. POST — send message.
+      tags:
+      - profile
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/profile/tickets/:
+    get:
+      operationId: profile_tickets_retrieve
+      description: GET — user's tickets. POST — create ticket.
+      tags:
+      - profile
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: profile_tickets_create
+      description: GET — user's tickets. POST — create ticket.
+      tags:
+      - profile
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/push/public-key/:
     get:
       operationId: push_public_key_retrieve
@@ -1832,7 +2682,7 @@ paths:
   /api/v1/report/{id}/:
     get:
       operationId: report_retrieve
-      description: GET /api/report/<pk>/ — Get detail of a report
+      description: GET /api/report/<pk>/ — Get detail of a report (public for approved).
       parameters:
       - in: path
         name: id
@@ -1845,6 +2695,7 @@ paths:
       - apiKeyAuth: []
       - cookieAuth: []
       - tokenAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -1852,6 +2703,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReportDetail'
           description: ''
+  /api/v1/report/lookup/:
+    get:
+      operationId: report_lookup_retrieve
+      description: 'GET /api/v1/scan/lookup/?q=...&type=all&risk=all&page=1
+
+        Unified search across ScanEvent + Report for the lookup page.'
+      tags:
+      - report
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/:
+    get:
+      operationId: reports_retrieve
+      description: GET /api/v1/stats/public/ — số liệu công khai cho trang chủ (không
+        hardcode).
+      tags:
+      - reports
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/stats/:
+    get:
+      operationId: reports_stats_retrieve
+      description: GET /api/v1/reports/stats/ — số liệu công khai cho stats bar trang
+        /reports/.
+      tags:
+      - reports
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scam-iq/attempt/{attempt_id}/:
+    get:
+      operationId: scam_iq_attempt_retrieve
+      description: 'GET /api/scam-iq/attempt/<id>/ — chi tiết 1 lượt làm bài (poll
+        điểm AI).
+
+
+        Frontend poll endpoint này sau khi nộp bài có câu tự luận, thay vì poll
+
+        /scam-iq/status/<ai_task_id>/ (endpoint đó chỉ hiểu task tạo đề nên với
+
+        task chấm điểm luôn trả 500, khiến UI treo "đang chấm" mãi).'
+      parameters:
+      - in: path
+        name: attempt_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - scam-iq
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/scam-iq/history/:
     get:
       operationId: scam_iq_history_retrieve
@@ -1876,9 +2800,21 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/v1/scam-iq/status/{task_id}/:
+  /api/v1/scam-iq/status/:
     get:
       operationId: scam_iq_status_retrieve
+      tags:
+      - scam-iq
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scam-iq/status/{task_id}/:
+    get:
+      operationId: scam_iq_status_retrieve_2
       parameters:
       - in: path
         name: task_id
@@ -1903,6 +2839,19 @@ paths:
       - apiKeyAuth: []
       - cookieAuth: []
       - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/scam-radar/:
+    get:
+      operationId: scam_radar_retrieve
+      tags:
+      - scam-radar
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
       responses:
         '200':
           description: No response body
@@ -1985,9 +2934,9 @@ paths:
   /api/v1/scan/audio/:
     post:
       operationId: scan_audio_create
-      description: |-
-        POST /api/scan/audio — Audio transcription + AI scam analysis.
-        Accepts audio file upload, offloads to Celery for Faster-Whisper + AI.
+      description: 'POST /api/scan/audio — Audio transcription + AI scam analysis.
+
+        Accepts audio file upload, offloads to Celery for Faster-Whisper + AI.'
       tags:
       - scan
       security:
@@ -2001,9 +2950,9 @@ paths:
   /api/v1/scan/banks/:
     get:
       operationId: scan_banks_retrieve
-      description: |-
-        GET /api/scan/banks — Fetch list of banks from VietQR API.
-        Cached for 24 hours to ensure local performance.
+      description: 'GET /api/scan/banks — Fetch list of banks from VietQR API.
+
+        Cached for 24 hours to ensure local performance.'
       tags:
       - scan
       security:
@@ -2045,9 +2994,9 @@ paths:
   /api/v1/scan/file/:
     post:
       operationId: scan_file_create
-      description: |-
-        POST /api/scan/file — Zero-Trust Docker Sandbox file analysis.
-        Accepts any file up to 500 MB, stores temporarily, offloads to Celery.
+      description: 'POST /api/scan/file — Zero-Trust Docker Sandbox file analysis.
+
+        Accepts any file up to 100 MB, stores temporarily, offloads to Celery.'
       tags:
       - scan
       security:
@@ -2061,9 +3010,9 @@ paths:
   /api/v1/scan/image/:
     post:
       operationId: scan_image_create
-      description: |-
-        POST /api/scan/image — OCR & Scam Analysis (Multi-image)
-        Offloaded to Celery because OCR and AI are heavy.
+      description: 'POST /api/scan/image — OCR & Scam Analysis (Multi-image)
+
+        Offloaded to Celery because OCR and AI are heavy.'
       tags:
       - scan
       security:
@@ -2077,9 +3026,9 @@ paths:
   /api/v1/scan/lookup/:
     get:
       operationId: scan_lookup_retrieve
-      description: |-
-        GET /api/v1/scan/lookup/?q=...&type=all&risk=all&page=1
-        Unified search across ScanEvent + Report for the lookup page.
+      description: 'GET /api/v1/scan/lookup/?q=...&type=all&risk=all&page=1
+
+        Unified search across ScanEvent + Report for the lookup page.'
       tags:
       - scan
       security:
@@ -2145,6 +3094,21 @@ paths:
                 additionalProperties: {}
                 description: Unspecified response body
           description: ''
+  /api/v1/stats/public/:
+    get:
+      operationId: stats_public_retrieve
+      description: GET /api/v1/stats/public/ — số liệu công khai cho trang chủ (không
+        hardcode).
+      tags:
+      - stats
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/tickets/:
     get:
       operationId: tickets_retrieve
@@ -2201,6 +3165,94 @@ paths:
       operationId: trends_radar_stats_retrieve
       tags:
       - trends
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trust/channels/:
+    get:
+      operationId: trust_channels_retrieve
+      description: GET /api/v1/trust/channels/ — kênh chính thức & tổng đài ngân hàng
+        VN.
+      tags:
+      - trust
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trust/policy/:
+    get:
+      operationId: trust_policy_retrieve
+      description: GET /api/v1/trust/policy/ — chính sách tin cậy & guardrail.
+      tags:
+      - trust
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trust/privacy/:
+    get:
+      operationId: trust_privacy_retrieve
+      description: 'GET /api/v1/trust/privacy/ — chính sách xử lý dữ liệu (điểm #5).'
+      tags:
+      - trust
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trust/redact/:
+    post:
+      operationId: trust_redact_create
+      description: POST /api/v1/trust/redact/ — thử nghiệm redaction PII (chỉ hiển
+        thị, không lưu).
+      tags:
+      - trust
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trust/sources/:
+    get:
+      operationId: trust_sources_retrieve
+      description: GET /api/v1/trust/sources/ — danh mục nguồn + độ tin cậy + giới
+        hạn.
+      tags:
+      - trust
+      security:
+      - apiKeyAuth: []
+      - cookieAuth: []
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/trust/storage/:
+    get:
+      operationId: trust_storage_retrieve
+      description: GET /api/v1/trust/storage/ — trạng thái object storage (không lộ
+        khoá bí mật).
+      tags:
+      - trust
       security:
       - apiKeyAuth: []
       - cookieAuth: []
@@ -2277,9 +3329,10 @@ paths:
   /api/v1/user/api-keys/:
     get:
       operationId: user_api_keys_retrieve
-      description: |-
-        GET  /api/v1/user/api-keys/  — List all API keys of authenticated user
-        POST /api/v1/user/api-keys/  — Create a new API key (returns raw key once)
+      description: 'GET  /api/v1/user/api-keys/  — List all API keys of authenticated
+        user
+
+        POST /api/v1/user/api-keys/  — Create a new API key (returns raw key once)'
       summary: Danh sách API Key của người dùng
       tags:
       - user
@@ -2296,9 +3349,10 @@ paths:
           description: ''
     post:
       operationId: user_api_keys_create
-      description: |-
-        GET  /api/v1/user/api-keys/  — List all API keys of authenticated user
-        POST /api/v1/user/api-keys/  — Create a new API key (returns raw key once)
+      description: 'GET  /api/v1/user/api-keys/  — List all API keys of authenticated
+        user
+
+        POST /api/v1/user/api-keys/  — Create a new API key (returns raw key once)'
       summary: Tạo API Key mới
       tags:
       - user
@@ -2452,8 +3506,15 @@ paths:
           description: ''
   /api/v1/user/reports/:
     get:
-      operationId: user_reports_list
-      description: GET /api/user/reports — User report history
+      operationId: user_reports_retrieve
+      description: 'GET /api/user/reports — User report history (co phan trang).
+
+
+        Truoc day cat cung 50 ban ghi dau, user gui nhieu bao cao se khong thay
+
+        het. Gio ho tro ?page=&page_size= (toi da 100) va tra envelope
+
+        {results, count, page, pages}.'
       tags:
       - user
       security:
@@ -2462,13 +3523,7 @@ paths:
       - tokenAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ReportList'
-          description: ''
+          description: No response body
   /api/v1/user/scan-picker/:
     get:
       operationId: user_scan_picker_retrieve
@@ -2491,8 +3546,13 @@ paths:
           description: ''
   /api/v1/user/scans/:
     get:
-      operationId: user_scans_list
-      description: GET /api/user/scans — User scan history
+      operationId: user_scans_retrieve
+      description: 'GET /api/user/scans — User scan history (co phan trang).
+
+
+        Truoc day cat cung 50 ban ghi dau. Gio ho tro ?type=&page=&page_size=
+
+        (toi da 100) va tra envelope {results, count, page, pages}.'
       tags:
       - user
       security:
@@ -2501,13 +3561,7 @@ paths:
       - tokenAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ScanEventList'
-          description: ''
+          description: No response body
   /api/v1/utils/editor-media/:
     get:
       operationId: utils_editor_media_retrieve
@@ -2617,9 +3671,9 @@ components:
       - approve
       - reject
       type: string
-      description: |-
-        * `approve` - approve
-        * `reject` - reject
+      description: '* `approve` - approve
+
+        * `reject` - reject'
     CategoryEnum:
       enum:
       - warning
@@ -2627,11 +3681,13 @@ components:
       - experience
       - question
       type: string
-      description: |-
-        * `warning` - Cảnh báo
+      description: '* `warning` - Cảnh báo
+
         * `discussion` - Thảo luận
+
         * `experience` - Kinh nghiệm
-        * `question` - Hỏi đáp
+
+        * `question` - Hỏi đáp'
     ChatAIRequestRequest:
       type: object
       properties:
@@ -2813,6 +3869,9 @@ components:
         author_username:
           type: string
           readOnly: true
+        author_id:
+          type: integer
+          readOnly: true
         author_is_staff:
           type: boolean
           readOnly: true
@@ -2903,6 +3962,7 @@ components:
       required:
       - author_avatar
       - author_comments_count
+      - author_id
       - author_is_staff
       - author_joined
       - author_name
@@ -2943,28 +4003,38 @@ components:
       - other
       - prefer_not_to_say
       type: string
-      description: |-
-        * `male` - Nam
+      description: '* `male` - Nam
+
         * `female` - Nữ
+
         * `non_binary` - Phi nhị nguyên giới (Non-binary)
+
         * `transgender` - Người chuyển giới (Transgender)
+
         * `gender_fluid` - Linh hoạt giới (Genderfluid)
+
         * `bigender` - Song giới (Bigender)
+
         * `genderqueer` - Giới phi chuẩn (Genderqueer)
+
         * `agender` - Vô giới (Agender)
+
         * `intersex` - Liên giới tính (Intersex)
+
         * `other` - Khác
-        * `prefer_not_to_say` - Tôi không muốn tiết lộ
+
+        * `prefer_not_to_say` - Tôi không muốn tiết lộ'
     LanguageStyleEnum:
       enum:
       - simple
       - detailed
       - concise
       type: string
-      description: |-
-        * `simple` - Đơn giản, dễ hiểu
+      description: '* `simple` - Đơn giản, dễ hiểu
+
         * `detailed` - Chi tiết, chuyên sâu
-        * `concise` - Ngắn gọn, súc tích
+
+        * `concise` - Ngắn gọn, súc tích'
     LoginRequest:
       type: object
       properties:
@@ -3069,11 +4139,10 @@ components:
         scammer_name:
           type: string
           maxLength: 200
-        ocr_text:
+        scammer_social:
           type: string
-          description: Text extracted from evidence_file via OCR
-        ai_analysis:
-          description: AI analysis of the report and OCR text
+          maxLength: 255
+        custom_fields: {}
       required:
       - description
       - scam_type
@@ -3121,6 +4190,14 @@ components:
         scammer_bank_name:
           type: string
           maxLength: 100
+        scammer_social:
+          type: string
+          description: Kênh MXH của kẻ lừa đảo (link Telegram, nhóm Zalo, username
+            FB, Fanpage)
+          maxLength: 255
+        custom_fields:
+          description: 'Thông tin tuỳ biến có cấu trúc: thiệt hại, ví crypto, hash
+            file, đơn vị giả mạo...'
         scammer_info:
           type: object
           additionalProperties: {}
@@ -3194,6 +4271,9 @@ components:
           maxLength: 500
         scam_type:
           $ref: '#/components/schemas/ScamTypeEnum'
+        scam_type_display:
+          type: string
+          readOnly: true
         severity:
           $ref: '#/components/schemas/SeverityEnum'
         description:
@@ -3205,6 +4285,14 @@ components:
           readOnly: true
         moderation_note:
           type: string
+        scammer_social:
+          type: string
+          description: Kênh MXH của kẻ lừa đảo (link Telegram, nhóm Zalo, username
+            FB, Fanpage)
+          maxLength: 255
+        custom_fields:
+          description: 'Thông tin tuỳ biến có cấu trúc: thiệt hại, ví crypto, hash
+            file, đơn vị giả mạo...'
         ocr_text:
           type: string
           description: Text extracted from evidence_file via OCR
@@ -3220,6 +4308,7 @@ components:
       - id
       - reporter_email
       - scam_type
+      - scam_type_display
       - target_type
       - target_value
     ReportModerateRequest:
@@ -3240,11 +4329,13 @@ components:
       - YELLOW
       - RED
       type: string
-      description: |-
-        * `SAFE` - An toàn
+      description: '* `SAFE` - An toàn
+
         * `GREEN` - Xanh
+
         * `YELLOW` - Cảnh báo
-        * `RED` - Nguy hiểm
+
+        * `RED` - Nguy hiểm'
     SavedMessage:
       type: object
       properties:
@@ -3285,6 +4376,7 @@ components:
       enum:
       - police_impersonation
       - bank_impersonation
+      - gov_impersonation
       - recruitment_scam
       - investment_scam
       - delivery_scam
@@ -3292,73 +4384,47 @@ components:
       - otp_steal
       - phishing
       - romance_scam
+      - deepfake
+      - malware_app
+      - crypto_scam
+      - social_engineering
+      - prize_scam
+      - emergency_scam
       - other
       type: string
-      description: |-
-        * `police_impersonation` - Giả danh công an
+      description: '* `police_impersonation` - Giả danh công an
+
         * `bank_impersonation` - Giả mạo ngân hàng
-        * `recruitment_scam` - Lừa tuyển dụng
-        * `investment_scam` - Lừa đầu tư
-        * `delivery_scam` - Giả mạo giao hàng
-        * `loan_scam` - Lừa vay tiền
+
+        * `gov_impersonation` - Giả mạo cơ quan Thuế / Dịch vụ công / VNeID
+
+        * `recruitment_scam` - Lừa tuyển dụng / Việc nhẹ lương cao
+
+        * `investment_scam` - Lừa đầu tư tài chính / Sàn ảo
+
+        * `delivery_scam` - Giả mạo giao hàng / Bưu cục
+
+        * `loan_scam` - Lừa vay tiền / Tín dụng đen
+
         * `otp_steal` - Chiêu trò OTP/2FA
-        * `phishing` - Phishing link
-        * `romance_scam` - Lừa tình cảm
-        * `other` - Khác
-    ScanEventList:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        scan_type:
-          allOf:
-          - $ref: '#/components/schemas/ScanTypeEnum'
-          readOnly: true
-        normalized_input:
-          type: string
-          readOnly: true
-        risk_score:
-          type: integer
-          readOnly: true
-        risk_level:
-          allOf:
-          - $ref: '#/components/schemas/RiskLevelEnum'
-          readOnly: true
-        result_json:
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - created_at
-      - id
-      - normalized_input
-      - result_json
-      - risk_level
-      - risk_score
-      - scan_type
-    ScanTypeEnum:
-      enum:
-      - phone
-      - message
-      - domain
-      - account
-      - qr
-      - email
-      - file
-      - audio
-      type: string
-      description: |-
-        * `phone` - Số điện thoại
-        * `message` - Tin nhắn
-        * `domain` - Website/URL
-        * `account` - Tài khoản ngân hàng
-        * `qr` - QR / Ảnh
-        * `email` - Email
-        * `file` - Tệp tin
-        * `audio` - Âm thanh
+
+        * `phishing` - Phishing link / Trang web giả mạo
+
+        * `romance_scam` - Lừa tình cảm / Bẫy lợn béo (Pig Butchering)
+
+        * `deepfake` - Deepfake âm thanh / Video AI mạo danh
+
+        * `malware_app` - Mã độc / Ứng dụng APK đánh cắp tài khoản
+
+        * `crypto_scam` - Lừa đảo Tiền điện tử / Ví Crypto / Airdrop
+
+        * `social_engineering` - Lừa đảo hội nhóm Telegram / Zalo / Fanpage
+
+        * `prize_scam` - Trúng thưởng / Quà tri ân / Đơn hàng ảo
+
+        * `emergency_scam` - Báo nạn cấp cứu / Tống tiền người thân
+
+        * `other` - Khác'
     SeverityEnum:
       enum:
       - low
@@ -3366,21 +4432,24 @@ components:
       - high
       - critical
       type: string
-      description: |-
-        * `low` - Thấp
+      description: '* `low` - Thấp
+
         * `medium` - Trung bình
+
         * `high` - Cao
-        * `critical` - Khẩn cấp
+
+        * `critical` - Khẩn cấp'
     StatusEnum:
       enum:
       - pending
       - approved
       - rejected
       type: string
-      description: |-
-        * `pending` - Chờ duyệt
+      description: '* `pending` - Chờ duyệt
+
         * `approved` - Đã duyệt
-        * `rejected` - Từ chối
+
+        * `rejected` - Từ chối'
     TargetTypeEnum:
       enum:
       - phone
@@ -3389,14 +4458,30 @@ components:
       - message
       - qr
       - email
+      - file
+      - audio
+      - social
+      - crypto
       type: string
-      description: |-
-        * `phone` - Số điện thoại
+      description: '* `phone` - Số điện thoại
+
         * `domain` - Website/URL
+
         * `account` - Tài khoản ngân hàng
+
         * `message` - Tin nhắn
+
         * `qr` - QR Code
+
         * `email` - Email
+
+        * `file` - Tệp tin / Ứng dụng APK độc hại
+
+        * `audio` - Cuộc gọi / Âm thanh Deepfake
+
+        * `social` - Mạng xã hội (Telegram/Zalo/FB)
+
+        * `crypto` - Địa chỉ ví Crypto / Web3'
     ToneEnum:
       enum:
       - professional
@@ -3405,12 +4490,15 @@ components:
       - formal
       - humorous
       type: string
-      description: |-
-        * `professional` - Chuyên nghiệp
+      description: '* `professional` - Chuyên nghiệp
+
         * `friendly` - Thân thiện
+
         * `casual` - Thoải mái
+
         * `formal` - Trang trọng
-        * `humorous` - Hài hước
+
+        * `humorous` - Hài hước'
     UserAPIKeyCreateRequestRequest:
       type: object
       properties:

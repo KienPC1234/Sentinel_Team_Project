@@ -1,0 +1,48 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Trang /learn/ — Cẩm nang kiến thức phòng tránh lừa đảo.
+
+   Chỉ chứa những thứ class tiện ích không diễn đạt được. Mọi màu đều lấy
+   từ token của theme (--color-brand-*, --muted, --ring, --background),
+   không hardcode mã màu.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Dải tab + dải pill lọc: cuộn ngang gọn với thanh cuộn mảnh theo token */
+.learn-filter-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-brand-400) 45%, transparent) var(--muted);
+}
+.learn-filter-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.learn-filter-scroll::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-radius: 999px;
+}
+.learn-filter-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, var(--color-brand-400), var(--color-brand2-400));
+  border-radius: 999px;
+}
+
+/* Thẻ nội dung là <div role="button"> nên trình duyệt không tự vẽ viền
+   tiêu điểm — thêm viền rõ cho người dùng điều hướng bằng bàn phím. */
+.learn-card:focus-visible {
+  outline: none;
+  border-color: var(--color-brand-400);
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px color-mix(in oklab, var(--ring) 70%, transparent);
+}
+
+/* Tiêu đề thẻ: bỏ giãn chữ quá rộng để dễ đọc với tiếng Việt có dấu */
+.learn-card h3 {
+  letter-spacing: -0.005em;
+}
+
+/* Ẩn thanh cuộn cho khung hội thoại diễn tập kịch bản */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

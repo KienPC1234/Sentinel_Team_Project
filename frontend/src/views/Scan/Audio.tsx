@@ -9,6 +9,7 @@ import { api } from '../../lib/api';
 
 import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import {
   ScanGuide,
   TurnstileWidget,
@@ -563,22 +564,26 @@ export default function Audio() {
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/55 pointer-events-none z-10">
                           <i className="bi bi-mic"></i>
                         </div>
-                        <select
-                          value={selectedDeviceId}
-                          onChange={(e) => {
-                            setSelectedDeviceId(e.target.value);
+                        <Select
+                          value={selectedDeviceId || 'default'}
+                          onValueChange={(v) => {
+                            setSelectedDeviceId(v === 'default' ? '' : v);
                             void testSelectedMic();
                           }}
-                          className="w-full bg-white/[0.03] border border-white/10 text-white/80 text-sm font-bold rounded-xl pl-11 pr-10 py-3 appearance-none focus:border-brand2-500/50 focus:ring-1 focus:ring-brand2-500/20 transition-all cursor-pointer"
                         >
-                          <option value="" className="bg-slate-900">Micro mặc định</option>
-                          {audioDevices.map((d) => (
-                            <option key={d.deviceId} value={d.deviceId} className="bg-slate-900">{d.label}</option>
-                          ))}
-                        </select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-white/55 pointer-events-none z-10">
-                          <i className="bi bi-chevron-down text-xs"></i>
-                        </div>
+                          <SelectTrigger
+                            className="w-full bg-white/[0.03] border border-white/10 text-white/80 text-sm font-bold rounded-xl pl-11 pr-10 py-3 h-auto focus:border-brand2-500/50 cursor-pointer"
+                            aria-label="Chọn micro"
+                          >
+                            <SelectValue placeholder="Micro mặc định" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            <SelectItem value="default">Micro mặc định</SelectItem>
+                            {audioDevices.map((d) => (
+                              <SelectItem key={d.deviceId} value={d.deviceId}>{d.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <button
                         type="button"
@@ -655,7 +660,7 @@ export default function Audio() {
                             Đang ghi âm: <span>{formatTime(recordingDuration)}</span>
                             <span className="text-white/15 text-xs">/ {formatTime(MAX_RECORD)}</span>
                           </p>
-                          <canvas ref={waveCanvasRef} width={320} height={64} className="rounded-2xl mx-auto opacity-90"></canvas>
+                          <canvas ref={waveCanvasRef} width={320} height={64} className="rounded-2xl mx-auto bg-white/[0.03] border border-white/5"></canvas>
                         </div>
                       )}
                     </div>

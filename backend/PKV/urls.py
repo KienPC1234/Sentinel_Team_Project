@@ -105,6 +105,8 @@ urlpatterns = [
     ])),
 
     # API Root Aliases (direct fallback endpoints to prevent 404s)
+    path('health/', core_api_views.HealthCheckView.as_view(), name='root-health'),
+    path('api/health/', core_api_views.HealthCheckView.as_view(), name='root-api-health'),
     path('api/auth/logout/', core_api_views.LogoutView.as_view(), name='root-api-auth-logout'),
     path('api/auth/me/', core_api_views.MeView.as_view(), name='root-api-auth-me'),
     path('api/me/', core_api_views.MeView.as_view(), name='root-api-me'),

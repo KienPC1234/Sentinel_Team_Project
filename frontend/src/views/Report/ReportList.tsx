@@ -1,14 +1,16 @@
 'use client';
 /* Port 1-1 từ PKV/templates/Report/report_list.html (Alpine.js → React).
  * API giữ nguyên: GET /api/v1/scan/lookup/ (danh sách), GET /api/v1/report/<id>/ (chi tiết).
- * Lưu ý: /scan/lookup/ trả về item rút gọn (không có description/scammer/custom_fields)
- * nên các block tương ứng chỉ hiển thị khi API có dữ liệu; phần markup giữ đúng template gốc.
+ * Lưu ý: /scan/lookup/ trả kèm description/scammer/custom_fields cho kind='report';
+ * các block tương ứng chỉ hiển thị khi có dữ liệu. Vì privacy, lookup không trả
+ * username người báo cáo (hiển thị 'Ẩn danh').
  */
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { Spinner } from '../../components/ui';
+import { fmtDate } from '../../lib/date';
 
 /* CSS gốc nằm trong {% block head_extra %} của template. */
 const REPORT_LIST_CSS = `
@@ -31,8 +33,7 @@ interface LookupItem {
   time_ago?: string;
   created_at?: string;
   url?: string;
-  /* Các trường dưới đây không có trong payload /scan/lookup/ hiện tại — giữ để
-   * markup (mô tả, hồ sơ kẻ gian, custom fields) khớp template nếu API bổ sung. */
+  /* Các trường mô tả/hồ sơ kẻ gian có trong payload /scan/lookup/ với kind='report'. */
   description?: string;
   scammer_name?: string;
   scammer_bank_account?: string;
@@ -143,17 +144,6 @@ function severityBadge(riskLevel?: string): string {
   if (l === 'RED') return 'bg-danger-500/10 text-danger-400 border-danger-500/20';
   if (l === 'YELLOW') return 'bg-warn-500/10 text-warn-400 border-warn-500/20';
   return 'bg-safe-500/10 text-safe-400 border-safe-500/20';
-}
-
-function fmtDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    const p = (n: number): string => String(n).padStart(2, '0');
-    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
-  } catch {
-    return '';
-  }
 }
 
 function copyText(text?: string): void {

@@ -20,29 +20,68 @@ interface MyReport {
 
 type StatusFilter = '' | 'pending' | 'approved' | 'rejected';
 
+const PAGE_SIZE = 12;
+
 export default function MyReports() {
   const [reports, setReports] = useState<MyReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
 
   useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+    if (statusFilter) params.set('status', statusFilter);
     api
-      .get<Paged<MyReport> | MyReport[]>('/user/reports/')
-      .then((r) => setReports(Array.isArray(r) ? r : r.results || []))
+      .get<Paged<MyReport> | MyReport[] & { status_counts?: { pending?: number; approved?: number; rejected?: number } }>(`/user/reports/?${params.toString()}`)
+      .then((r) => {
+        setReports(Array.isArray(r) ? r : r.results || []);
+        if (!Array.isArray(r)) {
+          if (typeof r.count === 'number') {
+            setTotal(r.count);
+            setTotalPages(Math.max(1, Math.ceil(r.count / PAGE_SIZE)));
+          }
+          const sc = (r as { status_counts?: { pending?: number; approved?: number; rejected?: number } }).status_counts;
+          if (sc) {
+            setStatusCounts({
+              pending: sc.pending || 0,
+              approved: sc.approved || 0,
+              rejected: sc.rejected || 0,
+            });
+          }
+        }
+      })
       .catch(() => setReports([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [page, statusFilter]);
 
-  const filtered = useMemo(() => (statusFilter ? reports.filter((r) => r.status === statusFilter) : reports), [reports, statusFilter]);
+  const pickFilter = (f: StatusFilter): void => {
+    setStatusFilter(f);
+    setPage(1);
+  };
+
+  /* Lọc theo trạng thái do server thực hiện (?status=...). */
+  const filtered = reports;
+  /* Số liệu toàn bộ từ server (đúng cả khi nhiều trang). */
   const stats = useMemo(
     () => ({
-      total: reports.length,
-      pending: reports.filter((r) => r.status === 'pending').length,
-      approved: reports.filter((r) => r.status === 'approved').length,
-      rejected: reports.filter((r) => r.status === 'rejected').length,
+      total,
+      pending: statusCounts.pending,
+      approved: statusCounts.approved,
+      rejected: statusCounts.rejected,
     }),
-    [reports],
+    [total, statusCounts],
   );
+
+  const goPage = (p: number): void => {
+    if (p >= 1 && p <= totalPages && p !== page) {
+      setPage(p);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   const iconFor = (t: string): string => {
     if (t === 'phone') return 'bi-telephone-fill';
@@ -97,7 +136,7 @@ export default function MyReports() {
           { v: 'approved' as StatusFilter, l: 'Đã duyệt', i: 'bi-check-circle' },
           { v: 'rejected' as StatusFilter, l: 'Từ chối', i: 'bi-x-circle' },
         ].map((f) => (
-          <button key={f.l} onClick={() => setStatusFilter(f.v)}
+          <button key={f.l} onClick={() => pickFilter(f.v)}
             className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${statusFilter === f.v ? 'bg-white/10 text-white border-white/20' : 'text-white/55 border-transparent hover:bg-white/5'}`}>
             {f.i && <i className={`bi ${f.i} mr-1`}></i>}{f.l}
           </button>
@@ -148,6 +187,37 @@ export default function MyReports() {
               <Link href="/report/" className="inline-flex items-center gap-2 text-brand-400 text-sm font-bold hover:text-white transition-colors">
                 <i className="bi bi-plus-circle"></i> Gửi báo cáo đầu tiên
               </Link>
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-1 pt-2">
+              <button
+                onClick={() => goPage(page - 1)}
+                disabled={page <= 1}
+                className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/55 hover:text-white hover:bg-white/10 transition disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <i className="bi bi-chevron-left"></i>
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                .map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => goPage(p)}
+                    disabled={p === page}
+                    className={`w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold transition ${p === page ? 'bg-danger-500/20 text-danger-400 border-danger-500/30' : 'bg-white/5 text-white/55 border-white/10 hover:text-white hover:bg-white/10'}`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              <button
+                onClick={() => goPage(page + 1)}
+                disabled={page >= totalPages}
+                className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/55 hover:text-white hover:bg-white/10 transition disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <i className="bi bi-chevron-right"></i>
+              </button>
+              <span className="ml-2 text-[10px] text-white/35">{`Trang ${page}/${totalPages} · ${total} báo cáo`}</span>
             </div>
           )}
         </div>

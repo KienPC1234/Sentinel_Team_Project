@@ -23,7 +23,7 @@ class Command(BaseCommand):
             "--sources",
             type=str,
             default="",
-            help="Comma-separated list of feed keys to run (e.g. urlhaus,openphish,phishing_db). Defaults to all.",
+            help="Comma-separated list of feed keys to run (e.g. urlhaus,openphish,phishing_db,tinnhiem_fake). Defaults to all.",
         )
         parser.add_argument(
             "--batch-size",

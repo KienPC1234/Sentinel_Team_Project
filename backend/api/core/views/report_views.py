@@ -108,6 +108,28 @@ class ReportCreateView(APIView):
                 'error': ' | '.join(errors),
                 'field_errors': serializer.errors,
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Chong spam bao cao trung: dung gia tri DA CHUAN HOA de so sanh (vi du
+        # phone luu E.164 +84...). Truoc day so sanh gia tri tho nen guard
+        # khong bao gio khop.
+        try:
+            _v = serializer.validated_data
+            _dup_qs = Report.objects.filter(
+                target_type=_v.get('target_type'),
+                target_value__iexact=(_v.get('target_value') or '').strip(),
+                status=ReportStatus.PENDING,
+                created_at__gte=timezone.now() - timedelta(hours=24),
+            )
+            if request.user.is_authenticated:
+                _dup_qs = _dup_qs.filter(reporter=request.user)
+                if _dup_qs.exists():
+                    return Response(
+                        {'error': 'Ban da gui bao cao cho doi tuong nay trong 24h qua va dang cho duyet.'},
+                        status=400,
+                    )
+        except Exception:
+            pass
+
         report = serializer.save()
 
         # Save additional evidence images (multi-upload)
@@ -218,8 +240,11 @@ class CommunityReportStatsView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        cached = cache.get('report_stats_v1')
+        if cached is not None:
+            return Response(cached)
         base = Report.objects.filter(status='approved')
-        return Response({
+        payload = {
             'total_approved': base.count(),
             'phone_reports': base.filter(target_type='phone').count(),
             'domain_reports': base.filter(target_type='domain').count(),
@@ -228,4 +253,6 @@ class CommunityReportStatsView(APIView):
             'social_reports': base.filter(target_type='social').count(),
             'crypto_reports': base.filter(target_type='crypto').count(),
             'audio_reports': base.filter(target_type='audio').count(),
-        })
+        }
+        cache.set('report_stats_v1', payload, timeout=120)
+        return Response(payload)

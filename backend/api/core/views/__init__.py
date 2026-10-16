@@ -27,7 +27,7 @@ from .admin_views import (
 from .forum_views import (ForumPostListCreateView, ForumPostCommentView, ForumPostLikeView, ForumPostReactionView, 
                           ForumPostReportView, ForumPostDetailView, ForumCommentLikeView, ForumCommentReportView,
                           ForumCommentReactionView, ForumPostReactionMutualView, ForumPostLikeMutualView, ForumStatsView)
-from .utils_views import EditorImageUploadView, EditorFetchUrlView, MentionUserListView, EditorMediaLibraryView
+from .utils_views import EditorImageUploadView, EditorFetchUrlView, MentionUserListView, EditorMediaLibraryView, HealthCheckView
 from .notification_views import (TestPushView, ResetRAGView, PushPublicKeyView,
                                 NotificationListView, NotificationUnreadCountView,
                                 NotificationMarkReadView, NotificationMarkAllReadView,
@@ -59,7 +59,7 @@ from .admin_forum_views import (
     AdminForumBanActionView,
     AdminForumModeratorView,
 )
-from .scam_iq_views import ScamIQStartView, ScamIQStatusView, ScamIQSubmitView, ScamIQHistoryView
+from .scam_iq_views import ScamIQStartView, ScamIQStatusView, ScamIQSubmitView, ScamIQAttemptView, ScamIQHistoryView
 from .api_key_views import (
     UserAPIKeyListCreateView, UserAPIKeyDetailView,
     UserAPIKeyToggleView, UserAPIKeyRegenerateView,
@@ -112,7 +112,7 @@ __all__ = [
     'AdminForumReportsView', 'AdminForumReportActionView',
     'AdminForumCommentReportsView', 'AdminForumCommentReportActionView',
     'AdminForumBansView', 'AdminForumBanActionView', 'AdminForumModeratorView',
-    'ScamIQStartView', 'ScamIQStatusView', 'ScamIQSubmitView', 'ScamIQHistoryView',
+    'ScamIQStartView', 'ScamIQStatusView', 'ScamIQSubmitView', 'ScamIQAttemptView', 'ScamIQHistoryView',
     'UserAPIKeyListCreateView', 'UserAPIKeyDetailView', 'UserAPIKeyToggleView', 'UserAPIKeyRegenerateView',
     'MCPConnectSSEView', 'MCPMessagesView', 'MCPDiscoveryView',
     'HelpsDetailAPIView',

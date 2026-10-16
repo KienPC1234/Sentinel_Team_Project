@@ -1,0 +1,739 @@
+/* ============================================================================
+ * CKEditor 5 — theme ShieldCall (dark) + đồng bộ nội dung với forum
+ * ----------------------------------------------------------------------------
+ * Port từ backend/PKV/static/css/ckeditor5.css (bản Django) — bản gốc chưa
+ * được nối vào app Next.js nên editor hiện render nền sáng mặc định, lệch hoàn
+ * toàn với theme navy + cyan của web.
+ *
+ * Nguyên tắc: nội dung soạn thảo (.ck-host .ck.ck-editor__editable) và nội dung hiển
+ * thị ở forum (.richtext-content) dùng CHUNG một bộ rule nên WYSIWYG khớp với
+ * thứ người dùng đọc được sau khi đăng.
+ * ========================================================================== */
+
+/* :root:root (0,2,0) thay vì :root (0,1,0) để luôn thắng bản :root mặc định
+ * của CKEditor bất kể thứ tự nạp 2 file CSS — nếu không, file gốc đứng sau là
+ * ghi đè theme và editor quay lại nền sáng. */
+:root:root,
+.ck-host {
+  /* Palette nền — lấy từ token của web */
+  --sc-ck-bg-0: #020617;
+  --sc-ck-bg-1: #0a0f1d;
+  --sc-ck-bg-2: #0d0d1f;
+  --sc-ck-bg-3: #161235;
+  --sc-ck-border: rgba(255, 255, 255, 0.12);
+  --sc-ck-border-strong: rgba(34, 211, 238, 0.35);
+  --sc-ck-text: #ffffff;
+  --sc-ck-text-soft: rgba(255, 255, 255, 0.72);
+  --sc-ck-text-mute: rgba(255, 255, 255, 0.45);
+  --sc-ck-brand: #22d3ee;
+  --sc-ck-brand-strong: #06b6d4;
+  --sc-ck-brand-soft: rgba(34, 211, 238, 0.14);
+  --sc-ck-danger: #f87171;
+
+  /* --ck* variables: đè lên palette sáng mặc định của CKEditor -- */
+  --ck-color-base-background: var(--sc-ck-bg-2);
+  --ck-color-base-border: var(--sc-ck-border);
+  --ck-color-base-active-hover-background: rgba(34, 211, 238, 0.1);
+  --ck-color-focus-border: var(--sc-ck-brand);
+  --ck-color-focus-outer-shadow: rgba(34, 211, 238, 0.18);
+  --ck-color-text: var(--sc-ck-text);
+  --ck-color-shadow-drop: rgba(0, 0, 0, 0.5);
+  --ck-color-shadow-inner: rgba(0, 0, 0, 0.35);
+
+  --ck-color-button-default-hover-background: rgba(255, 255, 255, 0.08);
+  --ck-color-button-default-active-background: rgba(34, 211, 238, 0.14);
+  --ck-color-button-default-active-shadow: rgba(34, 211, 238, 0.2);
+  --ck-color-button-on-background: rgba(34, 211, 238, 0.16);
+  --ck-color-button-on-hover-background: rgba(34, 211, 238, 0.24);
+  --ck-color-button-on-active-background: rgba(34, 211, 238, 0.3);
+  --ck-color-button-on-active-shadow: rgba(34, 211, 238, 0.3);
+  --ck-color-button-on-color: var(--sc-ck-brand);
+  --ck-color-button-on-disabled-background: transparent;
+  --ck-color-button-on-disabled-color: rgba(255, 255, 255, 0.25);
+  --ck-color-button-action-background: var(--sc-ck-brand-strong);
+  --ck-color-button-action-hover-background: #0891b2;
+  --ck-color-button-action-active-background: #0e7490;
+  --ck-color-button-action-active-shadow: rgba(34, 211, 238, 0.3);
+  --ck-color-button-action-disabled-background: rgba(255, 255, 255, 0.08);
+  --ck-color-button-action-text: #020617;
+
+  --ck-color-dropdown-panel-background: var(--sc-ck-bg-1);
+  --ck-color-dropdown-panel-border: var(--sc-ck-border);
+  --ck-color-dropdown-list-background: var(--sc-ck-bg-1);
+  --ck-color-dropdown-list-button-hover-background: rgba(34, 211, 238, 0.12);
+  --ck-color-dropdown-list-button-on-background: var(--sc-ck-brand);
+  --ck-color-dropdown-list-button-on-text: #020617;
+
+  --ck-color-input-background: rgba(255, 255, 255, 0.05);
+  --ck-color-input-border: var(--sc-ck-border);
+  --ck-color-input-text: var(--sc-ck-text);
+  --ck-color-input-placeholder-color: var(--sc-ck-text-mute);
+  --ck-color-input-disabled-background: rgba(255, 255, 255, 0.03);
+  --ck-color-input-disabled-border: rgba(255, 255, 255, 0.08);
+  --ck-color-input-disabled-text: rgba(255, 255, 255, 0.35);
+
+  --ck-color-dialog-background: var(--sc-ck-bg-2);
+  --ck-color-dialog-border: var(--sc-ck-border);
+  --ck-color-dialog-form-header-border: rgba(255, 255, 255, 0.08);
+  --ck-color-dialog-label-background: var(--sc-ck-bg-2);
+  --ck-color-dialog-description-background: var(--sc-ck-bg-2);
+  --ck-color-dialog-row-hover-background: rgba(255, 255, 255, 0.04);
+
+  --ck-color-list-background: var(--sc-ck-bg-1);
+  --ck-color-list-button-hover-background: rgba(255, 255, 255, 0.07);
+  --ck-color-list-button-on-background: rgba(34, 211, 238, 0.16);
+  --ck-color-list-button-on-text: var(--sc-ck-brand);
+
+  --ck-color-panel-background: var(--sc-ck-bg-1);
+  --ck-color-panel-border: var(--sc-ck-border);
+  --ck-color-balloon-panel-background: var(--sc-ck-bg-1);
+  --ck-color-balloon-panel-border: var(--sc-ck-border);
+
+  --ck-color-toolbar-background: rgba(13, 13, 31, 0.92);
+  --ck-color-toolbar-border: var(--sc-ck-border);
+  --ck-color-toolbar-drop-ckr-background: transparent;
+
+  --ck-color-tooltip-background: rgba(6, 8, 20, 0.96);
+  --ck-color-tooltip-text: rgba(255, 255, 255, 0.9);
+
+  --ck-color-menu-background: var(--sc-ck-bg-1);
+  --ck-color-menu-border: var(--sc-ck-border);
+  --ck-color-menu-item-hover-background: rgba(34, 211, 238, 0.12);
+  --ck-color-menu-item-active-toggled-background: rgba(34, 211, 238, 0.2);
+  --ck-color-menu-item-active-toggled-text: var(--sc-ck-brand);
+  --ck-color-menu-item-text: rgba(255, 255, 255, 0.8);
+
+  --ck-color-split-button-hover-background: rgba(34, 211, 238, 0.14);
+  --ck-color-split-button-hover-border: var(--sc-ck-brand-strong);
+
+  --ck-color-slider-ball-background: var(--sc-ck-brand);
+  --ck-color-slider-track-background: rgba(255, 255, 255, 0.15);
+  --ck-color-slider-toggled-ball-background: #ffffff;
+
+  --ck-color-table-cell-selection-background: rgba(34, 211, 238, 0.12);
+  --ck-color-table-cell-editable-background: rgba(34, 211, 238, 0.06);
+  --ck-color-table-cell-selected-hover-background: rgba(34, 211, 238, 0.16);
+  --ck-color-table-cell-selected-focus-background: rgba(34, 211, 238, 0.2);
+
+  --ck-color-widget-blurred-border: rgba(255, 255, 255, 0.15);
+  --ck-color-widget-hover-border: var(--sc-ck-brand);
+  --ck-color-widget-editable-focus-background: var(--sc-ck-bg-2);
+  --ck-color-widget-resizer-color: var(--sc-ck-brand);
+
+  --ck-color-link-default: var(--sc-ck-brand);
+  --ck-color-engine-placeholder-text: rgba(255, 255, 255, 0.42);
+  --ck-color-upload-placeholder-loader: rgba(255, 255, 255, 0.35);
+  --ck-content-color-image-caption-background: rgba(255, 255, 255, 0.04);
+  --ck-content-color-image-caption-text: rgba(255, 255, 255, 0.55);
+
+  /* Typography nội dung — dùng chung cho editor và output của forum */
+  --ck-content-font-family: var(--font-inter), "Inter", "Segoe UI", system-ui, sans-serif;
+  --ck-content-font-size: 0.95rem;
+  --ck-content-font-color: var(--sc-ck-text-soft);
+  --ck-content-line-height: 1.7;
+}
+
+/* ============================================================================
+ * 1. KHUNG EDITOR — bỏ nền/viền trắng, bo góc theo card của web
+ * ========================================================================== */
+.ck-host .ck.ck-editor {
+  background: transparent;
+  border: 0;
+  border-radius: 0.875rem;
+  overflow: visible;
+  color: var(--sc-ck-text);
+}
+
+.ck-host .ck.ck-editor__top > .ck-toolbar {
+  background: rgba(255, 255, 255, 0.03);
+  border: 0;
+  border-bottom: 1px solid var(--sc-ck-border);
+  border-radius: 0.875rem 0.875rem 0 0;
+  padding: 0.4rem 0.5rem;
+}
+
+/* Toolbar nhiều dòng trên desktop, cuộn ngang trên mobile (không bị cắt) */
+.ck-host .ck-toolbar > .ck-toolbar-items {
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
+}
+
+@media (max-width: 768px) {
+  .ck-host .ck-toolbar > .ck-toolbar-items {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex: 1 1 auto;
+  }
+  .ck-host .ck-toolbar > .ck-toolbar-items::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.ck-host .ck-host .ck.ck-editor__editable {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  min-height: var(--ck-host-min-height, 12rem);
+  padding: 1rem 1.1rem 1.25rem;
+  border-radius: 0 0 0.875rem 0.875rem;
+}
+
+.ck-host .ck-host .ck.ck-editor__editable.ck-focused {
+  box-shadow: inset 0 0 0 1px var(--sc-ck-brand-soft);
+}
+
+.ck-host .ck.ck-editor__top > .ck-toolbar.ck-sticky-panel .ck-sticky-panel__content {
+  position: sticky;
+  top: 0;
+  background: rgba(10, 15, 29, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ck-host .ck-host .ck.ck-editor__editable_inline {
+  border: 1px solid var(--sc-ck-border);
+  border-radius: 0.875rem;
+}
+
+/* Scrollbar trong vùng soạn thảo */
+.ck-host .ck-editor__editable,
+.ck-host .ck-editor__editable * {
+  scrollbar-width: thin;
+}
+.ck-host .ck-editor__editable::-webkit-scrollbar {
+  width: 8px;
+}
+.ck-host .ck-editor__editable::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.3);
+  border-radius: 999px;
+}
+
+/* ============================================================================
+ * 2. NỘI DUNG DÙNG CHUNG — editor (WYSIWYG) và .richtext-content (forum)
+ * ========================================================================== */
+.ck-host .ck.ck-editor__editable,
+.richtext-content {
+  font-family: var(--font-inter), "Inter", "Segoe UI", system-ui, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--sc-ck-text-soft);
+  overflow-wrap: break-word;
+}
+
+.ck-host .ck.ck-editor__editable > :first-child,
+.richtext-content > :first-child {
+  margin-top: 0;
+}
+.ck-host .ck.ck-editor__editable > :last-child,
+.richtext-content > :last-child {
+  margin-bottom: 0;
+}
+
+.ck-host .ck.ck-editor__editable p,
+.richtext-content p {
+  margin: 0.5em 0;
+}
+
+.ck-host .ck.ck-editor__editable h1,
+.ck-host .ck.ck-editor__editable h2,
+.ck-host .ck.ck-editor__editable h3,
+.ck-host .ck.ck-editor__editable h4,
+.ck-host .ck.ck-editor__editable h5,
+.ck-host .ck.ck-editor__editable h6,
+.richtext-content h1,
+.richtext-content h2,
+.richtext-content h3,
+.richtext-content h4,
+.richtext-content h5,
+.richtext-content h6 {
+  color: #fff;
+  font-weight: 800;
+  line-height: 1.3;
+  margin: 1em 0 0.4em;
+}
+
+.ck-host .ck.ck-editor__editable h1,
+.richtext-content h1 {
+  font-size: 1.6rem;
+}
+.ck-host .ck.ck-editor__editable h2,
+.richtext-content h2 {
+  font-size: 1.35rem;
+}
+.ck-host .ck.ck-editor__editable h3,
+.richtext-content h3 {
+  font-size: 1.15rem;
+}
+.ck-host .ck.ck-editor__editable h4,
+.richtext-content h4 {
+  font-size: 1.02rem;
+}
+.ck-host .ck.ck-editor__editable h5,
+.richtext-content h5 {
+  font-size: 0.95rem;
+}
+.ck-host .ck.ck-editor__editable h6,
+.richtext-content h6 {
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ck-host .ck.ck-editor__editable ul,
+.ck-host .ck.ck-editor__editable ol,
+.richtext-content ul,
+.richtext-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.6em;
+}
+
+.ck-host .ck.ck-editor__editable ul,
+.richtext-content ul {
+  list-style-type: disc;
+}
+.ck-host .ck.ck-editor__editable ul ul,
+.richtext-content ul ul {
+  list-style-type: circle;
+}
+.ck-host .ck.ck-editor__editable ul ul ul,
+.richtext-content ul ul ul {
+  list-style-type: square;
+}
+.ck-host .ck.ck-editor__editable ol,
+.richtext-content ol {
+  list-style-type: decimal;
+}
+
+.ck-host .ck.ck-editor__editable li,
+.richtext-content li {
+  margin: 0.2em 0;
+}
+
+/* Todo list: nền sáng mặc định của CKEditor cần chỉnh lại */
+.ck-host .ck.ck-editor__editable .todo-list {
+  margin: 0.5em 0;
+  padding-left: 1.2em;
+  list-style: none;
+}
+.ck-host .ck.ck-editor__editable .todo-list li {
+  position: relative;
+  margin: 0.3em 0;
+  padding-left: 1.5em;
+}
+.ck-host .ck.ck-editor__editable .todo-list li > label {
+  position: absolute;
+  left: 0;
+  top: 0.28em;
+}
+.ck-host .ck.ck-editor__editable .todo-list .ck-list-item-check {
+  width: 1em;
+  height: 1em;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.ck-host .ck.ck-editor__editable .todo-list .ck-list-item-check:checked {
+  background-color: var(--sc-ck-brand-strong);
+  border-color: var(--sc-ck-brand-strong);
+}
+.ck-host .ck.ck-editor__editable .todo-list li.ck-list-item-checked {
+  color: var(--sc-ck-text-mute);
+  text-decoration: line-through;
+}
+
+.ck-host .ck.ck-editor__editable blockquote,
+.richtext-content blockquote {
+  border-left: 3px solid rgba(34, 211, 238, 0.4);
+  padding: 0.1em 0 0.1em 1em;
+  margin: 0.8em 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.ck-host .ck.ck-editor__editable a,
+.richtext-content a {
+  color: var(--sc-ck-brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ck-host .ck.ck-editor__editable a:hover,
+.richtext-content a:hover {
+  color: #fff;
+}
+
+.ck-host .ck.ck-editor__editable code,
+.richtext-content code {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a5f3fc;
+  padding: 0.15em 0.4em;
+  border-radius: 0.35rem;
+  font-size: 0.88em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ck-host .ck.ck-editor__editable pre,
+.richtext-content pre {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--sc-ck-border);
+  color: rgba(255, 255, 255, 0.88);
+  border-radius: 0.85rem;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 0.85em 0;
+  line-height: 1.6;
+}
+.ck-host .ck.ck-editor__editable pre code,
+.richtext-content pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.ck-host .ck.ck-editor__editable hr,
+.richtext-content hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1.25em 0;
+}
+
+.ck-host .ck.ck-editor__editable table,
+.richtext-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.9em 0;
+  table-layout: fixed;
+  overflow: hidden;
+}
+.ck-host .ck.ck-editor__editable th,
+.ck-host .ck.ck-editor__editable td,
+.richtext-content th,
+.richtext-content td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.5em 0.7em;
+  text-align: left;
+  position: relative;
+  vertical-align: top;
+}
+.ck-host .ck.ck-editor__editable th,
+.richtext-content th {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-weight: 700;
+}
+.ck-host .ck.ck-editor__editable td:hover,
+.ck-host .ck.ck-editor__editable th:hover,
+.ck-host .ck.ck-editor__editable tr:hover td {
+  background: rgba(34, 211, 238, 0.04);
+}
+
+.ck-host .ck.ck-editor__editable figure.image,
+.richtext-content figure.image {
+  margin: 1em 0;
+  max-width: 100%;
+}
+.ck-host .ck.ck-editor__editable figure.image img,
+.ck-host .ck.ck-editor__editable .image img,
+.richtext-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.85rem;
+  display: block;
+}
+.ck-host .ck.ck-editor__editable figcaption,
+.richtext-content figcaption {
+  text-align: center;
+  color: var(--sc-ck-text-mute);
+  font-size: 0.78rem;
+  padding: 0.45rem 0;
+}
+
+/* Bảng / code block có thể tràn ngang trên mobile */
+.ck-host .ck-editor__editable,
+.richtext-content {
+  overflow-x: auto;
+}
+
+/* ============================================================================
+ * 3. NHỮNG THỨ CHỈ CÓ TRONG EDITOR
+ * ========================================================================== */
+.ck-host .ck.ck-editor__editable ::selection {
+  background: rgba(34, 211, 238, 0.28);
+}
+
+.ck.ck-placeholder::before {
+  color: var(--sc-ck-text-mute) !important;
+  font-style: normal !important;
+  opacity: 1 !important;
+}
+
+/* Marker (mention) */
+.ck-host .ck.ck-editor__editable .mention,
+.richtext-content .mention {
+  background: var(--sc-ck-brand-soft);
+  color: var(--sc-ck-brand);
+  border-radius: 0.35rem;
+  padding: 0.05em 0.3em;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* Highlight */
+.ck-host .ck.ck-editor__editable mark,
+.richtext-content mark {
+  background: rgba(251, 191, 36, 0.28);
+  color: #fef3c7;
+  border-radius: 0.25rem;
+  padding: 0.05em 0.2em;
+}
+
+.ck-host .ck.ck-editor__editable .ck-highlighted,
+.ck-host .ck.ck-editor__editable.ck-highlighted {
+  background: rgba(34, 211, 238, 0.2);
+}
+
+/* Link balloon + toolbar inputs nằm ngoài container nhưng vẫn cần nền tối */
+.ck-balloon-panel.ck-link-balloon,
+.ck-balloon-panel.ck-table-balloon,
+.ck-balloon-panel.ck-image-balloon,
+.ck-balloon-panel.ck-annotation-balloon {
+  background: var(--sc-ck-bg-1);
+  border: 1px solid var(--sc-ck-border);
+  border-radius: 0.9rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  color: var(--sc-ck-text-soft);
+}
+
+.ck-powered-by-balloon .ck-balloon-panel,
+.ck-balloon-panel .ck-powered-by-balloon {
+  background: var(--sc-ck-bg-1);
+}
+
+.ck-balloon-panel .ck-form__row > label {
+  color: var(--sc-ck-text-mute);
+}
+
+/* Dropdown (heading/style/list/link/…) — render ở cấp <body> */
+.ck.ck-dropdown__panel,
+.ck.ck-list {
+  background: var(--sc-ck-bg-1);
+  border: 1px solid var(--sc-ck-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
+  color: var(--sc-ck-text-soft);
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.ck.ck-dropdown__panel .ck-list__item,
+.ck.ck-dropdown__panel button {
+  color: var(--sc-ck-text-soft);
+  min-height: 2rem;
+}
+.ck.ck-dropdown__panel .ck-list__item:hover,
+.ck.ck-dropdown__panel button:not(.ck-disabled):hover {
+  background: var(--sc-ck-brand-soft);
+  color: #fff;
+}
+.ck.ck-dropdown__panel .ck-list__item.ck-on {
+  background: var(--sc-ck-brand-soft);
+  color: var(--sc-ck-brand);
+}
+
+.ck.ck-tooltip {
+  background: rgba(6, 8, 20, 0.96);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 0.5rem;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.55rem;
+}
+
+.ck.ck-dialog {
+  background: var(--sc-ck-bg-2);
+  border: 1px solid var(--sc-ck-border);
+  border-radius: 1rem;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7);
+  color: var(--sc-ck-text-soft);
+}
+.ck.ck-dialog .ck-dialog__header,
+.ck.ck-dialog .ck-dialog__footer {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.ck.ck-dialog .ck-dialog__title {
+  color: #fff;
+  font-weight: 800;
+}
+.ck.ck-dialog .ck-dialog__desc,
+.ck.ck-dialog label {
+  color: var(--sc-ck-text-mute);
+}
+.ck.ck-dialog .ck-button.ck-button-save {
+  background: var(--sc-ck-brand-strong);
+  color: #020617;
+}
+
+/* Autocomplete của dropdown list */
+.ck.ck-list__item > .ck-list-item__text,
+.ck.ck-dropdown__panel .ck-list-item__text {
+  color: var(--sc-ck-text-soft);
+}
+
+/* Bảng: nút thêm/xoá hàng cột */
+.ck.ck-table .ck-table__toolbar,
+.ck.ck-table .ck-table__resizer {
+  background: rgba(6, 182, 212, 0.6);
+}
+
+/* Emoji / special characters grid */
+.ck.ck-balloon-panel .ck-emoji__item:hover,
+.ck-special-characters__grid button:hover {
+  background: var(--sc-ck-brand-soft);
+}
+
+/* ============================================================================
+ * 4. STYLE DEFINITIONS — class CKEditor gắn vào nội dung.
+ *    Trước đây các class này không có CSS nào ở cả web lẫn backend nên chọn
+ *    trong menu "Style" xong không thấy gì thay đổi. Dưới đây định nghĩa cho
+ *    cả trong editor lẫn khi hiển thị ở forum.
+ * ========================================================================== */
+.ck-host .ck.ck-editor__editable .document-title,
+.richtext-content .document-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.25;
+  margin: 0.4em 0 0.6em;
+}
+
+.ck-host .ck.ck-editor__editable .document-subtitle,
+.richtext-content .document-subtitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0.3em 0 0.8em;
+}
+
+.ck-host .ck.ck-editor__editable .category,
+.richtext-content .category {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  color: var(--sc-ck-brand);
+  background: var(--sc-ck-brand-soft);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+}
+
+.ck-host .ck.ck-editor__editable .info-box,
+.richtext-content .info-box {
+  display: block;
+  padding: 0.9rem 1.1rem;
+  margin: 0.9em 0;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 3px solid var(--sc-ck-brand);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.ck-host .ck.ck-editor__editable .info-box strong,
+.richtext-content .info-box strong {
+  color: #fff;
+}
+
+.ck-host .ck.ck-editor__editable .button--green,
+.richtext-content .button--green {
+  display: inline-block;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--sc-ck-brand), var(--sc-ck-brand-strong));
+  color: #020617;
+  font-weight: 800;
+  text-decoration: none;
+  border: 0;
+}
+.ck-host .ck.ck-editor__editable .button--black,
+.richtext-content .button--black {
+  display: inline-block;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.ck-host .ck.ck-editor__editable .marker,
+.richtext-content .marker {
+  background: rgba(251, 191, 36, 0.22);
+  color: #fde68a;
+  border-radius: 0.3rem;
+  padding: 0.05em 0.25em;
+  font-weight: 700;
+}
+
+.ck-host .ck.ck-editor__editable .spoiler,
+.richtext-content .spoiler {
+  background: rgba(255, 255, 255, 0.12);
+  color: transparent;
+  border-radius: 0.3rem;
+  padding: 0.05em 0.25em;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.ck-host .ck.ck-editor__editable .spoiler:hover,
+.richtext-content .spoiler:hover,
+.richtext-content .spoiler.revealed {
+  color: inherit;
+}
+
+/* ============================================================================
+ * 5. Z-INDEX — dropdown/balloon/dialog luôn nằm trên overlay của web
+ * ========================================================================== */
+.ck.ck-editor,
+.ck.ck-editor__main,
+.ck-host .ck.ck-editor__editable {
+  position: relative;
+  z-index: 1;
+}
+
+.ck.ck-toolbar,
+.ck.ck-sticky-panel,
+.ck.ck-sticky-panel .ck-sticky-panel__content {
+  z-index: 2147483200;
+}
+
+.ck-body-wrapper,
+.ck.ck-reset_all,
+.ck.ck-balloon-panel,
+.ck.ck-dropdown__panel,
+.ck.ck-list,
+.ck.ck-tooltip,
+.ck.ck-dialog,
+.ck.ck-powered-by-balloon {
+  z-index: 2147483600;
+}
+
+/* ============================================================================
+ * 6. IN ẤN — bỏ nền tối khi in nội dung diễn đàn
+ * ========================================================================== */
+@media print {
+  .ck-host .ck.ck-editor__editable,
+  .richtext-content {
+    background: #fff;
+    color: #111;
+  }
+  .ck.ck-toolbar,
+  .ck.ck-dropdown__panel,
+  .ck.ck-balloon-panel {
+    display: none !important;
+  }
+}

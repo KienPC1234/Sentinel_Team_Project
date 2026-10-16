@@ -578,7 +578,16 @@ export default function Report() {
     const tsToken = getTsToken();
     const siteKey = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
 
-    if (siteKey && !tsToken) {
+    /* Không có sitekey thì widget không render, backend chắc chắn từ chối —
+     * báo rõ nguyên nhân thay vì để người dùng thử mãi không được. */
+    if (!siteKey) {
+      const msg = 'Chưa cấu hình xác minh anti-spam (NEXT_PUBLIC_TURNSTILE_SITEKEY). Liên hệ quản trị viên.';
+      setError(msg);
+      setLoading(false);
+      showToast(msg, 'error');
+      return;
+    }
+    if (!tsToken) {
       const msg = 'Vui lòng hoàn thành xác minh bảo mật (Anti-Spam)';
       setError(msg);
       setLoading(false);

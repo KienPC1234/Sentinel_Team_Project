@@ -26,10 +26,15 @@ class SourceCatalogView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        try:
+            dataset = vn_sources.tinnhiem_dataset_stats()
+        except Exception:
+            dataset = {}
         return Response({
             "policy": tg.trust_policy()["principle"],
             "gray_zone": tg.trust_policy()["gray_zone"],
             "sources": tg.source_catalog(),
+            "vn_dataset": dataset,
         })
 
 

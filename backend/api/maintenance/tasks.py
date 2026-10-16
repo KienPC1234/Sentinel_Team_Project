@@ -1,4 +1,5 @@
 from celery import shared_task
+from django.conf import settings
 from django.utils import timezone
 from .models import RAGIndexLog
 import logging
@@ -10,6 +11,14 @@ def rebuild_vector_index(self, trigger='MANUAL'):
     """
     Celery task to rebuild the FAISS vector index.
     """
+    from datetime import timedelta
+    stale_cutoff = timezone.now() - timedelta(minutes=15)
+    RAGIndexLog.objects.filter(status='RUNNING', started_at__lt=stale_cutoff).update(
+        status='FAILED',
+        completed_at=timezone.now(),
+        error_message='Hệ thống tự động hủy do worker khởi động lại hoặc timeout'
+    )
+
     logger.info(f"[RAG-REBUILD] Task started (trigger={trigger}, task_id={self.request.id})")
     log = RAGIndexLog.objects.create(status='RUNNING', trigger=trigger)
     
@@ -106,3 +115,103 @@ def backup_vector_store_task():
     except Exception as exc:
         logger.error(f"[VECTOR-BACKUP] FAILED: {exc}", exc_info=True)
         return {'error': str(exc)}
+
+
+@shared_task(name="api.maintenance.tasks.sync_tinnhiemmang_news", bind=True)
+def sync_tinnhiemmang_news(self, feed_keys=None, limit_per_feed=15, download_images=True, force_update=False, rebuild_rag=True):
+    """
+    Celery task để tự động tổng hợp tin tức nổi bật và cảnh báo lừa đảo từ tinnhiemmang.vn.
+    Lưu vào Article với kiểu nguồn tin 'tinnhiemmang' phục vụ hệ sinh thái ShieldCall VN.
+    """
+    logger.info(f"[TINNHIEMMANG-TASK] Bắt đầu tổng hợp tin tức (task_id={getattr(self.request, 'id', 'sync')})")
+    try:
+        from .tinnhiemmang_feed import sync_tinnhiemmang_articles
+        stats = sync_tinnhiemmang_articles(
+            feed_keys=feed_keys,
+            limit_per_feed=limit_per_feed,
+            download_images=download_images,
+            force_update=force_update,
+            rebuild_rag=rebuild_rag,
+            dedup=True,
+            dedup_llm=getattr(settings, "NEWS_DEDUP_LLM", False),
+        )
+        if getattr(settings, "NEWS_LLM_FORMAT", False):
+            try:
+                from .article_format import reformat_news_markdown
+                reformat_news_markdown(use_llm=True, limit=max(30, limit_per_feed * 2))
+            except Exception as fmt_exc:  # noqa: BLE001
+                logger.warning(f"[TINNHIEMMANG-TASK] Chuẩn hoá Markdown lỗi: {fmt_exc}")
+        logger.info(
+            f"[TINNHIEMMANG-TASK] Hoàn tất: {stats.get('created', 0)} bài mới, "
+            f"{stats.get('updated', 0)} cập nhật trong {stats.get('duration_seconds', 0)}s"
+        )
+        return stats
+    except Exception as exc:
+        logger.error(f"[TINNHIEMMANG-TASK] Thất bại: {exc}", exc_info=True)
+        return {"status": "FAILED", "error": str(exc)}
+
+
+@shared_task(name="api.maintenance.tasks.sync_tinnhiem_directory", bind=True)
+def sync_tinnhiem_directory(self, category="all", workers=None, stop_after_known=0,
+                            ingest=True, respect_robots=False):
+    """
+    Celery task: đồng bộ **danh bạ** Tín nhiệm mạng (tinnhiemmang.vn) — chỉ thêm mục mới.
+
+    Khác ``sync_tinnhiemmang_news`` (tin tức → Article), task này thu thập danh bạ
+    website/tổ chức/hệ thống/ứng dụng tín nhiệm + website lừa đảo ra JSONL, rồi nạp
+    danh sách lừa đảo vào model ``Domain``. Chạy hằng tuần qua Celery beat.
+    """
+    import io
+    from django.core.management import call_command
+
+    logger.info("[TINNHIEM-DIR-TASK] Bắt đầu đồng bộ danh bạ (task_id=%s)",
+                getattr(self.request, "id", "sync"))
+    buf = io.StringIO()
+    try:
+        call_command(
+            "sync_tinnhiem_directory",
+            category=category, workers=workers, stop_after_known=stop_after_known,
+            ingest=ingest, respect_robots=respect_robots, stdout=buf,
+        )
+        tail = buf.getvalue()[-2000:]
+        logger.info("[TINNHIEM-DIR-TASK] Hoàn tất đồng bộ danh bạ")
+        return {"status": "SUCCESS", "category": category, "output_tail": tail}
+    except Exception as exc:
+        logger.error(f"[TINNHIEM-DIR-TASK] Thất bại: {exc}", exc_info=True)
+        return {"status": "FAILED", "error": str(exc)}
+
+
+@shared_task(name="api.maintenance.tasks.sync_vnexpress_news", bind=True)
+def sync_vnexpress_news(self, feed_keys=None, limit_per_feed=15, download_images=True,
+                        force_update=False, rebuild_rag=True, create_new=True):
+    """
+    Celery task: tổng hợp tin lừa đảo từ **VnExpress** (tag 'Lừa đảo qua mạng') vào Article
+    với ``source_type='press'``. Chạy định kỳ qua Celery beat.
+    """
+    logger.info(f"[VNEXPRESS-TASK] Bắt đầu tổng hợp (task_id={getattr(self.request, 'id', 'sync')})")
+    try:
+        from .vnexpress_feed import sync_vnexpress_articles
+        stats = sync_vnexpress_articles(
+            feed_keys=feed_keys,
+            limit_per_feed=limit_per_feed,
+            download_images=download_images,
+            force_update=force_update,
+            rebuild_rag=rebuild_rag,
+            create_new=create_new,
+            dedup=True,
+            dedup_llm=getattr(settings, "NEWS_DEDUP_LLM", False),
+        )
+        if getattr(settings, "NEWS_LLM_FORMAT", False):
+            try:
+                from .article_format import reformat_news_markdown
+                reformat_news_markdown(use_llm=True, limit=max(30, limit_per_feed * 2))
+            except Exception as fmt_exc:  # noqa: BLE001
+                logger.warning(f"[VNEXPRESS-TASK] Chuẩn hoá Markdown lỗi: {fmt_exc}")
+        logger.info(
+            f"[VNEXPRESS-TASK] Hoàn tất: {stats.get('created', 0)} mới, "
+            f"{stats.get('updated', 0)} cập nhật trong {stats.get('duration_seconds', 0)}s"
+        )
+        return stats
+    except Exception as exc:
+        logger.error(f"[VNEXPRESS-TASK] Thất bại: {exc}", exc_info=True)
+        return {"status": "FAILED", "error": str(exc)}

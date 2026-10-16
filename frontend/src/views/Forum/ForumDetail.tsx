@@ -7,6 +7,7 @@
  * /user/scan-picker/, /scan/status/<id>/, /admin-cp/forum/ban/, WS /ws/forum/.
  */
 import { useEffect, useRef, useState } from 'react';
+import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
@@ -52,6 +53,7 @@ interface ForumComment {
 
 interface PostDetail extends ForumPost {
   image?: string | null;
+  author_id?: number | null;
   author_is_staff?: boolean;
   author_rank?: RankInfo | null;
   author_posts_count?: number;
@@ -232,15 +234,15 @@ function flattenComments(nodes: ForumComment[] | undefined): ForumComment[] {
 }
 
 async function adminPost(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/);
-  const csrf = m ? decodeURIComponent(m[1]) : '';
-  const res = await fetch(path, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-CSRFToken': csrf } : {}) },
-    body: JSON.stringify(body),
-  });
-  return (await res.json()) as Record<string, unknown>;
+  /* Luôn đi qua lib/api để không bỏ qua NEXT_PUBLIC_API_BASE_URL (bản cũ hardcode
+   * '/api/v1/...' nên hỏng khi chạy prod với API ở domain khác). */
+  try {
+    return await api.post<Record<string, unknown>>(path, body);
+  } catch (e) {
+    const data = (e instanceof ApiError ? e.data : null) as Record<string, unknown> | null;
+    if (data) return data;
+    throw e;
+  }
 }
 
 export default function ForumDetail() {
@@ -252,6 +254,7 @@ export default function ForumDetail() {
   const [comments, setComments] = useState<ForumComment[]>([]);
   const [loadingInit, setLoadingInit] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [sending, setSending] = useState(false);
 
   const [commentScanId, setCommentScanId] = useState<number | ''>('');
@@ -313,12 +316,13 @@ export default function ForumDetail() {
   const refreshPostDetail = (): void => {
     const postId = postIdRef.current;
     if (!postId) return;
+    /* X-Silent-Refresh: backend bỏ qua đếm lượt xem cho request này, tránh việc
+     * mỗi bình luận mới (WS) làm views_count tăng vọt. */
     api
-      .get<PostDetail>(`/forum/posts/${postId}/`)
+      .get<PostDetail>(`/forum/posts/${postId}/`, { 'X-Silent-Refresh': '1' })
       .then((data) => {
         setPost(data);
         setComments(data.comments || []);
-        loadReferencedScan(Number(data.scan_reference?.scan_id || 0));
       })
       .catch(() => {});
   };
@@ -328,19 +332,49 @@ export default function ForumDetail() {
     if (!id) return;
     let alive = true;
     api
-      .get<PostDetail>(`/forum/posts/${id}/`)
+      .get<PostDetail>(`/forum/posts/${id}/`, { 'X-Silent-Refresh': '1' })
       .then((data) => {
         if (!alive) return;
         setPost(data);
         setComments(data.comments || []);
         setNotFound(false);
+        setLoadError('');
         loadReferencedScan(Number(data.scan_reference?.scan_id || 0));
       })
-      .catch(() => { if (alive) setNotFound(true); })
+      .catch((e: unknown) => {
+        if (!alive) return;
+        /* Backend trả 403 cho bài bị khoá (trừ staff) — trước đây mọi lỗi đều
+         * bị quy về "Không tìm thấy bài viết", khiến người dùng tưởng bài xoá. */
+        if (e instanceof ApiError && e.status === 403) {
+          setLoadError(e.message || 'Bài viết này đã bị khóa bởi quản trị viên.');
+        } else if (e instanceof ApiError && e.status === 404) {
+          setNotFound(true);
+        } else {
+          setLoadError('Không tải được bài viết. Vui lòng thử lại sau.');
+        }
+      })
       .finally(() => { if (alive) setLoadingInit(false); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  /* Mở link trỏ tới 1 bình luận cụ thể (#comment-<id>) — cuộn tới sau khi render. */
+  useEffect(() => {
+    if (loadingInit) return;
+    const hash = window.location.hash;
+    if (!hash.startsWith('#comment-')) return;
+    const target = document.querySelector(hash);
+    if (target instanceof HTMLElement) {
+      window.setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
+    }
+  }, [loadingInit, comments.length]);
+
+  /* Bình luận bị xoá/khoá làm tổng số trang giảm — kéo currentPage về trang hợp lệ
+   * để không bị màn trình trắng trơn. */
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(comments.length / 15));
+    if (commentPage > maxPage) setCommentPage(maxPage);
+  }, [comments.length, commentPage]);
 
   /* Realtime WS /ws/forum/ (giữ nguyên reconnect + ping như bản gốc). */
   useEffect(() => {
@@ -441,11 +475,13 @@ export default function ForumDetail() {
     return (target.depth || 1) < MAX_REPLY_DEPTH;
   };
 
-  const commentTotalPages = (): number => Math.max(1, Math.ceil(flattenedComments().length / commentsPerPage));
+  /* Phân trang theo bình luận gốc (top-level), replies render lồng bên trong —
+   trước đây phân trang danh sách phẳng nên trả lời có thể nằm lọt sang trang
+   khác và mất luôn ngữ cảnh. */
+  const commentTotalPages = (): number => Math.max(1, Math.ceil(comments.length / commentsPerPage));
   const paginatedComments = (): ForumComment[] => {
-    const flat = flattenedComments();
     const start = (commentPage - 1) * commentsPerPage;
-    return flat.slice(start, start + commentsPerPage);
+    return comments.slice(start, start + commentsPerPage);
   };
   const commentPageNumbers = (): Array<number | string> => {
     const total = commentTotalPages();
@@ -536,68 +572,25 @@ export default function ForumDetail() {
     const target: PickerTarget = { type: targetType, commentId };
     const filters: PickerFilters = {
       ...scanPickerFilters,
-      manualId: String(targetType === 'reply' ? (replyScanIdRef.current[commentId || 0] || '') : (commentScanIdRef.current || '')),
+      manualId: String(
+        targetType === 'reply' ? replyScanIdRef.current[commentId || 0] || '' : commentScanIdRef.current || '',
+      ),
     };
     setScanPickerTarget(target);
     setScanPickerFilters(filters);
+    /* Mở modal có sẵn bộ lọc (scope/loại/mức độ/từ khoá). Trước đây hàm này luôn
+     * đi qua Swal nên toàn bộ UI modal bên dưới là code chết, không mở được. */
+    setScanPickerOpen(true);
     const rows = await fetchScanPicker(filters);
     if (!rows.length) {
       const manual = await Swal.fire({
-        title: 'Không có scan phù hợp',
-        text: 'Bạn có thể nhập Scan ID thủ công',
+        title: 'Chưa có scan nào khả dụng',
+        text: 'Nhập Scan ID thủ công (scan của bạn hoặc scan public referable).',
         input: 'text',
         inputPlaceholder: 'Nhập Scan ID...',
         showCancelButton: true,
         confirmButtonText: 'Dùng Scan ID',
-        cancelButtonText: 'Hủy',
-        background: 'var(--sc-night-2)',
-        color: 'var(--sc-white)',
-      });
-      if (!manual.isConfirmed) return;
-      await applyManualScanId(String(manual.value || ''), target, filters);
-      return;
-    }
-
-    const result = await Swal.fire({
-      title: 'Chọn scan tham chiếu',
-      html: `
-        <div class="space-y-3 text-left">
-          <label for="scan-picker-select" class="text-[10px] font-black uppercase tracking-widest text-white/45">Scan khả dụng</label>
-          <select id="scan-picker-select" class="liquid-input w-full py-3 px-4 text-sm font-bold">
-            <option value="">-- Chọn 1 scan --</option>
-            ${rows.slice(0, 100).map((scan) => {
-              const text = `#${scan.id} · ${scanTypeLabel(scan)} · ${(scan.verdict_label || scan.risk_level || 'N/A')}`;
-              return `<option value="${scan.id}">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</option>`;
-            }).join('')}
-          </select>
-        </div>
-      `,
-      showCancelButton: true,
-      showDenyButton: true,
-      denyButtonText: 'Nhập ID',
-      confirmButtonText: 'Gắn scan',
-      cancelButtonText: 'Hủy',
-      background: 'var(--sc-night-2)',
-      color: 'var(--sc-white)',
-      customClass: { popup: 'liquid-card border border-white/10 !rounded-2xl' },
-      preConfirm: () => {
-        const selected = (document.getElementById('scan-picker-select') as HTMLSelectElement | null)?.value || '';
-        if (!selected) {
-          Swal.showValidationMessage('Vui lòng chọn scan');
-          return null;
-        }
-        return selected;
-      },
-    });
-
-    if (result.isDenied) {
-      const manual = await Swal.fire({
-        title: 'Nhập Scan ID',
-        input: 'text',
-        inputPlaceholder: 'VD: 123',
-        showCancelButton: true,
-        confirmButtonText: 'Dùng ID này',
-        cancelButtonText: 'Hủy',
+        cancelButtonText: 'Để sau',
         background: 'var(--sc-night-2)',
         color: 'var(--sc-white)',
         customClass: { popup: 'liquid-card border border-white/10 !rounded-2xl' },
@@ -605,11 +598,6 @@ export default function ForumDetail() {
       if (manual.isConfirmed) {
         await applyManualScanId(String(manual.value || ''), target, filters);
       }
-      return;
-    }
-
-    if (result.isConfirmed && result.value) {
-      commitPickedScan({ id: Number(result.value) }, target);
     }
   };
 
@@ -618,6 +606,18 @@ export default function ForumDetail() {
     setScanPickerFilters(next);
     return next;
   };
+
+  /* Bộ lọc của modal: gom thay đổi + debounce 350ms. Trước đây mỗi ký tự gõ
+   * vào ô tìm kiếm đều bắn 1 request /user/scan-picker/ (kể cả khi modal chưa
+   * mở) gây nghẽn và loạn danh sách. */
+  useEffect(() => {
+    if (!scanPickerOpen) return;
+    const handle = window.setTimeout(() => {
+      void fetchScanPicker(scanPickerFilters);
+    }, 350);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanPickerOpen, scanPickerFilters.scope, scanPickerFilters.type, scanPickerFilters.riskLevel, scanPickerFilters.q]);
 
   const submitComment = async (parentId: number | null = null): Promise<void> => {
     if (!post) return;
@@ -631,7 +631,11 @@ export default function ForumDetail() {
 
     const tsToken = getTsToken();
     const siteKey = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
-    if (siteKey && !tsToken) {
+    if (!siteKey) {
+      showToast('Chưa cấu hình xác minh anti-spam (NEXT_PUBLIC_TURNSTILE_SITEKEY). Liên hệ quản trị viên.', 'error');
+      return;
+    }
+    if (!tsToken) {
       showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');
       return;
     }
@@ -762,9 +766,13 @@ export default function ForumDetail() {
       api
         .post<ReactionResp>(`/forum/posts/${post.id}/reaction/`, { reaction_type: 'share' })
         .then((data) => {
-          if (data && data.shares_count !== undefined) {
-            setPost((prev) => (prev ? { ...prev, shares_count: data.shares_count } : prev));
-          }
+          setPost((prev) => (prev ? {
+            ...prev,
+            shares_count: data.shares_count ?? prev.shares_count,
+            /* Backend toggle reaction nên sau khi copy link thì đánh dấu đã
+             * chia sẻ luôn (trước đây nút luôn ở trạng thái chưa chia sẻ). */
+            user_shared: true,
+          } : prev));
         })
         .catch(() => {});
     }).catch(() => {
@@ -809,9 +817,9 @@ export default function ForumDetail() {
     }
   };
 
-  const banUser = async (username?: string, displayName?: string): Promise<void> => {
+  const banUser = async (userId?: number | null, username?: string, displayName?: string): Promise<void> => {
     const result = await Swal.fire({
-      title: `Cấm ${displayName || ''} khỏi diễn đàn?`,
+      title: `Cấm ${displayName || username || 'thành viên'} khỏi diễn đàn?`,
       html: `
         <div class="space-y-3 text-left mt-4">
           <div>
@@ -847,12 +855,18 @@ export default function ForumDetail() {
     });
     if (!result.isConfirmed) return;
     const value = result.value as { reason: string; ban_type: string; days: number };
+    /* Backend yêu cầu user_id (trước đây gửi username nên luôn trả 400
+     * 'Thiếu người dùng hoặc lý do.' và tính năng cấm không bao giờ chạy). */
+    if (!userId) {
+      showToast('Không xác định được người dùng cần cấm', 'error');
+      return;
+    }
     try {
-      const data = await adminPost('/api/v1/admin/forum/ban/', { action: 'ban', username, ...value });
-      if (data.status === 'ok') showToast(String(data.message || 'Đã cấm'), 'success');
-      else showToast(String(data.error || 'Lỗi'), 'error');
-    } catch {
-      showToast('Lỗi kết nối', 'error');
+      const data = await adminPost('/admin/forum/ban/', { action: 'ban', user_id: userId, ...value });
+      if (data.status === 'ok') showToast(String(data.message || `Đã cấm ${displayName || ''}`), 'success');
+      else showToast(String(data.error || 'Không thể cấm người dùng này'), 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Lỗi kết nối', 'error');
     }
   };
 
@@ -866,10 +880,146 @@ export default function ForumDetail() {
   };
 
   if (loadingInit) return <div className="max-w-7xl mx-auto px-4 py-8"><Spinner /></div>;
-  if (notFound || !post) return <div className="max-w-7xl mx-auto px-4 py-8"><EmptyState text="Không tìm thấy bài viết." /></div>;
+  if (notFound || (!post && !loadError)) return <div className="max-w-7xl mx-auto px-4 py-8"><EmptyState text="Không tìm thấy bài viết." /></div>;
+  if (!post) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="voz-thread rounded-2xl p-8 text-center border border-warn-500/20 bg-warn-500/5">
+          <i className="bi bi-lock-fill text-warn-400 text-2xl"></i>
+          <p className="text-warn-400/90 mt-3 font-bold text-sm">{loadError}</p>
+          <p className="text-white/45 text-xs mt-1">Bạn không thể xem hoặc bình luận trong bài viết đã khóa.</p>
+          <Link href="/forum/" className="inline-flex items-center gap-2 mt-5 text-brand-400 font-bold hover:text-white transition-colors">
+            <i className="bi bi-arrow-left"></i> Về diễn đàn
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const isOwner = Boolean(user && post.author_username && user.username === post.author_username);
   const isStaff = Boolean(user?.is_staff);
+  /* Render 1 bình luận + các trả lời lồng nhau. Replies được nest sẵn trong
+   * payload của backend nên phải render đệ quy để không mất ngữ cảnh. */
+  const renderCommentNode = (comment: ForumComment, depth: number, orderLabel: string): ReactElement => {
+    const replyOpen = replyTo === comment.id;
+    const replyScan = replyScanId[comment.id] || '';
+    const marginLeft = Math.max(0, depth - 1) * 18;
+    return (
+      <div key={`comment-${comment.id}`} className="space-y-3">
+        <div className="comment-card rounded-2xl overflow-hidden" id={`comment-${comment.id}`} style={{ marginLeft: `${marginLeft}px` }}>
+          <div className="flex flex-col sm:flex-row">
+            {/* Comment Author (LEFT) */}
+            <div className="sm:w-40 shrink-0 p-4 border-b sm:border-b-0 sm:border-r border-white/5 bg-white/[0.01] flex flex-row sm:flex-col items-center gap-3 sm:gap-2 text-center">
+              <Link href={`/profile/@${comment.author_username || ''}/`} data-usercard={comment.author_username || ''} className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-400/10 to-brand2-500/10 border border-white/10 overflow-hidden flex items-center justify-center shrink-0 hover:border-brand-400/30 transition-all">
+                {comment.author_avatar ? (
+                  <img src={mediaUrl(comment.author_avatar)} className="w-full h-full object-cover" alt="" />
+                ) : (
+                  <span className="text-sm font-bold text-brand-400">{getInitial(comment.author_name)}</span>
+                )}
+              </Link>
+              <div className="flex flex-col items-center gap-0.5 min-w-0">
+                <div className="flex items-center gap-1">
+                  <Link href={`/profile/@${comment.author_username || ''}/`} className="text-xs font-bold text-white/80 hover:text-brand-400 transition-colors truncate max-w-[100px]">{comment.author_name}</Link>
+                  {comment.author_is_staff && <i className="bi bi-patch-check-fill verified-badge text-xs" title="Quản trị viên"></i>}
+                </div>
+                {comment.author_rank && (
+                  <span className={`rank-badge text-[8px] rank-${comment.author_rank.level || ''}`}>
+                    <i className={`${comment.author_rank.icon || ''} mr-0.5`}></i>
+                    <span>{comment.author_rank.name}</span>
+                  </span>
+                )}
+                <div className="hidden sm:block text-[9px] text-white/35 mt-1">
+                  <span>{`Bài viết: ${comment.author_posts_count || 0}`}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Comment Content (RIGHT) */}
+            <div className="flex-1 min-w-0">
+              <div className="px-4 py-2 bg-white/[0.01] border-b border-white/5 flex items-center justify-between">
+                <span className="text-[10px] text-white/55 font-bold">{formatDate(comment.created_at)}</span>
+                <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">{`#${orderLabel}`}</span>
+              </div>
+              <div className="p-4">
+                {comment.parent_author_name && (
+                  <div className="mb-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-danger-500/10 border border-danger-500/30 text-[10px] font-black tracking-wide">
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-danger-500/20 text-danger-300 leading-none">↳</span>
+                    <span className="text-danger-200">{`Trả lời @${comment.parent_author_name}`}</span>
+                  </div>
+                )}
+                <div className="text-sm text-white/70 leading-relaxed richtext-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(comment.content || '') }} />
+              </div>
+              {/* Comment reactions */}
+              <div className="px-4 py-2 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => void toggleCommentReaction(comment, 'upvote')} className={`text-[10px] font-black transition-all flex items-center gap-1 ${comment.user_liked ? 'text-safe-400' : 'text-white/35 hover:text-safe-400'}`}>
+                    <i className={`bi ${comment.user_liked ? 'bi-caret-up-fill' : 'bi-caret-up'}`}></i>
+                    <span>{comment.likes_count || 0}</span>
+                  </button>
+                  <button onClick={() => void toggleCommentReaction(comment, 'downvote')} className={`text-[10px] font-black transition-all flex items-center gap-1 ${comment.user_disliked ? 'text-danger-400' : 'text-white/35 hover:text-danger-400'}`}>
+                    <i className={`bi ${comment.user_disliked ? 'bi-caret-down-fill' : 'bi-caret-down'}`}></i>
+                    <span>{comment.dislikes_count || 0}</span>
+                  </button>
+                  <button onClick={() => void toggleCommentReaction(comment, 'helpful')} className={`text-[10px] font-black transition-all flex items-center gap-1 ${comment.user_helpful ? 'text-brand-400' : 'text-white/35 hover:text-brand-400'}`}>
+                    <i className={`bi ${comment.user_helpful ? 'bi-patch-check-fill' : 'bi-patch-check'}`}></i>
+                    <span>{comment.helpful_count || 0}</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!post.is_locked && canReply(comment.id) && (
+                    <button onClick={() => openReplyEditor(comment.id, comment.author_name)} className="text-[10px] font-black text-white/35 hover:text-brand-400 transition-all flex items-center gap-1">
+                      <i className="bi bi-reply-fill"></i> Trả lời
+                    </button>
+                  )}
+                  {!canReply(comment.id) && (
+                    <span className="text-[9px] font-black text-white/35 uppercase tracking-widest">Đã đạt tầng tối đa</span>
+                  )}
+                  <button onClick={() => shareComment(comment)} className="text-[10px] font-black text-white/35 hover:text-white/60 transition-all">
+                    <i className="bi bi-share"></i>
+                  </button>
+                  <button onClick={() => void reportComment(comment)} className="text-[10px] font-black text-white/35 hover:text-danger-400 transition-all">
+                    <i className="bi bi-flag"></i>
+                  </button>
+                </div>
+              </div>
+
+              {/* Reply Input */}
+              {replyOpen && (
+                <div className="mx-4 mb-4 p-4 rounded-xl bg-white/[0.03] border border-brand-500/10">
+                  <h4 className="text-[10px] font-black text-brand-400 uppercase tracking-widest mb-2">{`Phản hồi ${comment.author_name || ''}`}</h4>
+                  <div className={`overflow-hidden bg-black/20 rounded-xl border border-white/5 w-full ${sending ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <RichEditor
+                      key={comment.id}
+                      editorRef={replyEditorRef}
+                      initialData={repliesContent[comment.id] || ''}
+                      placeholder={`Phản hồi @${replyAuthorName || 'thành viên'}...`}
+                      minLines={4}
+                      onChangeData={(html) => setRepliesContent((prev) => ({ ...prev, [comment.id]: html }))}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button onClick={() => void openScanPickerDialog('reply', comment.id)} className="text-[10px] font-bold text-brand-400/70 hover:text-brand-300 px-3 py-1.5 uppercase tracking-widest transition-colors border border-brand-500/20 rounded-lg">
+                      <i className="bi bi-search"></i>
+                      <span>{replyScan ? `Scan #${replyScan}` : 'Scan ID'}</span>
+                    </button>
+                    <button onClick={() => setReplyTo(null)} className="text-[10px] font-bold text-white/45 hover:text-white px-3 py-1.5 uppercase tracking-widest transition-colors">Hủy</button>
+                    <button onClick={() => void submitComment(comment.id)} disabled={sending}
+                      className="bg-brand-500/20 text-brand-400 border border-brand-500/20 px-5 py-1.5 rounded-lg text-[10px] font-black hover:bg-brand-400 hover:text-black transition-all uppercase tracking-widest">
+                      {!sending && <span>Gửi</span>}
+                      {sending && <span className="w-3 h-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin inline-block"></span>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {(comment.replies || []).map((reply, replyIdx) =>
+          renderCommentNode(reply, depth + 1, `${orderLabel}.${replyIdx + 1}`),
+        )}
+      </div>
+    );
+  };
   const pageComments = paginatedComments();
 
   return (
@@ -972,7 +1122,7 @@ export default function ForumDetail() {
                     </div>
                   )}
 
-                  <div className="text-white/70 leading-relaxed text-[15px] space-y-4 richtext-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content || '') }} />
+                  <div className="text-white/70 leading-relaxed text-[15px] richtext-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content || '') }} />
                 </div>
 
                 {/* Reactions Row */}
@@ -1002,14 +1152,17 @@ export default function ForumDetail() {
                         <i className="bi bi-pencil-square"></i> Sửa
                       </Link>
                     )}
-                    {user && (isOwner || isStaff) && (
+                    {/* Chỉ staff mới khoá được (backend bỏ qua is_locked với thành viên thường) —
+                      hiển thị nút cho owner từng khiến UI báo "Đã khóa" nhưng bài
+                      vẫn mở. */}
+                    {user && isStaff && (
                       <button onClick={() => void toggleThreadLock()} className="text-[10px] font-black text-white/35 hover:text-warn-400 transition-all uppercase tracking-widest flex items-center gap-1.5">
                         <i className={`bi ${post.is_locked ? 'bi-unlock-fill' : 'bi-lock-fill'}`}></i>
                         <span>{post.is_locked ? 'Mở khóa' : 'Khóa chủ đề'}</span>
                       </button>
                     )}
                     {user && isStaff && !isOwner && (
-                      <button onClick={() => void banUser(post.author_username, post.author_name)} className="text-[10px] font-black text-white/35 hover:text-danger-500 transition-all uppercase tracking-widest flex items-center gap-1.5">
+                      <button onClick={() => void banUser(post.author_id, post.author_username, post.author_name)} className="text-[10px] font-black text-white/35 hover:text-danger-500 transition-all uppercase tracking-widest flex items-center gap-1.5">
                         <i className="bi bi-slash-circle"></i> Cấm
                       </button>
                     )}
@@ -1039,124 +1192,9 @@ export default function ForumDetail() {
 
             {/* Comments List (VOZ-style: author left, content right) */}
             <div className="space-y-3" id="comments-section">
-              {pageComments.map((comment, cIdx) => {
-                const replyOpen = replyTo === comment.id;
-                const depth = comment.depth || 1;
-                const marginLeft = Math.max(0, depth - 1) * 20;
-                const replyScan = replyScanId[comment.id] || '';
-                return (
-                  <div key={`comment-${comment.id}`} className="space-y-3">
-                    <div className="comment-card rounded-2xl overflow-hidden" id={`comment-${comment.id}`} style={{ marginLeft: `${marginLeft}px` }}>
-                      <div className="flex flex-col sm:flex-row">
-                        {/* Comment Author (LEFT) */}
-                        <div className="sm:w-40 shrink-0 p-4 border-b sm:border-b-0 sm:border-r border-white/5 bg-white/[0.01] flex flex-row sm:flex-col items-center gap-3 sm:gap-2 text-center">
-                          <Link href={`/profile/@${comment.author_username || ''}/`} data-usercard={comment.author_username || ''} className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-400/10 to-brand2-500/10 border border-white/10 overflow-hidden flex items-center justify-center shrink-0 hover:border-brand-400/30 transition-all">
-                            {comment.author_avatar ? (
-                              <img src={mediaUrl(comment.author_avatar)} className="w-full h-full object-cover" alt="" />
-                            ) : (
-                              <span className="text-sm font-bold text-brand-400">{getInitial(comment.author_name)}</span>
-                            )}
-                          </Link>
-                          <div className="flex flex-col items-center gap-0.5 min-w-0">
-                            <div className="flex items-center gap-1">
-                              <Link href={`/profile/@${comment.author_username || ''}/`} className="text-xs font-bold text-white/80 hover:text-brand-400 transition-colors truncate max-w-[100px]">{comment.author_name}</Link>
-                              {comment.author_is_staff && <i className="bi bi-patch-check-fill verified-badge text-xs" title="Quản trị viên"></i>}
-                            </div>
-                            {comment.author_rank && (
-                              <span className={`rank-badge text-[8px] rank-${comment.author_rank.level || ''}`}>
-                                <i className={`${comment.author_rank.icon || ''} mr-0.5`}></i>
-                                <span>{comment.author_rank.name}</span>
-                              </span>
-                            )}
-                            <div className="hidden sm:block text-[9px] text-white/35 mt-1">
-                              <span>{`Bài viết: ${comment.author_posts_count || 0}`}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Comment Content (RIGHT) */}
-                        <div className="flex-1 min-w-0">
-                          <div className="px-4 py-2 bg-white/[0.01] border-b border-white/5 flex items-center justify-between">
-                            <span className="text-[10px] text-white/55 font-bold">{formatDate(comment.created_at)}</span>
-                            <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">{`#${(commentPage - 1) * commentsPerPage + cIdx + 2}`}</span>
-                          </div>
-                          <div className="p-4">
-                            {comment.parent_author_name && (
-                              <div className="mb-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-danger-500/10 border border-danger-500/30 text-[10px] font-black tracking-wide">
-                                <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-danger-500/20 text-danger-300 leading-none">↳</span>
-                                <span className="text-danger-200">{`Trả lời @${comment.parent_author_name}`}</span>
-                              </div>
-                            )}
-                            <div className="text-sm text-white/70 leading-relaxed richtext-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(comment.content || '') }} />
-                          </div>
-                          {/* Comment reactions */}
-                          <div className="px-4 py-2 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <button onClick={() => void toggleCommentReaction(comment, 'upvote')} className={`text-[10px] font-black transition-all flex items-center gap-1 ${comment.user_liked ? 'text-safe-400' : 'text-white/35 hover:text-safe-400'}`}>
-                                <i className={`bi ${comment.user_liked ? 'bi-caret-up-fill' : 'bi-caret-up'}`}></i>
-                                <span>{comment.likes_count || 0}</span>
-                              </button>
-                              <button onClick={() => void toggleCommentReaction(comment, 'downvote')} className={`text-[10px] font-black transition-all flex items-center gap-1 ${comment.user_disliked ? 'text-danger-400' : 'text-white/35 hover:text-danger-400'}`}>
-                                <i className={`bi ${comment.user_disliked ? 'bi-caret-down-fill' : 'bi-caret-down'}`}></i>
-                                <span>{comment.dislikes_count || 0}</span>
-                              </button>
-                              <button onClick={() => void toggleCommentReaction(comment, 'helpful')} className={`text-[10px] font-black transition-all flex items-center gap-1 ${comment.user_helpful ? 'text-brand-400' : 'text-white/35 hover:text-brand-400'}`}>
-                                <i className={`bi ${comment.user_helpful ? 'bi-patch-check-fill' : 'bi-patch-check'}`}></i>
-                                <span>{comment.helpful_count || 0}</span>
-                              </button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {!post.is_locked && canReply(comment.id) && (
-                                <button onClick={() => openReplyEditor(comment.id, comment.author_name)} className="text-[10px] font-black text-white/35 hover:text-brand-400 transition-all flex items-center gap-1">
-                                  <i className="bi bi-reply-fill"></i> Trả lời
-                                </button>
-                              )}
-                              {!canReply(comment.id) && (
-                                <span className="text-[9px] font-black text-white/35 uppercase tracking-widest">Đã đạt tầng tối đa</span>
-                              )}
-                              <button onClick={() => shareComment(comment)} className="text-[10px] font-black text-white/35 hover:text-white/60 transition-all">
-                                <i className="bi bi-share"></i>
-                              </button>
-                              <button onClick={() => void reportComment(comment)} className="text-[10px] font-black text-white/35 hover:text-danger-400 transition-all">
-                                <i className="bi bi-flag"></i>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Reply Input */}
-                          {replyOpen && (
-                            <div className="mx-4 mb-4 p-4 rounded-xl bg-white/[0.03] border border-brand-500/10">
-                              <h4 className="text-[10px] font-black text-brand-400 uppercase tracking-widest mb-2">{`Phản hồi ${comment.author_name || ''}`}</h4>
-                              <div className={`overflow-hidden bg-black/20 rounded-xl border border-white/5 w-full ${sending ? 'opacity-50 pointer-events-none' : ''}`}>
-                                <RichEditor
-                                  key={comment.id}
-                                  editorRef={replyEditorRef}
-                                  initialData={repliesContent[comment.id] || ''}
-                                  placeholder={`Phản hồi @${replyAuthorName || 'thành viên'}...`}
-                                  minLines={4}
-                                  onChangeData={(html) => setRepliesContent((prev) => ({ ...prev, [comment.id]: html }))}
-                                />
-                              </div>
-                              <div className="flex justify-end gap-2 mt-2">
-                                <button onClick={() => void openScanPickerDialog('reply', comment.id)} className="text-[10px] font-bold text-brand-400/70 hover:text-brand-300 px-3 py-1.5 uppercase tracking-widest transition-colors border border-brand-500/20 rounded-lg">
-                                  <i className="bi bi-search"></i>
-                                  <span>{replyScan ? `Scan #${replyScan}` : 'Scan ID'}</span>
-                                </button>
-                                <button onClick={() => setReplyTo(null)} className="text-[10px] font-bold text-white/45 hover:text-white px-3 py-1.5 uppercase tracking-widest transition-colors">Hủy</button>
-                                <button onClick={() => void submitComment(comment.id)} disabled={sending}
-                                  className="bg-brand-500/20 text-brand-400 border border-brand-500/20 px-5 py-1.5 rounded-lg text-[10px] font-black hover:bg-brand-400 hover:text-black transition-all uppercase tracking-widest">
-                                  {!sending && <span>Gửi</span>}
-                                  {sending && <span className="w-3 h-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin inline-block"></span>}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {pageComments.map((comment, cIdx) =>
+                renderCommentNode(comment, 1, String((commentPage - 1) * commentsPerPage + cIdx + 2)),
+              )}
             </div>
 
             {/* Comment Pagination */}
@@ -1176,7 +1214,7 @@ export default function ForumDetail() {
                   className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/55 hover:text-white hover:bg-white/10 transition disabled:opacity-30 disabled:cursor-not-allowed">
                   <i className="bi bi-chevron-right"></i>
                 </button>
-                <span className="ml-2 text-[10px] text-white/35">{`Trang ${commentPage}/${commentTotalPages()} · ${comments.length} bình luận`}</span>
+                <span className="ml-2 text-[10px] text-white/35">{`Trang ${commentPage}/${commentTotalPages()} · ${flattenedComments().length} bình luận`}</span>
               </div>
             )}
 
@@ -1407,12 +1445,12 @@ export default function ForumDetail() {
 
             <div className="p-5 border-b border-white/10 space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <select value={scanPickerFilters.scope} onChange={(e) => { const next = patchFilters({ scope: e.target.value }); void fetchScanPicker(next); }} className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
+                <select value={scanPickerFilters.scope} onChange={(e) => patchFilters({ scope: e.target.value })} className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
                   <option value="mine">Scan của tôi</option>
                   <option value="public">Scan public referable</option>
                   <option value="all">Tất cả scan có quyền</option>
                 </select>
-                <select value={scanPickerFilters.type} onChange={(e) => { const next = patchFilters({ type: e.target.value }); void fetchScanPicker(next); }} className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
+                <select value={scanPickerFilters.type} onChange={(e) => patchFilters({ type: e.target.value })} className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
                   <option value="">Mọi loại scan</option>
                   <option value="phone">Phone</option>
                   <option value="message">Message</option>
@@ -1423,7 +1461,7 @@ export default function ForumDetail() {
                   <option value="file">File</option>
                   <option value="audio">Audio</option>
                 </select>
-                <select value={scanPickerFilters.riskLevel} onChange={(e) => { const next = patchFilters({ riskLevel: e.target.value }); void fetchScanPicker(next); }} className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
+                <select value={scanPickerFilters.riskLevel} onChange={(e) => patchFilters({ riskLevel: e.target.value })} className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
                   <option value="">Mọi mức độ</option>
                   <option value="RED">RED</option>
                   <option value="YELLOW">YELLOW</option>
@@ -1431,7 +1469,7 @@ export default function ForumDetail() {
                   <option value="SAFE">SAFE</option>
                 </select>
                 <div className="flex gap-2">
-                  <input type="text" value={scanPickerFilters.q} onChange={(e) => { const next = patchFilters({ q: e.target.value }); void fetchScanPicker(next); }} placeholder="Từ khóa..." className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl flex-1 px-4 py-2 text-sm font-bold text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
+                  <input type="text" value={scanPickerFilters.q} onChange={(e) => patchFilters({ q: e.target.value })} placeholder="Từ khóa..." className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl flex-1 px-4 py-2 text-sm font-bold text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
                   <button onClick={() => void fetchScanPicker(scanPickerFilters)} type="button" className="px-4 py-2 rounded-xl bg-brand-500/20 border border-brand-400/30 text-brand-300 hover:bg-brand-500/30 transition text-sm font-black"><i className="bi bi-funnel"></i></button>
                 </div>
               </div>

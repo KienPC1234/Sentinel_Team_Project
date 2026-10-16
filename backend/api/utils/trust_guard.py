@@ -146,6 +146,22 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "limits": "Kênh để xác minh thủ công, không tự động trả kết quả.",
         "url": "https://khonggianmang.vn",
     },
+    "tinnhiemmang": {
+        "name": "Tín nhiệm mạng (tinnhiemmang.vn — NCSC/VNCERT)",
+        "reliability": _HIGH,
+        "kind": "government",
+        "description": (
+            "Danh bạ chính thống: website/tổ chức/hệ thống/ứng dụng tín nhiệm đã được "
+            "chứng nhận và danh sách website lừa đảo (mạo danh tổ chức/thương hiệu). "
+            "Dùng để đối chiếu tên miền tin cậy ↔ lừa đảo."
+        ),
+        "limits": (
+            "Chỉ gồm thực thể đã đăng ký/chứng nhận hoặc đã bị ghi nhận — KHÔNG có nghĩa "
+            "mọi tên miền vắng mặt đều an toàn. Dữ liệu cập nhật theo từng đợt; luôn đối "
+            "chiếu trang gốc khi trích dẫn."
+        ),
+        "url": "https://tinnhiemmang.vn",
+    },
 }
 
 
@@ -212,6 +228,25 @@ def build_evidence(result: Dict[str, Any]) -> List[Dict[str, Any]]:
                 f"Sạch trên {vt.get('total_engines', '?')} engine antivirus.",
                 "INFO", url=vt.get("permalink") or None, supports="benign",
             ))
+
+    # (a2) Danh bạ Tín nhiệm mạng (tinnhiemmang.vn) — nguồn chính thống NCSC/VNCERT
+    tk = result.get("tinnhiem")
+    if isinstance(tk, dict) and tk.get("status") in ("scam", "trusted"):
+        rec = tk.get("record") or {}
+        if tk.get("status") == "scam":
+            imp = rec.get("impersonated") or rec.get("owner")
+            detail = "Tên miền nằm trong DANH SÁCH LỪA ĐẢO do NCSC/VNCERT công bố"
+            if imp:
+                detail += f" (mạo danh: {imp})"
+            ev.append(_mk_evidence("tinnhiemmang", detail, "CRITICAL",
+                                   url=rec.get("url"), supports="malicious"))
+        else:
+            owner = rec.get("owner") or rec.get("name")
+            detail = "Website đã được chứng nhận TÍN NHIỆM" + (f" — {owner}" if owner else "")
+            if rec.get("badge"):
+                detail += f" ({rec['badge']})"
+            ev.append(_mk_evidence("tinnhiemmang", detail, "INFO",
+                                   url=rec.get("url"), supports="benign"))
 
     # (b) forensic_evidence (file scan) — list dict hoặc list str
     for item in (result.get("forensic_evidence") or []):

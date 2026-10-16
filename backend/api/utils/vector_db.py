@@ -176,33 +176,88 @@ class ScamVectorDB:
 
     # --------------------------------------------------------- collect docs
     def _collect_documents(self) -> Tuple[List[str], List[Dict[str, Any]]]:
+        import re
+        from bs4 import BeautifulSoup
         from api.core.models import Article, LearnLesson, LearnQuiz, LearnScenario
+
+        def _clean_text(raw: str) -> str:
+            if not raw:
+                return ''
+            try:
+                soup = BeautifulSoup(raw, 'html.parser')
+                for s in soup(['script', 'style']):
+                    s.decompose()
+                text = soup.get_text(separator=' ', strip=True)
+                return re.sub(r'\s+', ' ', text).strip()
+            except Exception:
+                return re.sub(r'<[^>]+>', ' ', raw).strip()
 
         documents: List[str] = []
         metadata: List[Dict[str, Any]] = []
 
         for art in Article.objects.filter(is_published=True):
-            documents.append(f"Tiêu đề: {art.title}\nNội dung: {art.content}")
+            clean_body = _clean_text(art.content or '')
+            clean_summary = (art.summary or '').strip()
+            summary_part = f"\nTóm tắt: {clean_summary}" if clean_summary else ""
+            documents.append(f"Tiêu đề: {art.title}{summary_part}\nNội dung: {clean_body[:3000]}")
             metadata.append({'id': art.id, 'type': 'article', 'title': art.title, 'url': f"/learn/{art.slug}/"})
 
         for les in LearnLesson.objects.filter(is_published=True):
-            documents.append(f"Tiêu đề: {les.title}\nNội dung: {les.content}")
+            clean_body = _clean_text(les.content or '')
+            clean_summary = (les.summary or '').strip()
+            summary_part = f"\nTóm tắt: {clean_summary}" if clean_summary else ""
+            documents.append(f"Tiêu đề: {les.title}{summary_part}\nNội dung: {clean_body[:3000]}")
             metadata.append({'id': les.id, 'type': 'lesson', 'title': les.title, 'url': f"/learn/lesson/{les.slug}/"})
 
-        for q in (LearnQuiz.objects.filter(article__is_published=True) | LearnQuiz.objects.filter(lesson__is_published=True)):
-            documents.append(f"Câu hỏi: {q.question}\nGiải thích: {q.explanation}")
+        for q in (LearnQuiz.objects.filter(article__is_published=True) | LearnQuiz.objects.filter(lesson__is_published=True)).distinct():
+            opts_parts = []
+            if isinstance(q.options, list) and q.options:
+                for opt in q.options:
+                    if isinstance(opt, dict):
+                        opts_parts.append(f"{opt.get('id', '')}. {opt.get('text', '')}".strip())
+                    elif isinstance(opt, str):
+                        opts_parts.append(opt)
+            opts_text = ("\nLựa chọn: " + "; ".join(opts_parts)) if opts_parts else ""
+            documents.append(f"Câu hỏi trắc nghiệm: {q.question}{opts_text}\nGiải thích: {q.explanation}")
             quiz_url = "/learn/"
-            if q.article:
-                quiz_url = f"/learn/{q.article.slug}/"
-            elif q.lesson:
+            if q.lesson:
                 quiz_url = f"/learn/lesson/{q.lesson.slug}/"
+            elif q.article:
+                quiz_url = f"/learn/{q.article.slug}/"
             metadata.append({'id': q.id, 'type': 'quiz', 'title': f"Quiz: {q.question[:50]}", 'url': quiz_url})
 
         for s in LearnScenario.objects.all():
-            if s.article is None or s.article.is_published:
-                documents.append(f"Kịch bản: {s.title}\nMô tả: {s.description}")
-                metadata.append({'id': s.id, 'type': 'scenario', 'title': s.title,
-                                 'url': f"/learn/{s.article.slug}/" if s.article else "/learn/"})
+            if s.article and not s.article.is_published:
+                continue
+            if s.lesson and not s.lesson.is_published:
+                continue
+
+            content = s.content or {}
+            steps = content.get('steps') if isinstance(content, dict) else (content if isinstance(content, list) else [])
+            steps_lines = []
+            if steps:
+                for st in steps:
+                    if isinstance(st, dict):
+                        actor = st.get('actor') or st.get('speaker') or 'Nhân vật'
+                        txt = st.get('text') or ''
+                        analysis = st.get('analysis') or st.get('note') or ''
+                        line = f"{actor}: {txt}"
+                        if analysis:
+                            line += f" -> Phân tích: {analysis}"
+                        steps_lines.append(line)
+                    elif isinstance(st, str):
+                        steps_lines.append(st)
+
+            steps_text = ("\nDiễn biến chi tiết:\n" + "\n".join(steps_lines)) if steps_lines else ""
+            documents.append(f"Kịch bản tình huống lừa đảo: {s.title}\nMô tả: {s.description}{steps_text}")
+
+            scenario_url = "/learn/"
+            if s.lesson:
+                scenario_url = f"/learn/lesson/{s.lesson.slug}/"
+            elif s.article:
+                scenario_url = f"/learn/{s.article.slug}/"
+
+            metadata.append({'id': s.id, 'type': 'scenario', 'title': s.title, 'url': scenario_url})
 
         return documents, metadata
 
@@ -315,6 +370,21 @@ class ScamVectorDB:
             'quiz': {q.id: q for q in LearnQuiz.objects.filter(id__in=ids_by_type.get('quiz', []))},
             'scenario': {s.id: s for s in LearnScenario.objects.filter(id__in=ids_by_type.get('scenario', []))},
         }
+        import re
+        from bs4 import BeautifulSoup
+
+        def _clean(raw: str) -> str:
+            if not raw:
+                return ''
+            try:
+                soup = BeautifulSoup(raw, 'html.parser')
+                for s in soup(['script', 'style']):
+                    s.decompose()
+                text = soup.get_text(separator=' ', strip=True)
+                return re.sub(r'\s+', ' ', text).strip()
+            except Exception:
+                return re.sub(r'<[^>]+>', ' ', raw).strip()
+
         results = []
         for res in raw_results:
             obj = lookups.get(res['type'], {}).get(res['id'])
@@ -323,9 +393,26 @@ class ScamVectorDB:
             if res['type'] == 'quiz':
                 res['text'] = f"Câu hỏi: {obj.question}\nGiải thích: {obj.explanation}"
             elif res['type'] == 'scenario':
-                res['text'] = f"Kịch bản: {obj.title}\nMô tả: {obj.description}"
+                content = obj.content or {}
+                steps = content.get('steps') if isinstance(content, dict) else (content if isinstance(content, list) else [])
+                steps_lines = []
+                for st in steps:
+                    if isinstance(st, dict):
+                        actor = st.get('actor') or st.get('speaker') or 'Nhân vật'
+                        txt = st.get('text') or ''
+                        analysis = st.get('analysis') or st.get('note') or ''
+                        line = f"- {actor}: {txt}"
+                        if analysis:
+                            line += f" [Phân tích bảo mật: {analysis}]"
+                        steps_lines.append(line)
+                    elif isinstance(st, str):
+                        steps_lines.append(f"- {st}")
+                steps_str = ("\nDiễn biến kịch bản:\n" + "\n".join(steps_lines)) if steps_lines else ""
+                res['text'] = f"Kịch bản: {obj.title}\nMô tả: {obj.description}{steps_str}"
             else:
-                res['text'] = obj.content[:1000]
+                body = _clean(obj.content or '')
+                summary = (getattr(obj, 'summary', '') or '').strip()
+                res['text'] = f"{summary}\n\n{body}"[:2000] if summary else body[:2000]
             results.append(res)
         return results
 

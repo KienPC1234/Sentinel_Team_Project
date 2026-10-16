@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { wsBase, WsBadge } from '../../components/ScanWidgets';
 import type { WsState } from '../../components/ScanWidgets';
-import { useAdminGet } from './_shared';
+import { AdminShell, useAdminGet } from './_shared';
 import { scConfirm, showToast } from '../../lib/ui/feedback';
 
 /* Port 1-1 từ PKV/templates/Admin/rag_management.html.
@@ -273,34 +273,27 @@ export default function RagMgmt() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-10 mt-16 max-w-6xl">
-      <div className="flex items-center justify-between mb-12">
-        <div className="flex items-center gap-6">
-          <div className="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 shadow-lg shadow-brand-500/5">
-            <i className="bi bi-database-fill-gear text-2xl"></i>
-          </div>
-          <div>
-            <h1 className="text-3xl font-black text-white tracking-tight">RAG &amp; Kiến thức AI</h1>
-            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mt-1">Đồng bộ hóa trí tuệ nhân tạo</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
+    <AdminShell
+      title="RAG & Tri Thức AI"
+      subtitle="Quản lý Vector Index, FAISS Embeddings và đồng bộ hóa kiến thức AI"
+      actions={
+        <div className="flex items-center gap-3">
           <WsBadge state={wsState} connectedLabel="RAG trực tiếp" />
           <button
             type="button"
             disabled={reindexing}
             onClick={() => void reindex()}
-            className="px-8 py-3.5 rounded-2xl bg-brand-500 text-black font-black uppercase tracking-widest hover:bg-brand-400 transition-all shadow-xl shadow-brand-500/20 flex items-center gap-2 group disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl bg-brand-500 text-black font-black text-xs uppercase tracking-wider hover:bg-brand-400 transition-all shadow-md shadow-brand-500/20 flex items-center gap-2 group disabled:opacity-50"
           >
             <i
               id="reindex-icon"
-              className={`bi bi-arrow-repeat text-xl group-hover:rotate-180 transition-transform duration-500${reindexing ? ' animate-spin' : ''}`}
+              className={`bi bi-arrow-repeat text-base group-hover:rotate-180 transition-transform duration-500${reindexing ? ' animate-spin' : ''}`}
             ></i>
-            Quét lại kiến thức
+            <span>Quét lại kiến thức</span>
           </button>
         </div>
-      </div>
+      }
+    >
 
       {/* Running Status Banner */}
       {running && (
@@ -550,6 +543,6 @@ export default function RagMgmt() {
           </p>
         </div>
       </div>
-    </div>
+    </AdminShell>
   );
 }

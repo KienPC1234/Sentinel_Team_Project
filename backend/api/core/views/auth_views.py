@@ -167,7 +167,12 @@ class RegisterRequestOTPView(APIView):
         )
 
         from api.utils.email_utils import send_html_otp_email
-        send_html_otp_email(email, otp)
+        # Neu SMTP hong thi bao that bai (truoc day van tra "da gui" du mail
+        # khong di -> user doi OTP mai khong thay).
+        if not send_html_otp_email(email, otp):
+            return Response({
+                'error': 'Không gửi được email lúc này. Vui lòng thử lại sau.',
+            }, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({
             'message': 'Đã gửi mã OTP đến email của bạn.',
@@ -382,9 +387,10 @@ class LogoutView(APIView):
     def post(self, request):
         return self._do_logout(request)
 
-    @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
-        return self._do_logout(request)
+        # Khong ho tro GET de chong logout-CSRF (truoc day GET cung dang xuat
+        # + xoa DRF token). Client dung POST /api/auth/logout/.
+        return Response({'error': 'Phuong thuc khong ho tro. Hay dung POST.'}, status=405)
 
 
 class MeView(APIView):
@@ -560,6 +566,10 @@ class EmailChangeRequestOTPView(APIView):
         if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
             return Response({'error': 'Email này đã được sử dụng.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        if not _otp_send_allowed(f'email-change:{user.id}'):
+            return Response({'error': 'Bạn đã yêu cầu OTP quá nhiều lần. Vui lòng thử lại sau 1 giờ.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        _record_otp_send(f'email-change:{user.id}')
+
         otp = ''.join(secrets.choice('0123456789') for _ in range(6))
         cache_key = _email_change_cache_key(user.id, new_email)
         cache.set(
@@ -572,7 +582,11 @@ class EmailChangeRequestOTPView(APIView):
         )
 
         from api.utils.email_utils import send_html_otp_email
-        send_html_otp_email(new_email, otp)
+        if not send_html_otp_email(new_email, otp):
+            cache.delete(cache_key)
+            return Response({
+                'error': 'Không gửi được email lúc này. Vui lòng thử lại sau.',
+            }, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({
             'message': 'Đã gửi OTP xác nhận đến email mới của bạn.',
@@ -665,5 +679,15 @@ class PasswordChangeView(APIView):
         from django.contrib.auth import update_session_auth_hash
         update_session_auth_hash(request, user)
 
-        return Response({'message': 'Đã đổi mật khẩu thành công.'})
+        # Xoay DRF token: token cu (neu lo) mat hieu luc ngay. Client luu token
+        # moi tra ve trong response.
+        try:
+            Token.objects.filter(user=user).delete()
+            new_token = Token.objects.create(user=user)
+            new_token_key = new_token.key
+        except Exception:
+            logger.exception('Failed rotating token on password change for user_id=%s', user.id)
+            new_token_key = None
+
+        return Response({'message': 'Đã đổi mật khẩu thành công.', 'token': new_token_key})
 

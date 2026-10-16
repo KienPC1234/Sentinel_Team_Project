@@ -116,13 +116,6 @@ export default function Emergency() {
         streaming: false,
       },
     ]);
-    try {
-      setSessionId(
-        `emergency-${window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2)}`,
-      );
-    } catch {
-      setSessionId(`emergency-${Math.random().toString(36).substring(2)}`);
-    }
   }, []);
 
   useEffect(() => {
@@ -177,7 +170,7 @@ export default function Emergency() {
   async function send(text?: string): Promise<void> {
     const content = (text ?? input).trim();
     if (!content || typing) return;
-    if (content.length < 10 || content === lastSent) return;
+    if (content.length < 5 || content === lastSent) return;
     setLastSent(content);
     setMessages((prev) => [...prev, { fromUser: true, text: content, html: content, time: now(), status: '', isThinking: false, thinkingContent: '', thinkingCollapsed: false, streaming: false }]);
     setInput('');
@@ -191,10 +184,10 @@ export default function Emergency() {
         url: '/api/v1/chat/stream/',
         body: {
           user_message: content,
-          session_id: sessionId,
+          session_id: sessionId || undefined,
           context: 'chat',
           scan_context:
-            'EMERGENCY MODE: Người dùng đang ở trang Hỗ trợ khẩn cấp. Họ có thể đang là nạn nhân của lừa đảo. Hãy trả lời bằng tiếng Việt, ngắn gọn, rõ ràng, và đưa ra các bước hành động cụ thể. Ưu tiên an toàn tài chính và bảo mật thông tin cá nhân.',
+            'EMERGENCY MODE: Người dùng đang ở trang Hỗ trợ khẩn cấp. Họ có thể đang bị lừa đảo hoặc tống tiền dữ liệu (Ransomware). Hãy trả lời bằng tiếng Việt, ngắn gọn, trấn an, đưa ra hành động cụ thể ngay lập tức (không chuyển tiền, ngắt mạng, lưu bằng chứng, báo cơ quan chức năng). Ưu tiên bảo vệ tài sản và dữ liệu.',
         },
         onEvent: (ev) => {
           switch (ev.type) {
@@ -225,8 +218,8 @@ export default function Emergency() {
       updateLast({ status: '', streaming: false });
     } catch {
       updateLast({
-        text: 'Lỗi kết nối mạng. Vui lòng kiểm tra Internet và thử lại.',
-        html: 'Lỗi kết nối mạng. Vui lòng kiểm tra Internet và thử lại.',
+        text: 'Hệ thống AI đang phản hồi chậm hoặc gián đoạn kết nối. Trong trường hợp khẩn cấp, bạn vui lòng KHÔNG chuyển tiền theo yêu cầu kẻ gian, hãy gọi ngay đường dây nóng: Công an (113), Tổng đài Bảo vệ An toàn số (156), hoặc liên hệ ngân hàng để khóa tài khoản ngay lập tức.',
+        html: 'Hệ thống AI đang phản hồi chậm hoặc gián đoạn kết nối. Trong trường hợp khẩn cấp, bạn vui lòng **KHÔNG chuyển tiền** theo yêu cầu kẻ gian, hãy gọi ngay đường dây nóng: **Công an (113)**, **Tổng đài An toàn số (156)**, hoặc liên hệ ngân hàng để khóa tài khoản ngay lập tức.',
         streaming: false,
         status: '',
       });

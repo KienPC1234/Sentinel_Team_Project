@@ -76,7 +76,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path, { method: 'GET' }),
+  get: <T>(path: string, headers?: Record<string, string>) =>
+    request<T>(path, headers ? { method: 'GET', headers } : { method: 'GET' }),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body ?? {}) }),
   put: <T>(path: string, body?: unknown) =>
@@ -105,6 +106,10 @@ export interface Article {
   created_at?: string;
   category?: string;
   category_display?: string;
+  source_type?: string;
+  source_type_display?: string;
+  source_url?: string | null;
+  author_name?: string;
   reactions_count?: number;
   comments_count?: number;
 }

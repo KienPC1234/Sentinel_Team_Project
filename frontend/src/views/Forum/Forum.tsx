@@ -55,6 +55,16 @@ interface CategoryMeta {
   textColor: string;
 }
 
+/* /forum/stats/ — số liệu thật của toàn diễn đàn. Trước đây mọi thống kê suy ra
+ * từ danh sách tối đa 50 bài nên luôn sai khi diễn đàn có nhiều hơn 50 bài. */
+interface ForumStats {
+  total_posts?: number;
+  total_comments?: number;
+  total_members?: number;
+  posts_today?: number;
+  category_stats?: Array<{ category?: string; count?: number }>;
+}
+
 const CATS: Record<string, CategoryMeta> = {
   warning: { label: 'Cảnh báo', desc: 'Cảnh báo lừa đảo mới nhất', color: 'bg-danger-500/20 text-danger-500', iconBg: 'bg-danger-500/15 border-danger-500/30', icon: 'bi-shield-fill-exclamation', textColor: 'text-danger-400' },
   discussion: { label: 'Thảo luận', desc: 'Thảo luận về an ninh mạng', color: 'bg-brand-500/20 text-brand-500', iconBg: 'bg-brand-500/15 border-brand-500/30', icon: 'bi-chat-dots-fill', textColor: 'text-brand-400' },
@@ -101,6 +111,8 @@ const SORTS = [
   { v: 'views', l: 'Xem', i: 'bi-eye', active: 'text-warn-400' },
 ];
 
+
+
 export default function Forum() {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,13 +121,18 @@ export default function Forum() {
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState<'categories' | 'threads'>('categories');
   const [currentPage, setCurrentPage] = useState(1);
+  const [stats, setStats] = useState<ForumStats | null>(null);
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
   const postsPerPage = 20;
 
   const refresh = useCallback(
     () =>
       api
-        .get<Paged<ForumPost> | ForumPost[]>('/forum/posts/')
-        .then((r) => setPosts(Array.isArray(r) ? r : r.results || []))
+        .get<Paged<ForumPost> | ForumPost[]>('/forum/posts/?page_size=100')
+        .then((r) => {
+          setPosts(Array.isArray(r) ? r : r.results || []);
+          if (!Array.isArray(r) && typeof r.count === 'number') setServerTotal(r.count);
+        })
         .catch(() => setPosts([])),
     [],
   );
@@ -123,6 +140,15 @@ export default function Forum() {
   useEffect(() => {
     void refresh().finally(() => setLoading(false));
   }, [refresh]);
+
+  /* Thống kê tổng: lấy riêng từ endpoint thống kê, có fallback về số liệu suy
+   * ra từ danh sách khi endpoint lỗi. */
+  useEffect(() => {
+    api
+      .get<ForumStats>('/forum/stats/')
+      .then(setStats)
+      .catch(() => setStats(null));
+  }, []);
 
   /* Realtime: post_created / comment_created -> tải lại danh sách. */
   useEffect(() => {
@@ -169,20 +195,24 @@ export default function Forum() {
 
   const categoryStats: CatStat[] = useMemo(() => {
     const order = ['warning', 'discussion', 'experience', 'question'];
+    const counts = new Map<string, number>();
+    for (const row of stats?.category_stats || []) {
+      if (row?.category) counts.set(row.category, Number(row.count || 0));
+    }
     return order.map((v) => {
       const rows = posts.filter((p) => p.category === v);
       const latest = [...rows].sort((a, b) => +new Date(b.created_at || 0) - +new Date(a.created_at || 0))[0];
       return {
         value: v,
         label: catInfo(v).label,
-        threads_count: rows.length,
+        threads_count: counts.get(v) ?? rows.length,
         messages_count: rows.reduce((a, b) => a + (b.comments_count || 0), 0),
         latest_post: latest
           ? { id: latest.id, title: latest.title, author_name: latest.author_name, author_avatar: latest.author_avatar, created_at: latest.created_at }
           : null,
       };
     });
-  }, [posts]);
+  }, [posts, stats]);
 
   const filtered = useMemo(() => {
     let f = [...posts];
@@ -209,8 +239,15 @@ export default function Forum() {
   const pinned = posts.filter((p) => p.is_pinned);
   const recentThreads = posts.filter((p) => !p.is_pinned).slice(0, 10);
   const totalPages = Math.max(1, Math.ceil(filtered.length / postsPerPage));
+
+  /* Lọc/sắp xếp lại có thể làm trang hiện tại vượt quá tổng số trang -> trang trắng. */
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   const paginated = filtered.slice((currentPage - 1) * postsPerPage, currentPage * postsPerPage);
-  const totalComments = posts.reduce((a, b) => a + (b.comments_count || 0), 0);
+  const totalPosts = stats?.total_posts ?? serverTotal ?? posts.length;
+  const totalComments = stats?.total_comments ?? posts.reduce((a, b) => a + (b.comments_count || 0), 0);
   const totalViews = posts.reduce((a, b) => a + (b.views_count || 0), 0);
 
   const pickTab = (t: string) => {
@@ -582,6 +619,14 @@ export default function Forum() {
                         <p className="text-white/45 text-sm font-bold">Không tìm thấy bài viết</p>
                       </div>
                     )}
+
+                    {/* Backend trả tối đa LIST_LIMIT bài/lần — nói rõ khi còn bài chưa tải. */}
+                    {totalPosts > posts.length && (
+                      <div className="px-5 py-3 text-[10px] text-white/40 flex items-center gap-2">
+                        <i className="bi bi-info-circle"></i>
+                        <span>{`Đang hiển thị ${posts.length} chủ đề mới nhất. Tổng số chủ đề: ${totalPosts}.`}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Pagination */}
@@ -630,16 +675,22 @@ export default function Forum() {
                 <div className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-white/55 font-bold">Tổng chủ đề</span>
-                    <span className="text-sm font-black text-white/70">{posts.length}</span>
+                    <span className="text-sm font-black text-white/70">{totalPosts}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-white/55 font-bold">Tổng bình luận</span>
                     <span className="text-sm font-black text-white/70">{totalComments}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-white/55 font-bold">Tổng lượt xem</span>
+                    <span className="text-[10px] text-white/55 font-bold">Lượt xem (50 bài mới)</span>
                     <span className="text-sm font-black text-white/70">{totalViews}</span>
                   </div>
+                  {typeof stats?.total_members === 'number' && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-white/55 font-bold">Thành viên</span>
+                      <span className="text-sm font-black text-white/70">{stats.total_members}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

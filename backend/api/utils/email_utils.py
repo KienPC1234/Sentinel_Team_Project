@@ -432,8 +432,10 @@ def send_html_otp_email(to_email, token):
             fail_silently=False
         )
         logger.info(f"OTP email sent to {to_email}")
+        return True
     except Exception as e:
         logger.exception(f"Failed to send OTP email to {to_email}: {e}")
+        return False
 
 def send_report_outcome_email(user, report_type, target, status, reason=None):
     """
@@ -503,20 +505,40 @@ def send_new_lesson_email(user_emails, lesson_title, lesson_url):
     except Exception:
         plain_message = f"Chào bạn,\n\nChúng tôi vừa xuất bản bài học mới: {lesson_title}.\nXem ngay tại: {lesson_url}\n\nShieldCall VN Team"
         html_message = None
-    
+
+    # Gui RIENG tung nguoi qua 1 ket noi SMTP (truoc day truyen ca batch vao
+    # To: -> moi nguoi nhan thay email cua ca batch = ro ri PII hang loat).
+    from django.core.mail import EmailMessage, get_connection
+    addrs = [str(a or '').strip() for a in (user_emails or [])]
+    addrs = [a for a in addrs if a and '@' in a]
+    if not addrs:
+        return 0
+    sent_count = 0
     try:
-        sent_count = send_mail(
-            subject,
-            plain_message,
-            settings.DEFAULT_FROM_EMAIL,
-            user_emails,
-            html_message=html_message,
-            fail_silently=False
-        )
-        logger.info(f"New lesson email sent to {len(user_emails)} users (sent_count={sent_count})")
+        connection = get_connection(fail_silently=False)
+        connection.open()
+        try:
+            for addr in addrs:
+                try:
+                    msg = EmailMessage(
+                        subject, plain_message, settings.DEFAULT_FROM_EMAIL, [addr],
+                        connection=connection,
+                    )
+                    if html_message:
+                        # multipart/alternative dung: body text + ban HTML
+                        msg.attach_alternative(html_message, 'text/html')
+                    sent_count += msg.send()
+                except Exception:
+                    logger.exception('Failed to send lesson email to %s', addr)
+        finally:
+            try:
+                connection.close()
+            except Exception:
+                pass
+        logger.info(f"New lesson email sent to {sent_count}/{len(addrs)} users")
         return int(sent_count or 0)
     except Exception as e:
-        logger.exception(f"Failed to send bulk lesson email to {user_emails}: {e}")
+        logger.exception(f"Failed to send bulk lesson email ({len(addrs)} recipients): {e}")
         return 0
 
 

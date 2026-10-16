@@ -790,7 +790,7 @@ if not llm_logger.handlers:
         pass
     llm_logger.addHandler(fh)
 
-def _log_llm(prompt: str, response: str, system_prompt: str = None):
+def _log_llm(prompt: str, response: str, system_prompt: str = None, pii_allowed: bool = False):
     """Ghi log gọn cho 1 lượt gọi LLM (đã ẩn PII).
 
     Không dump toàn bộ system prompt (rất dài, log phình + lộ nội dung nội bộ);
@@ -805,6 +805,7 @@ def _log_llm(prompt: str, response: str, system_prompt: str = None):
         'system_prompt_length': len(system_prompt) if system_prompt else 0,
         'prompt_length': len(prompt),
         'response_length': len(response) if response else 0,
+        'pii_allowed': bool(pii_allowed),
     }
     if DEBUG_LLM:
         log_data['prompt_preview'] = _rp(prompt[:200] + '...' if len(prompt) > 200 else prompt)
@@ -1204,6 +1205,7 @@ def generate_response(
     format_schema: dict = None,
     max_loop_iterations: int = 15,
     skip_filter: bool = False,
+    allow_pii: bool = False,
 ) -> Optional[str]:
     """
     Generate a non-streamed response from Ollama.
@@ -1215,6 +1217,17 @@ def generate_response(
         skip_filter: If True, skip filter_hallucinations on the output.
                      Use for long-form content where CJK stripping could corrupt text.
     """
+    # Diem #5 (bao mat du lieu): mac dinh AN thong tin ca nhan truoc khi gui
+    # toi mo hinh cloud. Chi giu nguyen khi caller khang dinh can PII de phan
+    # tich (allow_pii=True) — truong hop do duoc ghi audit trong llm_access.log.
+    if not allow_pii:
+        try:
+            from api.utils.privacy import redact_for_external_llm as _redact
+            prompt = _redact(prompt)
+            if system_prompt:
+                system_prompt = _redact(system_prompt)
+        except Exception:
+            pass
     model = model or DEFAULT_MODEL
     _effective_max_tokens = max_tokens or LLM_MAX_TOKENS
     logger.info(f"[generate_response] START model={model}, max_tokens={_effective_max_tokens}, "
@@ -1323,7 +1336,7 @@ def generate_response(
         if iteration >= max_loop_iterations:
             logger.warning(f"[generate_response] hit max_loop_iterations={max_loop_iterations}, returning best content so far")
 
-        _log_llm(prompt, reply, system_prompt)
+        _log_llm(prompt, reply, system_prompt, pii_allowed=allow_pii)
 
         # When format_schema is set or skip_filter requested, do NOT apply
         # filter_hallucinations as it strips CJK characters and can corrupt output.
@@ -1342,7 +1355,7 @@ def generate_response(
         logger.error(f"Error calling Ollama: {e}", exc_info=True)
         return None
 
-def stream_response(prompt: str, system_prompt: str = None, model: str = None, max_tokens: int = None) -> Generator[str, None, None]:
+def stream_response(prompt: str, system_prompt: str = None, model: str = None, max_tokens: int = None, allow_pii: bool = False) -> Generator[str, None, None]:
     """
     Stream a response from Ollama token-by-token.
     Properly handles thinking models (qwen3, deepseek, etc.) by using
@@ -1352,6 +1365,14 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None, m
         max_tokens: Override num_predict (default LLM_MAX_TOKENS). Use higher
                     values for long-form content generation.
     """
+    if not allow_pii:
+        try:
+            from api.utils.privacy import redact_for_external_llm as _redact
+            prompt = _redact(prompt)
+            if system_prompt:
+                system_prompt = _redact(system_prompt)
+        except Exception:
+            pass
     model = model or DEFAULT_MODEL
     messages = []
     if system_prompt:
@@ -1399,7 +1420,7 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None, m
                 yield content
                 full_response.append(content)
 
-        _log_llm(prompt, "".join(full_response), system_prompt)
+        _log_llm(prompt, "".join(full_response), system_prompt, pii_allowed=allow_pii)
 
     except Exception as e:
         logger.error(f"Error in Ollama stream: {e}", exc_info=True)
@@ -1593,6 +1614,7 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
             'trustpilot': None,
         },
         'web_intelligence': [],
+        'tinnhiem': None,
     }
 
     # 1. Query Internal Database (Domain & Reports)
@@ -1658,6 +1680,41 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
             })
     except Exception as e:
         logger.warning(f"_assistant_scan_url DB query error: {e}")
+
+    # 1b. Danh bạ Tín nhiệm mạng (tinnhiemmang.vn) — NCSC/VNCERT
+    try:
+        from api.utils.vn_sources import tinnhiem_lookup_domain
+        tk = tinnhiem_lookup_domain(clean_domain) or tinnhiem_lookup_domain(apex_domain)
+        if tk and tk.get('status') != 'unknown':
+            rec = tk.get('record') or {}
+            report_payload['tinnhiem'] = {
+                'status': tk['status'],
+                'domain': rec.get('domain') or clean_domain,
+                'owner': rec.get('owner'),
+                'impersonated': rec.get('impersonated'),
+                'badge': rec.get('badge'),
+                'date': rec.get('date'),
+                'ref_url': rec.get('url'),
+                'source': 'tinnhiemmang.vn',
+            }
+            if tk['status'] == 'scam':
+                impersonated = rec.get('impersonated') or rec.get('owner')
+                report_payload['is_scam'] = True
+                report_payload['risk_score'] = max(report_payload['risk_score'], 90)
+                msg = 'Cảnh báo (Tín nhiệm mạng/NCSC): tên miền nằm trong DANH SÁCH LỪA ĐẢO'
+                if impersonated:
+                    msg += f' — mạo danh {impersonated}'
+                report_payload['summary'] = msg
+            elif tk['status'] == 'trusted':
+                owner = rec.get('owner') or rec.get('name')
+                report_payload['risk_score'] = max(0, report_payload['risk_score'] - 20)
+                if not report_payload['is_scam']:
+                    report_payload['summary'] = (
+                        'Tín nhiệm mạng (NCSC): website đã được chứng nhận TÍN NHIỆM'
+                        + (f' — {owner}' if owner else '')
+                    )
+    except Exception as e:
+        logger.warning(f"_assistant_scan_url tinnhiem error: {e}")
 
     # 2. Stealth Headless Chromium Browser Inspection
     try:
@@ -1984,6 +2041,7 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
             'bank_accounts': [],
         },
         'related_scans': [],
+        'tinnhiem_match': None,
     }
 
     try:
@@ -2065,6 +2123,27 @@ def _assistant_query_threat_database(query: str, target_type: str = "all") -> Di
                     'scam_type': d.scam_type,
                     'report_count': d.report_count,
                 })
+
+        # Danh bạ Tín nhiệm mạng (tinnhiemmang.vn) — dữ liệu NCSC/VNCERT
+        if target_type in ('all', 'domain', 'website', 'url', 'web'):
+            clean_dom = re.sub(r'^https?://', '', cleaned).split('/')[0].split(':')[0].strip().lower()
+            try:
+                from api.utils.vn_sources import tinnhiem_lookup_domain
+                tk = tinnhiem_lookup_domain(clean_dom)
+                if tk and tk.get('status') != 'unknown':
+                    rec = tk.get('record') or {}
+                    result['tinnhiem_match'] = {
+                        'status': tk['status'],
+                        'domain': rec.get('domain') or clean_dom,
+                        'owner': rec.get('owner'),
+                        'impersonated': rec.get('impersonated'),
+                        'badge': rec.get('badge'),
+                        'date': rec.get('date'),
+                        'ref_url': rec.get('url'),
+                        'source': 'tinnhiemmang.vn',
+                    }
+            except Exception as e:
+                logger.debug(f"tinnhiem lookup failed: {e}")
 
         # High-risk Phone Numbers
         if target_type in ('all', 'phone'):
@@ -2277,11 +2356,29 @@ def _assistant_get_latest_threat_trends(limit: int = 5) -> Dict[str, Any]:
     return trends_payload
 
 
-def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None, debug: bool = False) -> Generator[Dict[str, Any], None, None]:
+def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None, debug: bool = False, allow_pii: bool = False) -> Generator[Dict[str, Any], None, None]:
     """
     Improved streaming chat for ShieldCall AI.
     Handles multi-turn tool loops, thinking streaming, and search result yielding.
     """
+    # Diem #5: mac dinh an PII truoc khi stream toi cloud. Tro ly AI can noi
+    # dung goc (tra cuu SDT/tin nhan theo yeu cau) nen caller truyen
+    # allow_pii=True + audit log.
+    if not allow_pii:
+        try:
+            from api.utils.privacy import redact_for_external_llm as _redact
+            # Redact TAI CHO (giu nguyen identity cua list/dict) vi ham append
+            # lich su vao cung list caller truyen vao.
+            for m in (messages or []):
+                if isinstance(m, dict) and m.get('content'):
+                    m['content'] = _redact(m.get('content', ''))
+        except Exception:
+            pass
+    try:
+        from api.utils.privacy import pii_redaction_enabled as _en
+        llm_logger.info(f"LLM Chat: allow_pii={bool(allow_pii)}, redaction_on={_en()}")
+    except Exception:
+        pass
     if debug or DEBUG_LLM:
         yield {"type": "debug_model", "model": model or DEFAULT_MODEL}
         yield {"type": "debug_history_count", "count": len(messages)}
@@ -3828,8 +3925,10 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"Nội dung cần phân tích:\n{text_snippet}"
     )
 
+    # Phan tich can noi dung goc (SĐT/tin nhan/email) -> allow_pii + audit log.
     response = generate_response(
-        prompt, model, num_ctx=8192, max_tokens=2048, tools=[], format_schema=SCAM_ANALYSIS_SCHEMA
+        prompt, model, num_ctx=8192, max_tokens=2048, tools=[], format_schema=SCAM_ANALYSIS_SCHEMA,
+        allow_pii=True,
     )
 
     # Frontend should display only structured intelligence context,
@@ -3847,7 +3946,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
     parsed_result = _extract_json(response) if response else None
 
     if response and not parsed_result:
-        retry_notice = "⏳ AI cần thêm chút thời gian để chuẩn hóa kết quả, vui lòng chờ trong giây lát."
+        retry_notice = "AI đang xử lý chuẩn hóa cấu trúc kết quả phân tích."
         logger.warning(
             "analyze_text_for_scam: JSON parse failed on first pass; starting repair retry. Raw response: %s",
             response[:300],
@@ -3971,12 +4070,14 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
             result['ai_retry_used'] = True
             result['ai_retry_count'] = retry_count
             result['ai_notice'] = retry_notice
-            explanation = str(result.get('explanation', '') or '')
-            if retry_notice not in explanation:
-                result['explanation'] = f"{retry_notice} {explanation}".strip()
         else:
             result['ai_retry_used'] = False
             result['ai_retry_count'] = 0
+
+        # Sanitize any legacy hesitation prefix in explanation if present
+        explanation = str(result.get('explanation', '') or '').strip()
+        explanation = re.sub(r'^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+', '', explanation).strip()
+        result['explanation'] = explanation
 
         return result
 
@@ -3989,7 +4090,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         "risk_score": 0,
         "insufficient_input": True,
         "indicators": [],
-        "explanation": "⏳ AI cần thêm thời gian xử lý. Hệ thống CHƯA đủ dữ liệu để kết luận — KHÔNG xem đây là 'an toàn'; vui lòng thử lại hoặc xác minh qua kênh chính thức.",
+        "explanation": "Hệ thống chưa đủ dữ liệu để kết luận chính xác. Vui lòng thử lại hoặc đối chiếu thêm từ các kênh chính thống.",
         "web_sources": [
             {
                 'scamadviser': 'ScamAdviser',
@@ -4006,7 +4107,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         "db_sources_consulted": db_sources_consulted,
         "ai_retry_used": True,
         "ai_retry_count": retry_count,
-        "ai_notice": "⏳ AI cần thêm chút thời gian để chuẩn hóa kết quả, vui lòng thử lại sau vài giây.",
+        "ai_notice": "AI đang hoàn thiện dữ liệu phân tích.",
     }
 
 

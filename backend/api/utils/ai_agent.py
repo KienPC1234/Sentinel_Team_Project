@@ -22,6 +22,7 @@ QUY TẮC QUAN TRỌNG:
 2. Nếu người dùng hỏi về các chủ đề lừa đảo, hãy sử dụng thông tin trong [CONTEXT] để trả lời chính xác nhất.
 3. Khi người dùng cung cấp hoặc hỏi về một số điện thoại, URL/website, tài khoản ngân hàng, mã số thuế hoặc tên doanh nghiệp, hãy CHỦ ĐỘNG sử dụng công cụ chuyên biệt tương ứng (scan_phone, scan_url, scan_bank_account, lookup_company, query_threat_database) để kiểm tra đối chiếu dữ liệu thực tế trước khi đưa ra câu trả lời. Kết quả từ CÔNG CỤ (TOOLS) là dữ liệu tham khảo có thể nhiễu hoặc thiếu ngữ cảnh; cần đối chiếu chéo trước khi kết luận.
 3b. BẮT BUỘC tận dụng CSDL báo cáo nội bộ ShieldCall VN: với MỌI thông tin nghi ngờ (SĐT, link, STK, email, tên đối tượng, thủ đoạn lạ), luôn gọi query_threat_database trước để đối chiếu báo cáo cộng đồng đã kiểm duyệt (Approved), trích dẫn số lượng báo cáo + độ tin cậy. Khi gặp tệp tin/APK lạ, hash SHA256/MD5, chữ ký diệt virus → gọi scan_file_threat. Khi gặp thủ đoạn độc lạ (deepfake, giả VNeID/dịch vụ công, nhóm Telegram/Zalo, ví crypto/Web3, sàn ảo, quà tri ân) → gọi search_custom_reports với scam_category/target_type phù hợp.
+3c. ƯU TIÊN NGUỒN CHÍNH THỐNG "Tín nhiệm mạng" (NCSC/VNCERT): kết quả công cụ có thể kèm dữ liệu danh bạ Tín nhiệm mạng (website TÍN NHIỆM đã chứng nhận / website nằm trong DANH SÁCH LỪA ĐẢO, tổ chức sở hữu, tổ chức bị mạo danh, mức chứng nhận). Khi có dữ liệu này, hãy nêu RÕ đây là nguồn chính thống, trích dẫn tinnhiemmang.vn; nếu tên miền trong danh sách lừa đảo thì cảnh báo mạnh + nêu tổ chức bị mạo danh + hướng dẫn trình báo; nếu đã được chứng nhận tín nhiệm thì trấn an nhưng nhắc người dùng chỉ truy cập đúng tên miền chính thức (cảnh giác subdomain/lookalike).
 4. NGUYÊN TẮC XỬ LÝ NỘI DUNG TỪ HÌNH ẢNH:
    - TUYỆT ĐỐI KHÔNG BAO GIỜ nhắc đến các từ kỹ thuật như "OCR", "nhận diện quang học", "lỗi OCR", "hệ thống quét ảnh", "tuy OCR có thể gây lỗi..." trong câu trả lời cho người dùng. Coi như người dùng đã gửi ảnh tin nhắn/chứng từ thực tế.
    - TUYỆT ĐỐI KHÔNG coi hoặc liệt kê các lỗi ký tự hay lỗi chính tả nhỏ do bóc tách ảnh (như nhầm chữ cái, thiếu dấu câu, dính chữ...) là dấu hiệu khẳng định lừa đảo (không nói "Lỗi chính tả dày đặc"). Hãy tự động đọc hiểu đúng ngữ cảnh và nghĩa gốc của văn bản.
@@ -267,11 +268,14 @@ class AIAgent:
         # Inject scan context from "CHAT VỚI AI" button if available
         scan_ctx = getattr(self, '_scan_context', '')
         if scan_ctx:
-            messages.append({"role": "system", "content": (
-                "NGƯỜI DÙNG VỪA GỬI BỐI CẢNH SCAN ĐỂ BẠN PHÂN TÍCH. "
-                "Hãy sử dụng dữ liệu scan sau để trả lời câu hỏi của họ:\n\n"
-                f"{scan_ctx}"
-            )})
+            if "NGƯỜI CAO TUỔI" in scan_ctx or "Hướng dẫn cách trả lời" in scan_ctx:
+                messages.append({"role": "system", "content": scan_ctx})
+            else:
+                messages.append({"role": "system", "content": (
+                    "NGƯỜI DÙNG VỪA GỬI BỐI CẢNH SCAN ĐỂ BẠN PHÂN TÍCH. "
+                    "Hãy sử dụng dữ liệu scan sau để trả lời câu hỏi của họ:\n\n"
+                    f"{scan_ctx}"
+                )})
             self._scan_context = ''  # Only use once
         
         if debug:
@@ -287,7 +291,9 @@ class AIAgent:
         try:
             # 3. stream_chat_ai đã phát sẵn event có `type` -> chuyển thẳng ra ngoài;
             #    chỉ gộp metadata và tích luỹ text thật để lưu lịch sử.
-            for ev in stream_chat_ai(messages, debug=debug):
+            # Tro ly can hoi thoai goc (nguoi dung nho kiem tra SDT/tin nhan cu
+            # the) -> allow_pii + audit log trong stream_chat_ai.
+            for ev in stream_chat_ai(messages, debug=debug, allow_pii=True):
                 if not isinstance(ev, dict):
                     continue
                 etype = ev.get('type')

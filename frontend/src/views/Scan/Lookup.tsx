@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { api } from '../../lib/api';
 
 import { Spinner } from '../../components/ui';
+import { parseSafeDate } from '../../lib/date';
 
 interface LookupItem {
   id: number;
@@ -64,14 +65,10 @@ function riskClass(level?: string): string {
 }
 
 function fmtDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    const p = (n: number): string => String(n).padStart(2, '0');
-    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-  } catch {
-    return '';
-  }
+  const d = parseSafeDate(iso);
+  if (!d) return '';
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export default function Lookup() {

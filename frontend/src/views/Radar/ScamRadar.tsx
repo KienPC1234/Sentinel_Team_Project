@@ -175,7 +175,9 @@ export default function ScamRadar() {
         .catch(() => {});
     };
     fetchStats();
-    const t = setInterval(fetchStats, 5000);
+    /* Endpoint cache 120s phía server nên poll 60s là đủ (trước đây 5s/lần
+     * với endpoint ~50 query gây quá tải DB). */
+    const t = setInterval(fetchStats, 60000);
     return () => {
       alive = false;
       clearInterval(t);

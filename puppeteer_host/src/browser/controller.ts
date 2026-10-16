@@ -1,24 +1,31 @@
-const { launchBrowser, incrementRenderCount } = require('./manager');
-const { getRandomUA, applyHumanizedPageSetup } = require('./utils');
+import type { Page } from 'puppeteer';
+import { config } from '../config';
+import { logger } from '../logger';
+import { launchBrowser, incrementRenderCount } from './manager';
+import { getRandomUA, applyHumanizedPageSetup } from './security';
 
-let activePage = null;
+export interface RenderResult {
+  title: string;
+  content: string;
+  html: string;
+}
+
+let activePage: Page | null = null;
 const sessionUA = getRandomUA();
-const pageActivity = new WeakMap();
+const pageActivity = new WeakMap<Page, number>();
+const activityBoundPages = new WeakSet<Page>();
 
-const IDLE_TAB_TIMEOUT_MS = Number(process.env.PUPPETEER_IDLE_TAB_TIMEOUT_MS || 10 * 60 * 1000);
-const TAB_CLEANUP_INTERVAL_MS = Number(process.env.PUPPETEER_TAB_CLEANUP_INTERVAL_MS || 60 * 1000);
+let tabCleanupTimer: NodeJS.Timeout | null = null;
 
-let tabCleanupTimer = null;
-
-function touchPage(page) {
+function touchPage(page?: Page | null): void {
   if (!page || page.isClosed()) return;
   pageActivity.set(page, Date.now());
 }
 
-function bindPageActivity(page) {
-  if (!page || page.__activityBound) return;
+function bindPageActivity(page: Page): void {
+  if (activityBoundPages.has(page)) return;
+  activityBoundPages.add(page);
 
-  page.__activityBound = true;
   const onActivity = () => touchPage(page);
 
   page.on('request', onActivity);
@@ -34,41 +41,45 @@ function bindPageActivity(page) {
   touchPage(page);
 }
 
-async function cleanupIdleTabs() {
-  // Gracefully close inactive pages
+export async function cleanupIdleTabs(): Promise<void> {
   try {
     const browser = await launchBrowser();
     const pages = await browser.pages();
+    const now = Date.now();
+
     for (const page of pages) {
       if (page === activePage) continue;
       const lastActive = pageActivity.get(page) || 0;
-      if (Date.now() - lastActive >= IDLE_TAB_TIMEOUT_MS) {
+      if (now - lastActive >= config.PUPPETEER_IDLE_TAB_TIMEOUT_MS) {
         if (!page.isClosed()) {
+          logger.debug('TabController', 'Closing idle page tab to free resources.');
           await page.close().catch(() => {});
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    logger.debug('TabController', 'Failed during cleanupIdleTabs check:', err);
+  }
 }
 
-function startTabAutoCleanup() {
+export function startTabAutoCleanup(): void {
   if (tabCleanupTimer) return;
   tabCleanupTimer = setInterval(() => {
     cleanupIdleTabs().catch(() => {});
-  }, TAB_CLEANUP_INTERVAL_MS);
+  }, config.PUPPETEER_TAB_CLEANUP_INTERVAL_MS);
 
   if (typeof tabCleanupTimer.unref === 'function') {
     tabCleanupTimer.unref();
   }
 }
 
-function stopTabAutoCleanup() {
+export function stopTabAutoCleanup(): void {
   if (!tabCleanupTimer) return;
   clearInterval(tabCleanupTimer);
   tabCleanupTimer = null;
 }
 
-async function openPage(url) {
+export async function openPage(url: string): Promise<string> {
   startTabAutoCleanup();
 
   const browser = await launchBrowser();
@@ -85,7 +96,7 @@ async function openPage(url) {
   return activePage.url();
 }
 
-async function ensureActivePage(url = 'about:blank') {
+export async function ensureActivePage(url = 'about:blank'): Promise<string> {
   startTabAutoCleanup();
 
   const browser = await launchBrowser();
@@ -100,7 +111,7 @@ async function ensureActivePage(url = 'about:blank') {
   return activePage.url();
 }
 
-async function renderPage(url, timeout = 25000) {
+export async function renderPage(url: string, timeout = 25000): Promise<RenderResult> {
   startTabAutoCleanup();
 
   const browser = await launchBrowser();
@@ -111,9 +122,9 @@ async function renderPage(url, timeout = 25000) {
   try {
     await applyHumanizedPageSetup(page, sessionUA);
 
-    // Optimize memory & bandwidth: Block heavy media / audio / video / fonts
+    // Optimize memory & bandwidth: drop heavy resources
     await page.setRequestInterception(true);
-    page.on('request', req => {
+    page.on('request', (req) => {
       const resourceType = req.resourceType();
       if (['media', 'font', 'websocket'].includes(resourceType)) {
         req.abort();
@@ -124,8 +135,8 @@ async function renderPage(url, timeout = 25000) {
 
     await page.goto(url, { timeout, waitUntil: 'domcontentloaded' });
 
-    // Wait slightly for dynamic JS rendering if body is still sparse
-    await new Promise(r => setTimeout(r, 800));
+    // Allow slight grace period for single-page client side hydration
+    await new Promise((resolve) => setTimeout(resolve, 800));
 
     const title = await page.title();
     const content = await page.evaluate(() => document.body?.innerText || '');
@@ -141,44 +152,28 @@ async function renderPage(url, timeout = 25000) {
   }
 }
 
-async function closeAllIdleTabsNow() {
-  await cleanupIdleTabs();
-}
-
-async function click(selector) {
-  if (!activePage) throw new Error('No active page');
+export async function click(selector: string): Promise<void> {
+  if (!activePage || activePage.isClosed()) throw new Error('No active page open.');
   touchPage(activePage);
   await activePage.click(selector);
   touchPage(activePage);
 }
 
-async function type(selector, text) {
-  if (!activePage) throw new Error('No active page');
+export async function type(selector: string, text: string): Promise<void> {
+  if (!activePage || activePage.isClosed()) throw new Error('No active page open.');
   touchPage(activePage);
   await activePage.type(selector, text, { delay: 50 });
   touchPage(activePage);
 }
 
-async function getCookies() {
-  if (!activePage) throw new Error('No active page');
+export async function getCookies(): Promise<unknown[]> {
+  if (!activePage || activePage.isClosed()) throw new Error('No active page open.');
   touchPage(activePage);
   return await activePage.cookies();
 }
 
-function getActivePageUrl() {
+export function getActivePageUrl(): string | null {
   if (!activePage || activePage.isClosed()) return null;
   return activePage.url();
 }
 
-module.exports = {
-  startTabAutoCleanup,
-  stopTabAutoCleanup,
-  closeAllIdleTabsNow,
-  openPage,
-  ensureActivePage,
-  renderPage,
-  click,
-  type,
-  getCookies,
-  getActivePageUrl
-};

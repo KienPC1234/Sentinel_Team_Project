@@ -10,6 +10,7 @@ import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { api, learnApi, asList, mediaUrl } from '../lib/api';
 import type { Article } from '../lib/api';
+import { fmtDate } from '../lib/date';
 
 /* Ô "Phân tích chuyên sâu" trong Scanner card — chuẩn hóa thương hiệu Cyan */
 const QUICK_SCAN = [
@@ -30,16 +31,6 @@ const TOOLS: ToolCardDef[] = [
   { to: '/scan/audio/', icon: 'bi-soundwave', iconBg: 'bg-brand-500/10', iconColor: 'text-brand-400', iconHoverBg: 'group-hover:bg-brand-500/20', hoverBorder: 'hover:border-brand-500/50', title: 'Quét Âm Thanh', desc: 'Tải lên hoặc ghi âm trực tiếp: AI nhận diện giọng nói, chuyển thành văn bản và phân tích lừa đảo.', cta: 'VOICE AI SCAN', bgIcon: 'bi-mic', delay: 200 },
   { to: '/forum/', icon: 'bi-people', iconBg: 'bg-white/10', iconColor: 'text-white', iconHoverBg: '', hoverBorder: 'hover:border-white/40', title: 'Cộng đồng ShieldCall', desc: 'Tham gia cùng cộng đồng để cùng nhau xây dựng mạng lưới an toàn và hỗ trợ người bị lừa.', cta: 'THAM GIA NGAY', ctaColor: 'text-white/60', bgIcon: 'bi-people', bgClass: 'bg-white/[0.05]', delay: 300 },
 ];
-
-function fmtDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  } catch {
-    return '';
-  }
-}
 
 /* Kiểu chung cho card featured/mini (lesson & article). */
 interface ContentItem {
@@ -332,6 +323,16 @@ export default function Home() {
               >
                 <Link href="/scam-iq-exam/">
                   <i className="bi bi-patch-question-fill text-brand2-400"></i> BÀI KIỂM TRA SCAM IQ
+                </Link>
+              </Button>
+              {/* Lối vào lớn cho người cao tuổi — chữ to, nút to, không cần đăng nhập */}
+              <Button
+                asChild
+                variant="outline"
+                className="h-14 px-8 rounded-xl font-bold text-safe-200 border-safe-500/40 bg-safe-500/10 hover:bg-safe-500/20 hover:border-safe-500/60 transition-all duration-300 inline-flex items-center gap-2 backdrop-blur-md hover:-translate-y-0.5"
+              >
+                <Link href="/nguoi-cao-tuoi/">
+                  <i className="bi bi-person-hearts text-lg text-safe-300"></i> DÀNH CHO NGƯỜI CAO TUỔI
                 </Link>
               </Button>
             </div>

@@ -243,7 +243,10 @@ class ScamIQSubmitView(APIView):
                 is_ai_scored=not bool(ai_review_questions),
             )
             response_payload['attempt_id'] = attempt.id
-            
+            # Khoa de thi sau khi nop de chong nop lai 1 de nhieu lan cay diem
+            # lich su (moi luot thi phai tao de moi).
+            cache.delete(f'scam_iq_exam:{exam_id}')
+
             if ai_review_questions:
                 task = score_scamiq_responses_task.delay(attempt.id)
                 response_payload['ai_task_id'] = task.id
@@ -251,6 +254,36 @@ class ScamIQSubmitView(APIView):
             logger.exception('Failed to persist Scam IQ attempt for user_id=%s', request.user.id)
 
         return Response(response_payload)
+
+
+class ScamIQAttemptView(APIView):
+    """GET /api/scam-iq/attempt/<id>/ — chi tiết 1 lượt làm bài (poll điểm AI).
+
+    Frontend poll endpoint này sau khi nộp bài có câu tự luận, thay vì poll
+    /scam-iq/status/<ai_task_id>/ (endpoint đó chỉ hiểu task tạo đề nên với
+    task chấm điểm luôn trả 500, khiến UI treo "đang chấm" mãi).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, attempt_id):
+        try:
+            attempt = ScamIQAttempt.objects.get(id=attempt_id, user=request.user)
+        except ScamIQAttempt.DoesNotExist:
+            return Response({'error': 'Không tìm thấy lượt làm bài.'}, status=404)
+        level_info = ScamIQAttempt.calculate_level(attempt.score)
+        return Response({
+            'id': attempt.id,
+            'exam_title': attempt.exam_title,
+            'score': attempt.score,
+            'max_score': attempt.max_score,
+            'correct_count': attempt.correct_count,
+            'wrong_count': attempt.wrong_count,
+            'level': level_info['current'],
+            'difficulty_breakdown': attempt.difficulty_breakdown,
+            'ai_feedback': attempt.ai_feedback,
+            'is_ai_scored': attempt.is_ai_scored,
+            'created_at': attempt.created_at.isoformat(),
+        })
 
 
 class ScamIQHistoryView(APIView):

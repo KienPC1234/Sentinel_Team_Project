@@ -57,7 +57,7 @@ sập). Trình bày đúng mức "smoke test", không gọi là kiểm thử t�
 
 **Q8. GPU 8–16GB thì trường học chạy thế nào?**
 Thừa nhận yêu cầu phần cứng là rào cản; lộ trình: API cloud cho client nhẹ + bản local
-rút gọn (tắt Whisper/OCR nặng). `WHISPER_MODEL_SIZE` / `EASYOCR_GPU` đã cấu hình được
+rút gọn (tắt Whisper/OCR nặng). `WHISPER_MODEL_SIZE` / `OCR_ENGINE` đã cấu hình được
 qua env.
 
 ## Nhóm C — Bảo mật & pháp lý dữ liệu

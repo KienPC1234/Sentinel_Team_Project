@@ -293,7 +293,7 @@ export default function RadarList() {
 
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-black text-white glow-text">{meta.title}</h1>
-        <div className="text-white/60 text-sm">Top 200 tín hiệu rủi ro (Report đã duyệt + AI Scan)</div>
+        <div className="text-white/60 text-sm">Top 50 tín hiệu rủi ro (Report đã duyệt + AI Scan)</div>
       </div>
 
       {/* Table */}

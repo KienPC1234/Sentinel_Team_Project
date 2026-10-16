@@ -10,6 +10,7 @@ import { Spinner } from '../../components/ui';
 import { sanitizeHtml } from '../../lib/chat/markdown';
 import RichEditor, { getEditorData } from '../../components/RichEditor';
 import { showToast } from '../../lib/ui/feedback';
+import { fmtDate } from '../../lib/date';
 
 /* Types khớp UserSerializer + MeView (api/core/serializers.py, views/auth_views.py). */
 interface RankInfo {
@@ -85,16 +86,6 @@ function toastOk(msg: string): void {
 
 function toastErr(msg: string): void {
   showToast(msg, 'error');
-}
-
-function fmtDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  } catch {
-    return '';
-  }
 }
 
 const GENDERS: Array<{ value: string; label: string }> = [

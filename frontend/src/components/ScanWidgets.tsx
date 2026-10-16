@@ -204,6 +204,7 @@ export function resetTurnstile(): void {
 export function TurnstileWidget({ onToken }: { onToken?: (token: string) => void }): ReactNode {
   const boxRef = useRef<HTMLDivElement>(null);
   const [token, setToken] = useState('');
+  const [expired, setExpired] = useState(false);
   const siteKey = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
 
   useEffect(() => {
@@ -213,6 +214,7 @@ export function TurnstileWidget({ onToken }: { onToken?: (token: string) => void
     const push = (tok: string) => {
       if (!alive) return;
       setToken(tok);
+      if (tok) setExpired(false);
       if (onToken) onToken(tok);
     };
     void loadTsScript().then(() => {
@@ -224,7 +226,17 @@ export function TurnstileWidget({ onToken }: { onToken?: (token: string) => void
           sitekey: siteKey,
           theme: 'dark',
           callback: (t: unknown) => push(typeof t === 'string' ? t : ''),
-          'expired-callback': () => push(''),
+          'expired-callback': () => {
+            /* Token sống ~5 phút. Tự reset để hiện thử thách mới ngay thay vì
+             * để form kẹt ở trạng thái "chưa xác minh" mà không rõ lý do. */
+            push('');
+            setExpired(true);
+            try {
+              window.turnstile?.reset(wid || undefined);
+            } catch {
+              /* ignore */
+            }
+          },
           'error-callback': () => push(''),
         });
         wid = typeof id === 'string' ? id : '';
@@ -259,8 +271,11 @@ export function TurnstileWidget({ onToken }: { onToken?: (token: string) => void
   }
 
   return (
-    <div className="mt-4 flex justify-center min-h-[65px]">
+    <div className="mt-4 flex flex-col items-center gap-1 min-h-[65px]">
       <div ref={boxRef} className="cf-turnstile" />
+      {expired && !token && (
+        <p className="text-warn-400 text-[11px] font-bold">Xác minh đã hết hạn — vui lòng xác minh lại.</p>
+      )}
       <input type="hidden" name="cf-turnstile-response" value={token} readOnly />
     </div>
   );

@@ -76,6 +76,11 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [scans, setScans] = useState<ScanRow[]>([]);
   const [scanPage, setScanPage] = useState(1);
+  const [scanTotal, setScanTotal] = useState(0);
+  const [scanTotalPages, setScanTotalPages] = useState(1);
+  const [scansLoading, setScansLoading] = useState(false);
+  const [scanDangerTotal, setScanDangerTotal] = useState(0);
+  const [scanWeekCounts, setScanWeekCounts] = useState<number[]>([]);
   const [reports, setReports] = useState<UserReport[]>([]);
   const [alerts, setAlerts] = useState<UserAlert[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
@@ -89,14 +94,42 @@ export default function Dashboard() {
   const [copiedKey, setCopiedKey] = useState(false);
   const scansPerPage = 15;
 
+  /* Lịch sử scan phân trang server-side (trước đây cắt cứng 50 bản ghi đầu). */
+  const fetchScans = (p: number): void => {
+    setScansLoading(true);
+    api
+      .get<Paged<ScanRow> | ScanRow[] & { stats?: { total?: number; red?: number; last_7_days?: number[] } }>(`/user/scans/?page=${p}&page_size=${scansPerPage}`)
+      .then((d) => {
+        setScans(asList(d as Paged<ScanRow> | ScanRow[]));
+        if (!Array.isArray(d) && typeof (d as Paged<ScanRow>).count === 'number') {
+          const c = (d as Paged<ScanRow>).count || 0;
+          setScanTotal(c);
+          setScanTotalPages(Math.max(1, Math.ceil(c / scansPerPage)));
+        } else {
+          setScanTotal(Array.isArray(d) ? d.length : 0);
+          setScanTotalPages(1);
+        }
+        const st = (d as { stats?: { total?: number; red?: number; last_7_days?: number[] } }).stats;
+        if (st) {
+          if (typeof st.red === 'number') setScanDangerTotal(st.red);
+          if (Array.isArray(st.last_7_days)) setScanWeekCounts(st.last_7_days);
+        }
+      })
+      .catch(() => setScans([]))
+      .finally(() => setScansLoading(false));
+  };
+
+  useEffect(() => {
+    fetchScans(scanPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanPage]);
+
   useEffect(() => {
     Promise.allSettled([
-      api.get<Paged<ScanRow> | ScanRow[]>('/user/scans/'),
       api.get<Paged<UserReport> | UserReport[]>('/user/reports/'),
       api.get<Paged<UserAlert> | UserAlert[] | { alerts?: UserAlert[] }>('/user/alerts/'),
       learnApi.articles({ page_size: 3, ordering: '-created_at' }),
-    ]).then(([s, r, a, n]) => {
-      if (s.status === 'fulfilled') setScans(asList(s.value as Paged<ScanRow> | ScanRow[]));
+    ]).then(([r, a, n]) => {
       if (r.status === 'fulfilled') setReports(asList(r.value as Paged<UserReport> | UserReport[]));
       if (a.status === 'fulfilled') {
         const v = a.value as unknown as { results?: UserAlert[]; alerts?: UserAlert[] };
@@ -153,8 +186,9 @@ export default function Dashboard() {
     }).catch(() => {});
   };
 
-  const totalScans = scans.length;
-  const dangerScans = scans.filter((s) => (s.risk_level || '').toUpperCase() === 'RED').length;
+  /* Tổng quan dùng số liệu server (đúng cả khi nhiều trang lịch sử). */
+  const totalScans = scanTotal;
+  const dangerScans = scanDangerTotal;
   const totalReports = reports.length;
   const protection = totalScans === 0 ? 100 : Math.max(0, Math.round(100 - (dangerScans / totalScans) * 100));
 
@@ -164,12 +198,12 @@ export default function Dashboard() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
       days.push(`${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`);
-      counts.push(scans.filter((s) => (s.created_at || '').slice(0, 10) === key).length);
+      const idx = 6 - i;
+      counts.push(scanWeekCounts[idx] ?? 0);
     }
     return { days, counts };
-  }, [scans]);
+  }, [scanWeekCounts]);
 
   const barData: ChartData<'bar'> = useMemo(
     () => ({
@@ -218,8 +252,8 @@ export default function Dashboard() {
     }),
     [],
   );
-  const paginatedScans = scans.slice((scanPage - 1) * scansPerPage, scanPage * scansPerPage);
-  const scanTotalPages = Math.max(1, Math.ceil(scans.length / scansPerPage));
+  /* scans đã là trang hiện tại từ server — không slice client-side nữa. */
+  const paginatedScans = scans;
   const todayTotal = apiKeys.reduce((a, k) => a + (k.requests_today || 0), 0);
   const dailyQuota = apiKeys.reduce((a, k) => a + (k.daily_quota || 0), 0) || 500;
   const monthTotal = apiKeys.reduce((a, k) => a + (k.requests_this_month || 0), 0);
@@ -367,14 +401,15 @@ export default function Dashboard() {
                         </tr>
                         );
                       })}
-                      {scans.length === 0 && <tr><td colSpan={4} className="px-8 py-20 text-center text-white/20 font-black uppercase tracking-widest text-[10px]">Lịch sử sạch bóng lừa đảo</td></tr>}
+                      {scansLoading && scans.length === 0 && <tr><td colSpan={4} className="px-8 py-20 text-center text-white/20 font-black uppercase tracking-widest text-[10px]">Đang tải lịch sử...</td></tr>}
+                      {!scansLoading && scans.length === 0 && <tr><td colSpan={4} className="px-8 py-20 text-center text-white/20 font-black uppercase tracking-widest text-[10px]">Lịch sử sạch bóng lừa đảo</td></tr>}
                     </tbody>
                   </table>
                 </div>
               </div>
               {scanTotalPages > 1 && (
                 <div className="flex items-center justify-between">
-                  <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Trang {scanPage} / {scanTotalPages} • {scans.length} kết quả</div>
+                  <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Trang {scanPage} / {scanTotalPages} • {scanTotal} kết quả</div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => setScanPage(Math.max(1, scanPage - 1))} disabled={scanPage <= 1} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/55 disabled:opacity-20"><i className="bi bi-chevron-left text-xs"></i></button>
                     <button onClick={() => setScanPage(Math.min(scanTotalPages, scanPage + 1))} disabled={scanPage >= scanTotalPages} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/55 disabled:opacity-20"><i className="bi bi-chevron-right text-xs"></i></button>

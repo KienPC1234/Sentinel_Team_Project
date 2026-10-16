@@ -37,9 +37,12 @@ const VENV_BIN = path.join(VENV_DIR, 'bin');
 const VENV_PYTHON = getEnv('PYTHON_BIN', path.join(VENV_BIN, 'python'));
 const VENV_DAPHNE = getEnv('DAPHNE_BIN', path.join(VENV_BIN, 'daphne'));
 const VENV_CELERY = getEnv('CELERY_BIN', path.join(VENV_BIN, 'celery'));
-const PUPPETEER_DIR = path.join(BACKEND_DIR, 'scripts', 'puppeteer_host');
+const PUPPETEER_DIR = getEnv('PUPPETEER_DIR', path.join(ROOT_DIR, 'puppeteer_host'));
 const FRONTEND_DIR = path.join(ROOT_DIR, 'frontend');
 const FRONTEND_BIN = path.join(FRONTEND_DIR, 'node_modules', 'next', 'dist', 'bin', 'next');
+// OCR service (VietOCR) chạy trong venv RIÊNG (.venv-ocr)
+const OCR_VENV = getEnv('OCR_VENV', path.join(ROOT_DIR, '.venv-ocr'));
+const OCR_PYTHON = getEnv('OCR_PYTHON', path.join(OCR_VENV, 'bin', 'python'));
 
 // Configurable network parameters
 const WEB_HOST = getEnv('WEB_HOST', '0.0.0.0');
@@ -60,6 +63,8 @@ const CELERY_MAX_MEM = getEnv('PM2_CELERY_MAX_MEMORY', '4G');
 const BEAT_MAX_MEM = getEnv('PM2_BEAT_MAX_MEMORY', '1G');
 const PUPPETEER_MAX_MEM = getEnv('PM2_PUPPETEER_MAX_MEMORY', '1G');
 const FRONTEND_MAX_MEM = getEnv('PM2_FRONTEND_MAX_MEMORY', '2G');
+const OCR_MAX_MEM = getEnv('PM2_OCR_MAX_MEMORY', '2G');
+const OCR_PORT = getEnv('OCR_SERVICE_PORT', '5010');
 
 module.exports = {
   apps: [
@@ -112,9 +117,25 @@ module.exports = {
       },
     },
     {
+      // OCR service thường trú (VietOCR) — giữ model trong RAM, tránh nạp lại mỗi ảnh.
+      name: 'pkv-ocr',
+      cwd: BACKEND_DIR,
+      script: 'scripts/ocr_service.py',
+      interpreter: OCR_PYTHON,
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: OCR_MAX_MEM,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        VIETOCR_DEVICE: getEnv('VIETOCR_DEVICE', 'auto'),
+        OCR_SERVICE_PORT: OCR_PORT,
+      },
+    },
+    {
       name: 'pkv-puppeteer',
       cwd: PUPPETEER_DIR,
-      script: 'server.js',
+      script: 'dist/index.js',
       interpreter: 'node',
       instances: 1,
       autorestart: true,

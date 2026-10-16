@@ -1,7 +1,7 @@
 'use client';
-import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import type { DragEvent, FormEvent, MouseEventHandler, ReactNode, TouchEvent } from 'react';
+import type { DragEvent, FormEvent, MouseEventHandler, PointerEvent, ReactNode, TouchEvent } from 'react';
 
 import Link from 'next/link';
 
@@ -11,7 +11,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Accessibility, ALargeSmall, AlertTriangle, ArrowDown, ArrowUp, Bookmark, Check, ChevronDown, Copy, Download, Flag,
   FolderPlus, Globe, HeartHandshake, HeartPulse, Home, ImagePlus, Landmark, Menu,
-  MoreHorizontal, Newspaper, Pencil, Phone, Plus, RefreshCw, Search,
+  MoreHorizontal, Newspaper, PanelLeft, Pencil, Phone, Plus, RefreshCw, Search,
   ShieldCheck, Square, ThumbsDown, ThumbsUp, Trash2, Volume2, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -29,7 +29,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Toaster } from '@/components/ui/sonner';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -86,11 +85,19 @@ type ToolCallPayload = { function?: { name?: string; arguments?: unknown } };
 type SideTab = 'chats' | 'saved' | 'settings';
 type TextSize = 'normal' | 'large' | 'xlarge';
 
+/* Bề rộng sidebar cho phép kéo (px). */
+const NAV_MIN = 208;
+const NAV_MAX = 480;
+const NAV_DEFAULT = 264;
+
 const TEXT_SIZE_LABEL: Record<TextSize, string> = {
   normal: 'Cỡ chữ thường',
   large: 'Cỡ chữ lớn',
   xlarge: 'Cỡ chữ rất lớn',
 };
+
+/* useLayoutEffect ở client (áp dụng cỡ chữ trước khi vẽ -> không nháy), useEffect ở SSR. */
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 /* Thông báo dùng Sonner (chuẩn shadcn/ui) — thay cho showToast/sweetalert2. */
 type NotifyType = 'success' | 'error' | 'warning' | 'info';
@@ -476,6 +483,9 @@ export default function Assistant() {
   // Chế độ dễ đọc (người cao tuổi): 3 mức cỡ chữ, tương phản cao + đọc to.
   const [textSize, setTextSize] = useState<TextSize>('normal');
   const elder = textSize !== 'normal';
+  // Sidebar desktop: ẩn/hiện + bề rộng kéo được (người dùng tự chỉnh, nhớ lại).
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [navWidth, setNavWidth] = useState(NAV_DEFAULT);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [editId, setEditId] = useState<number | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
@@ -648,21 +658,69 @@ export default function Assistant() {
     try { localStorage.setItem('assistant_preview_ocr', previewOcr ? '1' : '0'); } catch { /* ignore */ }
   }, [previewOcr]);
 
-  // Chế độ dễ đọc: nhớ giữa các lần truy cập (migrate từ khoá cũ assistant_elder).
-  useEffect(() => {
+  // Chế độ dễ đọc: đọc cấu hình đã lưu TRƯỚC khi vẽ (layout effect) để không nháy cỡ chữ.
+  const textSizeRef = useRef<TextSize>('normal');
+  useIsoLayoutEffect(() => {
+    let saved: TextSize = 'normal';
     try {
-      const saved = localStorage.getItem('assistant_text_size');
-      if (saved === 'large' || saved === 'xlarge' || saved === 'normal') setTextSize(saved);
-      else if (localStorage.getItem('assistant_elder') === '1') setTextSize('large');
+      const v = localStorage.getItem('assistant_text_size');
+      if (v === 'large' || v === 'xlarge' || v === 'normal') saved = v;
+      else if (localStorage.getItem('assistant_elder') === '1') saved = 'large';
+    } catch { /* ignore */ }
+    if (saved !== 'normal') {
+      textSizeRef.current = saved;
+      setTextSize(saved);
+    }
+  }, []);
+
+  // Sidebar: đọc cấu hình đã lưu TRƯỚC khi vẽ để không nhảy kích thước.
+  const navWidthRef = useRef(NAV_DEFAULT);
+  useIsoLayoutEffect(() => {
+    try {
+      if (localStorage.getItem('assistant_nav_collapsed') === '1') setNavCollapsed(true);
+      const w = Number(localStorage.getItem('assistant_nav_width') || '');
+      if (Number.isFinite(w) && w >= NAV_MIN && w <= NAV_MAX) {
+        navWidthRef.current = w;
+        setNavWidth(w);
+      }
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    try { localStorage.setItem('assistant_text_size', textSize); } catch { /* ignore */ }
-  }, [textSize]);
+    try { localStorage.setItem('assistant_nav_collapsed', navCollapsed ? '1' : '0'); } catch { /* ignore */ }
+  }, [navCollapsed]);
+
+  /* Kéo vách ngăn để đổi bề rộng sidebar (desktop). */
+  const resizeRef = useRef<{ x: number; w: number } | null>(null);
+  const onResizeStart = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    resizeRef.current = { x: e.clientX, w: navWidthRef.current };
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+  const onResizeMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    const r = resizeRef.current;
+    if (!r) return;
+    const next = Math.min(NAV_MAX, Math.max(NAV_MIN, r.w + (e.clientX - r.x)));
+    navWidthRef.current = next;
+    setNavWidth(next);
+  }, []);
+  const onResizeEnd = useCallback(() => {
+    if (!resizeRef.current) return;
+    resizeRef.current = null;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    try { localStorage.setItem('assistant_nav_width', String(navWidthRef.current)); } catch { /* ignore */ }
+  }, []);
 
   // Dừng đọc to khi rời trang.
   useEffect(() => () => {
     try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
+  }, []);
+
+  // Tắt lớp lưới nền toàn site (body::before) khi ở trang assistant cho đỡ rối mắt.
+  useEffect(() => {
+    document.body.classList.add('assistant-route');
+    return () => { document.body.classList.remove('assistant-route'); };
   }, []);
 
   /* Đọc to 1 tin nhắn (Web Speech API, tiếng Việt). */
@@ -683,12 +741,16 @@ export default function Assistant() {
     }
   }, []);
 
+  /* Đổi cỡ chữ: tính giá trị kế tiếp BÊN NGOÀI updater (updater phải thuần —
+   * đặt notify() trong đó sẽ bắn 2 toast mỗi lần bấm). Dùng ref để bấm nhanh
+   * liên tiếp vẫn lên đúng từng mức. */
   const cycleTextSize = useCallback(() => {
-    setTextSize((cur) => {
-      const next: TextSize = cur === 'normal' ? 'large' : cur === 'large' ? 'xlarge' : 'normal';
-      notify(TEXT_SIZE_LABEL[next], 'info');
-      return next;
-    });
+    const cur = textSizeRef.current;
+    const next: TextSize = cur === 'normal' ? 'large' : cur === 'large' ? 'xlarge' : 'normal';
+    textSizeRef.current = next;
+    setTextSize(next);
+    try { localStorage.setItem('assistant_text_size', next); } catch { /* ignore */ }
+    notify(TEXT_SIZE_LABEL[next], 'info');
   }, []);
 
   // Phím tắt: Ctrl/Cmd+K -> tìm kiếm, Esc -> đóng sidebar mobile.
@@ -1203,11 +1265,13 @@ export default function Assistant() {
         {/* ── Sidebar ── */}
         <aside
           className={cn(
-            'z-40 flex w-[260px] shrink-0 flex-col bg-[var(--gpt-side)]',
-            // Mobile: trượt vào/ra từ cạnh trái; desktop luôn hiển thị tĩnh.
+            'z-40 flex min-h-0 shrink-0 flex-col overflow-hidden bg-[var(--gpt-side)]',
+            // Mobile: trượt vào/ra từ cạnh trái. Desktop: hiển thị tĩnh, có thể ẩn.
             'max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:transition-all max-md:duration-200 max-md:ease-out',
             mobileNav ? 'max-md:visible max-md:translate-x-0 max-md:shadow-2xl' : 'max-md:invisible max-md:-translate-x-full',
+            navCollapsed ? 'md:hidden' : 'md:flex',
           )}
+          style={{ width: `min(${navWidth}px, 85vw)` }}
           onTouchStart={onNavTouchStart}
           onTouchEnd={onNavTouchEnd}
         >
@@ -1290,11 +1354,11 @@ export default function Assistant() {
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => { void handleDropToFolder(e, f.id); }}
                       >
-                        <span className="flex items-center gap-2 overflow-hidden">
+                        <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                           <FolderPlus className="size-3.5 shrink-0 text-[var(--gpt-faint)]" />
-                          <span className="truncate text-xs font-medium">{f.name}</span>
+                          <span className="min-w-0 truncate text-xs font-medium">{f.name}</span>
                         </span>
-                        <span className="hover-reveal flex items-center gap-0.5 opacity-0 transition-opacity group-hover/folder:opacity-100">
+                        <span className="hover-reveal flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/folder:opacity-100">
                           <IconBtn label="Đổi tên thư mục" onClick={(e) => { e.preventDefault(); e.stopPropagation(); void renameFolder(f.id, f.name); }}><Pencil className="size-3.5" /></IconBtn>
                           <IconBtn label="Xóa thư mục" onClick={(e) => { e.preventDefault(); e.stopPropagation(); void deleteFolder(f.id); }}><X className="size-3.5" /></IconBtn>
                         </span>
@@ -1424,14 +1488,22 @@ export default function Assistant() {
             </TabsContent>
           </Tabs>
 
-          <Separator className="bg-white/[0.06]" />
-          <div className="p-3">
+          <Separator className="bg-white/[0.09]" />
+          <div className="gpt-side-foot p-3">
             <Link
               href="/"
               className="mb-1 flex items-center gap-2.5 rounded-xl px-2 py-2 text-[13px] text-[var(--gpt-muted)] transition-colors hover:bg-white/[0.06] hover:text-white"
             >
               <Home className="size-4 shrink-0" /> Trang chủ ShieldCall
             </Link>
+            <button
+              type="button"
+              onClick={exportChat}
+              disabled={messages.length === 0}
+              className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left text-[13px] text-[var(--gpt-muted)] transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-40 sm:hidden"
+            >
+              <Download className="size-4 shrink-0" /> Xuất hội thoại (.md)
+            </button>
             <Link
               href={user ? '/profile/' : '/login/?next=/ai-assistant/'}
               className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/[0.06]"
@@ -1449,10 +1521,44 @@ export default function Assistant() {
           </div>
         </aside>
 
+        {/* Vách ngăn kéo để đổi bề rộng sidebar (chỉ desktop) */}
+        {!navCollapsed && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Kéo để đổi bề rộng thanh bên (nháy đúp để về mặc định)"
+            title="Kéo để đổi bề rộng · nháy đúp để về mặc định"
+            onPointerDown={onResizeStart}
+            onPointerMove={onResizeMove}
+            onPointerUp={onResizeEnd}
+            onPointerCancel={onResizeEnd}
+            onDoubleClick={() => { setNavWidth(NAV_DEFAULT); navWidthRef.current = NAV_DEFAULT; try { localStorage.setItem('assistant_nav_width', String(NAV_DEFAULT)); } catch { /* ignore */ } }}
+            className="group/resize relative z-30 hidden w-1 shrink-0 cursor-col-resize md:block"
+          >
+            <span className="absolute inset-y-0 left-0 w-px bg-white/[0.08] transition-colors group-hover/resize:bg-[var(--gpt-accent-line)]" />
+          </div>
+        )}
+
         {/* ── Main ── */}
         <div className="relative flex min-w-0 flex-1 flex-col">
           <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.08] px-4 md:px-6">
             <div className="flex min-w-0 items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setNavCollapsed((v) => !v)}
+                    aria-label={navCollapsed ? 'Hiện thanh bên' : 'Ẩn thanh bên'}
+                    aria-pressed={navCollapsed}
+                    className="hidden text-[var(--gpt-muted)] hover:bg-white/10 hover:text-white md:inline-flex"
+                  >
+                    <PanelLeft className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{navCollapsed ? 'Hiện thanh bên' : 'Ẩn thanh bên'}</TooltipContent>
+              </Tooltip>
               <Button type="button" variant="ghost" size="icon" onClick={() => setMobileNav(!mobileNav)} className="md:hidden" aria-label="Mở danh sách">
                 <Menu className="size-5" />
               </Button>
@@ -1515,7 +1621,7 @@ export default function Assistant() {
                     variant="ghost"
                     size="icon-sm"
                     onClick={cycleTextSize}
-                    aria-label="Cỡ chữ / chế độ dễ đọc"
+                    aria-label={`Chế độ dễ đọc — ${TEXT_SIZE_LABEL[textSize]}`}
                     aria-pressed={elder}
                     className={cn(
                       'text-[var(--gpt-muted)] hover:bg-white/10 hover:text-white',
@@ -1539,7 +1645,7 @@ export default function Assistant() {
                     onClick={exportChat}
                     disabled={messages.length === 0}
                     aria-label="Xuất hội thoại"
-                    className="text-[var(--gpt-muted)] hover:bg-white/10 hover:text-white"
+                    className="hidden text-[var(--gpt-muted)] hover:bg-white/10 hover:text-white sm:inline-flex"
                   >
                     <Download className="size-4" />
                   </Button>
@@ -1549,7 +1655,7 @@ export default function Assistant() {
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button asChild variant="ghost" size="icon-sm" aria-label="Về trang chủ">
+                  <Button asChild variant="ghost" size="icon-sm" aria-label="Về trang chủ" className="hidden sm:inline-flex">
                     <Link href="/"><Home className="size-4" /></Link>
                   </Button>
                 </TooltipTrigger>
@@ -1797,9 +1903,6 @@ export default function Assistant() {
             </div>
           </DialogContent>
         </Dialog>
-
-        {/* Thông báo Sonner (chuẩn shadcn/ui) — đẩy lên trên composer trên mobile */}
-        <Toaster position="bottom-right" richColors closeButton mobileOffset={{ bottom: 96, right: 12, left: 12 }} />
       </div>
     </TooltipProvider>
   );
@@ -1831,11 +1934,11 @@ function SessionRow({ s, active, onOpen, onRename, onDelete }: { s: ChatSession;
       onDragStart={(e) => { e.dataTransfer.setData('sessionId', s.id); e.dataTransfer.effectAllowed = 'move'; }}
       onClick={onOpen}
       className={cn(
-        'group flex cursor-pointer items-center justify-between gap-1 rounded-lg py-1.5 pr-1 pl-2.5 text-sm transition-colors',
+        'gpt-session-row group flex cursor-pointer items-center justify-between gap-1 rounded-lg py-1.5 pr-1 pl-2.5 text-sm transition-colors',
         active ? 'bg-[var(--gpt-accent-soft)] text-white shadow-[inset_2px_0_0_var(--gpt-accent)]' : 'text-[var(--gpt-text)] hover:bg-white/[0.06]',
       )}
     >
-      <span className="flex-1 truncate">{s.title || 'Cuộc trò chuyện mới'}</span>
+      <span className="min-w-0 flex-1 truncate">{s.title || 'Cuộc trò chuyện mới'}</span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -2050,7 +2153,7 @@ function SourcesAccordion({ meta }: { meta: MsgMeta }) {
               <a key={k} href={url} target="_blank" rel="noopener noreferrer" className="group block rounded-lg border border-white/[0.06] bg-white/[0.03] p-2.5 transition-colors hover:border-white/15 hover:bg-white/[0.06]">
                 <div className="mb-1 flex items-center gap-2">
                   <Badge variant="outline" className="shrink-0 text-[9px] text-[var(--gpt-muted)]">{isRag ? 'ShieldCall Knowledge' : 'Web Resource'}</Badge>
-                  <span className="truncate text-[12px] font-medium text-[var(--gpt-text)]">{r.title || r.url || 'Nguồn thông tin'}</span>
+                  <span className="min-w-0 truncate text-[12px] font-medium text-[var(--gpt-text)]">{r.title || r.url || 'Nguồn thông tin'}</span>
                 </div>
                 {r.text && <div className="mb-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--gpt-muted)] italic">“{r.text}”</div>}
                 <div className="truncate font-mono text-[10px] text-[var(--gpt-faint)]">{url}</div>

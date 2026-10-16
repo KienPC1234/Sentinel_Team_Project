@@ -11,7 +11,7 @@
 | **Backend Core** | Django 5.x + Django REST Framework | ASGI, Monolith-first, API RESTful chuẩn |
 | **Frontend UI** | Tailwind CSS v4 + Alpine.js | Liquid Glass Aesthetic, SSE streaming |
 | **AI Engine** | Ollama (local LLM) + Cloud LLM fallback tùy chọn | Local-first; cloud chỉ khi cấu hình, có consent/log |
-| **AI Vision** | EasyOCR | Trích xuất văn bản từ ảnh/screenshot |
+| **AI Vision** | VietOCR | Trích xuất văn bản tiếng Việt từ ảnh/screenshot (venv riêng) |
 | **AI Audio** | Faster-Whisper | Phiên âm âm thanh cuộc gọi |
 | **Rich Text Editor** | CKEditor 5 Community (GPL) | Không cần license thương mại |
 | **Sandbox Phân tích mã độc** | Docker Zero-Trust Container | YARA + OLETools + PEFile + ClamAV |
@@ -35,7 +35,7 @@
 | **Email (.eml upload)** | Parse header, SPF/DKIM/DMARC, phân tích nội dung |
 | **Tin nhắn (SMS/Chat)** | Phát hiện kịch bản lừa đảo, yêu cầu OTP/chuyển tiền |
 | **QR Code** | Giải mã + quét URL kết quả |
-| **Hình ảnh (OCR)** | EasyOCR trích xuất + AI đánh giá ý đồ |
+| **Hình ảnh (OCR)** | VietOCR trích xuất + AI đánh giá ý đồ |
 | **Tệp tin (File Scan)** | Zero-Trust Docker Sandbox: YARA, OLETools, PEFile, ClamAV |
 | **Audio** | Faster-Whisper phiên âm + AI phân tích kịch bản giọng nói |
 
@@ -121,6 +121,15 @@ FAISS Vector DB lưu toàn bộ nội dung Learn Hub. Khi user hỏi, AI tìm ki
 ## Kiến trúc Dữ liệu
 
 Xem chi tiết trong [mvp.md](./mvp.md).
+
+### Danh bạ Tín nhiệm mạng (tinnhiemmang.vn)
+
+Thư viện `backend/api/utils/tinnhiemmang.py` + CLI `backend/scripts/crawl_tinnhiemmang.py`
+thu thập danh bạ: website/tổ chức/hệ thống/ứng dụng tín nhiệm và **danh sách website lừa đảo**
+của hệ thống Tín nhiệm mạng (NCSC/VNCERT). Dữ liệu lưu JSONL tại
+`backend/api/core/data/tinnhiemmang/`, được nối vào danh sách tên miền tin cậy khi quét
+và vào threat feed `tinnhiem_fake` (model `Domain`). Thư viện tôn trọng `robots.txt`
+mặc định. Chi tiết & giới hạn: [docs/TINNHIEM.md](./docs/TINNHIEM.md).
 
 ---
 

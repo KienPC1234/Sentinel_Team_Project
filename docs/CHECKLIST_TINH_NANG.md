@@ -29,7 +29,7 @@
 | A2.3 | URL / website / QR | `/scan/domain/`, QR giải mã rồi quét URL → `kind='url'` | ✅ |
 | A2.4 | Tin nhắn SMS/chat | `/scan/message/` → `kind='message'` | ✅ |
 | A2.5 | Email (.eml) | `/scan/email/` → `kind='email'` | ✅ |
-| A2.6 | Hình ảnh / biên lai (OCR) | EasyOCR (`media_utils.get_easyocr_reader`) + async `/scan/image/` | ✅ |
+| A2.6 | Hình ảnh / biên lai (OCR) | VietOCR (`ocr_bridge.py`, venv riêng) + async `/scan/image/` | ✅ |
 | A2.7 | Âm thanh | Faster-Whisper (`media_utils`) + async `/scan/audio/` | ✅ |
 | A2.8 | Tệp tin | `/scan/file/` → sandbox → `apply_guardrail(kind='file')` trong `tasks.py` | ✅ |
 
@@ -37,7 +37,7 @@
 | # | Điểm kiểm | Cách kiểm | Trạng thái |
 |---|---|---|---|
 | A3.1 | LLM cục bộ Ollama | `api/utils/ollama_client.py` (`_log_llm`, `generate_response`, `stream_response`) | ✅ |
-| A3.2 | OCR | `easyocr.Reader(['vi','en'], gpu=…)` có fallback CPU | ✅ |
+| A3.2 | OCR | VietOCR (venv `.venv-ocr` qua bridge; CER ~0.02) | ✅ |
 | A3.3 | STT | `faster_whisper.WhisperModel` | ✅ |
 | A3.4 | RAG / tra cứu | `api/utils/vector_db.py` (FAISS, nomic-embed 768-dim; log "Loaded vector index with 41 items") | ✅ |
 | A3.5 | Chuỗi thu thập bằng chứng | `build_evidence()` chuẩn hoá → `evidence[]` | ✅ |
@@ -94,6 +94,7 @@
 | B2.5 | Nguồn tham chiếu + báo chí chính thống | 8 nguồn nhà nước + 15 báo chí | ✅ |
 | B2.6 | Tra đúng ngân hàng theo tên (khớp chính xác→dài nhất→tiền tố) | `lookup_vn_bank_hotline` (VCB, MB, Techcombank, Eximbank đúng) | ✅ |
 | B2.7 | Kho tri thức VN (RAG) có trích dẫn nguồn | 18 bài VN (8 cũ + 10 mới: VNeID, romance, sàn ảo, BHXH/thuế, shipper, hack nick, tín dụng đen, bảo vệ trẻ em/người già, quy trình xử lý, kiểm tra doanh nghiệp); chỉ mục RAG 51 tài liệu | ✅ |
+| B2.8 | Danh bạ Tín nhiệm mạng (tinnhiemmang.vn) | Thư viện `api/utils/tinnhiemmang.py` + CLI `scripts/crawl_tinnhiemmang.py`: thu thập website/tổ chức/hệ thống/ứng dụng tín nhiệm & website lừa đảo → JSONL; nối vào `vn_sources` (tên miền tin cậy) và threat feed `tinnhiem_fake` (Domain) | ✅ |
 
 ### B3. Độ tin cậy nguồn & giới hạn công cụ
 | # | Điểm kiểm | Thực tế | TT |

@@ -6,7 +6,7 @@ import type { Chart as ChartType } from 'chart.js';
 import { api, mediaUrl } from '../../lib/api';
 import { escapeHtml } from '../../lib/chat/markdown';
 import { showToast } from '../../lib/ui/feedback';
-import { useAdminGet } from './_shared';
+import { AdminShell, useAdminGet } from './_shared';
 
 /* Port 1-1 từ PKV/templates/Admin/forum_management.html (Alpine forumAdmin()).
  *
@@ -97,6 +97,7 @@ interface ReportRow {
 interface BanRow {
   id: number;
   username: string;
+  is_active: boolean;
   display_name: string;
   banned_by: string;
   reason: string;
@@ -179,6 +180,9 @@ function mapBan(b: ApiBan): BanRow {
   return {
     id: b.id,
     username: b.user?.username || '',
+    /* Giữ is_active: trước đây bỏ qua field này nên user đã gỡ cấm vẫn hiện
+     * "đang bị cấm" và thống kê đếm cả lịch sử. */
+    is_active: !!b.is_active,
     display_name: b.user?.username || '',
     banned_by: b.banned_by?.username || '',
     reason: b.reason,
@@ -254,7 +258,11 @@ export default function ForumMgmt() {
     }));
   }, [postsData]);
 
-  const bannedSet = useMemo(() => new Set(bans.map((b) => b.username)), [bans]);
+  /* Chỉ tính lệnh cấm còn hiệu lực (bỏ qua bản ghi đã gỡ/hết hạn). */
+  const bannedSet = useMemo(
+    () => new Set(bans.filter((b) => b.is_active && !b.is_expired).map((b) => b.username)),
+    [bans],
+  );
 
   const allMembers = useMemo<MemberRow[]>(() => {
     const list = usersData?.results || [];
@@ -301,7 +309,7 @@ export default function ForumMgmt() {
       total_posts: posts.length,
       total_comments: posts.reduce((a, p) => a + p.comments_count, 0),
       total_members: members.length,
-      total_bans: bans.length,
+      total_bans: bans.filter((b) => b.is_active && !b.is_expired).length,
       pending_reports: postReports.filter((r) => r.status === 'pending').length
         + commentReports.filter((r) => r.status === 'pending').length,
       posts_today: postsToday,
@@ -543,7 +551,10 @@ export default function ForumMgmt() {
   };
 
   const unbanByUsername = async (username: string) => {
-    const ban = bans.find((b) => b.username === username);
+    /* Ưu tiên bản ghi còn hiệu lực — trước đây find() lấy bản ghi đầu tiên nên
+     * có thể gỡ nhầm lệnh đã hết hiệu lực trong khi lệnh mới vẫn còn. */
+    const ban = bans.find((b) => b.username === username && b.is_active && !b.is_expired)
+      || bans.find((b) => b.username === username);
     if (!ban) return;
     try {
       const data = await api.post<{ status?: string; message?: string; error?: string }>('/admin/forum/ban/', {
@@ -666,66 +677,78 @@ export default function ForumMgmt() {
     }
   };
 
-  const TAB_BTN = 'px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all';
+  const refetchAll = async () => {
+    refetchPosts();
+    refetchUsers();
+    await loadModeration();
+    showToast('Đã làm mới dữ liệu diễn đàn', 'success');
+  };
 
   return (
-    <div className="container mx-auto px-4 py-10 mt-16 max-w-7xl">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-6">
-          <Link href="/admin-cp/" className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/55 hover:text-brand-400 hover:border-brand-500/30 transition-all">
-            <i className="bi bi-chevron-left text-xl"></i>
+    <AdminShell
+      breadcrumbs={[{ label: 'Diễn đàn' }]}
+      title="Điều phối Diễn đàn"
+      subtitle="Quản lý bài viết, báo cáo vi phạm, thành viên và kỷ luật cộng đồng"
+      actions={
+        <div className="flex items-center gap-2">
+          <Link
+            href="/forum/"
+            target="_blank"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-brand-400 hover:bg-white/10 hover:text-white transition-all text-xs font-bold"
+          >
+            <i className="bi bi-box-arrow-up-right"></i> Xem diễn đàn
           </Link>
-          <div>
-            <h1 className="text-2xl font-black text-white tracking-tight">Điều phối Diễn đàn</h1>
-            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mt-1">Quản lý bài viết, báo cáo, thành viên &amp; nội dung</p>
-          </div>
+          <button
+            type="button"
+            onClick={refetchAll}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 hover:border-brand-500/30 transition-all text-xs font-bold"
+          >
+            <i className="bi bi-arrow-clockwise"></i> Làm mới
+          </button>
         </div>
-        <Link href="/forum/" target="_blank" className="px-4 py-2 rounded-xl bg-white/5 text-white/60 text-[10px] font-black uppercase tracking-widest border border-white/10 hover:border-brand-500/30 hover:text-brand-400 transition-all flex items-center gap-2">
-          <i className="bi bi-box-arrow-up-right"></i> Xem diễn đàn
-        </Link>
-      </div>
-
+      }
+    >
       {/* Dashboard Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 text-center backdrop-blur-xl shadow-lg">
           <div className="text-2xl font-black text-brand-400">{stats.total_posts}</div>
-          <div className="text-[9px] font-bold text-white/45 uppercase tracking-widest mt-1">Bài viết</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Bài viết</div>
         </div>
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-brand2-400">{stats.total_comments}</div>
-          <div className="text-[9px] font-bold text-white/45 uppercase tracking-widest mt-1">Bình luận</div>
+        <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 text-center backdrop-blur-xl shadow-lg">
+          <div className="text-2xl font-black text-cyan-400">{stats.total_comments}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Bình luận</div>
         </div>
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-brand-400">{stats.total_members}</div>
-          <div className="text-[9px] font-bold text-white/45 uppercase tracking-widest mt-1">Thành viên</div>
+        <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 text-center backdrop-blur-xl shadow-lg">
+          <div className="text-2xl font-black text-white">{stats.total_members}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Thành viên</div>
         </div>
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-danger-400">{stats.total_bans}</div>
-          <div className="text-[9px] font-bold text-white/45 uppercase tracking-widest mt-1">Đang cấm</div>
+        <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 text-center backdrop-blur-xl shadow-lg">
+          <div className="text-2xl font-black text-rose-400">{stats.total_bans}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Đang cấm</div>
         </div>
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-warn-400">{stats.pending_reports}</div>
-          <div className="text-[9px] font-bold text-white/45 uppercase tracking-widest mt-1">Báo cáo chờ</div>
+        <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 text-center backdrop-blur-xl shadow-lg">
+          <div className="text-2xl font-black text-amber-400">{stats.pending_reports}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Báo cáo chờ</div>
         </div>
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-safe-400">{stats.posts_today}</div>
-          <div className="text-[9px] font-bold text-white/45 uppercase tracking-widest mt-1">Hôm nay</div>
+        <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 text-center backdrop-blur-xl shadow-lg">
+          <div className="text-2xl font-black text-emerald-400">{stats.posts_today}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Hôm nay</div>
         </div>
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="md:col-span-2 bg-slate-900/40 border border-white/5 rounded-2xl p-5 backdrop-blur-xl">
-          <h3 className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-4 flex items-center gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="md:col-span-2 bg-slate-900/60 border border-white/10 rounded-2xl p-5 backdrop-blur-xl shadow-lg">
+          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-brand-500"></span> Bài viết 14 ngày qua
           </h3>
           <div className="h-48">
             <canvas ref={dailyRef} id="dailyPostsChart"></canvas>
           </div>
         </div>
-        <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 backdrop-blur-xl">
-          <h3 className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-brand2-500"></span> Theo danh mục
+        <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-5 backdrop-blur-xl shadow-lg">
+          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-cyan-500"></span> Theo danh mục
           </h3>
           <div className="h-48">
             <canvas ref={categoryRef} id="categoryChart"></canvas>
@@ -734,67 +757,109 @@ export default function ForumMgmt() {
       </div>
 
       {/* Report Status Mini Chart */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
-        <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 backdrop-blur-xl flex items-center gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 backdrop-blur-xl flex items-center gap-4 shadow-lg">
           <div className="w-20 h-20 shrink-0"><canvas ref={reportRef} id="reportStatusChart"></canvas></div>
-          <div className="text-[10px] space-y-1.5">
-            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-warn-400"></span><span className="text-white/55">Chờ: <span className="text-white font-bold">{reportData.pending}</span></span></div>
-            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-safe-400"></span><span className="text-white/55">Duyệt: <span className="text-white font-bold">{reportData.approved}</span></span></div>
-            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-danger-400"></span><span className="text-white/55">Từ chối: <span className="text-white font-bold">{reportData.rejected}</span></span></div>
-            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-warn-400"></span><span className="text-white/55">AI Flag: <span className="text-white font-bold">{reportData.ai_flagged}</span></span></div>
+          <div className="text-xs space-y-1.5 font-medium">
+            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400"></span><span className="text-slate-300">Chờ: <span className="text-white font-bold">{reportData.pending}</span></span></div>
+            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-400"></span><span className="text-slate-300">Duyệt: <span className="text-white font-bold">{reportData.approved}</span></span></div>
+            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-rose-400"></span><span className="text-slate-300">Từ chối: <span className="text-white font-bold">{reportData.rejected}</span></span></div>
+            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400"></span><span className="text-slate-300">AI Flag: <span className="text-white font-bold">{reportData.ai_flagged}</span></span></div>
           </div>
         </div>
         {/* Moderators quick overview */}
-        <div className="md:col-span-3 bg-slate-900/40 border border-white/5 rounded-2xl p-4 backdrop-blur-xl">
+        <div className="md:col-span-3 bg-slate-900/60 border border-white/10 rounded-2xl p-4 backdrop-blur-xl shadow-lg">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[10px] font-black text-white/60 uppercase tracking-widest flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-safe-500"></span> Kiểm duyệt viên
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Kiểm duyệt viên
             </h3>
-            <button onClick={() => setTab('moderators')} className="text-[9px] font-bold text-brand-400/60 hover:text-brand-400 transition-colors uppercase tracking-widest">Quản lý →</button>
+            <button onClick={() => setTab('moderators')} className="text-xs font-bold text-brand-400 hover:text-white transition-colors">Quản lý →</button>
           </div>
           <div className="flex flex-wrap gap-2">
             {moderators.map((mod) => (
-              <div key={mod.id} className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
+              <div key={mod.id} className="flex items-center gap-2 bg-slate-800/80 border border-white/10 rounded-xl px-3 py-1.5 shadow-sm">
                 <div className="w-6 h-6 rounded-full overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
                   {mod.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={mediaUrl(mod.avatar)} className="w-full h-full object-cover" alt="" />
                   ) : (
-                    <span className="text-[8px] font-bold text-brand-400">{mod.display_name?.charAt(0)?.toUpperCase()}</span>
+                    <span className="text-[10px] font-bold text-brand-400">{mod.display_name?.charAt(0)?.toUpperCase()}</span>
                   )}
                 </div>
-                <span className="text-[10px] font-bold text-white/60">{mod.display_name}</span>
+                <span className="text-xs font-bold text-slate-200">{mod.display_name}</span>
                 {mod.is_superuser && (
-                  <span className="text-[7px] font-black text-warn-400 bg-warn-400/10 px-1.5 py-0.5 rounded uppercase">SA</span>
+                  <span className="text-[9px] font-black text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase border border-amber-400/20">SA</span>
                 )}
               </div>
             ))}
             {moderators.length === 0 && (
-              <span className="text-[10px] text-white/35 italic">Chưa có kiểm duyệt viên</span>
+              <span className="text-xs text-slate-500 italic">Chưa có kiểm duyệt viên</span>
             )}
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1.5 p-1 rounded-2xl bg-slate-900/60 border border-white/5 backdrop-blur-xl mb-8 w-fit flex-wrap">
-        <button onClick={() => setTab('posts')} className={`${TAB_BTN} ${tab === 'posts' ? 'bg-brand-500 text-black shadow-lg shadow-brand-500/20' : 'bg-transparent text-white/55 hover:text-white'}`}>
-          <i className="bi bi-chat-square-text mr-1"></i> Bài viết (<span>{posts.length}</span>)
+      <div className="flex gap-2 p-1.5 rounded-2xl bg-slate-900/80 border border-white/10 backdrop-blur-xl mb-6 w-full overflow-x-auto custom-scrollbar shadow-lg">
+        <button
+          onClick={() => setTab('posts')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            tab === 'posts'
+              ? 'bg-gradient-to-r from-brand-500 to-brand-600 text-black font-black shadow-md'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <i className="bi bi-chat-square-text mr-1.5"></i> Bài viết ({posts.length})
         </button>
-        <button onClick={() => setTab('post_reports')} className={`${TAB_BTN} ${tab === 'post_reports' ? 'bg-danger-500 text-white shadow-lg shadow-danger-500/20' : 'bg-transparent text-white/55 hover:text-white'}`}>
-          <i className="bi bi-flag mr-1"></i> Báo cáo (<span>{postReports.length}</span>)
+        <button
+          onClick={() => setTab('post_reports')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            tab === 'post_reports'
+              ? 'bg-rose-500 text-white font-black shadow-md'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <i className="bi bi-flag mr-1.5"></i> Báo cáo bài ({postReports.length})
         </button>
-        <button onClick={() => setTab('comment_reports')} className={`${TAB_BTN} ${tab === 'comment_reports' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20' : 'bg-transparent text-white/55 hover:text-white'}`}>
-          <i className="bi bi-flag mr-1"></i> BL Báo cáo (<span>{commentReports.length}</span>)
+        <button
+          onClick={() => setTab('comment_reports')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            tab === 'comment_reports'
+              ? 'bg-amber-500 text-black font-black shadow-md'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <i className="bi bi-chat-left-dots mr-1.5"></i> Báo cáo BL ({commentReports.length})
         </button>
-        <button onClick={() => setTab('members')} className={`${TAB_BTN} ${tab === 'members' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20' : 'bg-transparent text-white/55 hover:text-white'}`}>
-          <i className="bi bi-people mr-1"></i> Thành viên (<span>{members.length}</span>)
+        <button
+          onClick={() => setTab('members')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            tab === 'members'
+              ? 'bg-gradient-to-r from-brand-500 to-brand-600 text-black font-black shadow-md'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <i className="bi bi-people mr-1.5"></i> Thành viên ({members.length})
         </button>
-        <button onClick={() => setTab('bans')} className={`${TAB_BTN} ${tab === 'bans' ? 'bg-warn-500 text-white shadow-lg shadow-warn-500/20' : 'bg-transparent text-white/55 hover:text-white'}`}>
-          <i className="bi bi-slash-circle mr-1"></i> Đang cấm (<span>{bans.length}</span>)
+        <button
+          onClick={() => setTab('bans')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            tab === 'bans'
+              ? 'bg-rose-600 text-white font-black shadow-md'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <i className="bi bi-slash-circle mr-1.5"></i> Đang cấm ({bans.length})
         </button>
-        <button onClick={() => setTab('moderators')} className={`${TAB_BTN} ${tab === 'moderators' ? 'bg-safe-500 text-white shadow-lg shadow-safe-500/20' : 'bg-transparent text-white/55 hover:text-white'}`}>
-          <i className="bi bi-shield-check mr-1"></i> Kiểm duyệt (<span>{moderators.length}</span>)
+        <button
+          onClick={() => setTab('moderators')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            tab === 'moderators'
+              ? 'bg-emerald-500 text-black font-black shadow-md'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <i className="bi bi-shield-check mr-1.5"></i> Kiểm duyệt ({moderators.length})
         </button>
       </div>
 
@@ -852,14 +917,14 @@ export default function ForumMgmt() {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                          <button onClick={() => void postAction(post.id, 'pin')} className="h-7 px-2.5 rounded-lg bg-white/5 text-[10px] font-bold border border-white/10 hover:border-warn-500/30 hover:text-warn-400 transition-all" title={post.is_pinned ? 'Bỏ ghim' : 'Ghim'}>
-                            <i className={`bi ${post.is_pinned ? 'bi-pin-angle-fill text-warn-500' : 'bi-pin-angle text-white/55'}`}></i>
+                        <div className="flex justify-end gap-1.5 transition-all">
+                          <button onClick={() => void postAction(post.id, 'pin')} className="h-7 px-2.5 rounded-lg bg-white/5 text-[10px] font-bold border border-white/10 hover:border-amber-500/30 hover:text-amber-400 transition-all" title={post.is_pinned ? 'Bỏ ghim' : 'Ghim'}>
+                            <i className={`bi ${post.is_pinned ? 'bi-pin-angle-fill text-amber-400' : 'bi-pin-angle text-slate-300'}`}></i>
                           </button>
-                          <button onClick={() => void postAction(post.id, 'lock')} className="h-7 px-2.5 rounded-lg bg-white/5 text-[10px] font-bold border border-white/10 hover:border-warn-500/30 hover:text-warn-400 transition-all" title={post.is_locked ? 'Mở khóa' : 'Khóa'}>
-                            <i className={`bi ${post.is_locked ? 'bi-lock-fill text-warn-500' : 'bi-unlock text-white/55'}`}></i>
+                          <button onClick={() => void postAction(post.id, 'lock')} className="h-7 px-2.5 rounded-lg bg-white/5 text-[10px] font-bold border border-white/10 hover:border-amber-500/30 hover:text-amber-400 transition-all" title={post.is_locked ? 'Mở khóa' : 'Khóa'}>
+                            <i className={`bi ${post.is_locked ? 'bi-lock-fill text-amber-400' : 'bi-unlock text-slate-300'}`}></i>
                           </button>
-                          <button onClick={() => void confirmDeletePost(post)} className="h-7 px-2.5 rounded-lg bg-white/5 text-white/55 text-[10px] font-bold border border-white/10 hover:border-danger-500/30 hover:text-danger-500 transition-all" title="Xóa">
+                          <button onClick={() => void confirmDeletePost(post)} className="h-7 px-2.5 rounded-lg bg-white/5 text-slate-300 text-[10px] font-bold border border-white/10 hover:border-rose-500/30 hover:text-rose-400 transition-all" title="Xóa">
                             <i className="bi bi-trash3"></i>
                           </button>
                         </div>
@@ -1203,7 +1268,7 @@ export default function ForumMgmt() {
                         <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-warn-400/10 text-warn-400 border border-warn-400/20">Super Admin</span>
                       )}
                       {!mod.is_superuser && (
-                        <button onClick={() => void demoteModerator(mod)} className="h-7 px-3 rounded-lg bg-white/5 text-white/55 text-[10px] font-bold border border-white/10 hover:border-danger-500/30 hover:text-danger-400 transition-all opacity-0 group-hover:opacity-100" title="Gỡ quyền">
+                        <button onClick={() => void demoteModerator(mod)} className="h-7 px-3 rounded-lg bg-white/5 text-slate-300 text-[10px] font-bold border border-white/10 hover:border-danger-500/30 hover:text-danger-400 transition-all" title="Gỡ quyền">
                           <i className="bi bi-person-dash mr-1"></i> Gỡ quyền
                         </button>
                       )}
@@ -1258,6 +1323,6 @@ export default function ForumMgmt() {
           </div>
         </div>
       )}
-    </div>
+    </AdminShell>
   );
 }

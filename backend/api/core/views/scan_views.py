@@ -609,6 +609,8 @@ class ScanPhoneView(APIView):
         )
 
         _document_scan_for_admin(scan_event)
+        _register_scan_in_session(request, scan_event.id)
+        result['scan_id'] = scan_event.id
 
         return Response(result)
 
@@ -720,7 +722,14 @@ class ScanEmailView(APIView):
             risk_score=base_risk_score,
             result_json={
                 'security_checks': security_details,
-                'content_snippet': email_data['body'][:5000]
+                'content_snippet': email_data['body'][:5000],
+                'extracted_info': {
+                    'subject': email_data['subject'],
+                    'from': email_data['from'],
+                    'to': email_data.get('to', ''),
+                    'url_count': len(email_data['urls']),
+                    'attachment_count': len(email_data['attachments']),
+                },
             },
             user=request.user if request.user.is_authenticated else None,
             detected_urls=email_data['urls']
@@ -772,6 +781,7 @@ class ScanEmailView(APIView):
             scan_event.result_json = res_data
             scan_event.save(update_fields=['status', 'risk_score', 'risk_level', 'result_json'])
             _document_scan_for_admin(scan_event)
+            _register_scan_in_session(request, scan_event.id)
             return Response(res_data)
 
         # 7. Trigger Deep Analysis Task (Async) for web interface
@@ -1033,6 +1043,7 @@ class ScanMessageView(APIView):
             scan_event.save(update_fields=['status', 'risk_score', 'risk_level', 'result_json'])
 
             _document_scan_for_admin(scan_event)
+            _register_scan_in_session(request, scan_event.id)
 
             return Response({
                 'scan_id': scan_event.id,
@@ -1174,8 +1185,10 @@ def _get_trusted_domains() -> dict:
 
     # Nguồn dữ liệu Việt Nam dùng chung (api/utils/vn_sources.py) — điểm cải tiến #2.
     try:
-        from api.utils.vn_sources import VN_TRUSTED_DOMAINS
+        from api.utils.vn_sources import VN_TRUSTED_DOMAINS, tinnhiem_trusted_domains
         from_vn = dict(VN_TRUSTED_DOMAINS)
+        # Bổ sung tên miền tin cậy thu thập từ danh bạ tinnhiemmang.vn (nếu có dataset).
+        from_vn.update(tinnhiem_trusted_domains())
     except Exception:
         from_vn = {}
 
@@ -1383,6 +1396,30 @@ def _analyze_domain(url: str) -> dict:
         score += 20
         details.append('Sử dụng địa chỉ IP thay vì domain')
 
+    # Danh bạ Tín nhiệm mạng (tinnhiemmang.vn) — dữ liệu NCSC/VNCERT tra cứu cục bộ (nhanh)
+    tinnhiem_info = None
+    try:
+        from api.utils.vn_sources import tinnhiem_lookup_domain
+        tinnhiem_info = tinnhiem_lookup_domain(domain)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"[ScanDomain] tinnhiem lookup failed: {exc}")
+    if tinnhiem_info:
+        rec = tinnhiem_info.get('record') or {}
+        if tinnhiem_info.get('status') == 'scam':
+            impersonated = rec.get('impersonated') or rec.get('owner')
+            score = max(score, 90)
+            _tk_msg = 'Tín nhiệm mạng (NCSC): tên miền nằm trong DANH SÁCH LỪA ĐẢO'
+            if impersonated:
+                _tk_msg += f' — mạo danh {impersonated}'
+            details.append(_tk_msg)
+        elif tinnhiem_info.get('status') == 'trusted':
+            owner = rec.get('owner') or rec.get('name')
+            _tk_msg = 'Tín nhiệm mạng (NCSC): website đã được chứng nhận TÍN NHIỆM'
+            if owner:
+                _tk_msg += f' — {owner}'
+            details.append(_tk_msg)
+            score = max(0, score - 20)
+
     score = min(100, score)
 
     if score >= 70:
@@ -1410,6 +1447,12 @@ def _analyze_domain(url: str) -> dict:
         result['virustotal'] = vt_obj
     if vt_sources:
         result['sources'] = vt_sources
+    if tinnhiem_info and tinnhiem_info.get('status') != 'unknown':
+        result['tinnhiem'] = {
+            'status': tinnhiem_info['status'],
+            'record': tinnhiem_info.get('record'),
+            'source': 'tinnhiemmang.vn',
+        }
     # Guardrail + bằng chứng (điểm #1/#4): không kết luận an toàn khi thiếu cơ sở.
     apply_guardrail(result, kind='url')
 
@@ -1495,6 +1538,12 @@ class ScanDomainView(APIView):
         if ts_err:
             return ts_err
 
+        # Tu choi domain rac truoc khi fetch/network (normalize_domain khong bao
+        # gio raise nen '!!!' van lot vao scan ton tai nguyen + luu DB).
+        _host = normalize_domain(url)
+        if not _host or '.' not in _host or len(_host) < 4:
+            return Response({'error': 'Ten mien/URL khong hop le (VD: ngan-hang-lua-dao.top).'}, status=400)
+
         if deep_scan:
             from api.core.models import ScanStatus
             from api.core.tasks import perform_web_scrapping_task
@@ -1534,6 +1583,8 @@ class ScanDomainView(APIView):
         )
 
         _document_scan_for_admin(scan_event)
+        _register_scan_in_session(request, scan_event.id)
+        result['scan_id'] = scan_event.id
 
         return Response(result)
 
@@ -1639,7 +1690,7 @@ class ScanAccountView(APIView):
         # Check reports specifically targeting this bank account
         reports_for_account = Report.objects.filter(
             target_type='account',
-        ).filter(
+        ).exclude(status='rejected').filter(
             Q(target_value__iexact=account) |
             Q(target_value__iexact=f"{bank}:{account}") |
             Q(target_value__iexact=f"{canonical_bank}:{account}") |
@@ -1693,6 +1744,7 @@ class ScanAccountView(APIView):
             )
 
         apply_guardrail(result, kind='account')
+        from api.core.models import ScanStatus
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='account',
@@ -1701,8 +1753,14 @@ class ScanAccountView(APIView):
             result_json=result,
             risk_score=score,
             risk_level=level,
+            status=ScanStatus.COMPLETED,
         )
 
+        result['scan_id'] = scan_event.id
+        scan_event.result_json = result
+        scan_event.save(update_fields=['result_json'])
+
+        _register_scan_in_session(request, scan_event.id)
         _document_scan_for_admin(scan_event)
 
         return Response(result)

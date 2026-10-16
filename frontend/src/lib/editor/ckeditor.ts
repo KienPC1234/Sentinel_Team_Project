@@ -45,8 +45,6 @@ import {
   Highlight,
   Style,
   GeneralHtmlSupport,
-  CloudServices,
-  Autosave,
   ButtonView,
   SpecialCharacters,
   SpecialCharactersEssentials,
@@ -456,13 +454,16 @@ function mentionFeed(query: string): Promise<{ id: string; text: string; name: s
 }
 
 export function buildEditorConfig(options: EditorOptions = {}): Record<string, unknown> {
+  /* Toolbar xếp theo nhóm rõ ràng; '|' là separator. CKEditor tự gộp phần tử
+   * dư vào menu overflow khi hẹp nên mobile vẫn dùng được. */
   const toolbarItems: string[] = [
     'undo', 'redo', '|',
-    'heading', 'style', '|',
-    'bold', 'italic', 'underline', 'strikethrough', 'subscript', 'superscript', '|',
-    'horizontalLine', 'link', 'insertImage', 'shieldCallMedia', 'mediaEmbed', 'insertTable', 'highlight', 'blockQuote', 'codeBlock', '|',
-    'alignment', '|',
-    'bulletedList', 'numberedList', 'todoList', 'outdent', 'indent',
+    'style', 'heading', '|',
+    'bold', 'italic', 'underline', 'strikethrough', '|',
+    'blockQuote', 'codeBlock', 'highlight', '|',
+    'bulletedList', 'numberedList', 'todoList', 'outdent', 'indent', '|',
+    'link', 'insertImage', 'shieldCallMedia', 'mediaEmbed', 'insertTable', '|',
+    'horizontalLine', 'alignment',
   ];
   // SpecialCharacters là optional trong bản UMD gốc — npm có sẵn thì dùng.
   if (SpecialCharacters) toolbarItems.push('|', 'specialCharacters');
@@ -471,14 +472,14 @@ export function buildEditorConfig(options: EditorOptions = {}): Record<string, u
   const config: Record<string, unknown> = {
     licenseKey: 'GPL',
     plugins: [
-      Alignment, AutoImage, AutoLink, Autosave, BlockQuote, Bold,
+      Alignment, AutoImage, AutoLink, BlockQuote, Bold,
       CodeBlock, Essentials, GeneralHtmlSupport, Heading,
       Highlight, HorizontalLine, ImageBlock, ImageCaption, ImageEditing,
       ImageInline, ImageInsertViaUrl, ImageStyle, ImageTextAlternative,
       ImageToolbar, ImageUpload, ImageUtils, Indent, IndentBlock, Italic,
       Link, List, MediaEmbed, Mention, Paragraph, Strikethrough,
       Style, Subscript, Superscript, Table, TableCaption, TableToolbar,
-      TodoList, Underline, Image, CloudServices,
+      TodoList, Underline, Image,
       ShieldCallUploadAdapterPlugin, ShieldCallMediaManagerPlugin,
       ...(SpecialCharactersEssentials ? [SpecialCharactersEssentials] : []),
       ...(SpecialCharacters ? [SpecialCharacters] : []),
@@ -486,16 +487,36 @@ export function buildEditorConfig(options: EditorOptions = {}): Record<string, u
     toolbar: { items: toolbarItems, shouldNotGroupWhenFull: false },
     heading: {
       options: [
-        { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
-        { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
-        { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
-        { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' },
-        { model: 'heading4', view: 'h4', title: 'Heading 4', class: 'ck-heading_heading4' },
-        { model: 'heading5', view: 'h5', title: 'Heading 5', class: 'ck-heading_heading5' },
-        { model: 'heading6', view: 'h6', title: 'Heading 6', class: 'ck-heading_heading6' },
+        { model: 'paragraph', title: 'Đoạn văn bản', class: 'ck-heading_paragraph' },
+        { model: 'heading1', view: 'h1', title: 'Tiêu đề 1', class: 'ck-heading_heading1' },
+        { model: 'heading2', view: 'h2', title: 'Tiêu đề 2', class: 'ck-heading_heading2' },
+        { model: 'heading3', view: 'h3', title: 'Tiêu đề 3', class: 'ck-heading_heading3' },
+        { model: 'heading4', view: 'h4', title: 'Tiêu đề 4', class: 'ck-heading_heading4' },
+        { model: 'heading5', view: 'h5', title: 'Tiêu đề 5', class: 'ck-heading_heading5' },
+        { model: 'heading6', view: 'h6', title: 'Tiêu đề 6', class: 'ck-heading_heading6' },
       ],
     },
-    htmlSupport: { allow: [{ name: /^.*$/, styles: true, attributes: true, classes: true }] },
+    /* Chỉ cho phép các class/attribute nào thật sự có CSS trong app/styles/ckeditor.css.
+     * Trước đây allow /^.*$/ cho phép paste class tuỳ ý làm vỡ layout forum và
+     * khiến nội dung soạn thảo lệch với bản hiển thị. */
+    htmlSupport: {
+      allow: [
+        {
+          name: /.*/,
+          attributes: [
+            'id', 'alt', 'title', 'dir', 'target', 'rel', 'colspan', 'rowspan',
+            'data-scan-ref', 'data-cke-saved-src',
+          ],
+          classes: [
+            'document-title', 'document-subtitle', 'category', 'info-box',
+            'button', 'button--green', 'button--black', 'marker', 'spoiler',
+            'mention', 'language-*',
+          ],
+          styles: ['text-align', 'width', 'height', 'background-color', 'color'],
+        },
+      ],
+      disallow: [{ name: /^(script|style|object|embed|form|input|button)$/ }],
+    },
     image: {
       toolbar: ['toggleImageCaption', 'imageTextAlternative', '|', 'imageStyle:inline', 'imageStyle:wrapText', 'imageStyle:breakText'],
     },
@@ -505,7 +526,7 @@ export function buildEditorConfig(options: EditorOptions = {}): Record<string, u
       decorators: {
         toggleDownloadable: {
           mode: 'manual',
-          label: 'Downloadable',
+          label: 'Tải xuống',
           attributes: { download: 'file' },
         },
       },
@@ -523,14 +544,14 @@ export function buildEditorConfig(options: EditorOptions = {}): Record<string, u
     },
     style: {
       definitions: [
-        { name: 'Article category', element: 'h3', classes: ['category'] },
-        { name: 'Title', element: 'h2', classes: ['document-title'] },
-        { name: 'Subtitle', element: 'h3', classes: ['document-subtitle'] },
-        { name: 'Info box', element: 'p', classes: ['info-box'] },
-        { name: 'CTA Link Primary', element: 'a', classes: ['button', 'button--green'] },
-        { name: 'CTA Link Secondary', element: 'a', classes: ['button', 'button--black'] },
-        { name: 'Marker', element: 'span', classes: ['marker'] },
-        { name: 'Spoiler', element: 'span', classes: ['spoiler'] },
+        { name: 'Tiêu đề bài viết', element: 'h2', classes: ['document-title'] },
+        { name: 'Phụ đề', element: 'h3', classes: ['document-subtitle'] },
+        { name: 'Nhãn danh mục', element: 'h3', classes: ['category'] },
+        { name: 'Khung thông tin', element: 'p', classes: ['info-box'] },
+        { name: 'Nút chính', element: 'a', classes: ['button', 'button--green'] },
+        { name: 'Nút phụ', element: 'a', classes: ['button', 'button--black'] },
+        { name: 'Đánh dấu', element: 'span', classes: ['marker'] },
+        { name: 'Ẩn nội dung (spoiler)', element: 'span', classes: ['spoiler'] },
       ],
     },
     table: { contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells'] },

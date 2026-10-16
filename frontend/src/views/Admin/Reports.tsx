@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api, mediaUrl } from '../../lib/api';
-import { useAdminGet } from './_shared';
+import { useAdminGet, AdminNavbar } from './_shared';
 import { showToast } from '../../lib/ui/feedback';
 
 /* Port 1-1 từ PKV/templates/Admin/reports.html.
@@ -437,7 +437,7 @@ function ReportDetailModal({
                   <div>
                     <p className="text-[9px] font-black text-brand2-400/40 uppercase tracking-widest">Đánh giá</p>
                     <p className="text-sm font-bold text-white">
-                      {ai.is_scam ? '[CANH BAO] CO DAU HIEU LUA DAO' : '[AN TOAN] BINH THUONG'}
+                      {ai.is_scam ? '[CẢNH BÁO] CÓ DẤU HIỆU LỪA ĐẢO' : '[AN TOÀN] BÌNH THƯỜNG'}
                     </p>
                   </div>
                   <div className="text-right">
@@ -694,79 +694,101 @@ export default function Reports() {
       <style>{SELECT_CSS}</style>
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/10">
+        <div className="flex items-center gap-4">
           <Link
             href="/admin-cp/"
-            className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/55 hover:text-brand-400 hover:border-brand-500/30 transition-all shadow-lg"
+            className="w-12 h-12 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white hover:border-white/20 transition-all shadow-lg"
           >
-            <i className="bi bi-chevron-left text-2xl"></i>
+            <i className="bi bi-chevron-left text-xl"></i>
           </Link>
           <div>
-            <h1 className="text-3xl font-black text-white tracking-tight">Báo cáo Cộng đồng</h1>
-            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mt-1">Quản lý phản hồi và báo lừa đảo</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500"></span>
+              <span className="text-[10px] uppercase font-black tracking-[0.2em] text-brand-400">Kiểm duyệt cộng đồng</span>
+            </div>
+            <h1 className="text-3xl font-black text-white tracking-tight">Báo Cáo Lừa Đảo</h1>
+            <p className="text-xs text-slate-400 mt-0.5">Xác minh, phân tích AI và phê duyệt báo cáo lừa đảo từ người dùng</p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin-cp/"
+            className="px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-xs font-bold text-slate-300 hover:text-white hover:border-white/20 transition-all"
+          >
+            ← Dashboard
+          </Link>
         </div>
       </div>
 
+      {/* Unified Tab Navigation */}
+      <AdminNavbar />
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="liquid-card p-4 text-center space-y-1">
-          <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto">
-            <i className="bi bi-file-earmark-text text-white/55 text-sm"></i>
+        <div className="p-4 rounded-2xl bg-slate-900/90 border border-white/10 text-center space-y-1 shadow-md">
+          <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-slate-300">
+            <i className="bi bi-file-earmark-text text-sm"></i>
           </div>
-          <p className="text-xl font-black text-white">{stats.total}</p>
-          <p className="text-[8px] font-bold text-white/55 uppercase tracking-widest">Tổng</p>
+          <p className="text-2xl font-black text-white">{stats.total}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng báo cáo</p>
         </div>
         <div
-          className={`liquid-card p-4 text-center space-y-1 cursor-pointer hover:border-warn-500/30 transition-all${
-            statusFilter === 'pending' ? ' border-warn-500/30 bg-warn-500/[0.03]' : ''
+          className={`p-4 rounded-2xl bg-slate-900/90 border text-center space-y-1 cursor-pointer transition-all shadow-md ${
+            statusFilter === 'pending'
+              ? 'border-warn-400 bg-warn-500/10 shadow-warn-500/10'
+              : 'border-white/10 hover:border-warn-400/50'
           }`}
           onClick={() => applyStatus('pending')}
         >
-          <div className="w-9 h-9 rounded-xl bg-warn-500/10 border border-warn-500/20 flex items-center justify-center mx-auto">
-            <i className="bi bi-clock text-warn-500 text-sm"></i>
+          <div className="w-9 h-9 rounded-xl bg-warn-500/15 border border-warn-500/30 flex items-center justify-center mx-auto text-warn-400">
+            <i className="bi bi-clock-history text-sm"></i>
           </div>
-          <p className="text-xl font-black text-warn-400">{stats.pending}</p>
-          <p className="text-[8px] font-bold text-white/55 uppercase tracking-widest">Chờ duyệt</p>
+          <p className="text-2xl font-black text-warn-400">{stats.pending}</p>
+          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Chờ duyệt</p>
         </div>
         <div
-          className={`liquid-card p-4 text-center space-y-1 cursor-pointer hover:border-safe-500/30 transition-all${
-            statusFilter === 'approved' ? ' border-safe-500/30 bg-safe-500/[0.03]' : ''
+          className={`p-4 rounded-2xl bg-slate-900/90 border text-center space-y-1 cursor-pointer transition-all shadow-md ${
+            statusFilter === 'approved'
+              ? 'border-safe-400 bg-safe-500/10 shadow-safe-500/10'
+              : 'border-white/10 hover:border-safe-400/50'
           }`}
           onClick={() => applyStatus('approved')}
         >
-          <div className="w-9 h-9 rounded-xl bg-safe-500/10 border border-safe-500/20 flex items-center justify-center mx-auto">
-            <i className="bi bi-check-circle text-safe-400 text-sm"></i>
+          <div className="w-9 h-9 rounded-xl bg-safe-500/15 border border-safe-500/30 flex items-center justify-center mx-auto text-safe-400">
+            <i className="bi bi-check-circle-fill text-sm"></i>
           </div>
-          <p className="text-xl font-black text-safe-400">{stats.approved}</p>
-          <p className="text-[8px] font-bold text-white/55 uppercase tracking-widest">Đã duyệt</p>
+          <p className="text-2xl font-black text-safe-400">{stats.approved}</p>
+          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Đã duyệt</p>
         </div>
         <div
-          className={`liquid-card p-4 text-center space-y-1 cursor-pointer hover:border-danger-500/30 transition-all${
-            statusFilter === 'rejected' ? ' border-danger-500/30 bg-danger-500/[0.03]' : ''
+          className={`p-4 rounded-2xl bg-slate-900/90 border text-center space-y-1 cursor-pointer transition-all shadow-md ${
+            statusFilter === 'rejected'
+              ? 'border-danger-400 bg-danger-500/10 shadow-danger-500/10'
+              : 'border-white/10 hover:border-danger-400/50'
           }`}
           onClick={() => applyStatus('rejected')}
         >
-          <div className="w-9 h-9 rounded-xl bg-danger-500/10 border border-danger-500/20 flex items-center justify-center mx-auto">
-            <i className="bi bi-x-circle text-danger-400 text-sm"></i>
+          <div className="w-9 h-9 rounded-xl bg-danger-500/15 border border-danger-500/30 flex items-center justify-center mx-auto text-danger-400">
+            <i className="bi bi-x-circle-fill text-sm"></i>
           </div>
-          <p className="text-xl font-black text-danger-400">{stats.rejected}</p>
-          <p className="text-[8px] font-bold text-white/55 uppercase tracking-widest">Từ chối</p>
+          <p className="text-2xl font-black text-danger-400">{stats.rejected}</p>
+          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Từ chối</p>
         </div>
-        <div className="liquid-card p-4 text-center space-y-1">
-          <div className="w-9 h-9 rounded-xl bg-warn-500/10 border border-warn-500/20 flex items-center justify-center mx-auto">
-            <i className="bi bi-exclamation-triangle text-warn-400 text-sm"></i>
+        <div className="p-4 rounded-2xl bg-slate-900/90 border border-white/10 text-center space-y-1 shadow-md">
+          <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
+            <i className="bi bi-exclamation-triangle-fill text-sm"></i>
           </div>
-          <p className="text-xl font-black text-warn-400">{stats.high_severity}</p>
-          <p className="text-[8px] font-bold text-white/55 uppercase tracking-widest">Nghiêm trọng</p>
+          <p className="text-2xl font-black text-rose-400">{stats.high_severity}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nghiêm trọng</p>
         </div>
-        <div className="liquid-card p-4 text-center space-y-1">
-          <div className="w-9 h-9 rounded-xl bg-brand2-500/10 border border-brand2-500/20 flex items-center justify-center mx-auto">
-            <i className="bi bi-robot text-brand2-400 text-sm"></i>
+        <div className="p-4 rounded-2xl bg-slate-900/90 border border-white/10 text-center space-y-1 shadow-md">
+          <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center mx-auto text-cyan-400">
+            <i className="bi bi-robot text-sm"></i>
           </div>
-          <p className="text-xl font-black text-brand2-400">{stats.has_ai}</p>
-          <p className="text-[8px] font-bold text-white/55 uppercase tracking-widest">AI đã phân tích</p>
+          <p className="text-2xl font-black text-cyan-400">{stats.has_ai}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Đã Quét</p>
         </div>
       </div>
 

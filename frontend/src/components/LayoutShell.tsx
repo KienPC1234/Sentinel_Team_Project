@@ -9,6 +9,9 @@ import UserCardPopup from '@/components/UserCardPopup';
 export function LayoutShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '';
   const isAssistant = pathname.startsWith('/ai-assistant');
+  // Trang người cao tuổi có khung chat riêng (chữ to) → không dùng widget nổi
+  // để tránh hai khung chat chồng nhau.
+  const hideFloatingChat = isAssistant || pathname.startsWith('/nguoi-cao-tuoi');
 
   if (isAssistant) {
     return (
@@ -25,7 +28,7 @@ export function LayoutShell({ children }: { children: ReactNode }) {
       <Navbar />
       <main className="flex-1">{children}</main>
       <Footer />
-      <ChatWidget />
+      {!hideFloatingChat && <ChatWidget />}
       <UserCardPopup />
     </div>
   );

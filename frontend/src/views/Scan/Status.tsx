@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { useParams } from 'next/navigation';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 
 
 
@@ -17,7 +17,7 @@ import { showToast, wsBase, TrustGuardrailPanel, guardrailTone, guardrailLabel }
 import type { ScanResult } from '../../components/ScanWidgets';
 import { asStr, asNum, asArr } from '../../components/ScanWidgets';
 
-type StatusState = 'pending' | 'processing' | 'completed' | 'failed';
+type StatusState = 'pending' | 'processing' | 'completed' | 'failed' | 'denied';
 
 const TYPE_LABELS: Record<string, string> = {
   phone: 'Số điện thoại',
@@ -105,8 +105,19 @@ export default function Status() {
             if (data.scan_type) setScanType(data.scan_type);
           }
         })
-        .catch(() => {
-          /* giữ trạng thái, lần poll sau thử lại */
+        .catch((err: unknown) => {
+          /* 403/404: không có quyền hoặc scan không tồn tại — dừng poll kẻo
+           * gọi mỗi 5s vô hạn. Lỗi mạng thoáng qua thì giữ trạng thái thử lại. */
+          if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
+            if (!alive) return;
+            setStatus('denied');
+            if (pollRef.current != null) window.clearInterval(pollRef.current);
+            try {
+              wsRef.current?.close();
+            } catch {
+              /* bỏ qua */
+            }
+          }
         });
     };
 
@@ -208,7 +219,13 @@ export default function Status() {
   const detailItems = (() => {
     const items: string[] = [];
     const pushList = (v: unknown): void => {
-      asArr<unknown>(v).forEach((i) => items.push(typeof i === 'string' ? i : JSON.stringify(i)));
+      asArr<unknown>(v).forEach((i) => {
+        const raw = typeof i === 'string' ? i : JSON.stringify(i);
+        const cleaned = raw.replace(/^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+/gi, '').trim();
+        if (cleaned) {
+          items.push(cleaned);
+        }
+      });
     };
     pushList(result['patterns_found']);
     pushList(result['indicators']);
@@ -218,7 +235,8 @@ export default function Status() {
     return [...new Set(items)].slice(0, 15);
   })();
   const webSources = asArr<string>(result['web_sources']);
-  const explanation = asStr(result['explanation']) || asStr(result['ai_insight']);
+  const rawExplanation = asStr(result['explanation']) || asStr(result['ai_insight']);
+  const explanation = rawExplanation.replace(/^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+/gi, '').trim();
   const webContext = asStr(result['web_context']);
 
   return (
@@ -283,6 +301,19 @@ export default function Status() {
           </div>
           <h2 className="text-xl font-black text-danger-400">Phân tích thất bại</h2>
           <p className="text-white/60 text-sm">Đã xảy ra lỗi trong quá trình phân tích. Vui lòng thử lại.</p>
+        </div>
+      )}
+
+      {status === 'denied' && (
+        <div className="liquid-card p-8 text-center space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-warn-500/20 flex items-center justify-center">
+            <i className="bi bi-lock-fill text-3xl text-warn-400"></i>
+          </div>
+          <h2 className="text-xl font-black text-white">Không thể xem kết quả này</h2>
+          <p className="text-white/60 text-sm">Kết quả quét không tồn tại hoặc bạn không có quyền truy cập (chỉ chủ scan, admin hoặc link tham chiếu public mới xem được).</p>
+          <Link href="/scan/" className="inline-flex items-center gap-2 text-brand-400 font-bold hover:text-white transition-colors">
+            <i className="bi bi-arrow-left"></i> Quét mới
+          </Link>
         </div>
       )}
 

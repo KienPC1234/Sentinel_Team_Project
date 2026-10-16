@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { api, ApiError, mediaUrl } from '../../lib/api';
 import { MarkdownView } from '../../components/ui';
 import { renderMd } from '../../lib/chat/markdown';
+import { fmtDate } from '../../lib/date';
 
 /* Port từ PKV/templates/Learning/lesson_detail.html.
  * API đã đấu: GET /learn/lessons/:slug/ (chi tiết + quiz + scenario),
@@ -58,16 +59,6 @@ interface Scenario {
   description?: string;
 }
 
-function fmtDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  } catch {
-    return '';
-  }
-}
-
 const CATEGORY_LABEL: Record<string, string> = {
   guide: 'Hướng dẫn an toàn',
   news: 'Tin tức',
@@ -104,8 +95,12 @@ export default function LessonDetail() {
         summary?: string;
         content?: string;
         category?: string;
+        category_display?: string;
         cover_image?: string | null;
         created_at?: string;
+        reaction_counts?: ReactionCounts;
+        reactions_count?: number;
+        my_reaction?: string | null;
         quizzes?: Array<{
           id: number;
           question: string;
@@ -121,10 +116,16 @@ export default function LessonDetail() {
           slug: d.slug || slug,
           title: d.title || '',
           content: d.content || '',
-          category_display: CATEGORY_LABEL[d.category || ''] || d.category,
+          category_display: d.category_display || CATEGORY_LABEL[d.category || ''] || d.category,
           cover_image: d.cover_image || null,
           created_at: d.created_at,
         });
+        if (d.reaction_counts) {
+          setCounts(d.reaction_counts);
+        }
+        if (d.my_reaction) {
+          setMy(d.my_reaction);
+        }
         setQuizzes(
           (d.quizzes || []).map((q) => ({
             id: q.id,
@@ -366,15 +367,21 @@ function QuizCard({ quiz, index }: { quiz: Quiz; index: number }) {
   const [answer, setAnswer] = useState<{ correct: boolean; correct_answer?: string; correct_answers?: string[]; explanation?: string } | null>(null);
   const correct = answer?.correct ?? false;
 
+  const resetQuiz = () => {
+    setSubmitted(false);
+    setSelected(null);
+    setAnswer(null);
+  };
+
   const optionClass = (oid: string, isCorrect: boolean): string => {
     if (submitted) {
-      if (isCorrect) return 'border-safe-500/40 bg-safe-500/10 text-safe-400';
-      if (selected === oid) return 'border-danger-500/40 bg-danger-500/10 text-danger-400';
-      return 'border-white/5 text-white/35 opacity-50';
+      if (isCorrect) return 'border-safe-500/50 bg-safe-500/15 text-safe-300';
+      if (selected === oid) return 'border-danger-500/50 bg-danger-500/15 text-danger-300';
+      return 'border-white/5 text-white/35 opacity-40';
     }
     return selected === oid
-      ? 'border-brand-400/50 bg-brand-400/10 text-white translate-x-1'
-      : 'border-white/5 text-white/60 hover:border-white/20 hover:bg-white/5 hover:text-white';
+      ? 'border-brand-400/60 bg-brand-400/10 text-white translate-x-1'
+      : 'border-white/5 text-white/70 hover:border-white/20 hover:bg-white/5 hover:text-white';
   };
 
   return (
@@ -394,8 +401,9 @@ function QuizCard({ quiz, index }: { quiz: Quiz; index: number }) {
       </div>
 
       <div className="p-6 flex-1 space-y-3">
-        {(quiz.options || []).map((opt) => {
+        {(quiz.options || []).map((opt, optIdx) => {
           const isCorrect = opt.id === (answer?.correct_answer ?? quiz.correct_answer);
+          const letter = opt.id && opt.id.length <= 2 ? opt.id : String.fromCharCode(65 + optIdx);
           return (
             <button
               key={opt.id}
@@ -408,13 +416,13 @@ function QuizCard({ quiz, index }: { quiz: Quiz; index: number }) {
             >
               <div className="flex items-center gap-4 min-w-0">
                 <span
-                  className={`w-6 h-6 shrink-0 rounded-lg bg-white/5 flex items-center justify-center text-[10px] font-black text-white/55 group-hover/opt:bg-brand-500/20 group-hover/opt:text-brand-400 ${
-                    selected === opt.id ? 'bg-brand-500/20 text-brand-400' : ''
+                  className={`w-7 h-7 shrink-0 rounded-lg bg-white/5 flex items-center justify-center text-xs font-black text-white/55 group-hover/opt:bg-brand-500/20 group-hover/opt:text-brand-400 ${
+                    selected === opt.id ? 'bg-brand-500/25 text-brand-300' : ''
                   }`}
                 >
-                  {opt.id}
+                  {letter}
                 </span>
-                <span className="text-white/90 font-medium break-words">{opt.text}</span>
+                <span className="text-white/90 font-medium break-words leading-relaxed">{opt.text}</span>
               </div>
               <div className="flex items-center shrink-0 ml-3">
                 {submitted && isCorrect && <i className="bi bi-check2-circle text-xl text-safe-400"></i>}
@@ -426,47 +434,84 @@ function QuizCard({ quiz, index }: { quiz: Quiz; index: number }) {
       </div>
 
       <div className="p-6 pt-0 space-y-4">
-        <button
-          type="button"
-          onClick={async () => {
-            if (selected && !submitted && !checking) {
-              setChecking(true);
-              try {
-                const res = await api.post<{ correct: boolean; correct_answer?: string; correct_answers?: string[]; explanation?: string }>(
-                  `/learn/quizzes/${quiz.id}/check/`,
-                  { selected },
-                );
-                setAnswer(res);
-              } catch {
-                setAnswer({ correct: false });
-              } finally {
-                setSubmitted(true);
-                setChecking(false);
+        {!submitted ? (
+          <button
+            type="button"
+            onClick={async () => {
+              if (selected && !submitted && !checking) {
+                setChecking(true);
+                try {
+                  const res = await api.post<{ correct: boolean; correct_answer?: string; correct_answers?: string[]; explanation?: string }>(
+                    `/learn/quizzes/${quiz.id}/check/`,
+                    { selected },
+                  );
+                  setAnswer(res);
+                } catch {
+                  setAnswer({ correct: false });
+                } finally {
+                  setSubmitted(true);
+                  setChecking(false);
+                }
               }
-            }
-          }}
-          disabled={!selected || submitted}
-          className={`w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-xl ${
-            !selected || submitted
-              ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5'
-              : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white hover:scale-[1.02] active:scale-95 shadow-brand-500/20'
-          }`}
-        >
-          <span className={!submitted ? '' : 'hidden'}>Kiểm tra đáp án</span>
-          <span className={submitted && correct ? '' : 'hidden'}>
-            <i className="bi bi-hand-thumbs-up-fill mr-2"></i>Chính xác!
-          </span>
-          <span className={submitted && !correct ? '' : 'hidden'}>
-            <i className="bi bi-exclamation-octagon-fill mr-2"></i>Cần xem lại
-          </span>
-        </button>
+            }}
+            disabled={!selected || checking}
+            className={`w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-xl flex items-center justify-center gap-2 ${
+              !selected || checking
+                ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5'
+                : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white hover:scale-[1.02] active:scale-95 shadow-brand-500/20'
+            }`}
+          >
+            {checking ? (
+              <>
+                <i className="bi bi-arrow-repeat animate-spin text-sm"></i> Đang đối chiếu...
+              </>
+            ) : (
+              <>
+                Kiểm tra đáp án <i className="bi bi-check-circle ml-1"></i>
+              </>
+            )}
+          </button>
+        ) : (
+          <div className="space-y-3">
+            {correct ? (
+              <div className="flex items-center gap-3">
+                <div className="flex-1 py-3 px-4 rounded-2xl bg-safe-500/10 border border-safe-500/30 text-safe-400 text-xs font-black flex items-center justify-center gap-2">
+                  <i className="bi bi-patch-check-fill text-base"></i> Chính xác tuyệt đối!
+                </div>
+                <button
+                  type="button"
+                  onClick={resetQuiz}
+                  title="Làm lại câu hỏi này"
+                  className="px-4 py-3 rounded-2xl bg-white/5 hover:bg-white/15 text-white/70 hover:text-white border border-white/10 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <i className="bi bi-arrow-counterclockwise"></i> Làm lại
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-2xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-xs font-bold flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <i className="bi bi-exclamation-octagon-fill text-base text-danger-400"></i> Chưa chính xác - Cần xem lại!
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetQuiz}
+                  className="w-full py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-98"
+                >
+                  <i className="bi bi-arrow-counterclockwise text-sm"></i> Thử chọn lại đáp án
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
-        {(quiz.explanation || answer?.explanation) && (
-          <div className={submitted ? 'p-5 rounded-3xl bg-warn-400/[0.03] border border-warn-400/10' : 'hidden'}>
+        {(quiz.explanation || answer?.explanation) && submitted && (
+          <div className="p-5 rounded-3xl bg-warn-400/[0.05] border border-warn-400/20">
             <span className="text-[9px] font-black text-warn-400 uppercase tracking-widest flex items-center gap-2 mb-2">
               <i className="bi bi-lightbulb-fill"></i> GIẢI THÍCH CHUYÊN GIA
             </span>
-            <p className="text-[12px] text-white/70 font-medium leading-relaxed italic">{quiz.explanation || answer?.explanation}</p>
+            <p className="text-[13px] text-white/90 font-medium leading-relaxed italic">{quiz.explanation || answer?.explanation}</p>
           </div>
         )}
       </div>
@@ -574,21 +619,28 @@ function ScenarioPlayer({ scenario, steps: rawSteps }: { scenario: Scenario; ste
                 </div>
                 <div>
                   <h4 className="text-[11px] font-black text-white uppercase tracking-widest">{scenario.title}</h4>
-                  <div className="flex items-center gap-2 mt-1.5 h-1.5 w-32">
+                  <div className="flex items-center gap-1.5 mt-2 h-2 w-44">
                     {steps.map((_, i) => (
-                      <div
+                      <button
                         key={i}
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          i <= currentStep ? 'bg-brand2-500 flex-1' : 'bg-white/10 w-1.5'
+                        type="button"
+                        onClick={() => setCurrentStep(i)}
+                        title={`Chuyển đến bước ${i + 1}`}
+                        className={`h-full rounded-full transition-all duration-300 cursor-pointer ${
+                          i === currentStep
+                            ? 'bg-brand2-400 flex-1 ring-2 ring-brand2-400/40'
+                            : i < currentStep
+                            ? 'bg-brand2-600/70 w-3 hover:bg-brand2-500'
+                            : 'bg-white/10 w-2 hover:bg-white/25'
                         }`}
-                      ></div>
+                      />
                     ))}
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="w-10 h-10 rounded-2xl hover:bg-white/5 text-white/35 hover:text-white transition-all"
+                className="w-10 h-10 rounded-2xl hover:bg-white/5 text-white/35 hover:text-white transition-all flex items-center justify-center"
               >
                 <i className="bi bi-x-lg"></i>
               </button>
@@ -618,11 +670,11 @@ function ScenarioPlayer({ scenario, steps: rawSteps }: { scenario: Scenario; ste
                         <span>{s.text}</span>
                       </div>
                       {s.analysis && (
-                        <div className="mt-4 p-5 rounded-3xl bg-warn-400/[0.02] border border-warn-400/10 max-w-[75%] relative overflow-hidden">
-                          <p className="text-[10px] font-black text-warn-500/80 uppercase tracking-[0.2em] mb-1.5 flex items-center gap-2">
+                        <div className="mt-4 p-5 rounded-3xl bg-warn-400/[0.05] border border-warn-400/20 max-w-[85%] relative overflow-hidden">
+                          <p className="text-[10px] font-black text-warn-400 uppercase tracking-[0.2em] mb-1.5 flex items-center gap-2">
                             <i className="bi bi-lightbulb-fill"></i> Phân tích
                           </p>
-                          <p className="text-[12px] text-warn-50/40 leading-relaxed italic">{s.analysis}</p>
+                          <p className="text-[13px] text-amber-100 font-medium leading-relaxed italic">{s.analysis}</p>
                         </div>
                       )}
                     </div>
@@ -632,35 +684,42 @@ function ScenarioPlayer({ scenario, steps: rawSteps }: { scenario: Scenario; ste
             </div>
 
             {/* Footer Controls */}
-            <div className="p-6 bg-[var(--sc-ink-deep)] border-t border-white/10 flex items-center justify-between gap-6 relative z-20">
+            <div className="p-6 bg-[var(--sc-ink-deep)] border-t border-white/10 flex items-center justify-between gap-4 relative z-20">
               <button
+                type="button"
                 onClick={prev}
-                disabled={currentStep === 0}
+                disabled={currentStep === 0 || maxSteps === 0}
+                title="Bước trước"
                 className={`w-14 h-14 rounded-2xl border border-white/5 flex items-center justify-center transition-all bg-white/[0.02] ${
-                  currentStep === 0 ? 'text-white/5 cursor-not-allowed' : 'text-white/60 hover:bg-white/10 hover:text-white'
+                  currentStep === 0 || maxSteps === 0 ? 'text-white/5 cursor-not-allowed' : 'text-white/70 hover:bg-white/10 hover:text-white'
                 }`}
               >
                 <i className="bi bi-arrow-left text-xl"></i>
               </button>
               <div className="flex-1 text-center">
-                <span className="text-[11px] font-black text-white/35 uppercase tracking-[0.3em]">
-                  BƯỚC <span className="text-brand2-400">{currentStep + 1}</span> / <span>{maxSteps}</span>
+                <span className="text-[11px] font-black text-white/50 uppercase tracking-[0.3em]">
+                  BƯỚC <span className="text-brand2-400 font-bold">{maxSteps > 0 ? currentStep + 1 : 0}</span> / <span>{maxSteps}</span>
                 </span>
               </div>
-              <button
-                onClick={next}
-                disabled={currentStep >= maxSteps - 1}
-                className={`flex-1 sm:flex-none sm:w-64 h-14 rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] transition-all relative overflow-hidden ${
-                  currentStep >= maxSteps - 1
-                    ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5'
-                    : 'bg-brand2-600 text-white shadow-2xl hover:scale-[1.03]'
-                }`}
-              >
-                <span className="relative z-10 flex items-center justify-center gap-2">
-                  {' '}
-                  Tiếp tục <i className="bi bi-arrow-right-short text-xl"></i>
-                </span>
-              </button>
+              {currentStep >= maxSteps - 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(0)}
+                  className="flex-1 sm:flex-none sm:w-64 h-14 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all relative overflow-hidden bg-gradient-to-r from-brand2-600 to-brand-600 text-white shadow-2xl hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <i className="bi bi-arrow-counterclockwise text-lg"></i>
+                  <span>Diễn tập lại từ đầu</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={next}
+                  className="flex-1 sm:flex-none sm:w-64 h-14 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all relative overflow-hidden bg-brand2-600 hover:bg-brand2-500 text-white shadow-2xl hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <span>Tiếp tục</span>
+                  <i className="bi bi-arrow-right-short text-xl"></i>
+                </button>
+              )}
             </div>
           </div>
         )}

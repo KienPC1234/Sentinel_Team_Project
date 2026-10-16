@@ -721,6 +721,13 @@ class ForumBan(models.Model):
 
 # ─── Article & Learn Model (Admin CMS) ──────────────────────────────────────
 
+class ArticleSourceType(models.TextChoices):
+    INTERNAL = 'internal', 'ShieldCall VN (Nội bộ)'
+    TINNHIEMMANG = 'tinnhiemmang', 'Tín nhiệm mạng (NCSC)'
+    PRESS = 'press', 'Báo chí chính thống'
+    COMMUNITY = 'community', 'Cộng đồng đóng góp'
+
+
 class ArticleCategory(models.TextChoices):
     NEWS = 'news', 'Tin tức'
     GUIDE = 'guide', 'Hướng dẫn'
@@ -728,6 +735,7 @@ class ArticleCategory(models.TextChoices):
     STORY = 'story', 'Chuyện cảnh giác'
     INCLUSIVE = 'inclusive', 'An ninh số Bao trùm'
     EMPATHY = 'empathy', 'Góc thấu cảm'
+    TINNHIEMMANG = 'tinnhiemmang', 'Tín nhiệm mạng'
 
 
 class Article(models.Model):
@@ -738,6 +746,20 @@ class Article(models.Model):
     content = models.TextField()
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)
+    source_type = models.CharField(
+        max_length=50,
+        choices=ArticleSourceType.choices,
+        default=ArticleSourceType.INTERNAL,
+        db_index=True,
+        help_text='Kiểu nguồn tin (internal, tinnhiemmang, ...)',
+    )
+    source_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text='Liên kết gốc của bài viết'
+    )
     cover_image = models.ImageField(upload_to='articles/covers/', null=True, blank=True)
     is_published = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -754,7 +776,7 @@ class Article(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             from django.utils.text import slugify
-            self.slug = slugify(self.title)
+            self.slug = slugify(self.title)[:350]
         super().save(*args, **kwargs)
 
 class LearnLesson(models.Model):

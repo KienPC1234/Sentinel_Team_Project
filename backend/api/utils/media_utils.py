@@ -9,6 +9,8 @@ This module provides implementations for:
 """
 
 import io
+import os
+import base64
 import json
 import logging
 import re
@@ -19,74 +21,9 @@ from api.utils.ollama_client import analyze_text_for_scam, generate_response
 
 logger = logging.getLogger(__name__)
 
-# ─── EasyOCR Configuration ──────────────────────────────────────────
+# ─── OCR engine: VietOCR (chạy trong venv riêng qua bridge) ──────────
+# Đã gỡ EasyOCR/PaddleOCR. Engine nhận dạng tiếng Việt = VietOCR (xem ocr_bridge.py).
 import importlib.util
-
-EASYOCR_AVAILABLE = importlib.util.find_spec('easyocr') is not None
-if not EASYOCR_AVAILABLE:
-    logger.warning("easyocr not installed. OCR will be disabled.")
-
-_EASYOCR_READER = None
-
-def get_easyocr_reader():
-    """
-    Singleton EasyOCR reader instance for English and Vietnamese.
-    Loads the model into memory only once.
-    Handles CUDA fork errors in Celery prefork workers by falling back to CPU.
-    """
-    global _EASYOCR_READER
-    if not EASYOCR_AVAILABLE:
-        return None
-        
-    if _EASYOCR_READER is None:
-        import os
-        import multiprocessing
-        import easyocr
-        from django.conf import settings
-
-        gpu = getattr(settings, 'EASYOCR_GPU', False)
-
-        # Detect forked subprocess (Celery prefork) — CUDA cannot reinitialize after fork
-        is_forked = multiprocessing.current_process().daemon or multiprocessing.parent_process() is not None
-        if is_forked and gpu:
-            logger.debug("Forked subprocess detected — forcing EasyOCR to CPU mode.")
-            gpu = False
-            # Prevent PyTorch from touching CUDA at all in forked process
-            os.environ['CUDA_VISIBLE_DEVICES'] = ''
-            try:
-                import torch
-                if hasattr(torch.cuda, 'is_available'):
-                    # Disable CUDA in torch before EasyOCR loads models
-                    torch.cuda.is_available = lambda: False
-            except ImportError:
-                pass
-
-        logger.info(f"Initializing EasyOCR reader (GPU={gpu})...")
-        try:
-            _EASYOCR_READER = easyocr.Reader(['vi', 'en'], gpu=gpu)
-            logger.info("EasyOCR reader initialized successfully.")
-        except RuntimeError as e:
-            if 'CUDA' in str(e) or 'forked' in str(e):
-                logger.warning(f"CUDA error detected, retrying with gpu=False: {e}")
-                os.environ['CUDA_VISIBLE_DEVICES'] = ''
-                try:
-                    import torch
-                    torch.cuda.is_available = lambda: False
-                except ImportError:
-                    pass
-                try:
-                    _EASYOCR_READER = easyocr.Reader(['vi', 'en'], gpu=False)
-                    logger.info("EasyOCR reader initialized successfully (CPU fallback).")
-                except Exception as e2:
-                    logger.error(f"Failed to initialize EasyOCR reader (CPU fallback): {e2}")
-                    return None
-            else:
-                logger.error(f"Failed to initialize EasyOCR reader: {e}")
-                return None
-        except Exception as e:
-            logger.error(f"Failed to initialize EasyOCR reader: {e}")
-            return None
-    return _EASYOCR_READER
 
 
 def preprocess_image_for_ocr(image_bytes: bytes) -> bytes:
@@ -140,7 +77,7 @@ def clean_ocr_text(text: str) -> str:
     text = re.sub(r'([a-zA-Z0-9_-]+)\s+(top|com|vn|net|org|xyz|vip)\b', r'\1.\2', text, flags=re.IGNORECASE)
     # Fix numbers with spaces before dots: 800 .000 -> 800.000
     text = re.sub(r'(\d+)\s*\.\s*(\d+)', r'\1.\2', text)
-    # Fix common EasyOCR Vietnamese character confusion
+    # Fix common Vietnamese OCR character confusion (dấu thanh)
     text = re.sub(r'(?i)\b[I|]àm\b', 'làm', text)
     text = re.sub(r'(?i)\bZàm\b', 'làm', text)
     text = re.sub(r'(?i)\bnình\b', 'mình', text)
@@ -156,70 +93,180 @@ def clean_ocr_text(text: str) -> str:
 
 def extract_ocr_text(image_file) -> str:
     """
-    Extract text from image using EasyOCR with image preprocessing and post-processing.
-    Supports Vietnamese (vi) and English (en) languages.
+    Extract text từ ảnh. Engine chính: **VietOCR** (tiếng Việt), chạy trong venv riêng qua
+    bridge (`backend/scripts/ocr_bridge.py`). Nếu VietOCR không khả dụng → Tesseract (vie+eng).
 
-    Args:
-        image_file: Django UploadedFile, file-like object, or bytes/numpy array
-    
-    Returns:
-        Cleaned extracted text string
+    Chọn engine qua setting `OCR_ENGINE` (env `OCR_ENGINE`): vietocr | tesseract (mặc định vietocr).
     """
-    reader = get_easyocr_reader()
-    if not reader:
-        logger.warning("EasyOCR not available, returning empty OCR result")
-        return ""
-
-    try:
-        if hasattr(image_file, 'read'):
-            image_data = image_file.read()
+    if hasattr(image_file, 'read'):
+        image_data = image_file.read()
+        try:
             image_file.seek(0)
-        else:
-            image_data = image_file
-
-        processed_data = preprocess_image_for_ocr(image_data)
-
-        # First attempt with paragraph=True for natural sentence structure
-        results = reader.readtext(processed_data, paragraph=True, detail=0)
-        if not results:
-            # Fallback to standard line detection
-            results = reader.readtext(processed_data, detail=0)
-
-        text = '\n'.join(results).strip()
-        cleaned = clean_ocr_text(text)
-
-        logger.info(f"EasyOCR extracted {len(cleaned)} characters from image (preprocessed & cleaned)")
-        return cleaned
-
-    except RuntimeError as e:
-        if 'CUDA' in str(e):
-            logger.warning(f"CUDA error during readtext, resetting reader to CPU: {e}")
-            global _EASYOCR_READER
-            _EASYOCR_READER = None
-            import os
-            os.environ['CUDA_VISIBLE_DEVICES'] = ''
-            try:
-                import torch
-                torch.cuda.is_available = lambda: False
-            except ImportError:
-                pass
-            reader = get_easyocr_reader()
-            if reader:
-                try:
-                    if hasattr(image_file, 'seek'):
-                        image_file.seek(0)
-                    processed_data = preprocess_image_for_ocr(image_data)
-                    results = reader.readtext(processed_data, paragraph=True, detail=0)
-                    if not results:
-                        results = reader.readtext(processed_data, detail=0)
-                    return clean_ocr_text('\n'.join(results).strip())
-                except Exception as e2:
-                    logger.error(f"EasyOCR retry failed: {e2}")
-        else:
-            logger.error(f"EasyOCR extraction error: {e}")
+        except Exception:
+            pass
+    else:
+        image_data = image_file
+    if not image_data:
         return ""
+
+    engine = _ocr_engine_choice()
+    if engine == 'vietocr':
+        # VietOCR bridge tự nhị phân hoá + phân đoạn dòng; upscale/CLAHE dễ phá phân đoạn.
+        processed_data = image_data
+    else:
+        try:
+            processed_data = preprocess_image_for_ocr(image_data)
+        except Exception:
+            processed_data = image_data
+
+    funcs = {
+        'vietocr': _ocr_vietocr_bytes,
+        'tesseract': _ocr_tesseract_bytes,
+    }
+    func = funcs.get(engine, _ocr_vietocr_bytes)
+    text = func(processed_data) or ""
+    if not text.strip() and func is not _ocr_tesseract_bytes:
+        text = _ocr_tesseract_bytes(processed_data) or ""
+    cleaned = clean_ocr_text(text)
+    logger.info(f"OCR[{engine}] extracted {len(cleaned)} characters from image")
+    return cleaned
+
+
+# ─── Pluggable OCR engines ───────────────────────────────────────────
+def _module_available(module: str) -> bool:
+    try:
+        return importlib.util.find_spec(module) is not None
+    except Exception:
+        return False
+
+
+def _backend_dir() -> str:
+    # .../backend/api/utils/media_utils.py -> .../backend
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _ocr_bridge_python() -> str:
+    """Trả về interpreter của venv OCR riêng (nếu có) để chạy engine ngoài .venv chính."""
+    try:
+        from django.conf import settings
+        p = getattr(settings, 'OCR_BRIDGE_PY', None) or os.getenv('OCR_BRIDGE_PY', '')
+    except Exception:
+        p = os.getenv('OCR_BRIDGE_PY', '')
+    if p and os.path.exists(p):
+        return p
+    cand = os.path.join(os.path.dirname(_backend_dir()), '.venv-ocr', 'bin', 'python')
+    return cand if os.path.exists(cand) else ''
+
+
+def _run_bridge(engine: str, image_bytes: bytes, boxes: bool = False) -> dict:
+    """Chạy engine OCR trong venv riêng qua subprocess. Trả dict {text, regions, error}."""
+    import subprocess
+    import tempfile
+    py = _ocr_bridge_python()
+    script = os.path.join(_backend_dir(), 'scripts', 'ocr_bridge.py')
+    if not py or not os.path.exists(script):
+        return {}
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as fh:
+            fh.write(image_bytes)
+            tmp = fh.name
+        cmd = [py, script, engine, tmp]
+        if boxes:
+            cmd.append('--boxes')
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        out = (res.stdout or '').strip()
+        if not out:
+            logger.warning(f"OCR bridge[{engine}] rỗng. stderr: {(res.stderr or '')[:200]}")
+            return {}
+        data = json.loads(out.splitlines()[-1])
+        if data.get('error'):
+            logger.warning(f"OCR bridge[{engine}] error: {data['error']}")
+        return data
     except Exception as e:
-        logger.error(f"EasyOCR extraction error: {e}")
+        logger.error(f"OCR bridge[{engine}] failed: {e}")
+        return {}
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except Exception:
+                pass
+
+
+def _ocr_service_url() -> str:
+    try:
+        from django.conf import settings
+        u = getattr(settings, 'OCR_SERVICE_URL', '') or os.getenv('OCR_SERVICE_URL', '')
+    except Exception:
+        u = os.getenv('OCR_SERVICE_URL', '')
+    return str(u or '').rstrip('/')
+
+
+def _run_ocr_service(url: str, image_bytes: bytes, boxes: bool = False) -> dict:
+    """Gọi OCR service thường trú qua HTTP (tránh nạp lại model mỗi ảnh)."""
+    import urllib.request
+    try:
+        payload = json.dumps({
+            "image_b64": base64.b64encode(image_bytes).decode('ascii'),
+            "boxes": boxes,
+        }).encode('utf-8')
+        req = urllib.request.Request(url + '/ocr', data=payload,
+                                     headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        logger.warning(f"OCR service không dùng được ({url}): {e}")
+        return {}
+
+
+def _run_engine(engine: str, image_bytes: bytes, boxes: bool = False) -> dict:
+    """Ưu tiên OCR service (model thường trú); nếu không có → bridge subprocess."""
+    url = _ocr_service_url()
+    if url:
+        data = _run_ocr_service(url, image_bytes, boxes)
+        if data:
+            return data
+    return _run_bridge(engine, image_bytes, boxes)
+
+
+def _ocr_text_boxes(image_bytes: bytes) -> list:
+    """Bounding boxes + text bằng VietOCR (service hoặc bridge)."""
+    return (_run_engine('vietocr', image_bytes, boxes=True) or {}).get('regions') or []
+
+
+def _ocr_engine_choice() -> str:
+    engine = 'vietocr'
+    try:
+        from django.conf import settings
+        engine = str(getattr(settings, 'OCR_ENGINE', None) or os.getenv('OCR_ENGINE', '') or 'vietocr')
+    except Exception:
+        engine = str(os.getenv('OCR_ENGINE', '') or 'vietocr')
+    engine = engine.strip().lower()
+    if engine in ('', 'auto'):
+        engine = 'vietocr'
+    return engine
+
+
+_VIETOCR_PREDICTOR = None
+
+
+def _ocr_vietocr_bytes(image_bytes: bytes) -> str:
+    """VietOCR — nhận dạng tiếng Việt (Transformer). Ưu tiên OCR service, fallback bridge."""
+    return (_run_engine('vietocr', image_bytes) or {}).get('text', '')
+
+
+def _ocr_tesseract_bytes(image_bytes: bytes) -> str:
+    """Tesseract (vie+eng) — cần cài hệ thống + `pip install pytesseract`."""
+    try:
+        import pytesseract
+    except Exception:
+        return ""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        return pytesseract.image_to_string(img, lang='vie+eng').strip()
+    except Exception as e:
+        logger.error(f"Tesseract error: {e}")
         return ""
 
 
@@ -244,10 +291,7 @@ def extract_ocr_with_boxes(image_file):
     except ImportError:
         PYZBAR_AVAILABLE = False
 
-    reader = get_easyocr_reader()
-    
     try:
-        global _EASYOCR_READER
         if hasattr(image_file, 'read'):
             image_data = image_file.read()
             image_file.seek(0)
@@ -256,7 +300,7 @@ def extract_ocr_with_boxes(image_file):
 
         pil_img = Image.open(io.BytesIO(image_data)).convert("RGB")
         draw = ImageDraw.Draw(pil_img)
-        
+
         # Build regions list
         regions = []
         text_parts = []
@@ -279,34 +323,18 @@ def extract_ocr_with_boxes(image_file):
                     "type": "qr"
                 })
 
-        # 2. Detect OCR Text (green/yellow/red boxes)
-        if reader:
-            try:
-                ocr_results = reader.readtext(image_data, detail=1)
-            except RuntimeError as cuda_err:
-                if 'CUDA' in str(cuda_err):
-                    logger.warning(f"CUDA error during readtext in extract_ocr_with_boxes, resetting reader: {cuda_err}")
-                    _EASYOCR_READER = None
-                    import os as _os
-                    _os.environ['CUDA_VISIBLE_DEVICES'] = ''
-                    try:
-                        import torch
-                        torch.cuda.is_available = lambda: False
-                    except ImportError:
-                        pass
-                    reader = get_easyocr_reader()
-                    ocr_results = reader.readtext(image_data, detail=1) if reader else []
-                else:
-                    raise
-            for item in ocr_results:
-                bbox, text, conf = item
-                text_parts.append(text)
-                regions.append({
-                    "bbox": [[int(p[0]), int(p[1])] for p in bbox],
-                    "text": text,
-                    "confidence": round(float(conf), 3),
-                    "type": "text"
-                })
+        # 2. Detect OCR Text (green/yellow/red boxes) — VietOCR (bridge)
+        for region in _ocr_text_boxes(image_data):
+            text = region.get("text", "")
+            if not text:
+                continue
+            text_parts.append(text)
+            regions.append({
+                "bbox": region.get("bbox") or [],
+                "text": text,
+                "confidence": round(float(region.get("confidence", 0.0)), 3),
+                "type": "text"
+            })
 
         full_text = clean_ocr_text('\n'.join(text_parts).strip())
 

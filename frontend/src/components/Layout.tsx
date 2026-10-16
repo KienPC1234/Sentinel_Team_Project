@@ -80,6 +80,7 @@ const SCAN_MENU: MenuItem[] = [
   { to: '/scan/bank/', icon: 'bi-bank2', title: 'Tài khoản', desc: 'Tra cứu bank lừa đảo' },
   { to: '/scan/email/', icon: 'bi-envelope-check', title: 'Email', desc: 'Phát hiện Email Scam' },
   { to: '/scan/qr/', icon: 'bi-qr-code-scan', title: 'QR / Ảnh', desc: 'OCR + Phân tích ảnh' },
+  { to: '/scan/image/', icon: 'bi-image', title: 'Ảnh / Chứng từ', desc: 'Đọc ảnh chuyển khoản, hoá đơn' },
   { to: '/scan/file/', icon: 'bi-file-earmark-check', title: 'Quét File', desc: 'Phân tích Docker Sandbox' },
   { to: '/scan/audio/', icon: 'bi-mic', title: 'Âm Thanh', desc: 'Phân tích hội thoại lừa đảo' },
 ];
@@ -100,7 +101,7 @@ function UserMenu({ user }: { user: { username: string; is_staff?: boolean; is_s
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="h-9 pl-1.5 pr-3.5 rounded-full hidden sm:inline-flex items-center gap-2.5 bg-slate-900/90 border border-white/15 hover:border-cyan-500/40 hover:bg-slate-800/90 transition-all outline-none cursor-pointer shadow-sm backdrop-blur-md data-[state=open]:border-cyan-400 data-[state=open]:bg-slate-800/90 shrink-0"
+          className="h-9 pl-1.5 pr-3.5 rounded-full hidden sm:inline-flex items-center gap-2.5 bg-white/[0.06] border border-white/15 hover:border-cyan-500/40 hover:bg-white/[0.10] transition-all outline-none cursor-pointer shadow-sm backdrop-blur-md data-[state=open]:border-cyan-400 data-[state=open]:bg-white/[0.10] shrink-0"
         >
           <span className="w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-xs shrink-0">
             <i className="bi bi-person-fill leading-none"></i>
@@ -114,7 +115,7 @@ function UserMenu({ user }: { user: { username: string; is_staff?: boolean; is_s
       <DropdownMenuContent
         align="end"
         sideOffset={8}
-        className="w-64 p-1.5 bg-slate-950/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-2xl ring-1 ring-white/10"
+        className="w-64 p-1.5 border border-border bg-popover/98 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)]"
       >
         <div className="px-3 py-2.5 border-b border-white/10 mb-1 flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-sm shrink-0">
@@ -209,7 +210,7 @@ function DropMenu({
         <button
           type="button"
           className={cn(
-            "h-9 px-3 rounded-full inline-flex items-center gap-1.5 text-xs transition-all outline-none cursor-pointer",
+            "h-8 px-2.5 xl:px-3 rounded-full inline-flex items-center gap-1.5 text-xs transition-all outline-none cursor-pointer select-none",
             active
               ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 font-bold shadow-sm shadow-cyan-500/10"
               : "text-slate-300 hover:text-white hover:bg-white/[0.08] font-semibold border border-transparent data-[state=open]:bg-white/[0.1] data-[state=open]:text-cyan-400"
@@ -223,19 +224,19 @@ function DropMenu({
       <DropdownMenuContent
         align="start"
         sideOffset={8}
-        className="w-68 p-1.5 bg-slate-950/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-2xl ring-1 ring-white/10"
+        className="w-68 p-1.5 border border-border bg-popover/98 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)]"
       >
         {items.map((it) => (
           <DropdownMenuItem key={it.to} asChild className="p-0 cursor-pointer rounded-xl overflow-hidden focus:bg-transparent">
             <Link
               href={it.to}
-              className="group flex items-center gap-3 p-2 rounded-xl hover:bg-slate-900/90 transition-colors w-full no-underline"
+              className="group flex items-center gap-3 p-2 rounded-xl hover:bg-accent transition-colors w-full no-underline"
             >
               <div
                 className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-all ${
                   it.isDanger
                     ? 'bg-rose-500/10 border-rose-500/25 text-rose-400 group-hover:bg-rose-500/20 group-hover:border-rose-500/40'
-                    : 'bg-slate-900 border-slate-800 text-cyan-400 group-hover:bg-cyan-500/15 group-hover:border-cyan-500/35 group-hover:text-cyan-300'
+                    : 'bg-white/[0.06] border-border text-cyan-400 group-hover:bg-cyan-500/15 group-hover:border-cyan-500/35 group-hover:text-cyan-300'
                 }`}
               >
                 <i className={`bi ${it.icon} text-sm leading-none`}></i>
@@ -266,10 +267,11 @@ export function Navbar() {
   const isRadarActive = pathname.startsWith('/scam-radar');
   const isForumActive = pathname.startsWith('/forum');
   const isLearnActive = pathname.startsWith('/learn') || pathname.startsWith('/helps');
+  const isElderActive = pathname.startsWith('/nguoi-cao-tuoi');
 
   const navLinkCls = (active: boolean) =>
     cn(
-      "h-9 px-3 rounded-full inline-flex items-center gap-1.5 text-xs transition-all outline-none no-underline",
+      "h-8 px-2.5 xl:px-3 rounded-full inline-flex items-center gap-1.5 text-xs transition-all outline-none no-underline select-none",
       active
         ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 font-bold shadow-sm shadow-cyan-500/10"
         : "text-slate-300 hover:text-white hover:bg-white/[0.08] font-semibold border border-transparent"
@@ -277,23 +279,28 @@ export function Navbar() {
 
   return (
     <nav className="nav-premium">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16 sm:h-[72px]">
-          <div className="flex items-center gap-6 lg:gap-8">
-            <Link href="/" className="flex items-center gap-3 group shrink-0">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 sm:h-[72px] gap-4">
+          {/* 1. Left: Brand Logo */}
+          <div className="flex items-center shrink-0">
+            <Link href="/" className="flex items-center gap-3 group shrink-0 no-underline">
               <img
                 src="/logo.png"
-                className="w-10 h-10 object-contain drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform shrink-0"
+                className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform shrink-0"
                 alt="ShieldCall VN"
               />
               <div className="hidden sm:flex flex-col justify-center">
-                <h2 className="text-lg font-black text-white leading-none tracking-tight">
+                <h2 className="text-[17px] sm:text-lg font-black text-white leading-none tracking-tight">
                   ShieldCall <span className="text-brand-400">VN</span>
                 </h2>
-                <p className="text-[10px] text-white/45 font-bold uppercase tracking-widest mt-1">Community Guard</p>
+                <p className="text-[9px] sm:text-[10px] text-white/45 font-bold uppercase tracking-widest mt-1">Community Guard</p>
               </div>
             </Link>
-            <div className="hidden lg:flex items-center gap-1.5">
+          </div>
+
+          {/* 2. Center: Navigation Capsule (Centered & Balanced) */}
+          <div className="hidden lg:flex items-center justify-center flex-1 max-w-3xl mx-auto px-2">
+            <div className="flex items-center gap-1 p-1 rounded-full bg-white/[0.035] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
               <DropMenu label="Kiểm tra" icon="bi-shield-check" items={SCAN_MENU} active={isScanActive} />
               <DropMenu label="Báo cáo" icon="bi-flag" items={REPORT_MENU} active={isReportActive} />
               <Link href="/scam-radar/" className={navLinkCls(isRadarActive)}>
@@ -308,9 +315,23 @@ export function Navbar() {
                 <i className="bi bi-journal-bookmark text-xs leading-none"></i>
                 <span>Kiến thức</span>
               </Link>
+              <Link
+                href="/nguoi-cao-tuoi/"
+                className={cn(
+                  "h-8 px-2.5 xl:px-3 rounded-full inline-flex items-center gap-1.5 text-xs transition-all outline-none no-underline select-none",
+                  isElderActive
+                    ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 font-bold shadow-sm shadow-emerald-500/15"
+                    : "text-emerald-400/90 hover:text-emerald-200 hover:bg-emerald-500/10 font-semibold border border-emerald-500/20 hover:border-emerald-500/35"
+                )}
+              >
+                <i className="bi bi-person-hearts text-xs leading-none text-emerald-400"></i>
+                <span>Người cao tuổi</span>
+              </Link>
             </div>
           </div>
-          <div className="flex items-center gap-2.5 sm:gap-3">
+
+          {/* 3. Right: Action Controls */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             <Link
               href="/emergency/"
               className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-bold text-rose-300 bg-rose-500/15 border border-rose-500/35 hover:bg-rose-500/25 hover:border-rose-500/50 hover:text-white transition-all shadow-sm shadow-rose-500/10 no-underline shrink-0"
@@ -332,7 +353,7 @@ export function Navbar() {
               </div>
             )}
             <button
-              className="lg:hidden p-2 rounded-full hover:bg-white/5 text-white/70 flex items-center justify-center"
+              className="lg:hidden p-2 rounded-full hover:bg-white/5 text-white/70 flex items-center justify-center cursor-pointer"
               onClick={() => setMobile(!mobile)}
               aria-label="Menu"
             >
@@ -346,6 +367,14 @@ export function Navbar() {
           <Link href="/" className="flex items-center gap-3 p-2.5 rounded-xl text-white/70 hover:bg-white/5">
             <i className="bi bi-house-door text-brand-400"></i>
             <span className="text-sm font-bold">Trang chủ</span>
+          </Link>
+          {/* Người cao tuổi: đặt ngay dưới Trang chủ để dễ tìm trên điện thoại */}
+          <Link
+            href="/nguoi-cao-tuoi/"
+            className="flex items-center gap-3 p-2.5 rounded-xl bg-safe-500/10 border border-safe-500/25 text-safe-300"
+          >
+            <i className="bi bi-person-hearts"></i>
+            <span className="text-sm font-bold">Người cao tuổi</span>
           </Link>
           {SCAN_MENU.map((it) => (
             <Link
@@ -426,9 +455,11 @@ export function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
           <div>
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand2-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
-                <i className="bi bi-shield-lock-fill text-white text-sm"></i>
-              </div>
+              <img
+                src="/logo.png"
+                className="w-9 h-9 object-contain drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] shrink-0"
+                alt={SITE_CONFIG.name}
+              />
               <span className="font-extrabold text-xl glow-text">{SITE_CONFIG.name}</span>
             </div>
             <p className="text-sm text-white/60 leading-relaxed">

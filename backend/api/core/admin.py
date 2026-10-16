@@ -82,9 +82,9 @@ class UserAlertAdmin(admin.ModelAdmin):
     search_fields = ['target_value']
 @admin.register(Article)
 class ArticleAdmin(admin.ModelAdmin):
-    list_display = ['title', 'category', 'author', 'is_published', 'created_at']
-    list_filter = ['category', 'is_published', 'author']
-    search_fields = ['title', 'content']
+    list_display = ['title', 'category', 'source_type', 'author', 'is_published', 'created_at']
+    list_filter = ['category', 'source_type', 'is_published', 'author']
+    search_fields = ['title', 'content', 'source_url']
     prepopulated_fields = {'slug': ('title',)}
     ordering = ['-created_at']
 

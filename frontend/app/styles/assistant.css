@@ -12,10 +12,14 @@
    ════════════════════════════════════════════════════════════════════ */
 
 .gpt {
-  --gpt-bg: #1c1c1f;
-  --gpt-bg-2: #212126;
-  --gpt-side: #171719;
-  --gpt-bubble: #303036;
+  /* Nằm trên lớp phủ toàn site (body::before của liquid-glass vẽ lưới 30px cố định
+     ở z-index 0) — nếu không tạo stacking context thì lưới đó đè lên trang này. */
+  position: relative;
+  z-index: 1;
+  --gpt-bg: #171719;
+  --gpt-bg-2: #1c1c1f;
+  --gpt-side: #111113;
+  --gpt-bubble: #2a2a30;
   --gpt-text: #ededf0;
   --gpt-muted: #c4c4cc;
   --gpt-faint: #9a9aa4;
@@ -31,12 +35,8 @@
   --gpt-safe-soft: rgba(244, 114, 182, 0.14);
   --gpt-safe-line: rgba(244, 114, 182, 0.38);
   background-color: var(--gpt-bg);
-  /* Lưới mờ + quầng accent ở đỉnh (rõ hơn nhưng vẫn dịu để không rối chữ). */
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    radial-gradient(120% 90% at 50% -10%, rgba(34, 211, 238, 0.10), transparent 62%),
-    linear-gradient(180deg, var(--gpt-bg-2), var(--gpt-bg));
+  /* Nền phẳng (không gradient/lưới) — gradient mờ bị banding thành vệt khó chịu trên
+     màn hình 8-bit. Màu sống động nằm ở điểm nhấn: nút gửi, tab, link, badge. */
   background-size: 26px 26px, 26px 26px, 100% 100%, 100% 100%;
   background-repeat: repeat, repeat, no-repeat, no-repeat;
   color: var(--gpt-text);
@@ -140,10 +140,6 @@
   --gpt-text: #ffffff;
   --gpt-muted: #e6e6ee;
   --gpt-faint: #c2c2cf;
-  /* Bỏ lưới nền cho đỡ rối mắt */
-  background-image:
-    radial-gradient(120% 90% at 50% -10%, rgba(34, 211, 238, 0.08), transparent 62%),
-    linear-gradient(180deg, var(--gpt-bg-2), var(--gpt-bg));
 }
 .gpt.gpt-elder {
   /* 2 mức cỡ chữ: large (mặc định của chế độ dễ đọc) và xlarge */
@@ -165,3 +161,101 @@
 .gpt.gpt-elder .gpt-dots span { width: 9px; height: 9px; }
 .gpt.gpt-size-xlarge [data-size^="icon"] { min-width: 3rem; min-height: 3rem; }
 .gpt.gpt-size-xlarge [data-slot="tabs-trigger"] { font-size: 14px; }
+
+/* ── Bảng quy đổi cỡ chữ cho chế độ dễ đọc ──
+   Nhiều chỗ trong giao diện dùng px cứng (sidebar, thẻ gợi ý, nhãn nhỏ) nên chỉ
+   đổi font ở khối tin nhắn là chưa đủ. Dưới đây quét các utility đó trong
+   phạm vi .gpt-elder để mọi thành phần to lên đồng bộ. */
+.gpt.gpt-elder .text-\[9px\]    { font-size: 11.5px; }
+.gpt.gpt-elder .text-\[10px\]   { font-size: 13px; }
+.gpt.gpt-elder .text-\[11px\]   { font-size: 14px; }
+.gpt.gpt-elder .text-xs         { font-size: 14.5px; }
+.gpt.gpt-elder .text-\[12px\]   { font-size: 15px; }
+.gpt.gpt-elder .text-\[13px\]   { font-size: 15.5px; }
+.gpt.gpt-elder .text-\[13.5px\] { font-size: 16px; }
+.gpt.gpt-elder .text-sm         { font-size: 16.5px; }
+.gpt.gpt-elder .text-2xl        { font-size: 30px; }
+
+.gpt.gpt-elder.gpt-size-xlarge .text-\[9px\]    { font-size: 13px; }
+.gpt.gpt-elder.gpt-size-xlarge .text-\[10px\]   { font-size: 15px; }
+.gpt.gpt-elder.gpt-size-xlarge .text-\[11px\]   { font-size: 16px; }
+.gpt.gpt-elder.gpt-size-xlarge .text-xs         { font-size: 16.5px; }
+.gpt.gpt-elder.gpt-size-xlarge .text-\[12px\]   { font-size: 17px; }
+.gpt.gpt-elder.gpt-size-xlarge .text-\[13px\]   { font-size: 17.5px; }
+.gpt.gpt-elder.gpt-size-xlarge .text-\[13.5px\] { font-size: 18px; }
+.gpt.gpt-elder.gpt-size-xlarge .text-sm         { font-size: 18.5px; }
+.gpt.gpt-elder.gpt-size-xlarge .text-2xl        { font-size: 34px; }
+
+/* Trang AI Assistant là dạng ứng dụng: tắt hẳn lớp lưới nền toàn site cho sạch. */
+body.assistant-route::before {
+  display: none !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Sidebar: mép cuối danh sách hội thoại
+   Khi danh sách dài, hàng cuối bị cắt ngang giữa chữ ngay sát footer -> trông
+   như lỗi. Cho mép dưới mờ dần + snap theo hàng để ranh giới trông có chủ ý.
+   ════════════════════════════════════════════════════════════════════ */
+.gpt aside {
+  overflow: hidden;
+}
+.gpt aside [data-slot="scroll-area-viewport"] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 20px), transparent 100%);
+  scroll-snap-type: y proximity;
+  scroll-padding-bottom: 10px;
+}
+.gpt aside .gpt-session-row {
+  scroll-snap-align: start;
+}
+/* Footer tách hẳn khỏi danh sách (nền đặc + viền trên rõ) */
+.gpt aside .gpt-side-foot {
+  background: var(--gpt-side);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Sidebar: không cho phần tử nào bị cắt khi cửa sổ thấp
+   - Các khối cố định (nút mới, tìm kiếm, tab, footer) không co lại.
+   - Chỉ vùng danh sách co giãn; quá thấp thì danh sách co về 0 chứ không đẩy
+     footer ra ngoài màn hình.
+   ════════════════════════════════════════════════════════════════════ */
+.gpt aside > div,
+.gpt aside [data-slot="tabs-list"],
+.gpt aside .gpt-side-foot {
+  flex-shrink: 0;
+}
+.gpt aside [data-slot="tabs"] {
+  min-height: 0;
+}
+
+/* Chốt cuối: nội dung tab cũng phải co được, không đẩy tràn ra khỏi sidebar
+   (trường hợp cửa sổ rất thấp, ví dụ 320px). */
+.gpt aside [data-slot="tabs-content"] {
+  min-height: 0;
+  overflow: hidden;
+}
+.gpt aside [data-slot="tabs-content"] > * {
+  min-height: 0;
+}
+.gpt aside [data-slot="scroll-area"] {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Vì sao tiêu đề dài làm nút "…" bị cắt ──────────────────────────────
+   Radix ScrollArea bọc nội dung trong một div có INLINE STYLE
+     `min-width: 100%; display: table`
+   Kiểu `display: table` khiến khối nội dung tự co giãn theo bề rộng chữ
+   (max-content) chứ không theo bề rộng sidebar. Tiêu đề dài → nội dung rộng
+   ra (ví dụ 643px trong sidebar 264px) → `truncate` không bao giờ kích hoạt
+   và nút "…" (justify-between) bị đẩy ra ngoài vùng nhìn, bị `overflow:hidden`
+   của sidebar cắt mất.
+   Ép wrapper về block + min-width:0 để hàng co đúng bề rộng sidebar, nhờ đó
+   tiêu đề cắt bằng dấu "…" và nút tuỳ chọn luôn nằm trong tầm nhìn.
+   (!important là bắt buộc vì Radix ghi style trực tiếp lên element.) */
+.gpt aside [data-slot="scroll-area-viewport"] > div {
+  display: block !important;
+  width: 100%;
+  min-width: 0 !important;
+}

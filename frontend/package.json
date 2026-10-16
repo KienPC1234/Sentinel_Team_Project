@@ -9,7 +9,10 @@
     "build:sw": "tsc -p tsconfig.worker.json && node -e \"fs.copyFileSync('public/sw.js', '../sw.js')\"",
     "build": "npm run build:scripts && next build --webpack",
     "start": "next start",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "lint:eslint": "eslint .",
+    "lint:eslint:fix": "eslint . --fix",
+    "lint:all": "oxlint && eslint ."
   },
   "dependencies": {
     "@ckeditor/ckeditor5-react": "^12.0.0",
@@ -40,6 +43,8 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "eslint": "^10.12.0",
+    "eslint-config-next": "^16.4.2",
     "oxlint": "^1.81.0",
     "postcss": "^8.5.30",
     "tailwindcss": "^4.3.3",

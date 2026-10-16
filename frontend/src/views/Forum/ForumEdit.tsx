@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api, mediaUrl } from '../../lib/api';
 import { showToast } from '../../lib/ui/feedback';
-import RichEditor from '../../components/RichEditor';
+import RichEditor, { hasEditorContent } from '../../components/RichEditor';
 
 const CATS = [
   { val: 'discussion', label: 'Thảo luận', icon: 'bi-chat-dots' },
@@ -27,7 +27,6 @@ const EDIT_CSS = `
 .input-premium:focus{background:rgba(255,255,255,0.06);border-color:var(--accent-cyan);box-shadow:0 0 20px rgba(24,255,255,0.1);outline:none}
 .cat-btn{transition:all .25s ease}
 .cat-btn.active{transform:scale(1.03)}
-.ck-editor__editable{min-height:320px !important}
 .img-preview{max-height:200px;border-radius:1rem;object-fit:cover}
 `;
 
@@ -82,9 +81,13 @@ export default function ForumEdit() {
   };
 
   const submitEdit = (): void => {
+    /* Bỏ tag trước khi kiểm tra rỗng — CKEditor trả <p>&nbsp;</p> khi rỗng. */
     const errs: { title?: string; content?: string } = {};
-    if (!title.trim()) errs.title = 'Tiêu đề không được để trống';
-    if (!content.trim()) errs.content = 'Nội dung không được để trống';
+    const cleanTitle = title.trim();
+    const cleanContent = hasEditorContent(content) ? content.trim() : '';
+    if (!cleanTitle) errs.title = 'Tiêu đề không được để trống';
+    else if (cleanTitle.length < 10) errs.title = 'Tiêu đề quá ngắn (tối thiểu 10 ký tự)';
+    if (!cleanContent) errs.content = 'Nội dung không được để trống';
     setErrors(errs);
     if (Object.keys(errs).length) {
       showToast('Vui lòng điền đầy đủ thông tin', 'warning');
@@ -94,8 +97,8 @@ export default function ForumEdit() {
 
     setLoading(true);
     const formData = new FormData();
-    formData.append('title', title.trim());
-    formData.append('content', content);
+    formData.append('title', cleanTitle);
+    formData.append('content', cleanContent);
     formData.append('category', category);
     if (imageFile) formData.append('image', imageFile);
 
@@ -166,7 +169,11 @@ export default function ForumEdit() {
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              maxLength={200}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (errors.title) setErrors((prev) => ({ ...prev, title: undefined }));
+              }}
               placeholder="Nhập tiêu đề bài viết..."
               className={`input-premium w-full px-5 py-3.5 text-base font-semibold ${errors.title ? 'border-danger-500/50' : ''}`}
             />
@@ -212,7 +219,12 @@ export default function ForumEdit() {
                   initialData={content}
                   placeholder="Chỉnh sửa nội dung bài viết..."
                   minLines={13}
-                  onChangeData={setContent}
+                  onChangeData={(html) => {
+                    setContent(html);
+                    if (errors.content && hasEditorContent(html)) {
+                      setErrors((prev) => ({ ...prev, content: undefined }));
+                    }
+                  }}
                 />
               )}
             </div>

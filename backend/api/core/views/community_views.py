@@ -1,6 +1,7 @@
 """ShieldCall VN – Community Views (Announcements, DMs, Tickets, User Card)"""
 import logging
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db.models import Q, F, Count
 from django.utils import timezone
 
@@ -40,15 +41,50 @@ class AnnouncementListCreateView(APIView):
         items = qs[(page - 1) * per_page:page * per_page]
 
         data = []
+        forwarded = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
+        if request.user.is_authenticated:
+            visitor_key = f'user-{request.user.pk}'
+            item_ids = [a.id for a in items]
+            user_reactions_map = {}
+            if item_ids:
+                for ann_id, rtype in AnnouncementReaction.objects.filter(
+                    announcement_id__in=item_ids, user=request.user
+                ).values_list('announcement_id', 'reaction_type'):
+                    user_reactions_map.setdefault(ann_id, {})[rtype] = True
+            from django.db.models import Count as _Count
+            likes_map = dict(
+                AnnouncementReaction.objects.filter(
+                    announcement_id__in=item_ids, reaction_type='like'
+                ).values('announcement_id').annotate(c=_Count('id')).values_list('announcement_id', 'c')
+            ) if item_ids else {}
+        else:
+            visitor_key = f'ip-{forwarded or request.META.get("REMOTE_ADDR") or "anon"}'
+            user_reactions_map = {}
+            likes_map = {}
+            if items:
+                from django.db.models import Count as _Count2
+                likes_map = dict(
+                    AnnouncementReaction.objects.filter(
+                        announcement_id__in=[a.id for a in items], reaction_type='like'
+                    ).values('announcement_id').annotate(c=_Count2('id')).values_list('announcement_id', 'c')
+                )
         for a in items:
             profile = getattr(a.author, 'profile', None)
-            user_reactions = {}
-            if request.user.is_authenticated:
-                user_reactions = {
-                    r.reaction_type: True
-                    for r in AnnouncementReaction.objects.filter(announcement=a, user=request.user)
-                }
-            likes = AnnouncementReaction.objects.filter(announcement=a, reaction_type='like').count()
+            if profile:
+                author_name = profile.display_name or a.author.username
+                author_avatar = profile.avatar.url if profile.avatar else None
+            else:
+                author_name = a.author.username
+                author_avatar = None
+            user_reactions = user_reactions_map.get(a.id, {})
+            likes = likes_map.get(a.id, 0)
+            # views_count truoc day luon bang 0 (khong noi nao tang). Chi tinh
+            # 1 lan / 30 phut / nguoi xem de danh sach khong tu bom luot xem.
+            view_key = f'forum_ann_view:{a.id}:{visitor_key}'
+            if not cache.get(view_key):
+                Announcement.objects.filter(id=a.id).update(views_count=F('views_count') + 1)
+                cache.set(view_key, 1, timeout=1800)
+                a.views_count = (a.views_count or 0) + 1
             data.append({
                 'id': a.id,
                 'title': a.title,
@@ -56,9 +92,9 @@ class AnnouncementListCreateView(APIView):
                 'is_pinned': a.is_pinned,
                 'likes_count': likes,
                 'views_count': a.views_count,
-                'author_name': profile.display_name or a.author.username if profile else a.author.username,
+                'author_name': author_name,
                 'author_username': a.author.username,
-                'author_avatar': profile.avatar.url if profile and profile.avatar else None,
+                'author_avatar': author_avatar,
                 'author_is_staff': a.author.is_staff,
                 'user_liked': user_reactions.get('like', False),
                 'created_at': a.created_at.isoformat(),
@@ -243,8 +279,19 @@ class AdminTicketListView(APIView):
         if status_filter:
             qs = qs.filter(status=status_filter)
 
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = min(100, max(1, int(request.query_params.get('page_size', 50))))
+        except (TypeError, ValueError):
+            page_size = 50
+        total = qs.count()
+        offset = (page - 1) * page_size
+
         data = []
-        for t in qs[:100]:
+        for t in qs[offset:offset + page_size]:
             profile = getattr(t.author, 'profile', None)
             data.append({
                 'id': t.id,
@@ -259,7 +306,19 @@ class AdminTicketListView(APIView):
                 'created_at': t.created_at.isoformat(),
                 'updated_at': t.updated_at.isoformat(),
             })
-        return Response(data)
+        base_all = SupportTicket.objects.all()
+        # Envelope (frontend parse duoc ca array | {results}).
+        return Response({
+            'results': data,
+            'count': total,
+            'page': page,
+            'pages': max(1, (total + page_size - 1) // page_size),
+            'status_counts': {
+                'open': base_all.filter(status='open').count(),
+                'in_progress': base_all.filter(status='in_progress').count(),
+                'resolved': base_all.filter(status='resolved').count(),
+            },
+        })
 
     def patch(self, request):
         ticket_id = request.data.get('ticket_id')

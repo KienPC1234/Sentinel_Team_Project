@@ -198,15 +198,22 @@ def record_strike(user) -> tuple:
     return strikes, False
 
 
-def is_duplicate_submit(user_id: int, text: str) -> bool:
-    """Chặn copy-paste cùng nội dung trong 10 phút (spam)."""
+def is_duplicate_submit(user_id: int, text: str, record: bool = True) -> bool:
+    """Chặn copy-paste cùng nội dung trong 10 phút (spam).
+
+    `record=False` để chỉ kiểm tra mà không ghi cache — dùng khi muốn kiểm tra
+    trước nhưng chỉ "đánh dấu trùng" sau khi bài viết thực sự được tạo. Nếu
+    ghi cache ngay khi request, một bài bị validation lỗi/block vẫn bị khóa
+    10 phút với thông báo nhầm "nội dung trùng lặp".
+    """
     import hashlib
     try:
         h = hashlib.sha256(_norm(text).encode()).hexdigest()
         key = f'forum_dup:{user_id}:{h}'
         if cache.get(key):
             return True
-        cache.set(key, 1, timeout=DUP_WINDOW_SECONDS)
+        if record:
+            cache.set(key, 1, timeout=DUP_WINDOW_SECONDS)
     except Exception:
         pass
     return False

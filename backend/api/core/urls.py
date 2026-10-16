@@ -173,6 +173,7 @@ urlpatterns = [
     path('scam-iq/start/', views.ScamIQStartView.as_view(), name='scam-iq-start'),
     path('scam-iq/status/<str:task_id>/', views.ScamIQStatusView.as_view(), name='scam-iq-status'),
     path('scam-iq/submit/', views.ScamIQSubmitView.as_view(), name='scam-iq-submit'),
+    path('scam-iq/attempt/<int:attempt_id>/', views.ScamIQAttemptView.as_view(), name='scam-iq-attempt'),
     path('scam-iq/history/', views.ScamIQHistoryView.as_view(), name='scam-iq-history'),
 
     # Trust / Guardrail / Source reliability / Privacy (cải tiến theo hội đồng)
@@ -182,4 +183,18 @@ urlpatterns = [
     path('trust/privacy/', views.PrivacyNoticeView.as_view(), name='trust-privacy'),
     path('trust/redact/', views.RedactPreviewView.as_view(), name='trust-redact'),
     path('trust/storage/', views.StorageStatusView.as_view(), name='trust-storage'),
+
+    # Health check probe
+    path('health/', views.HealthCheckView.as_view(), name='health-check'),
+
+    # Backward-compatible and cross-subsystem URL aliases
+    path('forum/announcements/', views.AnnouncementListCreateView.as_view(), name='forum-announcements-alias'),
+    path('scam-radar/', views.ScamRadarStatsView.as_view(), name='scam-radar-alias'),
+    path('profile/inbox/', views.DirectMessageInboxView.as_view(), name='profile-inbox-alias'),
+    path('profile/tickets/', views.TicketListCreateView.as_view(), name='profile-tickets-alias'),
+    path('my-reports/', views.UserReportsView.as_view(), name='my-reports-alias'),
+    path('reports/', views.PublicStatsView.as_view(), name='reports-alias'),
+    path('emergency/', views.HelpsDetailAPIView.as_view(), kwargs={'slug': 'emergency'}, name='emergency-alias'),
+    path('report/lookup/', views.ScanLookupView.as_view(), name='report-lookup-alias'),
+    path('scam-iq/status/', views.ScamIQHistoryView.as_view(), name='scam-iq-status-alias'),
 ]

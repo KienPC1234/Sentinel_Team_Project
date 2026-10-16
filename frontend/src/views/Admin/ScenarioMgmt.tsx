@@ -40,64 +40,73 @@ export function ScenarioMgmt() {
   };
 
   return (
-    <AdminShell title="Quản Lý Kịch Bản" subtitle="Tình huống mô phỏng Scam IQ tương tác">
+    <AdminShell
+      title="Kịch Bản Mô Phỏng"
+      subtitle="Thiết kế và quản lý các tình huống giả định Scam IQ tương tác cho người dùng"
+      actions={
+        <Link
+          href="/admin-cp/scenarios/add/"
+          className="px-4 py-2.5 rounded-xl bg-brand-500 text-black text-xs font-black uppercase tracking-wider hover:bg-brand-400 transition-all shadow-md shadow-brand-500/20 flex items-center gap-1.5"
+        >
+          <i className="bi bi-plus-lg"></i> Thêm kịch bản mới
+        </Link>
+      }
+    >
       {msg && (
-        <div className={`p-4 rounded-xl mb-4 text-xs font-bold border ${msg.ok ? 'bg-safe-500/10 border-safe-500/20 text-safe-300' : 'bg-danger-500/10 border-danger-500/20 text-danger-300'}`}>
+        <div className={`p-4 rounded-xl mb-6 text-xs font-bold border ${msg.ok ? 'bg-safe-500/15 border-safe-500/30 text-safe-300' : 'bg-danger-500/15 border-danger-500/30 text-danger-300'}`}>
           {msg.text}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        <Link href="/admin-cp/scenarios/add/" className="px-4 py-2.5 rounded-xl bg-brand-500 text-black text-xs font-black uppercase tracking-wider hover:bg-brand-400 transition-all">
-          <i className="bi bi-plus-lg mr-1.5"></i> Thêm kịch bản mới
-        </Link>
-      </div>
-
-      <div className="overflow-x-auto rounded-2xl border border-white/10">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900/90 shadow-2xl">
+        <table className="w-full text-sm text-left border-separate border-spacing-0">
           <thead className="bg-white/[0.03]">
             <tr>
-              <th className="px-4 py-3 text-left text-[11px] font-black text-white/60 uppercase">Kịch bản</th>
-              <th className="px-4 py-3 text-left text-[11px] font-black text-white/60 uppercase">Liên kết</th>
-              <th className="px-4 py-3 text-left text-[11px] font-black text-white/60 uppercase">Số bước</th>
-              <th className="px-4 py-3 text-left text-[11px] font-black text-white/60 uppercase">Ngày tạo</th>
-              <th className="px-4 py-3 text-right text-[11px] font-black text-white/60 uppercase">Thao tác</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10">Kịch bản</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10">Liên kết</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10">Số bước</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10">Ngày tạo</th>
+              <th className="px-6 py-4 text-right text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10">Thao tác</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-white/5">
             {list.map((s) => (
-              <tr key={s.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                <td className="px-4 py-3">
-                  <div className="font-bold text-white">{s.title}</div>
-                  <div className="text-xs text-white/55 line-clamp-1">{s.description || 'Không có mô tả'}</div>
+              <tr key={s.id} className="hover:bg-white/[0.04] transition-all">
+                <td className="px-6 py-4">
+                  <div className="font-bold text-white text-base tracking-tight">{s.title}</div>
+                  <div className="text-xs text-slate-400 line-clamp-1 mt-0.5">{s.description || 'Không có mô tả'}</div>
                 </td>
-                <td className="px-4 py-3 text-xs text-white/60">
+                <td className="px-6 py-4 text-xs whitespace-nowrap">
                   {s.lesson_title ? (
-                    <span className="text-brand-300 font-bold">Bài học: {s.lesson_title}</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 font-bold">
+                      Bài học: {s.lesson_title}
+                    </span>
                   ) : s.article_title ? (
-                    <span className="text-brand2-300 font-bold">Tin tức: {s.article_title}</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 font-bold">
+                      Tin tức: {s.article_title}
+                    </span>
                   ) : (
-                    <span className="text-white/45">Độc lập</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 font-medium">Độc lập</span>
                   )}
                 </td>
-                <td className="px-4 py-3">
-                  <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-white/70 text-xs font-bold">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs font-bold">
                     {s.steps_count} bước
                   </span>
                 </td>
-                <td className="px-4 py-3 text-xs text-white/55">{s.created_at}</td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-6 py-4 text-xs text-slate-400 whitespace-nowrap">{s.created_at}</td>
+                <td className="px-6 py-4 text-right whitespace-nowrap">
                   <div className="inline-flex gap-2">
                     <Link
                       href={`/admin-cp/scenarios/${s.id}/edit/`}
-                      className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-brand-300 hover:bg-white/10 transition-all"
+                      className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/15 text-xs font-bold text-slate-200 hover:bg-brand-500 hover:text-black transition-all"
                     >
                       <i className="bi bi-pencil mr-1"></i> Sửa
                     </Link>
                     <button
                       disabled={deletingId === s.id}
                       onClick={() => void handleDelete(s.id, s.title)}
-                      className="px-3 py-1.5 rounded-lg bg-danger-500/15 border border-danger-500/30 text-xs font-bold text-danger-300 hover:bg-danger-500/25 transition-all disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-lg bg-danger-500/15 border border-danger-500/30 text-xs font-bold text-danger-300 hover:bg-danger-500 hover:text-white transition-all disabled:opacity-50"
                     >
                       <i className="bi bi-trash mr-1"></i> Xóa
                     </button>
@@ -105,16 +114,16 @@ export function ScenarioMgmt() {
                 </td>
               </tr>
             ))}
+            {list.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-8 py-16 text-center text-slate-400 font-bold text-xs">
+                  {loading ? 'Đang tải danh sách kịch bản...' : 'Chưa có kịch bản mô phỏng nào được tạo.'}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
-
-      {loading && <p className="text-white/55 text-sm mt-4">Đang tải danh sách kịch bản...</p>}
-      {!loading && list.length === 0 && (
-        <div className="liquid-card p-8 text-center text-white/35 text-sm mt-4">
-          Chưa có kịch bản nào được tạo.
-        </div>
-      )}
     </AdminShell>
   );
 }

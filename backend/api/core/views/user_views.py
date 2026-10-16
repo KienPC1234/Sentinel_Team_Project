@@ -44,17 +44,55 @@ logger = logging.getLogger(__name__)
 # USER APIs
 # ═══════════════════════════════════════════════════════════════════════════
 
-class UserScansView(generics.ListAPIView):
-    """GET /api/user/scans — User scan history"""
-    serializer_class = ScanEventListSerializer
+class UserScansView(APIView):
+    """GET /api/user/scans — User scan history (co phan trang).
+
+    Truoc day cat cung 50 ban ghi dau. Gio ho tro ?type=&page=&page_size=
+    (toi da 100) va tra envelope {results, count, page, pages}.
+    """
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        qs = ScanEvent.objects.filter(user=self.request.user)
-        scan_type = self.request.query_params.get('type')
+    def get(self, request):
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get('page_size', 15))
+        except (TypeError, ValueError):
+            page_size = 15
+        page_size = max(1, min(page_size, 100))
+        qs = ScanEvent.objects.filter(user=request.user).order_by('-created_at')
+        scan_type = (request.query_params.get('type') or '').strip()
         if scan_type:
             qs = qs.filter(scan_type=scan_type)
-        return qs[:50]
+        total = qs.count()
+        offset = (page - 1) * page_size
+        items = list(qs[offset:offset + page_size])
+        data = ScanEventListSerializer(items, many=True, context={'request': request}).data
+        # Thong ke tong cho tab overview (dung ca khi nhieu trang).
+        from datetime import datetime as _dt_cls, time as _time_cls, timedelta as _td
+        from django.utils import timezone as _tz
+        _now = _tz.now()
+        _cur_tz = _tz.get_current_timezone()
+        _today = _now.astimezone(_cur_tz).date()
+        _last7 = []
+        for _i in range(6, -1, -1):
+            _day = _today - _td(days=_i)
+            _start = _tz.make_aware(_dt_cls.combine(_day, _time_cls.min), _cur_tz)
+            _end = _tz.make_aware(_dt_cls.combine(_day, _time_cls.max), _cur_tz)
+            _last7.append(qs.filter(created_at__range=(_start, _end)).count())
+        return Response({
+            'results': data,
+            'count': total,
+            'page': page,
+            'pages': max(1, (total + page_size - 1) // page_size),
+            'stats': {
+                'total': total,
+                'red': qs.filter(risk_level='RED').count(),
+                'last_7_days': _last7,
+            },
+        })
 
 
 def _mask_scan_preview(scan: ScanEvent) -> str:
@@ -140,13 +178,45 @@ class UserScanPickerView(APIView):
         return Response({'results': items, 'count': len(items)})
 
 
-class UserReportsView(generics.ListAPIView):
-    """GET /api/user/reports — User report history"""
-    serializer_class = ReportListSerializer
+class UserReportsView(APIView):
+    """GET /api/user/reports — User report history (co phan trang).
+
+    Truoc day cat cung 50 ban ghi dau, user gui nhieu bao cao se khong thay
+    het. Gio ho tro ?page=&page_size= (toi da 100) va tra envelope
+    {results, count, page, pages}.
+    """
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return Report.objects.filter(reporter=self.request.user)[:50]
+    def get(self, request):
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get('page_size', 20))
+        except (TypeError, ValueError):
+            page_size = 20
+        page_size = max(1, min(page_size, 100))
+        qs = Report.objects.filter(reporter=request.user).order_by('-created_at')
+        status_f = (request.query_params.get('status') or '').strip()
+        if status_f in ('pending', 'approved', 'rejected'):
+            qs = qs.filter(status=status_f)
+        total = qs.count()
+        offset = (page - 1) * page_size
+        items = list(qs[offset:offset + page_size])
+        data = ReportListSerializer(items, many=True, context={'request': request}).data
+        base = Report.objects.filter(reporter=request.user)
+        return Response({
+            'results': data,
+            'count': total,
+            'page': page,
+            'pages': max(1, (total + page_size - 1) // page_size),
+            'status_counts': {
+                'pending': base.filter(status='pending').count(),
+                'approved': base.filter(status='approved').count(),
+                'rejected': base.filter(status='rejected').count(),
+            },
+        })
 
 
 class UserAlertsView(APIView):

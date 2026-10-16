@@ -1,40 +1,42 @@
-const randomUseragent = require('random-useragent');
-const dns = require('dns').promises;
-const net = require('net');
+import dns from 'node:dns/promises';
+import net from 'node:net';
+import randomUseragent from 'random-useragent';
+import type { Page } from 'puppeteer';
 
-/**
- * Checks if an IP is in a private, loopback, or link-local range.
- */
-function isPrivateIp(ip) {
+export function isPrivateIp(ip: string): boolean {
   if (!ip) return false;
-  
-  // IPv4 checks
+
+  // IPv4 ranges check
   if (net.isIPv4(ip)) {
     const parts = ip.split('.').map(Number);
     if (parts[0] === 127) return true; // 127.0.0.0/8 Loopback
-    if (parts[0] === 10) return true;  // 10.0.0.0/8 Private
+    if (parts[0] === 10) return true; // 10.0.0.0/8 Private
     if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12 Private
     if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16 Private
     if (parts[0] === 169 && parts[1] === 254) return true; // 169.254.0.0/16 Link-local / Cloud metadata
-    if (parts[0] === 0) return true; // 0.0.0.0/8
+    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // 100.64.0.0/10 Carrier-grade NAT
+    if (parts[0] === 0) return true; // 0.0.0.0/8 Broadcast / Current
     return false;
   }
 
-  // IPv6 checks
+  // IPv6 ranges check
   if (net.isIPv6(ip)) {
     const normalized = ip.toLowerCase();
     if (normalized === '::1' || normalized === '::') return true;
-    if (normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+    if (
+      normalized.startsWith('fe80:') || // Link-local
+      normalized.startsWith('fc') || // Unique local
+      normalized.startsWith('fd')
+    ) {
+      return true;
+    }
     return false;
   }
 
   return false;
 }
 
-/**
- * Validates that input is a valid HTTP/HTTPS URL and prevents SSRF to internal resources.
- */
-async function isSafeExternalUrl(input) {
+export async function isSafeExternalUrl(input: string): Promise<boolean> {
   try {
     const parsed = new URL(input);
     if (!['http:', 'https:'].includes(parsed.protocol)) {
@@ -51,7 +53,7 @@ async function isSafeExternalUrl(input) {
       return false;
     }
 
-    // Resolve DNS hostname to IP
+    // Resolve DNS hostname to verify against DNS rebinding / private IP targets
     try {
       const addresses = await dns.lookup(hostname, { all: true });
       for (const addr of addresses) {
@@ -60,7 +62,7 @@ async function isSafeExternalUrl(input) {
         }
       }
     } catch {
-      return false; // Cannot resolve hostname
+      return false;
     }
 
     return true;
@@ -69,7 +71,7 @@ async function isSafeExternalUrl(input) {
   }
 }
 
-function isHttpUrl(input) {
+export function isHttpUrl(input: string): boolean {
   try {
     const parsed = new URL(input);
     return ['http:', 'https:'].includes(parsed.protocol);
@@ -78,27 +80,36 @@ function isHttpUrl(input) {
   }
 }
 
-function detectCaptcha(content = '', html = '') {
-  const blob = `${content}\n${html}`.toLowerCase();
-  return [
+export function detectCaptcha(content = '', html = ''): boolean {
+  const combined = `${content}\n${html}`.toLowerCase();
+  const signatures = [
     'captcha',
     'recaptcha',
     'hcaptcha',
     'verify you are human',
     'checking your browser',
-    'cloudflare turnstile'
-  ].some(m => blob.includes(m));
+    'cloudflare turnstile',
+    'cf-turnstile',
+    'challenge-running',
+  ];
+  return signatures.some((sig) => combined.includes(sig));
 }
 
-function getRandomUA() {
-  return randomUseragent.getRandom(ua => (
-    ua.browserName === 'Chrome'
-    && ua.osName === 'Windows'
-    && !/Mobile/i.test(ua.toString())
-  )) || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+export function getRandomUA(): string {
+  try {
+    const candidate = randomUseragent.getRandom((ua: { browserName?: string; osName?: string }) => {
+      return ua.browserName === 'Chrome' && ua.osName === 'Windows';
+    });
+    if (candidate && !/Mobile/i.test(candidate)) {
+      return candidate;
+    }
+  } catch {
+    // fallback
+  }
+  return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
 }
 
-async function applyHumanizedPageSetup(page, userAgent) {
+export async function applyHumanizedPageSetup(page: Page, userAgent?: string): Promise<void> {
   const ua = userAgent || getRandomUA();
   await page.setUserAgent(ua);
   await page.setViewport({
@@ -106,7 +117,7 @@ async function applyHumanizedPageSetup(page, userAgent) {
     height: 900,
     deviceScaleFactor: 1,
     isMobile: false,
-    hasTouch: false
+    hasTouch: false,
   });
 
   await page.setExtraHTTPHeaders({
@@ -116,17 +127,10 @@ async function applyHumanizedPageSetup(page, userAgent) {
     'sec-ch-ua-platform': '"Windows"',
   });
 
-  // Mask automated flags
+  // Evasion overrides
   await page.evaluateOnNewDocument(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    window.chrome = { runtime: {} };
+    (window as unknown as { chrome?: { runtime: Record<string, unknown> } }).chrome = { runtime: {} };
   });
 }
 
-module.exports = {
-  isHttpUrl,
-  isSafeExternalUrl,
-  detectCaptcha,
-  getRandomUA,
-  applyHumanizedPageSetup
-};

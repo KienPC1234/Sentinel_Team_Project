@@ -10,7 +10,7 @@
  * - Cache lifecycle management with automatic cleanup of outdated versions.
  */
 const sw = self;
-const SW_VERSION = '2026-10-15-v3';
+const SW_VERSION = '2026-10-16-v4';
 const STATIC_CACHE = `sc-static-${SW_VERSION}`;
 const PAGES_CACHE = `sc-pages-${SW_VERSION}`;
 const ALL_ACTIVE_CACHES = [STATIC_CACHE, PAGES_CACHE];
@@ -275,9 +275,14 @@ sw.addEventListener('fetch', (event) => {
         event.respondWith((async () => {
             try {
                 const networkRes = await fetch(req);
-                if (networkRes.ok && networkRes.status === 200) {
-                    const cache = await caches.open(PAGES_CACHE);
-                    void cache.put(req, networkRes.clone());
+                if (networkRes.ok && networkRes.status === 200 && networkRes.type === 'basic') {
+                    try {
+                        const cache = await caches.open(PAGES_CACHE);
+                        await cache.put(req, networkRes.clone());
+                    }
+                    catch {
+                        // Cache.put có thể lỗi (NetworkError / body bị cắt) — bỏ qua, không làm hỏng trang
+                    }
                 }
                 return networkRes;
             }
@@ -304,9 +309,14 @@ sw.addEventListener('fetch', (event) => {
                 return cached;
             try {
                 const networkRes = await fetch(req);
-                if (networkRes.ok && networkRes.status === 200) {
-                    const cache = await caches.open(STATIC_CACHE);
-                    void cache.put(req, networkRes.clone());
+                if (networkRes.ok && networkRes.status === 200 && networkRes.type === 'basic') {
+                    try {
+                        const cache = await caches.open(STATIC_CACHE);
+                        await cache.put(req, networkRes.clone());
+                    }
+                    catch {
+                        // Bỏ qua lỗi cache (tránh "Cache.put() encountered a network error")
+                    }
                 }
                 return networkRes;
             }

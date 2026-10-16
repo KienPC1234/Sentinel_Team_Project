@@ -55,7 +55,7 @@ function patternLabel(p: unknown): string {
   return String(p);
 }
 
-export default function Qr() {
+export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -186,13 +186,19 @@ export default function Qr() {
       >
         <div className="text-center space-y-4">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-[2rem] bg-brand-500/10 text-brand-400 border border-brand-500/20 shadow-lg shadow-brand-500/10 mb-5">
-            <i className="bi bi-qr-code-scan text-4xl"></i>
+            <i className={mode === 'image' ? 'bi bi-image text-4xl' : 'bi bi-qr-code-scan text-4xl'}></i>
           </div>
           <h1 className="text-4xl font-black text-white tracking-tight leading-none">
-            Kiểm tra <span className="glow-text">QR / Hình ảnh</span>
+            {mode === 'image' ? (
+              <>Kiểm tra <span className="glow-text">Ảnh / Chứng từ</span></>
+            ) : (
+              <>Kiểm tra <span className="glow-text">QR / Hình ảnh</span></>
+            )}
           </h1>
           <p className="text-white/55 max-w-md mx-auto text-sm leading-relaxed">
-            Tải lên hoặc kéo thả ảnh chụp QR code, link lừa đảo hoặc thông báo giả mạo để hệ thống phân tích rủi ro.
+            {mode === 'image'
+              ? 'Tải lên ảnh chụp màn hình chuyển khoản, tin nhắn, hoá đơn, giấy tờ hoặc thông báo nghi giả mạo — hệ thống đọc nội dung (OCR) và phân tích rủi ro.'
+              : 'Tải lên hoặc kéo thả ảnh chụp QR code, link lừa đảo hoặc thông báo giả mạo để hệ thống phân tích rủi ro.'}
           </p>
         </div>
 

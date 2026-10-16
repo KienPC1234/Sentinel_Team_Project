@@ -87,6 +87,7 @@ interface ExamResult {
   ai_feedback?: Array<{ question_id: string; ai_score?: number; ai_comment?: string }>;
   difficulty_breakdown?: Record<string, { total: number; correct: number }>;
   ai_task_id?: string;
+  attempt_id?: number;
 }
 
 const SIM_TYPES = ['simulation_sms', 'simulation_email', 'incident_response'];
@@ -223,6 +224,10 @@ export default function ScamIQ() {
   const [aiMsg, setAiMsg] = useState('');
   const [taskId, setTaskId] = useState<string | null>(null);
   const [aiTaskId, setAiTaskId] = useState<string | null>(null);
+  /* exam_id backend cấp khi đề sẵn sàng — phải giữ riêng vì mảng questions
+   * không chứa nó. Trước đây submit đọc exam_id từ questions (luôn undefined)
+   * nên mọi lượt nộp bài đều 400 "Thiếu exam_id". */
+  const [examId, setExamId] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
   const cancelled = useRef(false);
   const toastTimeout = useRef<number | null>(null);
@@ -304,12 +309,18 @@ export default function ScamIQ() {
     if (taskFinishedRef.current) return;
     taskFinishedRef.current = true;
     const qs = (s.questions as Q[]) || [];
+    const eid = typeof s.exam_id === 'string' && s.exam_id ? s.exam_id : null;
     setQuestions(qs);
+    setExamId(eid);
     setStage('ready');
     setIndex(0);
     setProgress((p) => ({ ...p, created: qs.length || 30, msg: 'Bộ câu hỏi đã sẵn sàng.', phase: 'Hoàn tất' }));
     setTaskId(null);
     startTimer();
+    if (!eid) {
+      setError('Đề thi thiếu mã định danh. Vui lòng tạo đề mới.');
+      setStage('idle');
+    }
   };
 
   const failExam = (message: string): void => {
@@ -400,9 +411,9 @@ export default function ScamIQ() {
       aiWsActiveRef.current = true;
     },
     onUnavailable: () => {
-      // WS không kết nối được: polling không lấy được kết quả chấm AI nên dừng chờ.
+      /* WS không nối được: vòng poll /scam-iq/attempt/ vẫn lấy được điểm AI
+       * nên chỉ đánh dấu để vòng lặp không kết luận "treo" sớm. */
       aiWsActiveRef.current = false;
-      applyAiFailed('Không kết nối được AI giám khảo. Vui lòng thử lại sau.');
     },
   });
 
@@ -413,6 +424,7 @@ export default function ScamIQ() {
     setResult(null);
     setAnswers({});
     setQuestions([]);
+    setExamId(null);
     setIndex(0);
     setProgress({ created: 0, total: 30, msg: 'Đang khởi tạo pipeline đề thi...', phase: 'Khởi tạo' });
     stopTimer();
@@ -450,6 +462,10 @@ export default function ScamIQ() {
 
   const submitExam = async () => {
     setError('');
+    if (!examId) {
+      setError('Không tìm thấy mã đề thi. Vui lòng tạo đề mới rồi nộp lại.');
+      return;
+    }
     setSubmitting(true);
     stopTimer();
     try {
@@ -457,42 +473,46 @@ export default function ScamIQ() {
       questions.forEach((q) => {
         if (answers[q.id]) payload[q.id] = answers[q.id];
       });
-      const examId = (questions as unknown as { exam_id?: string }).exam_id;
       const d = await api.post<ExamResult>('/scam-iq/submit/', { exam_id: examId, answers: payload });
       setResult(d);
       setStage('result');
       setReviewFilter('all');
-      if (d.ai_task_id) {
+      if (d.ai_task_id && d.attempt_id) {
         aiFinishedRef.current = false;
         aiWsActiveRef.current = false;
         setAiTaskId(d.ai_task_id);
         setAiScoring(true);
         setAiMsg('Đang kết nối AI giám khảo...');
-        // WS (useTaskSocket) là kênh chính; vòng lặp status dưới đây giữ làm fallback.
-        for (let i = 0; i < 60; i++) {
+        /* WS là kênh chính; poll GET /scam-iq/attempt/<id>/ làm fallback.
+         * Trước đây fallback poll /scam-iq/status/<ai_task_id>/ — endpoint đó
+         * chỉ hiểu task tạo đề nên luôn 500, khiến AI chấm xong mà UI treo mãi. */
+        for (let i = 0; i < 90; i++) {
           await new Promise((r) => setTimeout(r, 2000));
           if (aiFinishedRef.current) break;
           try {
-            const s = await api.get<Record<string, unknown>>(`/scam-iq/status/${d.ai_task_id}/`);
+            const a = await api.get<{
+              is_ai_scored?: boolean; score?: number; correct_count?: number;
+              level?: ExamResult['level']; ai_feedback?: ExamResult['ai_feedback'];
+            }>(`/scam-iq/attempt/${d.attempt_id}/`);
             if (aiFinishedRef.current) break;
-            if (typeof s.message === 'string') setAiMsg(s.message);
-            const data = (s.data ?? {}) as Record<string, unknown>;
-            if (s.status === 'done' || s.ready) {
-              applyAiDone(data, typeof s.message === 'string' ? s.message : undefined);
+            if (a.is_ai_scored) {
+              applyAiDone(
+                {
+                  score: a.score, correct_count: a.correct_count,
+                  level: a.level, feedback: a.ai_feedback,
+                },
+                'Hoàn tất chấm điểm AI!',
+              );
               break;
             }
-            if (s.status === 'failed') {
-              applyAiFailed(typeof s.message === 'string' ? s.message : undefined);
-              break;
-            }
+            if (i === 0) setAiMsg('AI giám khảo đang chấm các câu tự luận...');
           } catch {
-            break;
+            /* mất mạng thoáng qua — thử lại ở vòng sau */
           }
         }
-        if (!aiFinishedRef.current && !aiWsActiveRef.current) {
-          aiFinishedRef.current = true;
-          setAiScoring(false);
-          setAiTaskId(null);
+        if (!aiFinishedRef.current) {
+          /* Hết 3 phút vẫn chưa có điểm AI: giữ điểm chấm tự động, báo rõ. */
+          applyAiFailed('AI chấm điểm quá lâu. Điểm hiện tại là kết quả chấm tự động — đáp án tự luận sẽ được cập nhật sau.');
         }
       }
       void loadHistory();
@@ -513,6 +533,7 @@ export default function ScamIQ() {
     setAiTaskId(null);
     setStage('idle');
     setQuestions([]);
+    setExamId(null);
     setIndex(0);
     setAnswers({});
     setResult(null);

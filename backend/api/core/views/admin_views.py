@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Count, Sum, F, Q
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.http import StreamingHttpResponse
 from rest_framework import status, permissions, generics, serializers
@@ -72,7 +72,9 @@ class AdminReportsView(generics.ListAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        qs = Report.objects.all()
+        # select_related reporter: moi dong deu doc reporter.email (mask) nen
+        # thieu dong nay la 1 query/dong o hang doi kiem duyet.
+        qs = Report.objects.select_related('reporter').all()
         st = self.request.query_params.get('status', 'pending')
         if st:
             qs = qs.filter(status=st)
@@ -100,28 +102,34 @@ class AdminReportActionView(APIView):
         report.moderation_note = serializer.validated_data.get('note', '')
         report.save()
 
-        # Notify reporter via email + push notification
+        # Notify reporter via email + push notification. Boc het trong try rieng:
+        # trang thai da luu o tren, loi gui mail/push khong duoc lam action 500.
         if report.reporter:
-            from api.utils.email_utils import send_report_outcome_email
-            send_report_outcome_email(report.reporter, report.target_type, report.target_value, report.status)
-
-            from api.utils.push_service import push_service
-            if action == 'approve':
-                push_service.send_push(
-                    report.reporter.id,
-                    'Báo cáo đã được chấp thuận',
-                    f'Báo cáo #{report_id} về {report.target_value} đã được chấp thuận.',
-                    url='/my-reports/',
-                    notification_type='success'
-                )
-            else:
-                push_service.send_push(
-                    report.reporter.id,
-                    'Báo cáo đã bị từ chối',
-                    f'Báo cáo #{report_id} về {report.target_value} đã bị từ chối.',
-                    url='/my-reports/',
-                    notification_type='warning'
-                )
+            try:
+                from api.utils.email_utils import send_report_outcome_email
+                send_report_outcome_email(report.reporter, report.target_type, report.target_value, report.status)
+            except Exception:
+                logger.exception('Failed to send report outcome email for report #%s', report_id)
+            try:
+                from api.utils.push_service import push_service
+                if action == 'approve':
+                    push_service.send_push(
+                        report.reporter.id,
+                        'Báo cáo đã được chấp thuận',
+                        f'Báo cáo #{report_id} về {report.target_value} đã được chấp thuận.',
+                        url='/my-reports/',
+                        notification_type='success'
+                    )
+                else:
+                    push_service.send_push(
+                        report.reporter.id,
+                        'Báo cáo đã bị từ chối',
+                        f'Báo cáo #{report_id} về {report.target_value} đã bị từ chối.',
+                        url='/my-reports/',
+                        notification_type='warning'
+                    )
+            except Exception:
+                logger.exception('Failed to push report outcome for report #%s', report_id)
 
         # If approved, update entity risk scores
         if action == 'approve':
@@ -129,10 +137,18 @@ class AdminReportActionView(APIView):
                 from api.core.tasks import recompute_phone_risk
                 recompute_phone_risk.delay(report.target_value)
             elif report.target_type == 'domain':
-                Domain.objects.filter(domain_name=report.target_value).update(
-                    risk_score=F('risk_score') + 15,
-                    report_count=F('report_count') + 1,
-                )
+                # Tran risk_score o 100 (truoc day +15 moi lan duyet co the vuot 100).
+                for _domain in Domain.objects.filter(domain_name=report.target_value)[:1]:
+                    _domain.report_count = (_domain.report_count or 0) + 1
+                    _domain.risk_score = min(100, (_domain.risk_score or 0) + 15)
+                    _domain.save(update_fields=['report_count', 'risk_score'])
+
+        # So lieu public thay doi -> xoa cache stats
+        try:
+            from django.core.cache import cache as _cache
+            _cache.delete('report_stats_v1')
+        except Exception:
+            pass
 
         return Response({
             'message': f'Report #{report_id} đã được {action}.',
@@ -146,8 +162,18 @@ class AdminStatsView(APIView):
 
     @extend_schema(responses={200: serializers.DictField()})
     def get(self, request):
-        today = timezone.now().date()
-        week_ago = today - timedelta(days=7)
+        # Dashboard poll endpoint nay moi 5s (~25 count query/lan) nen cache 60s.
+        # Truoc day moi tab admin mo la 12 lan/phut x 25 query vao DB.
+        from django.core.cache import cache as _cache
+        cached = _cache.get('admin_stats_v1')
+        if cached is not None:
+            return Response(cached)
+        now = timezone.now()
+        tz = timezone.get_current_timezone()
+        today = now.astimezone(tz).date()
+        today_start = timezone.make_aware(datetime.combine(today, time.min), tz)
+        today_end = timezone.make_aware(datetime.combine(today, time.max), tz)
+        week_ago_start = timezone.make_aware(datetime.combine(today - timedelta(days=7), time.min), tz)
 
         # Đếm thêm nội dung + diễn đàn cho trang Dashboard/Panel (bản gốc dùng context server).
         from api.core.models import ForumPost, ForumComment, ForumPostReport, ArticleComment
@@ -165,27 +191,41 @@ class AdminStatsView(APIView):
             forum_stats = {}
 
         # Chuỗi 7 ngày gần nhất cho biểu đồ Dashboard.
+        # Sử dụng datetime range để không phụ thuộc vào CONVERT_TZ của MySQL/MariaDB.
         labels, scans_series, reports_series = [], [], []
         for i in range(6, -1, -1):
             day = today - timedelta(days=i)
             labels.append(day.strftime('%d/%m'))
-            scans_series.append(ScanEvent.objects.filter(created_at__date=day).count())
-            reports_series.append(Report.objects.filter(created_at__date=day).count())
+            day_start = timezone.make_aware(datetime.combine(day, time.min), tz)
+            day_end = timezone.make_aware(datetime.combine(day, time.max), tz)
+            scans_series.append(ScanEvent.objects.filter(created_at__range=(day_start, day_end)).count())
+            reports_series.append(Report.objects.filter(created_at__range=(day_start, day_end)).count())
 
-        return Response({
+        from api.core.models import WebPushSubscription, SupportTicket
+        try:
+            webpush_active = WebPushSubscription.objects.filter(is_active=True).count()
+            webpush_total = WebPushSubscription.objects.count()
+            open_tickets = SupportTicket.objects.filter(status='open').count()
+        except Exception:
+            webpush_active, webpush_total, open_tickets = 0, 0, 0
+
+        payload = {
             'total_users': User.objects.count(),
             'total_scans': ScanEvent.objects.count(),
             'total_reports': Report.objects.count(),
             'pending_reports': Report.objects.filter(status='pending').count(),
-            'scans_today': ScanEvent.objects.filter(created_at__date=today).count(),
-            'scans_week': ScanEvent.objects.filter(created_at__date__gte=week_ago).count(),
-            'reports_week': Report.objects.filter(created_at__date__gte=week_ago).count(),
+            'scans_today': ScanEvent.objects.filter(created_at__range=(today_start, today_end)).count(),
+            'scans_week': ScanEvent.objects.filter(created_at__gte=week_ago_start).count(),
+            'reports_week': Report.objects.filter(created_at__gte=week_ago_start).count(),
             'domains_tracked': Domain.objects.count(),
             'accounts_tracked': BankAccount.objects.count(),
             'total_lessons': LearnLesson.objects.count(),
             'total_articles': Article.objects.count(),
             'total_article_comments': ArticleComment.objects.count(),
-            'active_today': User.objects.filter(last_login__date=today).count()
+            'webpush_subscribers': webpush_active,
+            'webpush_total': webpush_total,
+            'pending_tickets': open_tickets,
+            'active_today': User.objects.filter(last_login__range=(today_start, today_end)).count()
             if hasattr(User, 'last_login') else 0,
             # Đếm diễn đàn (vừa top-level cho Panel cũ, vừa nested cho Dashboard mới).
             'total_posts': forum_stats.get('total_posts', 0),
@@ -197,7 +237,9 @@ class AdminStatsView(APIView):
                 'scans': scans_series,
                 'reports': reports_series,
             },
-        })
+        }
+        _cache.set('admin_stats_v1', payload, timeout=60)
+        return Response(payload)
 
 
 class AdminRAGManagementView(APIView):
@@ -215,11 +257,25 @@ class AdminRAGManagementView(APIView):
         from api.maintenance.models import RAGIndexLog
         from api.utils.vector_db import vector_db
         from django.conf import settings
+        from django.utils import timezone
+        from datetime import timedelta
         
+        # Auto-fail orphaned RUNNING logs older than 15 minutes to prevent perpetual stuck UI
+        stale_cutoff = timezone.now() - timedelta(minutes=15)
+        RAGIndexLog.objects.filter(status='RUNNING', started_at__lt=stale_cutoff).update(
+            status='FAILED',
+            completed_at=timezone.now(),
+            error_message='Hệ thống tự động hủy do worker quá hạn (timeout >15 phút)'
+        )
+
         query = request.query_params.get('query')
         test_results = []
         if query:
-            test_results = vector_db.search(query, k=5)
+            try:
+                test_results = vector_db.search(query, k=5)
+            except Exception as search_err:
+                logger.warning("RAG vector search test failed: %s", search_err)
+                test_results = []
             
         logs = RAGIndexLog.objects.all()[:50]
         
@@ -230,22 +286,25 @@ class AdminRAGManagementView(APIView):
         running_log = RAGIndexLog.objects.filter(status='RUNNING').first()
         last_success = RAGIndexLog.objects.filter(status='SUCCESS').first()
         
-        # Get beat schedule interval
-        beat_interval = 3600
+        # Get beat schedule interval for news & vector synchronization
+        beat_interval = 86400
         beat_schedule = getattr(settings, 'CELERY_BEAT_SCHEDULE', {})
-        for key, val in beat_schedule.items():
-            if 'vector' in key.lower() or 'rag' in key.lower():
-                sched = val.get('schedule', None)
+        for key in ('sync-tinnhiemmang-news-daily', 'sync-tinnhiemmang-news-12h', 'daily-trend-aggregation'):
+            if key in beat_schedule:
+                sched = beat_schedule[key].get('schedule')
                 if hasattr(sched, 'total_seconds'):
                     beat_interval = int(sched.total_seconds())
                 elif isinstance(sched, (int, float)):
                     beat_interval = int(sched)
                 break
         
+        total_items = len(vector_db.metadata) if vector_db and getattr(vector_db, 'metadata', None) is not None else 0
+        is_ready = bool(vector_db and getattr(vector_db, 'index', None) is not None)
+        
         stats = {
-            'total_items': len(vector_db.metadata),
+            'total_items': total_items,
             'last_sync': last_success.completed_at if last_success else None,
-            'is_ready': vector_db.index is not None,
+            'is_ready': is_ready,
             'model_name': MODEL_NAME,
             'is_running': running_log is not None,
             'running_since': running_log.started_at if running_log else None,
@@ -277,8 +336,12 @@ class AdminRAGRebuildView(APIView):
     @extend_schema(responses={200: serializers.DictField()})
     def post(self, request):
         from api.maintenance.tasks import rebuild_vector_index
-        rebuild_vector_index.delay(trigger='MANUAL')
-        return Response({'message': 'Đã lên lịch xây dựng lại chỉ mục Vector.'})
+        try:
+            rebuild_vector_index.delay(trigger='MANUAL')
+            return Response({'message': 'Đã lên lịch xây dựng lại chỉ mục Vector.'})
+        except Exception as e:
+            logger.error("Failed to queue rebuild_vector_index: %s", e)
+            return Response({'error': f'Không thể kích hoạt Celery: {str(e)}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 class AdminRAGClearLogsView(APIView):
     """POST /api/admin/rag/clear-logs — Clear sync history logs"""
@@ -287,8 +350,8 @@ class AdminRAGClearLogsView(APIView):
     @extend_schema(responses={200: serializers.DictField()})
     def post(self, request):
         from api.maintenance.models import RAGIndexLog
-        count = RAGIndexLog.objects.count()
-        RAGIndexLog.objects.all().delete()
+        count = RAGIndexLog.objects.exclude(status='RUNNING').count()
+        RAGIndexLog.objects.exclude(status='RUNNING').delete()
         return Response({'message': f'Đã xóa {count} bản ghi lịch sử đồng bộ.', 'cleared': count})
 
 
@@ -305,9 +368,10 @@ class AdminUsersView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        q = (request.query_params.get('q') or '').strip()
+        q = (request.query_params.get('q') or '').strip()[:100]
         role = request.query_params.get('role', 'all')
-        
+        status_f = (request.query_params.get('status') or 'all').strip()
+
         users_qs = User.objects.select_related('profile').annotate(
             posts_count=Count('forum_posts', distinct=True),
             comments_count=Count('forum_comments', distinct=True),
@@ -327,6 +391,11 @@ class AdminUsersView(APIView):
             users_qs = users_qs.filter(is_superuser=True)
         elif role == 'user':
             users_qs = users_qs.filter(is_staff=False, is_superuser=False)
+
+        if status_f == 'active':
+            users_qs = users_qs.filter(is_active=True)
+        elif status_f == 'inactive':
+            users_qs = users_qs.filter(is_active=False)
 
         count = users_qs.count()
         try:
@@ -541,6 +610,25 @@ class AdminScenarioDetailView(APIView):
             return Response({'error': 'Kịch bản không tồn tại.'}, status=status.HTTP_404_NOT_FOUND)
 
 
+def _trigger_vector_rebuild():
+    """Trigger background Vector DB rebuild and cache invalidation."""
+    try:
+        from api.utils.vector_db import vector_db
+        vector_db.invalidate_cache()
+    except Exception:
+        pass
+    try:
+        from api.core.tasks import rebuild_scam_vector_index
+        rebuild_scam_vector_index.delay()
+    except Exception:
+        try:
+            import threading
+            from api.utils.vector_db import vector_db
+            threading.Thread(target=vector_db.rebuild_index, kwargs={'force_cpu': True}, daemon=True).start()
+        except Exception:
+            pass
+
+
 class AdminLearnView(APIView):
     """GET/POST /api/v1/admin/learn/ — List and create lessons"""
     permission_classes = [IsAdminUser]
@@ -622,6 +710,7 @@ class AdminLearnView(APIView):
                     content={'steps': parsed_steps},
                 )
 
+        _trigger_vector_rebuild()
         return Response({'status': 'ok', 'id': lesson.id, 'slug': lesson.slug, 'message': 'Đã tạo bài học thành công.'}, status=status.HTTP_201_CREATED)
 
 
@@ -744,12 +833,14 @@ class AdminLearnDetailView(APIView):
                         content={'steps': parsed_steps},
                     )
 
+        _trigger_vector_rebuild()
         return Response({'status': 'ok', 'message': 'Đã cập nhật bài học thành công.'})
 
     def delete(self, request, lesson_id):
         try:
             lesson = LearnLesson.objects.get(id=lesson_id)
             lesson.delete()
+            _trigger_vector_rebuild()
             return Response({'status': 'ok', 'message': 'Đã xóa bài học.'})
         except LearnLesson.DoesNotExist:
             return Response({'error': 'Bài học không tồn tại.'}, status=status.HTTP_404_NOT_FOUND)
@@ -808,10 +899,13 @@ class AdminArticlesView(APIView):
             'slug': a.slug,
             'category': a.category,
             'category_display': a.get_category_display(),
+            'source_type': getattr(a, 'source_type', 'internal'),
+            'source_type_display': a.get_source_type_display() if hasattr(a, 'get_source_type_display') else 'ShieldCall VN',
+            'source_url': getattr(a, 'source_url', None),
             'summary': a.summary,
             'is_published': a.is_published,
             'cover_image': a.cover_image.url if a.cover_image else None,
-            'author_name': a.author.username if a.author else 'Admin',
+            'author_name': a.author.username if a.author else ('Tín nhiệm mạng (NCSC)' if a.source_type == 'tinnhiemmang' else 'Admin'),
             'created_at': a.created_at.strftime('%d/%m/%Y'),
         } for a in articles]
         return Response(data)
@@ -821,6 +915,8 @@ class AdminArticlesView(APIView):
         content = (request.data.get('content') or '').strip()
         summary = (request.data.get('summary') or '').strip()
         category = request.data.get('category', 'news')
+        source_type = request.data.get('source_type', 'internal')
+        source_url = request.data.get('source_url', None)
         is_published = _as_bool(request.data.get('is_published'), True)
         cover_image = request.FILES.get('cover_image')
 
@@ -832,6 +928,8 @@ class AdminArticlesView(APIView):
             content=content,
             summary=summary,
             category=category,
+            source_type=source_type,
+            source_url=source_url,
             is_published=is_published,
             author=request.user,
         )
@@ -839,6 +937,7 @@ class AdminArticlesView(APIView):
             article.cover_image = cover_image
             article.save(update_fields=['cover_image'])
 
+        _trigger_vector_rebuild()
         return Response({
             'status': 'ok',
             'id': article.id,
@@ -862,6 +961,10 @@ class AdminArticleDetailView(APIView):
             'title': a.title,
             'slug': a.slug,
             'category': a.category,
+            'category_display': a.get_category_display(),
+            'source_type': getattr(a, 'source_type', 'internal'),
+            'source_type_display': a.get_source_type_display() if hasattr(a, 'get_source_type_display') else 'ShieldCall VN',
+            'source_url': getattr(a, 'source_url', None),
             'summary': a.summary,
             'content': a.content,
             'is_published': a.is_published,
@@ -879,6 +982,8 @@ class AdminArticleDetailView(APIView):
         content = (request.data.get('content') or '').strip()
         summary = (request.data.get('summary') or '').strip()
         category = request.data.get('category', a.category)
+        source_type = request.data.get('source_type', a.source_type)
+        source_url = request.data.get('source_url', a.source_url)
         is_published = request.data.get('is_published', a.is_published)
         cover_image = request.FILES.get('cover_image')
 
@@ -889,12 +994,15 @@ class AdminArticleDetailView(APIView):
         a.content = content
         a.summary = summary
         a.category = category
+        a.source_type = source_type
+        a.source_url = source_url
         a.is_published = _as_bool(is_published)
+        update_fields = ['title', 'content', 'summary', 'category', 'source_type', 'source_url', 'is_published', 'updated_at']
         if cover_image:
             a.cover_image = cover_image
-            a.save(update_fields=['title', 'content', 'summary', 'category', 'is_published', 'cover_image'])
-        else:
-            a.save(update_fields=['title', 'content', 'summary', 'category', 'is_published'])
+            update_fields.append('cover_image')
+        a.save(update_fields=update_fields)
+        _trigger_vector_rebuild()
 
         return Response({'status': 'ok', 'message': 'Đã cập nhật bài viết thành công.'})
 
@@ -902,6 +1010,7 @@ class AdminArticleDetailView(APIView):
         try:
             a = Article.objects.get(id=article_id)
             a.delete()
+            _trigger_vector_rebuild()
             return Response({'status': 'ok', 'message': 'Đã xóa bài viết.'})
         except Article.DoesNotExist:
             return Response({'error': 'Bài viết không tồn tại.'}, status=status.HTTP_404_NOT_FOUND)

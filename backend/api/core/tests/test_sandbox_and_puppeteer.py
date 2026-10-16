@@ -1,7 +1,11 @@
 import os
+import socket
 import tempfile
+import unittest
 from unittest.mock import patch
+from urllib.parse import urlparse
 
+from django.conf import settings
 from django.test import TestCase
 
 from api.utils.puppeteer_host_client import fetch_with_puppeteer_host
@@ -9,16 +13,49 @@ from api.utils.sandbox_analyzer import LocalSandboxAnalyzer
 from api.utils.vt_client import VTClient
 
 
+def _tcp_reachable(url: str, default_port: int, timeout: float = 1.5) -> bool:
+    """Return True when a TCP connection to the URL's host:port succeeds.
+
+    Used to skip infrastructure-dependent integration tests (Docker sandbox
+    daemon, Node Puppeteer host) on runners where those services are not
+    provisioned, e.g. the plain Django CI job.
+    """
+    if not url:
+        return False
+    parsed = urlparse(url)
+    host = parsed.hostname
+    port = parsed.port or default_port
+    if not host or not port:
+        return False
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+SANDBOX_DAEMON_URL = getattr(settings, 'SANDBOX_DAEMON_URL', '') or ''
+PUPPETEER_HOST_URL = getattr(settings, 'PUPPETEER_HOST_URL', '') or ''
+
+SANDBOX_DAEMON_UP = _tcp_reachable(SANDBOX_DAEMON_URL, 5005)
+PUPPETEER_HOST_UP = _tcp_reachable(PUPPETEER_HOST_URL, 3010)
+
+
 class DockerSandboxAndPuppeteerTests(TestCase):
     """
     Automated test suite verifying Docker Zero-Trust Sandbox file analyzer
     and Puppeteer host rendering client.
+
+    Tests that require the Docker sandbox daemon or the Node Puppeteer host
+    are skipped when that infrastructure is not provisioned (e.g. the plain
+    Django CI job); the dedicated ``docker-sandbox`` workflow runs them.
     """
 
     def setUp(self):
         self.analyzer = LocalSandboxAnalyzer()
         self.vt_client = VTClient()
 
+    @unittest.skipUnless(SANDBOX_DAEMON_UP, 'Docker sandbox daemon not reachable')
     def test_sandbox_scan_clean_file(self):
         """Test scanning a benign file produces a SAFE verdict and low risk score."""
         with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as f:
@@ -39,6 +76,7 @@ class DockerSandboxAndPuppeteerTests(TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    @unittest.skipUnless(SANDBOX_DAEMON_UP, 'Docker sandbox daemon not reachable')
     def test_sandbox_scan_eicar_malware(self):
         """Test scanning an EICAR test string triggers MALICIOUS detection via ClamAV."""
         eicar_bytes = b'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
@@ -57,6 +95,7 @@ class DockerSandboxAndPuppeteerTests(TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    @unittest.skipUnless(SANDBOX_DAEMON_UP, 'Docker sandbox stack not provisioned')
     def test_sandbox_cli_fallback_when_daemon_unreachable(self):
         """Test ephemeral container CLI mode executes properly when the daemon microservice is down."""
         with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as f:
@@ -138,6 +177,7 @@ class DockerSandboxAndPuppeteerTests(TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    @unittest.skipUnless(PUPPETEER_HOST_UP, 'Node Puppeteer host not reachable')
     def test_puppeteer_live_render(self):
         """Test Puppeteer host renders an external safe URL and extracts title & body."""
         res = fetch_with_puppeteer_host('https://example.com', timeout_ms=8000)

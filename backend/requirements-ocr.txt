@@ -1,0 +1,16 @@
+# Requirements cho venv OCR riêng (VietOCR) — KHÔNG cài vào .venv chính.
+#
+#   cd /data/Sentinel_Team_Project
+#   .venv/bin/python -m venv .venv-ocr
+#   .venv-ocr/bin/pip install -U pip
+#   # torch: chọn CPU hoặc CUDA (khớp driver). Ví dụ CUDA cu130:
+#   .venv-ocr/bin/pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+#   .venv-ocr/bin/pip install -r backend/requirements-ocr.txt
+#
+# Lý do tách riêng: vietocr kéo theo albumentations/imgaug/opencv/torch có thể xung đột
+# với môi trường chính (numpy 2.4 / opencv-python-headless / torch cu130). Cách ly venv +
+# bridge (backend/scripts/ocr_bridge.py) giữ .venv chính sạch. Gỡ EasyOCR khỏi .venv chính.
+#
+# Ghi chú: vietocr KHÔNG khai báo torch trong deps → phải cài torch tường minh (dòng trên).
+
+vietocr

@@ -45,6 +45,16 @@ FEED_CONFIGS = {
         "type": "plaintext_domains",
         "description": "Actively maintained community repository of malicious phishing domains",
     },
+    "tinnhiem_fake": {
+        "name": "Tín nhiệm mạng — Website lừa đảo (tinnhiemmang.vn)",
+        "url": "https://tinnhiemmang.vn/website-lua-dao",
+        "type": "local_jsonl",
+        "description": (
+            "Danh sách website lừa đảo do Cục An ninh mạng (NCSC/VNCERT) công bố, "
+            "kèm tổ chức/thương hiệu bị mạo danh. Đọc từ dataset cục bộ do "
+            "backend/scripts/crawl_tinnhiemmang.py thu thập (không gọi mạng tại đây)."
+        ),
+    },
 }
 
 DOMAIN_REGEX = re.compile(
@@ -226,10 +236,77 @@ def fetch_phishing_db_feed(limit: Optional[int] = None) -> Iterator[Dict[str, An
         yielded_count += 1
 
 
+# Ánh xạ (tổ chức bị mạo danh / tên miền) → ScamType của nội bộ.
+_TINNHIEM_TYPE_HINTS = [
+    (re.compile(r"ngân hàng|bank|vietcombank|bidv|vietinbank|agribank|techcombank|"
+                r"vpbank|mbbank|acb|sacombank|tpbank|vib|hdbank|shb|msb|ocb|"
+                r"eximbank|seabank|lpbank|nam\s*a|scb|ncb|ví|momo|zalopay|vnpay|"
+                r"shopeepay|viettelmoney|timo|cake", re.I), ScamType.BANK_IMPERSONATION),
+    (re.compile(r"công an|viện kiểm sát|tòa án|cảnh sát|kiểm sát", re.I), ScamType.POLICE_IMPERSONATION),
+    (re.compile(r"thuế|dịch vụ công|vneid|chính phủ|bảo hiểm xã hội|bhxh|hải quan|"
+                r"đăng kiểm|kho bạc|hành chính", re.I), ScamType.GOV_IMPERSONATION),
+    (re.compile(r"bưu|courier|giao hàng|shipper|viettel\s*post|ghn|ghtk|vnpost|"
+                r"chuyển phát|vận đơn", re.I), ScamType.DELIVERY_SCAM),
+    (re.compile(r"điện lực|evn|điện|gas|nước|điện thoại|viễn thông|viettel|vnpt|mobifone", re.I),
+     ScamType.SOCIAL_ENGINEERING),
+    (re.compile(r"tuyển dụng|việc làm|cộng tác viên|ctv", re.I), ScamType.RECRUITMENT_SCAM),
+    (re.compile(r"đầu tư|chứng khoán|forex|crypto|tiền ảo|usdt|sàn", re.I), ScamType.INVESTMENT_SCAM),
+    (re.compile(r"vay|tín dụng|app vay", re.I), ScamType.LOAN_SCAM),
+    (re.compile(r"thương mại điện tử|shopee|lazada|tiki|tiktok|facebook|zalo|"
+                r"mạng xã hội|fanpage|đơn hàng|hoàn tiền|sàn", re.I), ScamType.OTHER),
+]
+
+
+def _guess_tinnhiem_scam_type(*texts: str) -> str:
+    """Suy đoán ``ScamType`` từ tổ chức bị mạo danh / tên miền (mặc định PHISHING)."""
+    blob = " ".join(t for t in texts if t)
+    if not blob:
+        return ScamType.PHISHING
+    for pattern, scam_type in _TINNHIEM_TYPE_HINTS:
+        if pattern.search(blob):
+            return scam_type
+    return ScamType.PHISHING
+
+
+def fetch_tinnhiem_fake_feed(limit: Optional[int] = None) -> Iterator[Dict[str, Any]]:
+    """
+    Nạp danh sách website lừa đảo từ dataset cục bộ của tinnhiemmang.vn.
+
+    Dataset do ``backend/scripts/crawl_tinnhiemmang.py --category fake`` tạo ra
+    (JSONL trong ``api/core/data/tinnhiemmang/fake.jsonl``). Không gọi mạng —
+    chỉ đọc đĩa, nên an toàn khi chạy định kỳ.
+    """
+    from api.utils import tinnhiemmang as th
+
+    rows = th.iter_records("fake")
+    yielded_count = 0
+    for row in rows:
+        if limit and yielded_count >= limit:
+            break
+        domain = clean_domain_target(row.get("domain") or "")
+        if not domain:
+            continue
+        impersonated = row.get("impersonated") or row.get("owner") or ""
+        yield {
+            "domain": domain,
+            "source": "tinnhiemmang.vn",
+            "threat": "reported_scam_website",
+            "tags": f"tinnhiemmang;impersonates:{impersonated}".strip(";"),
+            "ref_url": row.get("url") or config_ref_url(),
+            "scam_type": _guess_tinnhiem_scam_type(impersonated, row.get("name", "")),
+        }
+        yielded_count += 1
+
+
+def config_ref_url() -> str:
+    return FEED_CONFIGS["tinnhiem_fake"]["url"]
+
+
 FEED_FETCHERS = {
     "urlhaus": fetch_urlhaus_feed,
     "openphish": fetch_openphish_feed,
     "phishing_db": fetch_phishing_db_feed,
+    "tinnhiem_fake": fetch_tinnhiem_fake_feed,
 }
 
 

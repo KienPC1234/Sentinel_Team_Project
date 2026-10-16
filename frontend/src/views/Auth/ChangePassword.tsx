@@ -66,11 +66,13 @@ export default function ChangePassword() {
     setError('');
     setDone('');
     try {
-      await api.post('/auth/password/change/', {
+      const d = await api.post<{ token?: string }>('/auth/password/change/', {
         old_password: oldPassword,
         new_password: new1,
         token: token.trim(),
       });
+      /* Backend xoay DRF token khi đổi mật khẩu — lưu token mới kẻo bị văng. */
+      if (d.token) setToken(d.token);
       setDone('Đổi mật khẩu thành công!');
       setOldPassword('');
       setNew1('');

@@ -127,20 +127,47 @@ class AdminNotificationBroadcastView(APIView):
         if not self._has_admin_access(request.user):
             return Response({'error': 'Bạn không có quyền gửi broadcast.'}, status=403)
 
-        title = request.data.get('title', '').strip()
-        message = request.data.get('message', '').strip()
-        notification_type = request.data.get('notification_type', 'info')
-        url = request.data.get('url', '')
-        
+        title = str(request.data.get('title', '') or '').strip()
+        message = str(request.data.get('message', '') or '').strip()
+        notification_type = str(request.data.get('notification_type', 'info') or 'info').strip()
+        url = str(request.data.get('url', '') or '').strip()
+
         if not title or not message:
             return Response({'error': 'Tiêu đề và nội dung là bắt buộc.'}, status=400)
-        
-        count = push_service.broadcast_all(title, message, url=url, notification_type=notification_type)
+        # Chan noi dung qua dai lam phinh DB + vuot gioi han webpush payload.
+        if len(title) > 200:
+            return Response({'error': 'Tiêu đề tối đa 200 ký tự.'}, status=400)
+        if len(message) > 2000:
+            return Response({'error': 'Nội dung tối đa 2000 ký tự.'}, status=400)
+        if notification_type not in ('info', 'warning', 'success', 'error'):
+            return Response({'error': 'Loại thông báo không hợp lệ.'}, status=400)
+        # URL noi bo hoac https (chan javascript:/data: vi frontend render link).
+        if url and not (url.startswith('/') or url.startswith('https://') or url.startswith('http://')):
+            return Response({'error': 'URL chỉ chấp nhận đường dẫn nội bộ hoặc http(s).'}, status=400)
+        if len(url) > 500:
+            return Response({'error': 'URL tối đa 500 ký tự.'}, status=400)
+
+        # Chuyen sang task nen (truoc day broadcast dong bo trong request: lap 2
+        # vong toan bo user + N query dem unread + webpush tung nguoi).
+        send_webpush = bool(request.data.get('send_webpush', True))
+        send_inapp = bool(request.data.get('send_inapp', True))
+        try:
+            from api.core.tasks import admin_broadcast_task
+            admin_broadcast_task.delay(
+                title,
+                message,
+                url,
+                notification_type,
+                send_webpush=send_webpush,
+                send_inapp=send_inapp,
+            )
+        except Exception:
+            logger.exception('Failed to enqueue admin broadcast')
+            return Response({'error': 'Không thể xếp hàng gửi thông báo lúc này.'}, status=500)
         return Response({
-            'status': 'success',
-            'message': f'Đã gửi thông báo đến {count} người dùng.',
-            'count': count,
-        }, status=201)
+            'status': 'queued',
+            'message': 'Đã xếp hàng gửi thông báo đến toàn bộ người dùng (WebPush + In-App).',
+        }, status=202)
 
 
 # ═══ Existing Push / RAG views ════════════════════════════════════
@@ -149,19 +176,77 @@ class TestPushView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        message = request.data.get('message', 'Đây là tin nhắn thử nghiệm từ ShieldCall!')
-        title = request.data.get('title', 'Thông báo thử nghiệm')
-        
-        success = push_service.send_push(
+        message = str(request.data.get('message', 'Đây là thông báo thử nghiệm từ ShieldCall VN!') or '').strip()
+        title = str(request.data.get('title', 'Thông báo thử nghiệm ShieldCall') or '').strip()
+        url = str(request.data.get('url', '/admin-cp/') or '/admin-cp/').strip()
+
+        # 1. Ban WebSocket den cac tab dang mo
+        ws_sent = push_service._send_ws(
             user_id=request.user.id,
             title=title,
             message=message,
-            notification_type='success'
+            url=url,
+            notification_type='success',
         )
-        
-        if success:
-            return Response({'status': 'success', 'message': 'Đã gửi yêu cầu push tới websocket.'})
-        return Response({'status': 'error', 'message': 'Không thể gửi push.'}, status=500)
+
+        # 2. Ban native WebPush truc tiep den tat ca subscription active cua user
+        from api.core.models import WebPushSubscription
+        subs = list(WebPushSubscription.objects.filter(user=request.user, is_active=True))
+        webpush_sent = 0
+        webpush_errors = []
+        for sub in subs:
+            ok, err, status = push_service.send_webpush(
+                sub,
+                {
+                    'title': title,
+                    'body': message,
+                    'message': message,
+                    'url': url,
+                    'notification_type': 'success',
+                    'tag': f'sc-test-push-{request.user.id}',
+                    'icon': '/web-app-manifest-192x192.png',
+                    'badge': '/favicon-96x96.png',
+                },
+                ttl=3600,
+            )
+            if ok:
+                webpush_sent += 1
+                sub.last_used_at = timezone.now()
+                sub.last_success_at = timezone.now()
+                sub.fail_count = 0
+                sub.last_error = ''
+                sub.save(update_fields=['last_used_at', 'last_success_at', 'fail_count', 'last_error', 'updated_at'])
+            else:
+                webpush_errors.append(err)
+                sub.last_error = err
+                if status in (404, 410):
+                    sub.is_active = False
+                sub.save(update_fields=['is_active', 'last_error', 'updated_at'])
+
+        if webpush_sent > 0:
+            return Response({
+                'status': 'success',
+                'message': f'Đã gửi WebPush thành công tới {webpush_sent} thiết bị (WebSocket: {"OK" if ws_sent else "Chưa mở"}).',
+                'webpush_sent': webpush_sent,
+                'subscriptions_count': len(subs),
+                'ws_sent': ws_sent,
+            })
+        elif subs:
+            return Response({
+                'status': 'warning',
+                'message': f'Tìm thấy {len(subs)} thiết bị nhưng WebPush không phản hồi: {"; ".join(webpush_errors[:2])}. Đã gửi WebSocket.',
+                'webpush_sent': 0,
+                'subscriptions_count': len(subs),
+                'ws_sent': ws_sent,
+            })
+        else:
+            return Response({
+                'status': 'info',
+                'message': 'Đã gửi WebSocket. Thiết bị hiện tại chưa đăng ký WebPush trên hệ thống. Hãy nhấn nút "Bật thông báo" để trình duyệt nhận WebPush.',
+                'webpush_sent': 0,
+                'subscriptions_count': 0,
+                'ws_sent': ws_sent,
+            })
 
 class ResetRAGView(APIView):
     permission_classes = [IsAdminUser]
@@ -224,6 +309,8 @@ def _is_origin_allowed(request) -> bool:
         return False
 
     allowed_hosts = {request.get_host()}
+    dev_origins = {'localhost:3000', '127.0.0.1:3000', 'localhost:8001', '127.0.0.1:8001', 'localhost', '127.0.0.1'}
+    allowed_hosts.update(dev_origins)
     for trusted in getattr(settings, 'CSRF_TRUSTED_ORIGINS', []) or []:
         t = urlparse(trusted)
         if t.netloc:
@@ -260,14 +347,12 @@ class WebPushSubscribeView(APIView):
             from api.core.models import WebPushSubscription
             caller_uid = request.user.id if request.user.is_authenticated else None
             existing = WebPushSubscription.objects.filter(endpoint=endpoint).first()
-            if existing and existing.user_id and caller_uid and existing.user_id != caller_uid:
-                # Không cho phép chiếm/ghi đè endpoint của người dùng khác.
-                return Response({'status': 'error', 'message': 'Endpoint already registered'}, status=403)
+            target_uid = caller_uid if caller_uid else (existing.user_id if existing else None)
+
             sub, _created = WebPushSubscription.objects.update_or_create(
                 endpoint=endpoint,
                 defaults={
-                    # Giữ chủ sở hữu cũ nếu request ẩn danh (không xoá chủ).
-                    'user_id': caller_uid if caller_uid else (existing.user_id if existing else None),
+                    'user_id': target_uid,
                     'p256dh': p256dh,
                     'auth': auth,
                     'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
@@ -276,11 +361,14 @@ class WebPushSubscribeView(APIView):
                     'last_error': '',
                 },
             )
-            if request.user.is_authenticated and sub.user_id != request.user.id:
-                sub.user_id = request.user.id
-                sub.save(update_fields=['user'])
+            if caller_uid and sub.user_id != caller_uid:
+                sub.user_id = caller_uid
+                sub.is_active = True
+                sub.fail_count = 0
+                sub.last_error = ''
+                sub.save(update_fields=['user_id', 'is_active', 'fail_count', 'last_error', 'updated_at'])
 
-            return Response({'status': 'success'})
+            return Response({'status': 'success', 'subscription_id': sub.id})
         except Exception as e:
             logger.error(f"WebPush subscribe error: {e}")
             return Response({'status': 'error', 'message': str(e)}, status=500)

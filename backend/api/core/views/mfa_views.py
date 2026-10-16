@@ -161,9 +161,19 @@ class MFASetupTOTPView(APIView):
     @extend_schema(request={'application/json': {'type': 'object', 'properties': {'token': {'type': 'string'}}, 'required': ['token']}}, responses={200: serializers.DictField()})
     def post(self, request):
         user = request.user
+        # Chong do ma TOTP setup (ma 6 so, cua so 30s).
+        if otp_verify_blocked('mfa-totp-setup', user.id):
+            return Response({'error': 'Nhập sai quá nhiều lần. Vui lòng thử lại sau 10 phút.'}, status=429)
         token = request.data.get('token')
         device = TOTPDevice.objects.filter(user=user, name='default').first()
-        if device and device.verify_token(token):
+        # Chi goi verify_token 1 lan (goi lap lai co the bi replay-protection
+        # cua django-otp tu choi).
+        verified = bool(device and device.verify_token(token))
+        if not verified:
+            record_otp_verify_fail('mfa-totp-setup', user.id)
+            return Response({'error': 'Invalid token. Please try again.'}, status=400)
+        clear_otp_verify_fails('mfa-totp-setup', user.id)
+        if verified:
             device.confirmed = True
             device.save()
             EmailDevice.objects.filter(user=user).delete()
@@ -176,7 +186,6 @@ class MFASetupTOTPView(APIView):
                 'recovery_codes': recovery_codes,
                 'recovery_note': 'Đây là 10 mã dự phòng, hãy lưu ở nơi an toàn. Mỗi mã chỉ dùng được 1 lần.',
             })
-        return Response({'error': 'Invalid token. Please try again.'}, status=400)
 
 class MFASetupEmailView(APIView):
     permission_classes = [AllowAny]
@@ -214,8 +223,9 @@ class MFASetupEmailView(APIView):
         request.session.modified = True
         
         from api.utils.email_utils import send_html_otp_email
-        send_html_otp_email(user.email, token)
-        
+        if not send_html_otp_email(user.email, token):
+            return Response({'error': 'Không gửi được email lúc này. Vui lòng thử lại sau.'}, status=502)
+
         return Response({'message': 'Mã OTP đã được gửi đến email của bạn.'})
 
     @extend_schema(request={'application/json': {'type': 'object', 'properties': {'token': {'type': 'string'}}, 'required': ['token']}}, responses={200: serializers.DictField()})

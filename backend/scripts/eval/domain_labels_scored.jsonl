@@ -17,3 +17,20 @@
 {"url": "sp18ct10-murlek-biz-qanavi.pages.dev", "label": 1, "tactic": "phishing", "source": "OpenPhish", "collected": "2026-10-15", "score": 100, "risk_level": "RED"}
 {"url": "9hgp0-wiw-3k4u-bwsjq-30-09-2026-hh.pages.dev", "label": 1, "tactic": "phishing", "source": "OpenPhish", "collected": "2026-10-15", "score": 95, "risk_level": "RED"}
 {"url": "spamhaus.org", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "ed.ac.uk", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "twc.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "picsart.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "utoronto.ca", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "irishtimes.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "wowhead.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "porn300.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 10, "risk_level": "GREEN"}
+{"url": "comcast.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "google.cn", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "lecturas.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "in.net", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "msidentity.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "arstechnica.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "zoho.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 30, "risk_level": "GREEN"}
+{"url": "mountain.com", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "unruly.co", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}
+{"url": "standard.co.uk", "label": 0, "tactic": "legit", "source": "Tranco top-5k + VN trusted", "collected": "2026-10-15", "score": 0, "risk_level": "SAFE"}

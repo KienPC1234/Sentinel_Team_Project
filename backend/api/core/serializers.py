@@ -240,6 +240,16 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         target_type = attrs.get('target_type')
         target_value = (attrs.get('target_value') or '').strip()
 
+        description = attrs.get('description') or ''
+        if len(str(description).strip()) < 10:
+            raise serializers.ValidationError({
+                'description': 'Mo ta toi thieu 10 ky tu.'
+            })
+        if len(str(description)) > 10000:
+            raise serializers.ValidationError({
+                'description': 'Mo ta toi da 10000 ky tu.'
+            })
+
         if not target_value:
             raise serializers.ValidationError({
                 'target_value': 'Thông tin đối tượng không được để trống.'
@@ -556,6 +566,13 @@ class ForumCommentSerializer(serializers.ModelSerializer):
                             'created_at', 'parent_author_name', 'likes_count', 'dislikes_count', 'helpful_count', 'depth', 'scan_reference']
 
     def validate(self, attrs):
+        raw = attrs.get('content') or ''
+        import re as _re2
+        plain = _re2.sub(r'<[^>]*>', '', str(raw)).replace('&nbsp;', ' ').strip()
+        if not plain:
+            raise serializers.ValidationError({'content': 'Noi dung binh luan khong duoc de trong.'})
+        if len(plain) > 20000:
+            raise serializers.ValidationError({'content': 'Binh luan qua dai (toi da 20000 ky tu).'})
         parent = attrs.get('parent')
         post = self.context.get('post')
         if parent:
@@ -613,6 +630,9 @@ class ForumCommentSerializer(serializers.ModelSerializer):
         return obj.author.profile.rank_info
 
     def get_author_posts_count(self, obj):
+        annotated = getattr(obj, 'author_posts_total', None)
+        if annotated is not None:
+            return annotated
         return obj.author.forum_posts.count()
 
     def get_author_joined(self, obj):
@@ -624,11 +644,24 @@ class ForumCommentSerializer(serializers.ModelSerializer):
         return None
 
     def get_replies(self, obj):
+        # View ghep san cay binh luan (1 query cho ca bai) -> dung no thay vi
+        # query lai replies/cho tung binh luan.
+        children = self.context.get('forum_comment_children')
+        if children is not None:
+            kids = children.get(obj.id) or []
+            if not kids:
+                return []
+            return ForumCommentSerializer(kids, many=True, context=self.context).data
         if obj.replies.exists():
-            return ForumCommentSerializer(obj.replies.filter(parent=obj), many=True, context=self.context).data 
+            return ForumCommentSerializer(obj.replies.filter(parent=obj), many=True, context=self.context).data
         return []
 
     def get_depth(self, obj):
+        # Ban cung cap depths -> 0 query (truoc day moi binh luan la 1 vong while
+        # lai parent, tien do khong duoc dung o trang co nhieu binh luan).
+        depths = self.context.get('forum_comment_depths')
+        if depths is not None:
+            return depths.get(obj.id, 1)
         depth = 1
         node = obj
         while node.parent_id:
@@ -647,12 +680,18 @@ class ForumCommentSerializer(serializers.ModelSerializer):
         return {'scan_id': scan_id, 'url': f'/scan/status/{scan_id}/'}
 
     def get_user_liked(self, obj):
+        annotated = getattr(obj, 'viewer_has_liked', None)
+        if annotated is not None:
+            return annotated
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
         return obj.likes.filter(user=request.user).exists()
 
     def get_user_disliked(self, obj):
+        annotated = getattr(obj, 'viewer_has_disliked', None)
+        if annotated is not None:
+            return annotated
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
@@ -662,6 +701,9 @@ class ForumCommentSerializer(serializers.ModelSerializer):
         ).exists()
 
     def get_user_helpful(self, obj):
+        annotated = getattr(obj, 'viewer_has_helpful', None)
+        if annotated is not None:
+            return annotated
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
@@ -673,6 +715,7 @@ class ForumCommentSerializer(serializers.ModelSerializer):
 class ForumPostSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
     author_username = serializers.CharField(source='author.username', read_only=True)
+    author_id = serializers.IntegerField(source='author.id', read_only=True)
     author_is_staff = serializers.BooleanField(source='author.is_staff', read_only=True)
     author_avatar = serializers.ImageField(source='author.profile.avatar', read_only=True)
     author_rank = serializers.SerializerMethodField()
@@ -692,17 +735,37 @@ class ForumPostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ForumPost
-        fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar',
+        fields = ['id', 'author_name', 'author_username', 'author_id', 'author_is_staff', 'author_avatar',
                   'author_rank', 'author_posts_count', 'author_comments_count', 'author_joined',
                   'title', 'content', 'category', 'image', 
                   'views_count', 'unique_views_count', 'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
                   'comments_count', 'is_pinned', 'is_locked', 'user_liked', 'user_helpful', 'user_shared', 'user_disliked',
                   'comments', 'last_comment_author', 'last_comment_at', 'scan_reference', 'scan_id', 'created_at']
-        read_only_fields = ['id', 'author_name', 'author_username', 'author_is_staff', 'author_avatar',
+        read_only_fields = ['id', 'author_name', 'author_username', 'author_id', 'author_is_staff', 'author_avatar',
                             'author_rank', 'author_posts_count', 'author_comments_count', 'author_joined',
                             'views_count', 'unique_views_count',
                             'likes_count', 'helpful_count', 'shares_count', 'dislikes_count', 'reports_count',
                             'comments_count', 'last_comment_author', 'last_comment_at', 'scan_reference', 'created_at']
+
+    def validate_title(self, value):
+        text = (value or '').strip()
+        if not text:
+            raise serializers.ValidationError('Tieu de khong duoc de trong.')
+        if len(text) < 10:
+            raise serializers.ValidationError('Tieu de qua ngan (toi thieu 10 ky tu).')
+        if len(text) > 200:
+            raise serializers.ValidationError('Tieu de toi da 200 ky tu.')
+        return text
+
+    def validate_content(self, value):
+        import re as _re
+        text = _re.sub(r'<[^>]*>', '', str(value or ''))
+        text = text.replace('&nbsp;', ' ').strip()
+        if not text:
+            raise serializers.ValidationError('Noi dung khong duoc de trong.')
+        if len(text) < 10:
+            raise serializers.ValidationError('Noi dung qua ngan (toi thieu 10 ky tu).')
+        return value
 
     def validate_scan_id(self, value):
         if not value:
@@ -740,6 +803,12 @@ class ForumPostSerializer(serializers.ModelSerializer):
         return instance
 
     def get_comments(self, obj):
+        # Neu view da ghep cay binh luan (1 query cho ca bai) thi dung no.
+        roots = self.context.get('forum_comment_roots_by_post', {}).get(obj.id)
+        if roots is not None:
+            if not roots:
+                return []
+            return ForumCommentSerializer(roots, many=True, context=self.context).data
         # Only return top-level comments
         comments = obj.comments.filter(parent__isnull=True)
         return ForumCommentSerializer(comments, many=True, context=self.context).data
@@ -751,15 +820,26 @@ class ForumPostSerializer(serializers.ModelSerializer):
         return obj.author.profile.rank_info
 
     def get_author_posts_count(self, obj):
+        # Uu tien annotation do view gan san (tranh 1 query/bai o danh sach).
+        annotated = getattr(obj, 'author_posts_total', None)
+        if annotated is not None:
+            return annotated
         return obj.author.forum_posts.count()
 
     def get_author_comments_count(self, obj):
+        annotated = getattr(obj, 'author_comments_total', None)
+        if annotated is not None:
+            return annotated
         return obj.author.forum_comments.count()
 
     def get_author_joined(self, obj):
         return obj.author.date_joined.strftime('%d/%m/%Y')
 
     def get_last_comment_author(self, obj):
+        # View nap san bang tra author cua binh luan cuoi -> 0 query.
+        last_authors = self.context.get('forum_last_comment_authors')
+        if last_authors is not None:
+            return last_authors.get(obj.id)
         last = obj.comments.order_by('-created_at').select_related('author', 'author__profile').first()
         if last:
             return {
@@ -770,6 +850,9 @@ class ForumPostSerializer(serializers.ModelSerializer):
         return None
 
     def get_last_comment_at(self, obj):
+        annotated = getattr(obj, 'last_comment_created_at', None)
+        if annotated is not None:
+            return annotated.isoformat() if annotated else None
         last = obj.comments.order_by('-created_at').first()
         return last.created_at.isoformat() if last else None
 
@@ -784,32 +867,60 @@ class ForumPostSerializer(serializers.ModelSerializer):
         return {'scan_id': scan_id, 'url': f'/scan/status/{scan_id}/'}
 
     def get_unique_views_count(self, obj):
+        annotated = getattr(obj, 'unique_views_total', None)
+        if annotated is not None:
+            return annotated
         from api.core.models import ForumPostView
         return ForumPostView.objects.filter(post=obj).count()
 
     def get_user_liked(self, obj):
+        annotated = getattr(obj, 'viewer_has_liked', None)
+        if annotated is not None:
+            return annotated
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
         return ForumLike.objects.filter(post=obj, user=request.user).exists()
 
     def get_user_helpful(self, obj):
+        annotated = getattr(obj, 'viewer_has_helpful', None)
+        if annotated is not None:
+            return annotated
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
         return ForumPostReaction.objects.filter(post=obj, user=request.user, reaction_type=ForumReactionType.HELPFUL).exists()
 
     def get_user_shared(self, obj):
+        annotated = getattr(obj, 'viewer_has_shared', None)
+        if annotated is not None:
+            return annotated
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
         return ForumPostReaction.objects.filter(post=obj, user=request.user, reaction_type=ForumReactionType.SHARE).exists()
 
     def get_user_disliked(self, obj):
+        annotated = getattr(obj, 'viewer_has_disliked', None)
+        if annotated is not None:
+            return annotated
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
         return ForumPostReaction.objects.filter(post=obj, user=request.user, reaction_type=ForumReactionType.DISLIKE).exists()
+
+
+class ForumPostListSerializer(ForumPostSerializer):
+    """Ban nhe cho GET /forum/posts/ - bo field `comments`.
+
+    Truoc day endpoint danh sach tra kem toan bo cay binh luan cua moi bai viet
+    (50 bai x N binh luan) du frontend danh sach khong dung field nay - payload
+    to gap nhieu lan va ton query. Chi can loai 'comments' khoi Meta.fields thi
+    DRF se khong serialize field do (ke ca field duoc khai bao o lop cha).
+    """
+
+    class Meta(ForumPostSerializer.Meta):
+        fields = [f for f in ForumPostSerializer.Meta.fields if f != 'comments']
 
 class ForumPostReportSerializer(serializers.ModelSerializer):
     class Meta:

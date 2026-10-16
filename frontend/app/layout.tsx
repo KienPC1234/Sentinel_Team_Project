@@ -156,7 +156,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <AuthProvider>
           <PwaInit />
           <LayoutShell>{children}</LayoutShell>
-          <Toaster richColors position="bottom-right" />
+          <Toaster richColors position="bottom-right" closeButton mobileOffset={{ bottom: 96, right: 12, left: 12 }} />
         </AuthProvider>
         {/* Google Translate (y bản gốc — phục vụ chọn ngôn ngữ footer) */}
         <Script id="google-translate-init" strategy="lazyOnload">

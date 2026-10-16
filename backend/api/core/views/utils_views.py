@@ -239,3 +239,36 @@ class MentionUserListView(APIView):
             })
 
         return Response(results)
+
+
+from rest_framework.permissions import AllowAny
+from django.db import connection
+from django.core.cache import cache
+
+class HealthCheckView(APIView):
+    """GET /api/v1/health/ or /health/ — Health check probe for monitoring & uptime services."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        db_ok = False
+        try:
+            connection.ensure_connection()
+            db_ok = True
+        except Exception as e:
+            logger.warning(f"Health check DB error: {e}")
+
+        redis_ok = False
+        try:
+            cache.set('__health_probe__', 1, 10)
+            redis_ok = cache.get('__health_probe__') == 1
+        except Exception as e:
+            logger.warning(f"Health check Redis error: {e}")
+
+        is_healthy = db_ok and redis_ok
+        status_code = 200 if is_healthy else 503
+        return Response({
+            'status': 'healthy' if is_healthy else 'degraded',
+            'database': 'ok' if db_ok else 'error',
+            'redis': 'ok' if redis_ok else 'error',
+        }, status=status_code)
+

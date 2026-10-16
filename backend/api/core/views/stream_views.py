@@ -154,7 +154,8 @@ class ScanAnalyzeSSEView(APIView):
                 else:
                     prompt = f"Hãy phân tích rủi ro an ninh mạng cho {scan_type} sau bằng tiếng Việt: {raw_input}. Dữ liệu kèm theo: {json.dumps(scan_data, ensure_ascii=False)}"
 
-                for chunk in stream_response(prompt, system_prompt=CHAT_SYSTEM_PROMPT):
+                # Giai thich ket qua quet can dung target goc -> allow_pii + audit.
+                for chunk in stream_response(prompt, system_prompt=CHAT_SYSTEM_PROMPT, allow_pii=True):
                     if not chunk or chunk.startswith('__'):
                         continue
                     yield f"data: {json.dumps({'type': 'delta', 'text': chunk}, ensure_ascii=False)}\n\n"

@@ -11,6 +11,7 @@ Các endpoint phục vụ trang Admin/forum_management.html:
 """
 from datetime import timedelta
 
+from django.db.models import F
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
@@ -19,10 +20,32 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
 from api.core.models import (
+    ForumPost,
     ForumPostReport,
     ForumCommentReport,
     ForumBan,
 )
+
+
+def _broadcast_forum_live(event_name, payload):
+    """Đẩy sự kiện realtime tới các tab đang mở chủ đề."""
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+        async_to_sync(channel_layer.group_send)(
+            'forum_live',
+            {
+                'type': 'forum_live_event',
+                'event': event_name,
+                'payload': payload or {},
+                'timestamp': timezone.now().isoformat(),
+            }
+        )
+    except Exception:
+        pass
 
 
 def _user_brief(user):
@@ -100,6 +123,9 @@ class AdminForumReportActionView(APIView):
                 # Chỉ đếm báo cáo chưa bị từ chối (không tính report đã rejected).
                 post.reports_count = post.post_reports.exclude(status='rejected').count()
                 post.save(update_fields=['is_locked', 'reports_count'])
+                # Bao cho cac tab dang mo bai viet (frontend lang nghe
+                # post_moderated de tai lai + hien banner khoa).
+                _broadcast_forum_live('post_moderated', {'post_id': post.id})
             except Exception:
                 pass
         elif action == 'reject':
@@ -153,9 +179,21 @@ class AdminForumCommentReportActionView(APIView):
             r.status = ForumPostReport.ReportStatus.APPROVED
             r.is_resolved = True
             try:
+                post_id = r.comment.post_id
+                comment_id = r.comment.id
                 r.comment.delete()
             except Exception:
-                pass
+                post_id = comment_id = None
+            # comments_count chỉ được tăng khi đăng bình luận — nếu không trừ ở
+            # đây thì số bình luận trên bài viết tăng vĩnh viễn so với thực tế.
+            if post_id and comment_id:
+                _broadcast_forum_live('comment_deleted', {
+                    'post_id': post_id,
+                    'comment_id': comment_id,
+                })
+                ForumPost.objects.filter(id=post_id).update(
+                    comments_count=F('comments_count') - 1
+                )
         elif action == 'reject':
             r.status = ForumPostReport.ReportStatus.REJECTED
             r.is_resolved = True

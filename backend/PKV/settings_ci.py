@@ -106,6 +106,20 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
+    # Scoped throttles attached to views (see api/core/throttling.py) resolve
+    # their rates from here; without them every throttled view raises
+    # ImproperlyConfigured. Keep the global anon/user throttles out of CI so a
+    # shared per-IP counter across the suite can't cause flaky 429s.
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '120/min',
+        'user': '600/min',
+        'scan_sync': '120/hour',
+        'scan': '60/hour',
+        'scan_heavy': '20/hour',
+        'ai': '60/hour',
+        'auth': '20/min',
+        'report': '20/hour',
+    },
 }
 
 # Allauth
@@ -120,8 +134,10 @@ OPENAI_BASE_URL = 'https://api.deepseek.com'
 OPENAI_API_KEY = ''
 OLLAMA_BASE_URL = 'http://localhost:11434'
 OLLAMA_API_KEY = ''
-LLM_MODEL = 'test'
-SMALL_MODEL = 'test'
+# Mirror the production default (PKV/settings.py) so the OpenAI-backend
+# default-model assertions stay meaningful in CI.
+LLM_MODEL = 'deepseek-v4.1-flash:cloud'
+SMALL_MODEL = 'gemma4:31b-cloud'
 LLM_TEMPERATURE = 0.3
 LLM_MAX_TOKENS = 4096
 SEARXNG_URL = 'https://search.fptoj.com'

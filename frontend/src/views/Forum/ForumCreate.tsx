@@ -11,8 +11,10 @@ import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import { api } from '../../lib/api';
 import { showToast } from '../../lib/ui/feedback';
-import RichEditor from '../../components/RichEditor';
+import RichEditor, { hasEditorContent } from '../../components/RichEditor';
 import { TurnstileWidget, getTsToken, resetTurnstile } from '../../components/ScanWidgets';
+
+const TITLE_MAX = 200;
 
 const CATS = [
   { val: 'discussion', label: 'Thảo luận', icon: 'bi-chat-dots', color: 'hover:border-brand-500/50' },
@@ -67,6 +69,7 @@ export default function ForumCreate() {
   const [imageName, setImageName] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ title?: string; content?: string }>({});
 
   const onImage = (e: ChangeEvent<HTMLInputElement>): void => {
     const f = e.target.files?.[0] || null;
@@ -195,22 +198,37 @@ export default function ForumCreate() {
   };
 
   const submitPost = async (): Promise<void> => {
-    if (!title.trim() || !content.trim()) {
-      showToast('Vui lòng điền đầy đủ tiêu đề và nội dung', 'warning');
+    /* CKEditor luôn trả markup cho <p>&nbsp;</p> nên phải bỏ tag trước khi
+     * kiểm tra rỗng, nếu không sẽ đăng được bài không có nội dung. */
+    const errs: { title?: string; content?: string } = {};
+    const cleanTitle = title.trim();
+    const cleanContent = hasEditorContent(content) ? content.trim() : '';
+    if (!cleanTitle) errs.title = 'Vui lòng nhập tiêu đề bài viết.';
+    else if (cleanTitle.length < 10) errs.title = 'Tiêu đề quá ngắn (tối thiểu 10 ký tự).';
+    if (!cleanContent) errs.content = 'Vui lòng nhập nội dung bài viết.';
+    setErrors(errs);
+    if (Object.keys(errs).length) {
+      showToast('Vui lòng kiểm tra lại tiêu đề và nội dung', 'warning');
       return;
     }
 
     const tsToken = getTsToken();
     const siteKey = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
-    if (siteKey && !tsToken) {
+    if (!siteKey) {
+      /* Không có sitekey thì widget không render, backend chắc chắn từ chối —
+       * nói rõ nguyên nhân thay vì báo chung chung "xác minh không hợp lệ". */
+      showToast('Chưa cấu hình xác minh anti-spam (NEXT_PUBLIC_TURNSTILE_SITEKEY). Liên hệ quản trị viên.', 'error');
+      return;
+    }
+    if (!tsToken) {
       showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');
       return;
     }
 
     setLoading(true);
     const formData = new FormData();
-    formData.append('title', title);
-    formData.append('content', content);
+    formData.append('title', cleanTitle);
+    formData.append('content', cleanContent);
     formData.append('category', category);
     if (scanId && String(scanId).trim()) formData.append('scan_id', String(scanId).trim());
     if (tsToken) formData.append('cf-turnstile-response', tsToken);
@@ -258,9 +276,22 @@ export default function ForumCreate() {
 
           {/* Title */}
           <div className="space-y-3">
-            <label className="text-[10px] font-black uppercase tracking-widest text-white/45 ml-1">Tiêu đề bài viết</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nhập tiêu đề ngắn gọn nhưng đủ thông tin..."
-              className="input-premium w-full px-6 py-4 text-lg font-bold" />
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-black uppercase tracking-widest text-white/45 ml-1">Tiêu đề bài viết</label>
+              <span className="text-[10px] font-bold text-white/35">{title.length}/{TITLE_MAX}</span>
+            </div>
+            <input
+              type="text"
+              value={title}
+              maxLength={TITLE_MAX}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (errors.title) setErrors((prev) => ({ ...prev, title: undefined }));
+              }}
+              placeholder="Nhập tiêu đề ngắn gọn nhưng đủ thông tin..."
+              className={`input-premium w-full px-6 py-4 text-lg font-bold ${errors.title ? 'border-danger-500/60' : ''}`}
+            />
+            {errors.title && <p className="text-danger-400 text-xs">{errors.title}</p>}
           </div>
 
           <div className="space-y-3">
@@ -295,13 +326,19 @@ export default function ForumCreate() {
           </div>
 
           {/* Content */}
-          <div className="input-premium w-full overflow-hidden bg-black/20">
+          <div className={`input-premium w-full overflow-hidden bg-black/20 ${errors.content ? 'border-danger-500/60' : ''}`}>
             <RichEditor
               placeholder="Mô tả kỹ chi tiết vụ việc, cách thức lừa đảo..."
               minLines={13}
-              onChangeData={setContent}
+              onChangeData={(html) => {
+                setContent(html);
+                if (errors.content && hasEditorContent(html)) {
+                  setErrors((prev) => ({ ...prev, content: undefined }));
+                }
+              }}
             />
           </div>
+          {errors.content && <p className="text-danger-400 text-xs -mt-6">{errors.content}</p>}
           <p className="text-[10px] text-white/35 font-medium flex items-center gap-1.5"><i className="bi bi-info-circle"></i> CKEditor 5 hỗ trợ soạn thảo trực quan với thanh công cụ tích hợp.</p>
 
           {/* Antispam & Control */}

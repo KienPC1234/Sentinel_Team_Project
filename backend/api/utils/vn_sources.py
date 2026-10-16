@@ -15,6 +15,7 @@ Lưu ý độ tin cậy: danh mục này được biên soạn thủ công từ 
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -22,32 +23,35 @@ from typing import Any, Dict, List, Optional
 # ---------------------------------------------------------------------------
 VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
     {
-        "name": "Tổng đài Quốc gia phòng chống lừa đảo (NCSC)",
+        "name": "Đầu số 156 — phản ánh tin nhắn/cuộc gọi rác, dấu hiệu lừa đảo",
         "phone": "156",
-        "url": "https://khonggianmang.vn",
-        "description": "Báo cáo lừa đảo trực tuyến, kiểm tra tên miền/app độc hại do Cục An toàn thông tin vận hành.",
+        "url": "https://mic.gov.vn/bo-tttt-trien-khai-tong-dai-156-tiep-nhan-phan-anh-tin-nhan-rac-cuoc-goi-rac-cuoc-goi-co-dau-hieu-lua-dao-197155742.htm",
+        "description": "Tiếp nhận phản ánh tin nhắn hoặc cuộc gọi có dấu hiệu lừa đảo. Không phải kênh xác nhận an toàn cho mọi giao dịch, URL hay tài khoản.",
         "reliability": "official",
+        "verified_on": "2026-10-15",
     },
     {
-        "name": "Cục An toàn thông tin (A05/NCSC)",
+        "name": "Cổng cảnh báo an toàn thông tin (NCSC)",
         "phone": None,
         "url": "https://canhbao.ncsc.gov.vn",
-        "description": "Cảnh báo lừa đảo, mã độc, giả mạo thương hiệu do cơ quan nhà nước phát hành.",
+        "description": "Tham khảo cảnh báo an toàn thông tin; đối chiếu thời điểm công bố và từng đối tượng được nêu trong cảnh báo.",
         "reliability": "official",
     },
     {
-        "name": "Cơ quan Công an — Đường dây nóng 113",
+        "name": "Tín nhiệm mạng (NCSC) — Hệ sinh thái Tín nhiệm & Giám sát an toàn không gian mạng",
+        "phone": None,
+        "url": "https://tinnhiemmang.vn",
+        "description": "Cổng thông tin thuộc Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC) - Cục An toàn thông tin; cung cấp cảnh báo lừa đảo trực tuyến, nhận diện tổ chức, website và thiết bị tin cậy.",
+        "reliability": "official",
+        "verified_on": "2026-10-15",
+    },
+    {
+        "name": "Cảnh sát 113 — tình huống khẩn cấp",
         "phone": "113",
         "url": "https://bocongan.gov.vn",
-        "description": "Trình báo tội phạm, khẩn cấp khi đã chuyển tiền hoặc bị đe dọa.",
+        "description": "Chỉ gọi khi cần trợ giúp khẩn cấp. Vụ việc không khẩn cấp: liên hệ Công an địa phương hoặc kênh tiếp nhận tố giác thích hợp.",
         "reliability": "official",
-    },
-    {
-        "name": "Cảnh sát hình sự — 069.2342609",
-        "phone": "069.2342609",
-        "url": "https://bocongan.gov.vn",
-        "description": "Đầu mối điều tra tội phạm sử dụng công nghệ cao.",
-        "reliability": "official",
+        "verified_on": "2026-10-15",
     },
     {
         "name": "Tổng đài Quốc gia Bảo vệ Trẻ em — 111",
@@ -228,6 +232,7 @@ VN_TRUSTED_DOMAINS: Dict[str, str] = {
     "bocongan.gov.vn": "Bộ Công an",
     "canhbao.ncsc.gov.vn": "NCSC",
     "khonggianmang.vn": "Không gian mạng VN",
+    "tinnhiemmang.vn": "Tín nhiệm mạng NCSC",
     "vncert.vn": "VNCERT",
     "dichvucong.gov.vn": "Dịch vụ công Quốc gia",
     "baohiemxahoi.gov.vn": "Bảo hiểm xã hội VN",
@@ -268,6 +273,8 @@ VN_TRUSTED_DOMAINS: Dict[str, str] = {
 VN_REFERENCE_SOURCES: List[Dict[str, str]] = [
     {"title": "Cục An toàn thông tin — Cảnh báo lừa đảo trực tuyến", "url": "https://canhbao.ncsc.gov.vn", "type": "government"},
     {"title": "Không gian mạng Việt Nam — Tổng đài 156", "url": "https://khonggianmang.vn", "type": "government"},
+    {"title": "Tín nhiệm mạng — Cảnh báo lừa đảo trực tuyến", "url": "https://tinnhiemmang.vn/canh-bao-lua-dao", "type": "tinnhiemmang"},
+    {"title": "Tín nhiệm mạng — Tin tức an toàn thông tin nổi bật", "url": "https://tinnhiemmang.vn/noi-bat", "type": "tinnhiemmang"},
     {"title": "Bộ Công an — Cảnh báo tội phạm công nghệ cao", "url": "https://bocongan.gov.vn", "type": "government"},
     {"title": "Cổng thông tin Chính phủ — Phòng chống lừa đảo", "url": "https://chinhphu.vn", "type": "government"},
     {"title": "Ngân hàng Nhà nước — Cảnh báo an toàn thanh toán", "url": "https://sbv.gov.vn", "type": "government"},
@@ -294,6 +301,61 @@ VN_PRESS_SOURCES: List[Dict[str, str]] = [
     {"title": "VnEconomy", "url": "https://vneconomy.vn", "type": "press"},
     {"title": "ICTNews", "url": "https://ictnews.vn", "type": "press"},
 ]
+
+# Danh bạ Tín nhiệm mạng (NCSC/VNCERT) — nguồn đối chiếu tên miền tin cậy/lừa đảo
+# (điểm cải tiến #2). Dữ liệu động do thư viện api.utils.tinnhiemmang thu thập.
+VN_TINNHIEM_SOURCES: List[Dict[str, str]] = [
+    {
+        "title": "Tín nhiệm mạng — Website tín nhiệm",
+        "url": "https://tinnhiemmang.vn/website-tin-nhiem",
+        "type": "government",
+    },
+    {
+        "title": "Tín nhiệm mạng — Tổ chức tín nhiệm",
+        "url": "https://tinnhiemmang.vn/to-chuc-tin-nhiem",
+        "type": "government",
+    },
+    {
+        "title": "Tín nhiệm mạng — Website lừa đảo",
+        "url": "https://tinnhiemmang.vn/website-lua-dao",
+        "type": "government",
+    },
+    {
+        "title": "Tín nhiệm mạng — Hệ thống/Ứng dụng/Thiết bị tín nhiệm",
+        "url": "https://tinnhiemmang.vn/he-thong-tin-nhiem",
+        "type": "government",
+    },
+    {
+        "title": "Tín nhiệm mạng — Cảnh báo lừa đảo",
+        "url": "https://tinnhiemmang.vn/canh-bao-lua-dao",
+        "type": "tinnhiemmang",
+    },
+    {
+        "title": "Tín nhiệm mạng — Tin tức nổi bật",
+        "url": "https://tinnhiemmang.vn/noi-bat",
+        "type": "tinnhiemmang",
+    },
+]
+
+# Cấu hình Feed Tín nhiệm mạng (tinnhiemmang.vn) dùng cho Crawler / Ingestion Job
+VN_TINNHIEMMANG_FEEDS: Dict[str, Dict[str, Any]] = {
+    "canh_bao_lua_dao": {
+        "key": "canh_bao_lua_dao",
+        "name": "Tín nhiệm mạng — Cảnh báo lừa đảo",
+        "url": "https://tinnhiemmang.vn/canh-bao-lua-dao",
+        "default_category": "alert",
+        "source_type": "tinnhiemmang",
+        "description": "Cảnh báo thủ đoạn lừa đảo trực tuyến, giả mạo ngân hàng, bẫy việc làm và mã độc từ NCSC.",
+    },
+    "noi_bat": {
+        "key": "noi_bat",
+        "name": "Tín nhiệm mạng — Tin tức nổi bật",
+        "url": "https://tinnhiemmang.vn/noi-bat",
+        "default_category": "news",
+        "source_type": "tinnhiemmang",
+        "description": "Tin tức an ninh mạng, lỗ hổng bảo mật số và sự kiện nổi bật trong nước và quốc tế.",
+    },
+}
 
 
 def _norm_key(s: str) -> str:
@@ -365,3 +427,119 @@ def vn_reference_sources() -> List[Dict[str, str]]:
 
 def vn_press_sources() -> List[Dict[str, str]]:
     return [dict(s) for s in VN_PRESS_SOURCES]
+
+
+def vn_tinnhiem_sources() -> List[Dict[str, str]]:
+    """Nguồn danh bạ Tín nhiệm mạng (tinnhiemmang.vn)."""
+    return [dict(s) for s in VN_TINNHIEM_SOURCES]
+
+
+def vn_tinnhiemmang_sources() -> List[Dict[str, str]]:
+    """Nguồn tin tức và cảnh báo Tín nhiệm mạng (type='tinnhiemmang')."""
+    return [dict(s) for s in VN_REFERENCE_SOURCES if s.get("type") == "tinnhiemmang"]
+
+
+# ---------------------------------------------------------------------------
+# Danh bạ Tín nhiệm mạng (tinnhiemmang.vn) — tra cứu cục bộ/động
+# ---------------------------------------------------------------------------
+def tinnhiem_trusted_domains() -> Dict[str, str]:
+    """Tên miền tin cậy thu thập từ tinnhiemmang.vn (dataset cục bộ).
+
+    Trả về ``{domain: "Tên đơn vị"}``; rỗng nếu chưa có dataset (an toàn, không
+    gọi mạng). Gộp vào ``_get_trusted_domains`` ở tầng scan.
+    """
+    try:
+        from api.utils import tinnhiemmang as th
+    except Exception:
+        return {}
+    out: Dict[str, str] = {}
+    try:
+        for row in th.iter_domain_records(categories=("web",)):
+            if row["kind"] == "trusted" and row["domain"]:
+                out[row["domain"]] = row["owner"] or row["domain"]
+    except Exception:
+        return {}
+    return out
+
+
+def tinnhiem_scam_domains() -> Dict[str, str]:
+    """Tên miền lừa đảo thu thập từ tinnhiemmang.vn → ``{domain: tổ chức bị mạo danh}``."""
+    try:
+        from api.utils import tinnhiemmang as th
+    except Exception:
+        return {}
+    out: Dict[str, str] = {}
+    try:
+        for row in th.iter_domain_records(categories=("fake",)):
+            if row["kind"] == "scam" and row["domain"]:
+                out[row["domain"]] = row["impersonated"] or row["owner"] or "Lừa đảo"
+    except Exception:
+        return {}
+    return out
+
+
+def tinnhiem_dataset_stats() -> Dict[str, Any]:
+    """Thong ke dataset cuc bo tinnhiemmang.vn (so ban ghi + lan cap nhat cuoi).
+
+    Hoi dong tham dinh can biet du lieu nguon "tuoi" co nao -> tra so lieu that
+    doc tu file, khong hardcode.
+    """
+    try:
+        from api.utils import tinnhiemmang as th
+        base = Path(th.__file__).resolve().parent
+    except Exception:
+        base = None
+    stats: Dict[str, Any] = {"trusted": 0, "scam": 0, "updated_at": None}
+    try:
+        from api.utils import tinnhiemmang as th2
+        data_dir = Path(th2.__file__).resolve().parents[1] / "core" / "data" / "tinnhiemmang"
+        latest: Optional[float] = None
+        for name in ("web.jsonl", "fake.jsonl", "app.jsonl", "org.jsonl"):
+            fp = data_dir / name
+            if not fp.is_file():
+                continue
+            try:
+                mtime = fp.stat().st_mtime
+                latest = mtime if latest is None else max(latest, mtime)
+            except OSError:
+                pass
+        trusted = sum(1 for _r in th2.iter_domain_records(categories=("web",)) if _r.get("kind") == "trusted")
+        scam = sum(1 for _r in th2.iter_domain_records(categories=("fake",)) if _r.get("kind") == "scam")
+        stats["trusted"] = trusted
+        stats["scam"] = scam
+        if latest:
+            from datetime import datetime
+            stats["updated_at"] = datetime.fromtimestamp(latest).strftime("%d/%m/%Y")
+    except Exception:
+        pass
+    return stats
+
+
+def tinnhiem_lookup_domain(domain: str, allow_network: bool = False) -> Optional[Dict[str, Any]]:
+    """Tra một tên miền trong danh bạ Tín nhiệm mạng.
+
+    Ưu tiên dataset cục bộ; chỉ gọi mạng khi ``allow_network=True``.
+    Trả về dict có ``status`` ∈ {``trusted``, ``scam``, ``unknown``} và ``record``.
+    """
+    try:
+        from api.utils import tinnhiemmang as th
+    except Exception:
+        return None
+    result = th.lookup_local_domain(domain)  # thư viện tự thử cả tên miền cha (suffix)
+    if result.get("status") != "unknown" or not allow_network:
+        return result
+    try:
+        client = th.TinnhiemClient(delay=0.0, timeout=10.0, retries=1)
+        live = client.lookup_domain(domain)
+    except Exception:
+        return result
+    bucket = live.get("scam") or live.get("trusted") or []
+    if not bucket:
+        return result
+    return {
+        "query": live.get("query", result.get("query")),
+        "status": live.get("status", "unknown"),
+        "record": bucket[0],
+        "source": "live",
+    }
+

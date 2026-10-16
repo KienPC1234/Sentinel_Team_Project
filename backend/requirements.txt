@@ -11,7 +11,8 @@ pillow
 requests>=2.31.0
 django-tailwind
 python-dotenv
-easyocr
+# OCR engine: VietOCR chạy trong venv riêng (.venv-ocr) — xem backend/requirements-ocr.txt
+# (đã gỡ easyocr khỏi venv chính để tránh xung đột deps)
 pyzbar
 opencv-python-headless
 ollama
@@ -35,7 +36,10 @@ whitenoise
 faiss-cpu
 pywebpush>=2.0.3
 sentence-transformers
-transformers
+# nomic-embed-text-v1 ships remote code that calls
+# PreTrainedModel.get_extended_attention_mask, removed in transformers 5.17.
+# Cap below that to keep vector-index rebuilds working on fresh installs.
+transformers>=5.0,<5.17
 torch
 martor
 mcp>=2.2.0

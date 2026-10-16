@@ -187,9 +187,13 @@ class MCPIntegrationTest(TestCase):
         body = api_resp.content.decode('utf-8', 'ignore')
         self.assertIn('check_phone', body)
         self.assertIn('shieldcall', body)
-        # Trang HTML được reverse-proxy sang Next.js (200 hoặc redirect khi Next chạy)
+        # Trang HTML được reverse-proxy sang Next.js (200 hoặc redirect khi Next chạy).
+        # Khi Next.js không chạy (Django CI thuần), gateway suy giảm an toàn thành 502.
         page_resp = client.get('/mcp/')
-        self.assertIn(page_resp.status_code, (200, 301, 302, 307, 308))
+        if page_resp.status_code == 502:
+            self.assertIn(b'Frontend unavailable', page_resp.content)
+        else:
+            self.assertIn(page_resp.status_code, (200, 301, 302, 307, 308))
 
 
 class AnalysisFeaturesVerificationTest(TestCase):

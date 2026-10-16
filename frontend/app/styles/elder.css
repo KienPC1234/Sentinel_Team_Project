@@ -1,0 +1,621 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Trang /nguoi-cao-tuoi/ — Trợ giúp dành cho người cao tuổi.
+
+   Ràng buộc thiết kế (theo năng lực thao tác thật của người cao tuổi):
+   1. CHỮ: cỡ cơ bản lớn (mặc định ~20px), tương phản cao, không chữ mờ nhạt
+      cho phần quan trọng, không viết hoa toàn bộ (khó đọc với tiếng Việt).
+   2. TAY: run/đau khớp → nút cao ≥3em (≈60px), nút chính ≥3.6em, khoảng cách
+      giữa các nút ≥ 16px, không dùng thao tác kéo/vuốt, không phụ thuộc hover.
+   3. TRÍ NHỚ: không bắt nhớ qua nhiều bước; trạng thái phải LUÔN hiển thị
+      ("bác đã xác minh xong chưa", "đang kiểm tra"), lỗi phải hiện tại chỗ và
+      KHÔNG tự biến mất như toast.
+   4. CHỮ NGHĨA: không dùng thuật ngữ kỹ thuật; nói rõ captcha là gì.
+
+   Toàn bộ file chỉ dùng token màu của theme, không hardcode mã màu.
+   Cỡ chữ điều khiển bằng biến --elder-scale; mọi chữ dùng đơn vị `em`.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.elder {
+  --elder-scale: 1.25; /* mặc định đã là mức "Lớn" */
+  font-size: calc(1rem * var(--elder-scale));
+  line-height: 1.6;
+  color: var(--foreground);
+}
+
+.elder-size-normal {
+  --elder-scale: 1.05;
+}
+.elder-size-large {
+  --elder-scale: 1.25;
+}
+.elder-size-xlarge {
+  --elder-scale: 1.45;
+}
+
+/* ── Chữ ────────────────────────────────────────────────────────────── */
+.elder-h1 {
+  font-size: 1.9em;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.elder-h2 {
+  font-size: 1.35em;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.elder-h3 {
+  font-size: 1.12em;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.elder-lead {
+  font-size: 1.08em;
+  color: var(--foreground);
+}
+.elder-body {
+  font-size: 1.05em;
+}
+.elder-note {
+  font-size: 0.95em;
+  color: var(--muted-foreground);
+}
+.elder-icon {
+  font-size: 1.35em;
+  line-height: 1;
+}
+/* Icon đứng trong tiêu đề mục: chỉ nhỉnh hơn chữ một chút */
+.elder-h-icon {
+  font-size: 1.15em;
+  line-height: 1;
+}
+.elder-value {
+  font-size: 1.15em;
+  font-weight: 800;
+  word-break: break-word;
+}
+
+/* ── Nút bấm ────────────────────────────────────────────────────────── */
+.elder-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55em;
+  min-height: 3em;
+  padding: 0.65em 1.05em;
+  border-radius: 1rem;
+  border: 2px solid var(--border);
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  color: var(--foreground);
+  font-size: 1.05em;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+.elder-btn:hover {
+  background: color-mix(in oklab, var(--card) 100%, transparent);
+  border-color: color-mix(in oklab, var(--color-brand-400) 45%, var(--border));
+}
+.elder-btn:active {
+  transform: scale(0.985);
+}
+.elder-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px var(--background),
+    0 0 0 6px var(--ring);
+}
+/* Nút mờ đi khi bận, nhưng vẫn thấy rõ chữ để bác biết máy đang làm việc */
+.elder-btn:disabled {
+  opacity: 1;
+  cursor: progress;
+  background: color-mix(in oklab, var(--color-brand-500) 30%, transparent);
+  border-color: color-mix(in oklab, var(--color-brand-400) 50%, transparent);
+  color: var(--foreground);
+}
+
+.elder-btn--xl {
+  width: 100%;
+  min-height: 3.6em;
+  border-radius: 1.15rem;
+  font-size: 1.22em;
+}
+
+.elder-btn--brand {
+  background: var(--color-brand-500);
+  border-color: var(--color-brand-400);
+  color: var(--primary-foreground);
+}
+.elder-btn--brand:hover {
+  background: var(--color-brand-400);
+}
+
+.elder-btn--danger {
+  background: var(--color-danger-600);
+  border-color: var(--color-danger-500);
+  color: var(--foreground);
+}
+.elder-btn--danger:hover {
+  background: var(--color-danger-500);
+}
+
+.elder-btn--safe {
+  background: color-mix(in oklab, var(--color-safe-500) 20%, transparent);
+  border-color: color-mix(in oklab, var(--color-safe-400) 55%, transparent);
+  color: var(--color-safe-200);
+}
+.elder-btn--safe:hover {
+  background: color-mix(in oklab, var(--color-safe-500) 30%, transparent);
+}
+
+.elder-btn--quiet {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--border) 140%, transparent);
+}
+
+.elder-btn--sm {
+  min-height: 2.7em;
+  padding: 0.4em 0.75em;
+  border-radius: 0.85rem;
+  font-size: 0.95em;
+}
+
+/* Ô chọn: icon + 2 dòng chữ, canh trái */
+.elder-btn--choice {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* Mục đang trỏ tới trong bảng chọn ngân hàng: viền rõ để bác biết đang ở đâu */
+.elder-bank-opt--active {
+  border-color: var(--color-brand-300);
+  background: color-mix(in oklab, var(--color-brand-500) 22%, transparent);
+}
+
+/* Trạng thái đang chọn: đổi HẲN diện mạo, không chỉ nhích màu */
+.elder-btn[aria-pressed='true'] {
+  border-color: var(--color-brand-300);
+  background: color-mix(in oklab, var(--color-brand-500) 30%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--color-brand-300) 60%, transparent);
+}
+
+/* ── Ô nhập ─────────────────────────────────────────────────────────── */
+.elder-input {
+  width: 100%;
+  min-height: 3.3em;
+  padding: 0.55em 0.85em;
+  border-radius: 0.9rem;
+  border: 2px solid var(--input);
+  background: color-mix(in oklab, var(--background) 75%, transparent);
+  color: var(--foreground);
+  font-size: 1.2em;
+  font-weight: 700;
+}
+.elder-input::placeholder {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.elder-input:focus {
+  outline: none;
+  border-color: var(--color-brand-400);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 32%, transparent);
+}
+.elder-input[aria-invalid='true'] {
+  border-color: var(--color-danger-500);
+}
+
+/* Ô nhập nhiều dòng (dán tin nhắn lừa đảo) */
+.elder-textarea {
+  min-height: 6em;
+  line-height: 1.5;
+  resize: vertical;
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.elder-label {
+  display: block;
+  margin-bottom: 0.4em;
+  font-size: 1.05em;
+  font-weight: 800;
+}
+
+/* ── Khối nội dung ──────────────────────────────────────────────────── */
+.elder-card {
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  padding: 1.1em;
+}
+
+/* ── Lỗi tại chỗ: to, đỏ, KHÔNG tự mất ──────────────────────────────── */
+.elder-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6em;
+  border: 2px solid var(--color-danger-500);
+  background: color-mix(in oklab, var(--color-danger-500) 18%, transparent);
+  color: var(--color-danger-100);
+  border-radius: 1rem;
+  padding: 0.8em 1em;
+  font-size: 1.05em;
+  font-weight: 700;
+}
+
+/* ── Trạng thái từng bước (đã làm / chưa làm) ───────────────────────── */
+.elder-state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.5em;
+  border-radius: 1rem;
+  border: 2px solid var(--border);
+  padding: 0.4em 0.85em;
+  font-size: 1em;
+  font-weight: 800;
+}
+.elder-state--todo {
+  border-color: var(--color-warn-500);
+  background: color-mix(in oklab, var(--color-warn-500) 16%, transparent);
+  color: var(--color-warn-200);
+}
+.elder-state--done {
+  border-color: var(--color-safe-500);
+  background: color-mix(in oklab, var(--color-safe-500) 16%, transparent);
+  color: var(--color-safe-200);
+}
+
+/* ── Hộp captcha: giải thích rõ đó là gì ─────────────────────────────── */
+.elder-captcha {
+  border: 2px dashed color-mix(in oklab, var(--color-brand-400) 55%, transparent);
+  background: color-mix(in oklab, var(--color-brand-500) 10%, transparent);
+  border-radius: 1rem;
+  padding: 0.9em 1em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  /* Khung xác minh của Cloudflare rộng 300px cố định; nếu máy hẹp hơn thì cho
+     cuộn riêng trong hộp này, tuyệt đối không để tràn ra cả trang. */
+  overflow-x: auto;
+}
+@media (max-width: 480px) {
+  /* Nới hộp xác minh ra sát mép thẻ để đủ chỗ cho khung 300px */
+  .elder-captcha {
+    margin-inline: -1em;
+    padding-inline: 0.35em;
+  }
+}
+
+/* ── Việc gấp: khối đỏ, nổi hẳn ─────────────────────────────────────── */
+.elder-urgent {
+  border: 3px solid var(--color-danger-500);
+  background: color-mix(in oklab, var(--color-danger-500) 16%, transparent);
+  border-radius: 1.25rem;
+  padding: 1.1em;
+}
+.elder-urgent .elder-verdict__icon {
+  color: var(--color-danger-300);
+}
+
+/* ── Kết luận: 4 mức ────────────────────────────────────────────────── */
+.elder-verdict {
+  border: 3px solid var(--border);
+  border-radius: 1.25rem;
+  padding: 1.1em;
+}
+.elder-verdict--danger {
+  border-color: var(--color-danger-500);
+  background: color-mix(in oklab, var(--color-danger-500) 15%, transparent);
+}
+.elder-verdict--warn {
+  border-color: var(--color-warn-500);
+  background: color-mix(in oklab, var(--color-warn-500) 15%, transparent);
+}
+.elder-verdict--safe {
+  border-color: var(--color-safe-500);
+  background: color-mix(in oklab, var(--color-safe-500) 13%, transparent);
+}
+.elder-verdict--neutral {
+  border-color: var(--color-brand-400);
+  background: color-mix(in oklab, var(--color-brand-400) 12%, transparent);
+}
+
+.elder-verdict__label {
+  font-size: 1.45em;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.elder-verdict--danger .elder-verdict__label {
+  color: var(--color-danger-200);
+}
+.elder-verdict--warn .elder-verdict__label {
+  color: var(--color-warn-200);
+}
+.elder-verdict--safe .elder-verdict__label {
+  color: var(--color-safe-200);
+}
+.elder-verdict--neutral .elder-verdict__label {
+  color: var(--color-brand-200);
+}
+.elder-verdict__icon {
+  font-size: 1.8em;
+  line-height: 1;
+}
+.elder-verdict--danger .elder-verdict__icon {
+  color: var(--color-danger-300);
+}
+.elder-verdict--warn .elder-verdict__icon {
+  color: var(--color-warn-300);
+}
+.elder-verdict--safe .elder-verdict__icon {
+  color: var(--color-safe-300);
+}
+.elder-verdict--neutral .elder-verdict__icon {
+  color: var(--color-brand-300);
+}
+
+/* Việc cần làm: số thứ tự to, dễ lần theo */
+.elder-todo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65em;
+  font-size: 1.08em;
+  font-weight: 600;
+}
+.elder-todo__num {
+  flex: 0 0 auto;
+  width: 1.7em;
+  height: 1.7em;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.92em;
+  background: color-mix(in oklab, var(--color-brand-500) 25%, transparent);
+  border: 2px solid color-mix(in oklab, var(--color-brand-300) 45%, transparent);
+  color: var(--color-brand-100);
+}
+
+/* Câu miễn trừ — luôn hiện, không giấu */
+.elder-caveat {
+  font-size: 1em;
+  color: var(--muted-foreground);
+  border-left: 4px solid color-mix(in oklab, var(--color-warn-400) 60%, transparent);
+  padding-left: 0.8em;
+}
+
+/* ── Thiết bị cảm ứng / giảm chuyển động ────────────────────────────── */
+@media (pointer: coarse) {
+  .elder-btn {
+    min-height: 3.35em;
+  }
+  .elder-btn--xl {
+    min-height: 3.9em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elder-btn,
+  .elder * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ── Câu trả lời của trợ lý: render markdown/HTML đầy đủ ──────────────
+   .ai-markdown mặc định 0.85rem (13.6px) — quá nhỏ cho người cao tuổi.
+   Trong trang này cho nó theo cỡ chữ của trang (--elder-scale) và nới
+   khoảng dòng, danh sách, hộp cảnh báo cho dễ đọc. */
+.elder .ai-markdown {
+  font-size: 1em;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+.elder .ai-markdown p {
+  margin-bottom: 0.7em;
+}
+.elder .ai-markdown ul,
+.elder .ai-markdown ol {
+  margin: 0.6em 0 0.8em 1.5em;
+}
+.elder .ai-markdown li {
+  margin-bottom: 0.35em;
+}
+.elder .ai-markdown strong,
+.elder .ai-markdown b {
+  font-weight: 800;
+}
+.elder .ai-markdown h1,
+.elder .ai-markdown h2,
+.elder .ai-markdown h3,
+.elder .ai-markdown h4 {
+  font-size: 1.08em;
+  font-weight: 800;
+  margin: 0.85em 0 0.4em;
+  color: var(--foreground);
+}
+.elder .ai-markdown a {
+  color: var(--color-brand-300);
+}
+.elder .ai-markdown .callout-box {
+  font-size: 1em;
+  margin: 0.9em 0;
+  line-height: 1.55;
+}
+.elder .ai-markdown table {
+  font-size: 0.95em;
+}
+
+/* Thu gọn câu trả lời dài: dùng max-height để KHÔNG cắt vỡ HTML/markdown */
+.elder-md--clamp {
+  max-height: 24em;
+  overflow: hidden;
+  position: relative;
+}
+.elder-md--clamp::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3em;
+  background: linear-gradient(to bottom, transparent, color-mix(in oklab, var(--card) 94%, transparent));
+  pointer-events: none;
+}
+
+/* ── Phân Tab lớn cho người cao tuổi ────────────────────────────────── */
+.elder-nav-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+@media (min-width: 640px) {
+  .elder-nav-tabs {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.elder-tab-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.3em;
+  padding: 0.85em 0.6em;
+  min-height: 4.4em;
+  border-radius: 1.15rem;
+  border: 2px solid var(--border);
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  color: var(--muted-foreground);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.elder-tab-btn:hover {
+  background: color-mix(in oklab, var(--card) 100%, transparent);
+  border-color: color-mix(in oklab, var(--color-brand-400) 40%, var(--border));
+  color: var(--foreground);
+}
+.elder-tab-btn[aria-selected='true'] {
+  border-color: var(--color-brand-400);
+  background: color-mix(in oklab, var(--color-brand-500) 18%, var(--card));
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 2px var(--color-brand-400), 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.elder-tab-btn[aria-selected='true'] .elder-tab-icon {
+  color: var(--color-brand-300);
+  transform: scale(1.1);
+}
+.elder-tab-btn--danger[aria-selected='true'] {
+  border-color: var(--color-danger-400);
+  background: color-mix(in oklab, var(--color-danger-500) 18%, var(--card));
+  box-shadow: inset 0 0 0 2px var(--color-danger-400), 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.elder-tab-btn--danger[aria-selected='true'] .elder-tab-icon {
+  color: var(--color-danger-300);
+}
+
+.elder-tab-icon {
+  font-size: 1.55em;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+.elder-tab-title {
+  font-size: 1.05em;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.elder-tab-sub {
+  font-size: 0.82em;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  line-height: 1.2;
+}
+.elder-tab-btn[aria-selected='true'] .elder-tab-sub {
+  color: var(--foreground);
+}
+
+/* Thanh thông báo khẩn cấp nhỏ gọn ở đầu trang */
+.elder-alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  padding: 0.75em 1.1em;
+  background: color-mix(in oklab, var(--color-danger-500) 18%, transparent);
+  border: 2px solid var(--color-danger-500);
+  color: var(--color-danger-100);
+}
+.elder-alert-banner__btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+  border-radius: 0.75rem;
+  padding: 0.45em 0.85em;
+  font-size: 0.95em;
+  font-weight: 800;
+  background: var(--color-danger-600);
+  border: 1px solid var(--color-danger-400);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.elder-alert-banner__btn:hover {
+  background: var(--color-danger-500);
+}
+
+/* Thẻ tình huống mô phỏng & Quiz */
+.elder-scenario-box {
+  border: 2px solid var(--border);
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--card) 85%, transparent);
+  padding: 1.2em;
+  position: relative;
+}
+.elder-scenario-step {
+  border-left: 3px solid var(--color-brand-400);
+  padding-left: 0.9em;
+  margin-left: 0.4em;
+}
+.elder-quiz-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7em;
+  width: 100%;
+  text-align: left;
+  border-radius: 1rem;
+  border: 2px solid var(--border);
+  padding: 0.85em 1.1em;
+  font-size: 1.05em;
+  font-weight: 700;
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.elder-quiz-opt:hover {
+  border-color: var(--color-brand-300);
+  background: color-mix(in oklab, var(--color-brand-500) 12%, var(--card));
+}
+.elder-quiz-opt--correct {
+  border-color: var(--color-safe-400);
+  background: color-mix(in oklab, var(--color-safe-500) 20%, var(--card));
+  color: var(--color-safe-100);
+}
+.elder-quiz-opt--wrong {
+  border-color: var(--color-danger-400);
+  background: color-mix(in oklab, var(--color-danger-500) 20%, var(--card));
+  color: var(--color-danger-100);
+}
+

@@ -220,11 +220,15 @@ staticfiles/
 celerybeat-schedule.*
 scripts/puppeteer_host/node_modules/
 scripts/puppeteer_host/chrome/
+scripts/puppeteer_host/puppeteer_profile/
+puppeteer_host/node_modules/
+puppeteer_host/chrome/
+puppeteer_host/puppeteer_profile/
+puppeteer_host/dist/
 frontend/node_modules/
 frontend/dist/
 frontend/.next/
 frontend/out/
-scripts/puppeteer_host/puppeteer_profile/
 *.zip
 
 # Malware Sandbox downloaded databases & precompiled indexes
@@ -245,3 +249,5 @@ frontend/.env.*.local
 _minhchung/
 backend/PKV/settings.py
 backend/vector_store
+# OCR engine venv (PaddleOCR/VietOCR tách riêng khỏi .venv chính)
+.venv-ocr/

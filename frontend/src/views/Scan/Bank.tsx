@@ -12,6 +12,7 @@ import { MarkdownView } from '../../components/ui';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { openSseStream } from '../../lib/chat/stream';
 import {
   ScanGuide,
@@ -155,21 +156,23 @@ export default function Bank() {
           <form onSubmit={submit}>
             <div className="space-y-4">
               <div className="relative">
-                <select
-                  className="w-full h-14 px-5 text-sm font-bold rounded-2xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-brand-400/50 transition-all cursor-pointer"
-                  value={bank}
-                  onChange={(e) => setBank(e.target.value)}
-                  required
-                >
-                  <option value="" className="bg-slate-900 text-white">-- Chọn ngân hàng --</option>
-                  {banks.map((b) => (
-                    <option key={b.bin || b.shortName} value={b.shortName} className="bg-slate-900 text-white">
-                      {b.shortName} - {b.name}
-                    </option>
-                  ))}
-                </select>
+                <Select value={bank} onValueChange={setBank}>
+                  <SelectTrigger
+                    className="w-full h-14 px-5 text-sm font-bold rounded-2xl bg-white/5 border border-white/10 text-white focus:border-brand-400/50 cursor-pointer"
+                    aria-label="Chọn ngân hàng"
+                  >
+                    <SelectValue placeholder="Chọn ngân hàng" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    {banks.map((b) => (
+                      <SelectItem key={b.bin || b.shortName} value={b.shortName}>
+                        {b.shortName} - {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {bank && bankLogo && (
-                  <div className="absolute right-12 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                  <div className="absolute right-9 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                     <img src={bankLogo} className="h-6 w-auto" alt="" />
                   </div>
                 )}
@@ -178,8 +181,8 @@ export default function Bank() {
               <div className="flex flex-col sm:flex-row gap-3">
                 <Input
                   type="text"
-                  className="flex-1 h-14 px-5 text-base sm:text-lg font-bold tracking-widest uppercase rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus-visible:border-brand-400/50 focus-visible:ring-brand-400/20"
-                  placeholder="SỐ TÀI KHOẢN..."
+                  className="flex-1 h-14 px-5 text-base sm:text-lg font-bold tracking-widest rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus-visible:border-brand-400/50 focus-visible:ring-brand-400/20"
+                  placeholder="Số tài khoản..."
                   value={account}
                   onChange={(e) => setAccount(e.target.value)}
                   required
