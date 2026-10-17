@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { asList, learnApi } from '../../lib/api';
+import { warmTts } from '../../lib/tts';
 
 type LearnSubTab = 'signs' | 'scenarios' | 'lessons' | 'quiz';
 
@@ -232,6 +233,9 @@ export default function ElderLearn({
   const [lessons, setLessons] = useState<CuratedLesson[]>(FALLBACK_LESSONS);
   const [selectedLesson, setSelectedLesson] = useState<CuratedLesson | null>(null);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeLessonRef = useRef<HTMLButtonElement>(null);
+
   // Quiz state
   const [quizIdx, setQuizIdx] = useState(0);
   const [selectedOpt, setSelectedOpt] = useState<number | null>(null);
@@ -266,6 +270,82 @@ export default function ElderLearn({
       alive = false;
     };
   }, []);
+
+  /* Build trước audio ở server cho toàn bộ nội dung tĩnh của tab Học — lần bấm
+   * "Đọc to/Nghe" sau đó là tức thì. Chạy nền, lỗi thì bỏ qua (tự fallback). */
+  useEffect(() => {
+    const texts: string[] = [];
+    SIGNS.forEach((s, i) => {
+      texts.push(`Dấu hiệu ${i + 1}: ${s.text}. Lời khuyên: ${s.tip}`);
+    });
+    texts.push(
+      SIGNS.map((s, i) => `Dấu hiệu ${i + 1}: ${s.text}. Lời khuyên của cháu: ${s.tip}`).join('. '),
+    );
+    SCENARIOS.forEach((sc) => {
+      texts.push(
+        `Tình huống: ${sc.title}. Kẻ gian nói: "${sc.scammerSays}". Thực tế là: ${sc.truth}. Bác cần làm: ${sc.action}`,
+      );
+    });
+    FALLBACK_LESSONS.forEach((ls) => {
+      texts.push(`${ls.title}. Tóm tắt: ${ls.summary}. ${ls.content}`);
+      texts.push(`${ls.title}. ${ls.content}`);
+    });
+    QUIZ_LIST.forEach((q) => {
+      texts.push(q.question);
+      q.options.forEach((o) => texts.push(o.explanation));
+    });
+    void warmTts(texts);
+  }, []);
+
+  /* Bài học tải từ server (nội dung động) → warm khi có. */
+  useEffect(() => {
+    if (lessons.length === 0) return;
+    void warmTts(
+      lessons.flatMap((ls) => [
+        `${ls.title}. Tóm tắt: ${ls.summary}. ${ls.content}`,
+        `${ls.title}. ${ls.content}`,
+      ]),
+    );
+  }, [lessons]);
+
+  /* Modal xem bài học: khoá cuộn nền, đưa tiêu điểm vào nút "Đóng", đóng bằng
+     phím Esc và giữ tiêu điểm (Tab) bên trong hộp thoại. */
+  useEffect(() => {
+    if (!selectedLesson) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeLessonRef.current?.focus();
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectedLesson(null);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const root = dialogRef.current;
+      if (!root) return;
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [selectedLesson]);
 
   const curQuiz = QUIZ_LIST[quizIdx];
   const curScenario = SCENARIOS.find((s) => s.id === activeScenario) || SCENARIOS[0];
@@ -436,7 +516,7 @@ export default function ElderLearn({
                   <i className={`bi ${sc.icon} elder-icon text-brand-300`} aria-hidden="true"></i>
                   <div className="flex-1 min-w-0">
                     <span className="block font-bold">{sc.title}</span>
-                    <span className="block text-xs font-semibold text-danger-300">{sc.tag}</span>
+                    <span className="block elder-tag font-semibold text-danger-300">{sc.tag}</span>
                   </div>
                   {active && <i className="bi bi-check-circle-fill text-safe-300 shrink-0" aria-hidden="true"></i>}
                 </button>
@@ -448,14 +528,14 @@ export default function ElderLearn({
           <div className="elder-scenario-box space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h3 className="elder-h3 text-brand-200">{curScenario.title}</h3>
-              <span className="rounded-full bg-danger-500/20 px-3 py-1 text-xs font-bold text-danger-200">
+              <span className="rounded-full bg-danger-500/20 px-3 py-1 elder-tag font-bold text-danger-200">
                 {curScenario.tag}
               </span>
             </div>
 
             {/* Kẻ gian nói */}
             <div className="rounded-xl border border-danger-500/30 bg-danger-500/10 p-3.5 space-y-1">
-              <p className="text-sm font-bold text-danger-300 flex items-center gap-2">
+              <p className="elder-small font-bold text-danger-300 flex items-center gap-2">
                 <i className="bi bi-megaphone-fill" aria-hidden="true"></i> Kẻ gian sẽ nói qua điện thoại:
               </p>
               <p className="elder-body font-semibold italic text-foreground">&ldquo;{curScenario.scammerSays}&rdquo;</p>
@@ -463,7 +543,7 @@ export default function ElderLearn({
 
             {/* Tâm lý mắc bẫy */}
             <div className="space-y-1 pl-1">
-              <p className="text-sm font-bold text-warn-300 flex items-center gap-2">
+              <p className="elder-small font-bold text-warn-300 flex items-center gap-2">
                 <i className="bi bi-exclamation-diamond-fill" aria-hidden="true"></i> Vì sao người cao tuổi hay mắc bẫy:
               </p>
               <p className="elder-note text-foreground">{curScenario.seniorTrap}</p>
@@ -471,7 +551,7 @@ export default function ElderLearn({
 
             {/* Sự thật */}
             <div className="rounded-xl border border-safe-500/30 bg-safe-500/10 p-3.5 space-y-1">
-              <p className="text-sm font-bold text-safe-300 flex items-center gap-2">
+              <p className="elder-small font-bold text-safe-300 flex items-center gap-2">
                 <i className="bi bi-shield-fill-check" aria-hidden="true"></i> Sự thật bác cần nhớ:
               </p>
               <p className="elder-body font-bold text-safe-100">{curScenario.truth}</p>
@@ -479,7 +559,7 @@ export default function ElderLearn({
 
             {/* Việc bác cần làm */}
             <div className="rounded-xl border border-brand-500/30 bg-brand-500/15 p-3.5 space-y-1">
-              <p className="text-sm font-bold text-brand-300 flex items-center gap-2">
+              <p className="elder-small font-bold text-brand-300 flex items-center gap-2">
                 <i className="bi bi-hand-thumbs-up-fill" aria-hidden="true"></i> Việc chuẩn xác bác cần làm ngay:
               </p>
               <p className="elder-body font-bold text-foreground">{curScenario.action}</p>
@@ -506,7 +586,7 @@ export default function ElderLearn({
               <div key={ls.id} className="elder-card flex flex-col justify-between space-y-3">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="rounded-md bg-safe-500/20 px-2 py-0.5 text-xs font-bold text-safe-200">
+                    <span className="rounded-md bg-safe-500/20 px-2 py-0.5 elder-tag font-bold text-safe-200">
                       {ls.category}
                     </span>
                     <i className={`bi ${ls.icon} elder-icon text-brand-300`} aria-hidden="true"></i>
@@ -539,11 +619,18 @@ export default function ElderLearn({
 
           {/* Modal / Xem bài học chi tiết */}
           {selectedLesson && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-              <div className="elder-card bg-card border-brand-400 max-w-2xl w-full max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl p-6">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" role="presentation">
+              <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="elder-lesson-title"
+                className="elder-card bg-card border-brand-400 max-w-2xl w-full max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl p-6"
+              >
                 <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
-                  <h3 className="elder-h2 text-foreground font-extrabold">{selectedLesson.title}</h3>
+                  <h3 id="elder-lesson-title" className="elder-h2 text-foreground font-extrabold">{selectedLesson.title}</h3>
                   <button
+                    ref={closeLessonRef}
                     type="button"
                     className="elder-btn elder-btn--sm"
                     onClick={() => setSelectedLesson(null)}
@@ -603,8 +690,8 @@ export default function ElderLearn({
           </div>
 
           <div className="elder-card space-y-5 border-2 border-brand-500/40">
-            <div className="flex items-center justify-between text-sm font-bold text-muted-foreground">
-              <span>CÂU HỎI {quizIdx + 1} TRÊN {QUIZ_LIST.length}</span>
+            <div className="flex items-center justify-between elder-small font-bold text-muted-foreground">
+              <span>Câu hỏi {quizIdx + 1} trên {QUIZ_LIST.length}</span>
               {canSpeak && (
                 <button
                   type="button"
@@ -657,7 +744,7 @@ export default function ElderLearn({
                     : 'bg-danger-500/15 border-danger-400 text-danger-100'
                 }`}
               >
-                <div className="flex items-center gap-2 font-bold text-lg">
+                <div className="flex items-center gap-2 elder-h3">
                   <i
                     className={`bi ${
                       curQuiz.options[selectedOpt].correct ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'
@@ -665,7 +752,7 @@ export default function ElderLearn({
                     aria-hidden="true"
                   ></i>
                   <span>
-                    {curQuiz.options[selectedOpt].correct ? 'ĐÚNG RỒI BÁC ƠI!' : 'CHƯA ĐÚNG RỒI BÁC NHÉ!'}
+                    {curQuiz.options[selectedOpt].correct ? 'Đúng rồi bác ơi!' : 'Chưa đúng rồi bác nhé!'}
                   </span>
                 </div>
                 <p className="elder-body font-semibold">{curQuiz.options[selectedOpt].explanation}</p>
@@ -680,7 +767,7 @@ export default function ElderLearn({
                     </button>
                   )}
                   <button type="button" className="elder-btn elder-btn--brand" onClick={nextQuiz}>
-                    {quizIdx + 1 < QUIZ_LIST.length ? 'LÀM CÂU TIẾP THEO' : 'CHƠI LẠI TỪ ĐẦU'}
+                    {quizIdx + 1 < QUIZ_LIST.length ? 'Làm câu tiếp theo' : 'Chơi lại từ đầu'}
                     <i className="bi bi-arrow-right elder-icon" aria-hidden="true"></i>
                   </button>
                 </div>

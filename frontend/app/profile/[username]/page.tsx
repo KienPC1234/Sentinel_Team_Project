@@ -12,14 +12,15 @@ export default async function RoutePage({
     notFound();
   }
 
-  const cleanUser = username.startsWith('@') ? username.slice(1) : username;
+  const raw = decodeURIComponent(username).trim();
+  const cleanUser = raw.startsWith('@') ? raw.slice(1).trim() : raw;
   if (!cleanUser) {
     notFound();
   }
 
   return (
     <RouteShell>
-      <PublicProfile usernameProp={decodeURIComponent(cleanUser)} />
+      <PublicProfile usernameProp={cleanUser} />
     </RouteShell>
   );
 }

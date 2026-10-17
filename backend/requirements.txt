@@ -45,3 +45,22 @@ martor
 mcp>=2.2.0
 django-storages
 boto3
+# Text-to-Speech tiếng Việt cho chế độ người cao tuổi (giọng do server tổng hợp,
+# thay Web Speech API của trình duyệt). Piper = ONNX (nhẹ, chạy CPU rất nhanh).
+# Model voice tải bằng: python manage.py download_tts_voice
+piper-tts>=1.8.0
+soundfile>=0.12
+# Chạy TTS trên GPU (CUDA): cài bản GPU (THAY cho onnxruntime CPU mà
+# faster-whisper/piper kéo về) và đặt TTS_USE_CUDA=true. Code tự preload cuDNN
+# từ wheel nvidia-* của torch → không cần set LD_LIBRARY_PATH.
+#   pip install onnxruntime-gpu
+# Engine chính (giọng tự nhiên hơn, 48kHz, 25 giọng dựng sẵn): VieNeu-TTS.
+#   pip install --no-deps vieneu sea-g2p soxr kaldi-native-fbank librosa
+#   (gradio của vieneu chỉ dùng cho web UI nên bỏ qua được khi chỉ suy luận.)
+#   Model tự tải từ HuggingFace lần đầu; đặt HF_HUB_DISABLE_SYMLINKS=1 để tránh
+#   lỗi external-data của onnxruntime.
+vieneu
+sea-g2p
+soxr
+kaldi-native-fbank
+librosa

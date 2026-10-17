@@ -472,6 +472,13 @@ function ScenarioPlayerCard({ scenario }: { scenario: Scenario; index: number })
     if (currentStep > 0) setCurrentStep((s) => s - 1);
   };
 
+  const actorName = (actor: string): string => {
+    if (actor === 'scammer' || actor === 'Kẻ lừa đảo') return 'Kẻ lừa đảo';
+    if (actor === 'victim' || actor === 'Nạn nhân') return 'Nạn nhân';
+    if (actor === 'narrator' || actor === 'Người dẫn / Bối cảnh') return 'Bối cảnh / Dẫn chuyện';
+    return actor || 'Tình huống';
+  };
+
   const actorAlign = (actor: string): string => {
     if (actor === 'scammer' || actor === 'Kẻ lừa đảo') return 'items-start';
     if (actor === 'victim' || actor === 'Nạn nhân') return 'items-end';
@@ -596,7 +603,7 @@ function ScenarioPlayerCard({ scenario }: { scenario: Scenario; index: number })
                       )}`}
                     >
                       <i className={`bi ${actorIcon(s.actor || '')}`}></i>
-                      <span>{s.actor}</span>
+                      <span>{actorName(s.actor || '')}</span>
                     </div>
 
                     <div

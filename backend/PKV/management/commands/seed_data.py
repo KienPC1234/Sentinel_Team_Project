@@ -15,6 +15,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.utils.text import slugify
 from django.db import transaction
 
 from api.core.models import (
@@ -518,16 +519,17 @@ Nhiều thành viên trên diễn đàn ShieldCall VN sau khi gặp sự cố đ
 
             created_articles = []
             for a_idx, a_data in enumerate(articles_data):
-                art, _ = Article.objects.get_or_create(
-                    title=a_data['title'],
-                    defaults={
-                        'category': a_data['category'],
-                        'summary': a_data['summary'],
-                        'content': a_data['content'],
-                        'author': a_data['author'],
-                        'is_published': True,
-                    }
-                )
+                slug_cand = slugify(a_data['title'])[:350]
+                art = Article.objects.filter(slug=slug_cand).first() or Article.objects.filter(title=a_data['title']).first()
+                if not art:
+                    art = Article.objects.create(
+                        title=a_data['title'],
+                        category=a_data['category'],
+                        summary=a_data['summary'],
+                        content=a_data['content'],
+                        author=a_data['author'],
+                        is_published=True,
+                    )
                 created_articles.append(art)
 
                 # Add 2 comments per article
@@ -1043,15 +1045,16 @@ Trạm phát sóng BTS giả mạo phát sóng công suất cao ép điện tho�
             ]
 
             for l_data in lessons_data:
-                lesson, _ = LearnLesson.objects.get_or_create(
-                    title=l_data['title'],
-                    defaults={
-                        'category': l_data['category'],
-                        'summary': l_data['summary'],
-                        'content': l_data['content'],
-                        'is_published': True,
-                    }
-                )
+                slug_cand = slugify(l_data['title'])[:350]
+                lesson = LearnLesson.objects.filter(slug=slug_cand).first() or LearnLesson.objects.filter(title=l_data['title']).first()
+                if not lesson:
+                    lesson = LearnLesson.objects.create(
+                        title=l_data['title'],
+                        category=l_data['category'],
+                        summary=l_data['summary'],
+                        content=l_data['content'],
+                        is_published=True,
+                    )
                 if 'quiz' in l_data:
                     q = l_data['quiz']
                     LearnQuiz.objects.get_or_create(

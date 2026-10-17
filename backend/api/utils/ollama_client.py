@@ -406,6 +406,11 @@ if OLLAMA_API_KEY:
     client_kwargs['headers'] = {
         'Authorization': f'Bearer {OLLAMA_API_KEY}',
     }
+# Timeout phòng treo vô hạn (Ollama SDK mặc định không timeout). Cấu hình qua env.
+try:
+    client_kwargs['timeout'] = float(os.getenv('OLLAMA_TIMEOUT', '300'))
+except (TypeError, ValueError):
+    client_kwargs['timeout'] = 300.0
 
 client = ollama.Client(**client_kwargs)
 
@@ -1109,7 +1114,7 @@ def message_to_dict(msg) -> Dict[str, Any]:
     if isinstance(msg, dict):
         return {k: v for k, v in msg.items() if v is not None}
 
-    d: Dict[str, Any] = {'role': msg.role}
+    d: Dict[str, Any] = {'role': getattr(msg, 'role', 'assistant')}
 
     content = getattr(msg, 'content', None)
     if content:

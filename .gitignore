@@ -217,6 +217,10 @@ __marimo__/
 .streamlit/secrets.toml
 media/
 staticfiles/
+# Model giọng đọc TTS (Piper, ~63MB) — tải bằng:
+#   python manage.py download_tts_voice
+backend/models/piper/*.onnx
+backend/models/piper/*.onnx.json
 celerybeat-schedule.*
 scripts/puppeteer_host/node_modules/
 scripts/puppeteer_host/chrome/

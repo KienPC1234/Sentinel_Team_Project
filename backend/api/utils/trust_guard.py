@@ -16,6 +16,7 @@ Tất cả hàm ở đây thuần tuý (không I/O) để dễ kiểm thử.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional
 
 from api.utils.vn_sources import VN_OFFICIAL_CHANNELS, lookup_vn_bank_hotline, bank_official_site
@@ -24,6 +25,28 @@ DISCLAIMER = (
     "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định — "
     "không thay thế kết luận của cơ quan chức năng. Hãy luôn xác minh qua kênh chính thức."
 )
+
+# Ngưỡng phân tầng rủi ro CANONICAL cho MỌI loại quét (điểm #1 — tính nhất quán).
+# Trước đây mỗi loại quét dùng băng ngưỡng khác nhau (80/50/20 vs 70/40/10) khiến
+# cùng một điểm cho nhãn khác nhau giữa sync/async và giữa các trang.
+RISK_RED_MIN = 70
+RISK_YELLOW_MIN = 40
+RISK_GREEN_MIN = 10
+
+
+def level_from_score(score: Any) -> str:
+    """Trả `risk_level` ('RED'|'YELLOW'|'GREEN'|'SAFE') theo ngưỡng canonical."""
+    try:
+        s = int(score or 0)
+    except (TypeError, ValueError):
+        s = 0
+    if s >= RISK_RED_MIN:
+        return "RED"
+    if s >= RISK_YELLOW_MIN:
+        return "YELLOW"
+    if s >= RISK_GREEN_MIN:
+        return "GREEN"
+    return "SAFE"
 
 # ---------------------------------------------------------------------------
 # 1. Danh mục nguồn & độ tin cậy (điểm #3)
@@ -423,6 +446,139 @@ def trust_policy() -> Dict[str, Any]:
         "sources": source_catalog(),
         "disclaimer": DISCLAIMER,
     }
+
+
+# ---------------------------------------------------------------------------
+# 5. Guardrail có cấu trúc cho CHAT (điểm #1 — đồng nhất với luồng quét)
+# ---------------------------------------------------------------------------
+# Câu trả lời chat không có `risk_score` sẵn như các luồng quét. Guardrail suy ra từ:
+#   (a) kết quả công cụ kiểm chứng đã chạy (scan_phone/url/bank/... trả bằng chứng thực), và
+#   (b) phân tích các khẳng định "an toàn" mang tính chắc chắn trong chính câu trả lời.
+_LEVEL_SCORE = {
+    "CRITICAL": 90, "RED": 80, "HIGH": 80, "YELLOW": 50, "MEDIUM": 50,
+    "GREEN": 0, "SAFE": 0, "LOW": 0, "UNKNOWN": 0, "": 0,
+}
+
+# Các cụm khẳng định an toàn dứt khoát mà trợ lý AI có thể lỡ dùng khi chưa đủ cơ sở.
+# Hỗ trợ cả dạng có dấu lẫn không dấu (người dùng/LLM hay gõ thiếu dấu).
+_SAFE_AN = r"(?:an toàn|an toan)"
+_SAFE_HAS_ISSUE = r"(?:vấn đề|van de|rủi ro|rui ro|nguy hiểm|nguy hiem|gì|gi)"
+_ABSOLUTE_SAFE_PATTERN = re.compile(
+    r"(?i)("
+    r"(?:chắc chắn|chac chan) (?:là |la )?" + _SAFE_AN +
+    r"|(?:100\s*%|tuyệt đối|tuyet doi|hoàn toàn|hoan toan)\s*(?:là |la )?" + _SAFE_AN +
+    r"|" + _SAFE_AN + r" (?:tuyệt đối|tuyet doi|100\s*%)"
+    r"|(?:không|khong) (?:có|co) " + _SAFE_HAS_ISSUE +
+    r"|(?:yên tâm|yen tam) (?:tuyệt đối|tuyet doi|100\s*%)"
+    r")"
+)
+
+# Câu trả lời có ĐƯA RA NHẬN ĐỊNH an toàn/rủi ro (để quyết định có gắn guardrail hay không).
+# Chỉ những lượt chat liên quan an toàn – rủi ro mới cần guardrail; chat kiến thức chung
+# (định nghĩa, hướng dẫn thông thường) KHÔNG bị gắn nhãn để giữ sự quyết đoán, tránh nhiễu.
+_RISK_ASSERT_PATTERN = re.compile(
+    r"(?i)(lừa đảo|lua dao|scam|nguy hiểm|nguy hiem|đáng ngờ|dang ngo|cảnh báo|canh bao|"
+    r"mạo danh|mao danh|giả mạo|gia mao|phishing|rủi ro|rui ro|bất thường|bat thuong|"
+    r"độc hại|doc hai|tấn công|tan cong|dính bẫy|dinh bay)"
+)
+
+CHAT_AI_CAUTION = (
+    "Trợ lý AI có thể nhận diện SAI. Câu trả lời này là ý kiến tham khảo, KHÔNG phải "
+    "kết luận đã xác minh — hãy kiểm chứng qua kênh chính thức trước khi giao dịch/chia sẻ thông tin."
+)
+
+
+def detect_absolute_safety_claim(text: str) -> Optional[str]:
+    """Trả về cụm khẳng định an toàn dứt khoát nếu câu trả lời có (để gắn cảnh báo)."""
+    m = _ABSOLUTE_SAFE_PATTERN.search(text or "")
+    return m.group(0).strip() if m else None
+
+
+def asserts_risk_or_safety(text: str) -> bool:
+    """Có nhận định liên quan an toàn – rủi ro không (cần guardrail)."""
+    return bool(_RISK_ASSERT_PATTERN.search(text or ""))
+
+
+def _result_risk_score(result: Dict[str, Any]) -> int:
+    """Suy điểm rủi ro từ kết quả công cụ: ưu tiên risk_score, rồi is_scam/risk_level."""
+    try:
+        score = int(result.get("risk_score", 0) or 0)
+    except (TypeError, ValueError):
+        score = 0
+    if score:
+        return score
+    if result.get("is_scam"):
+        return 80
+    return _LEVEL_SCORE.get(str(result.get("risk_level") or "").upper(), 0)
+
+
+def chat_guardrail(answer_text: str = "", tool_results: Optional[List[Any]] = None,
+                   *, used_web_search: bool = False, used_knowledge: bool = False) -> Optional[Dict[str, Any]]:
+    """Khối guardrail có cấu trúc cho hội thoại chat (đồng nhất với luồng quét).
+
+    Nguyên tắc (cân bằng an toàn & QUYẾT ĐOÁN):
+    - CHỈ gắn guardrail cho lượt chat có nội dung an toàn – rủi ro (có công cụ kiểm chứng
+      đã chạy, có tra cứu web/OSINT, hoặc câu trả lời đưa ra nhận định an toàn/rủi ro).
+      Chat kiến thức/hướng dẫn thông thường KHÔNG bị gắn nhãn -> trả `None`.
+    - Khi CÓ bằng chứng, dùng đúng phân tầng của `assess()` và **kết luận dứt khoát**
+      (CONFIRMED/HIGH/SUSPICIOUS/LIKELY_SAFE) — không hạ nhãn xuống "chưa đủ cơ sở".
+    - CHỈ trả `INSUFFICIENT` khi bằng chứng thực sự thiếu (đúng vùng xám).
+    - Nếu câu trả lời khẳng định quá mức ("100% an toàn", "chắc chắn không sao"...) thì
+      gắn cảnh báo riêng, KHÔNG tự ý xoá bỏ kết luận dựa trên bằng chứng.
+    - Luôn kèm disclaimer + kênh xác minh chính thức + cảnh báo AI có thể sai.
+    """
+    results = [r for r in (tool_results or []) if isinstance(r, dict)]
+
+    score = 0
+    evidence: List[Dict[str, Any]] = []
+    seen = set()
+    for r in results:
+        score = max(score, _result_risk_score(r))
+        found = build_evidence(r)
+        if not found and _result_risk_score(r) >= 10:
+            # Công cụ trả mức rủi ro nhưng chưa có evidence chuẩn hoá -> tạo một mục từ summary.
+            found = [_mk_evidence(
+                "heuristic",
+                r.get("summary") or f"Công cụ nội bộ trả mức rủi ro {r.get('risk_level') or 'cao'}.",
+                "HIGH" if _result_risk_score(r) >= 70 else "MEDIUM",
+                supports="malicious",
+            )]
+        for e in found:
+            key = (e.get("source"), e.get("detail"))
+            if key not in seen:
+                seen.add(key)
+                evidence.append(e)
+
+    if used_web_search and not any(e.get("source") == "web_search" for e in evidence):
+        evidence.append(_mk_evidence(
+            "web_search", "Đã tham khảo nguồn mở trên web (chưa được xác minh độc lập).",
+            "INFO", supports="context"))
+    if used_knowledge and not any(e.get("source") == "rag" for e in evidence):
+        evidence.append(_mk_evidence(
+            "rag", "Có tham chiếu kho tri thức nội bộ ShieldCall.", "INFO", supports="context"))
+
+    claim = detect_absolute_safety_claim(answer_text)
+
+    # Cổng phát guardrail: chỉ khi có việc-để-xác-minh thực sự.
+    relevant = bool(results) or used_web_search or bool(claim) or asserts_risk_or_safety(answer_text)
+    if not relevant:
+        return None
+
+    g = assess({"risk_score": score, "evidence": evidence}, kind="chat")
+    g["answer_asserts_absolute_safety"] = bool(claim)
+
+    cautions = list(g.get("cautions") or [])
+    if claim:
+        cautions.insert(0,
+            f'Câu trả lời chứa khẳng định mang tính chắc chắn (“{claim}”). Hệ thống KHÔNG xác nhận '
+            "mức độ an toàn tuyệt đối — hãy tự kiểm chứng qua kênh chính thức.")
+    cautions.insert(0, CHAT_AI_CAUTION)
+    g["cautions"] = cautions
+
+    # Giữ nguyên kết luận của assess() (quyết đoán khi có bằng chứng); chỉ đánh dấu "AI có thể sai".
+    g["kind"] = "chat"
+    g["evidence"] = evidence  # nhúng kèm để UI chat hiển thị được bằng chứng
+    return g
 
 
 # ---------------------------------------------------------------------------

@@ -251,7 +251,7 @@ export default function Website() {
                 </div>
                 <div className="p-4 rounded-2xl bg-white/[0.03] space-y-1">
                   <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Loại hình</div>
-                  <div className="text-sm font-bold text-white/80">{asStr(result['scam_type']) || 'Kiểm tra kỹ thuật'}</div>
+                  <div className="text-sm font-bold text-white/80">{asStr(result['scam_type']) || 'Chưa xác định'}</div>
                 </div>
                 {asStr(result['page_title']) && (
                   <div className="p-4 rounded-2xl bg-white/[0.03] space-y-1">

@@ -16,9 +16,34 @@ class ScanProgressConsumer(AsyncWebsocketConsumer):
         self._ping_task = None
         self._intentional_close = False
 
+        # Chống IDOR: chỉ chủ sở hữu (user/phiên ẩn danh), staff, hoặc scan
+        # được đánh dấu công khai mới được xem tiến trình/kết quả. Trước đây
+        # consumer nhận MỌI scan_id -> rò rỉ kết quả quét của người khác.
+        if not await self._authorized():
+            await self.close()
+            return
+
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
         self._ping_task = asyncio.ensure_future(self._heartbeat())
+
+    @database_sync_to_async
+    def _authorized(self):
+        from api.core.models import ScanEvent
+        try:
+            event = ScanEvent.objects.get(id=self.scan_id)
+        except (ScanEvent.DoesNotExist, ValueError, TypeError):
+            return False
+        user = self.scope.get('user')
+        session = self.scope.get('session')
+        if getattr(user, 'is_staff', False):
+            return True
+        if getattr(user, 'is_authenticated', False) and event.user_id == user.id:
+            return True
+        if event.is_public_referable:
+            return True
+        active = session.get('active_scan_ids', []) if session is not None else []
+        return self.scan_id in active or str(self.scan_id) in [str(x) for x in (active or [])]
 
     async def disconnect(self, close_code):
         self._intentional_close = True

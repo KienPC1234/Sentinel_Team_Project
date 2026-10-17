@@ -288,6 +288,8 @@ class AIAgent:
 
         full_response = ""
         self._think_buffer = ""
+        tool_results: List[dict] = []
+        used_web_search = False
         try:
             # 3. stream_chat_ai đã phát sẵn event có `type` -> chuyển thẳng ra ngoài;
             #    chỉ gộp metadata và tích luỹ text thật để lưu lịch sử.
@@ -307,7 +309,32 @@ class AIAgent:
                     md = ev.get('metadata')
                     if isinstance(md, dict):
                         current_metadata.update(md)
+                elif etype == 'tool_result':
+                    # Thu thập kết quả công cụ kiểm chứng để dựng guardrail chat.
+                    if ev.get('tool') == 'web_search':
+                        used_web_search = True
+                    res = ev.get('result')
+                    if isinstance(res, dict):
+                        tool_results.append(res)
                 yield ev
+
+            # 3b. Guardrail có cấu trúc cho chat (góp ý hội đồng #1) — chỉ gắn cho
+            #     lượt chat có nội dung an toàn–rủi ro (có kiểm chứng/nhận định).
+            #     Khi CÓ bằng chứng thì kết luận dứt khoát; giữ cảnh báo AI có thể sai.
+            if full_response.strip():
+                try:
+                    from api.utils.trust_guard import chat_guardrail
+                    guard = chat_guardrail(
+                        full_response,
+                        tool_results=tool_results,
+                        used_web_search=used_web_search,
+                        used_knowledge=bool(rag_results),
+                    )
+                    if guard:
+                        current_metadata['guardrail'] = guard
+                        yield {"type": "guardrail", "guardrail": guard}
+                except Exception as ge:
+                    logger.error(f"Chat guardrail error: {ge}")
 
             # 4. Lưu câu trả lời vào lịch sử (chỉ còn phần text thật)
             if self.session and full_response:

@@ -226,7 +226,7 @@ export default function Bank() {
                 </div>
                 <div className="p-5 rounded-3xl bg-white/[0.03] border border-white/5 space-y-2">
                   <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Số tài khoản</div>
-                  <div className="text-xl font-bold text-white/90 tracking-widest">{asStr(result['account']) || account}</div>
+                  <div className="text-xl font-bold text-white/90 tracking-widest">{asStr(result['account_masked']) || account}</div>
                 </div>
               </div>
 
@@ -335,7 +335,7 @@ export default function Bank() {
                     variant="outline"
                     size="sm"
                     className="rounded-xl border-white/10 bg-white/5 text-white/70 hover:text-white"
-                    onClick={() => showToast('Đã lưu!', 'success')}
+                    onClick={() => showToast('Tính năng lưu đang được phát triển.', 'info')}
                   >
                     <i className="bi bi-safe mr-1.5"></i> Archive
                   </Button>

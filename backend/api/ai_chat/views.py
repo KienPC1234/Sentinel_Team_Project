@@ -319,18 +319,23 @@ class ChatAIStreamView(APIView):
         if session_id:
             try:
                 parsed_session_id = uuid.UUID(str(session_id))
-                existing_session = ChatSession.objects.filter(id=parsed_session_id).first()
-                if existing_session is not None:
-                    if existing_session.user_id is not None:
-                        if user is None or existing_session.user_id != user.pk:
-                            return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
-                    session_id = str(existing_session.id)
-                else:
-                    # Session not found in DB - fallback to new session instead of 404
-                    session_id = None
             except (ValueError, TypeError, AttributeError):
-                # Invalid UUID format (e.g. client prefix "emergency-xxx") - fallback to new session instead of 400
-                session_id = None
+                return Response({'error': 'Invalid session ID format'}, status=status.HTTP_400_BAD_REQUEST)
+
+            existing_session = ChatSession.objects.filter(id=parsed_session_id).first()
+            if existing_session is None:
+                return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            if existing_session.user_id is not None:
+                if user is None or existing_session.user_id != user.pk:
+                    return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+            else:
+                session_obj = getattr(request, 'session', None)
+                guest_sessions = session_obj.get('guest_chat_sessions', []) if session_obj is not None else []
+                if str(existing_session.id) not in [str(x) for x in guest_sessions]:
+                    return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+            session_id = str(existing_session.id)
 
         agent = get_agent(session_id=session_id, user=user, safe_mode=safe_mode, branding=branding, branding_full=branding_full)
         if scan_context:

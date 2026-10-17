@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { apiBase } from '../../components/ScanWidgets';
+import { apiBase, ChatGuardrailNote, type GuardrailData } from '../../components/ScanWidgets';
 import { MarkdownView } from '../../components/ui';
 import { renderMd } from '../../lib/chat/markdown';
 import { openSseStream } from '../../lib/chat/stream';
@@ -21,6 +21,7 @@ import type { StreamEvent } from '../../lib/chat/stream';
 interface Msg {
   from: 'user' | 'bot';
   text: string;
+  guardrail?: GuardrailData | null;
 }
 
 /* Gửi kèm trong `scan_context`: backend chèn thành system message (KHÔNG lưu vào
@@ -42,7 +43,35 @@ const SUGGESTIONS = [
   'Có người gọi tự xưng là công an và đòi tôi chuyển tiền, tôi phải làm gì?',
   'Có người hỏi xin mã OTP của tôi, tôi có nên cho không?',
   'Tôi nhận được tin nhắn báo trúng thưởng, có phải lừa đảo không?',
+  'Có người bảo tôi cài ứng dụng Dịch vụ công qua đường link, tôi có nên cài?',
+  'Tôi bị chuyển tiền cho kẻ lừa đảo rồi, giờ phải làm gì?',
 ];
+
+/* Nhập câu hỏi bằng GIỌNG NÓI (Web Speech API) — quan trọng cho người cao tuổi
+ * vì gõ chữ trên điện thoại rất khó. Không phải trình duyệt nào cũng có (đặc
+ * biệt là máy tính để bàn), nên nút micro chỉ hiện khi được hỗ trợ. */
+type SpeechRecognitionEventLike = { results: ArrayLike<ArrayLike<{ transcript: string }>> };
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: unknown) => void) | null;
+  onend: (() => void) | null;
+};
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+function getSpeechRecognition(): SpeechRecognitionCtor | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
 
 /** Chuyển câu trả lời thành CHỮ TRƠN — CHỈ dùng cho nút "Đọc to": trình đọc
  *  không được đọc tên thẻ HTML/markdown. Phần HIỂN THỊ thì render markdown đầy đủ
@@ -78,7 +107,7 @@ function toSpeechText(md: string): string {
   return t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function BotBubble({ text, canSpeak, speak }: { text: string; canSpeak: boolean; speak: (t: string) => void }) {
+function BotBubble({ text, guardrail, canSpeak, speak }: { text: string; guardrail?: GuardrailData | null; canSpeak: boolean; speak: (t: string) => void }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
   const [open, setOpen] = useState(false);
@@ -87,11 +116,18 @@ function BotBubble({ text, canSpeak, speak }: { text: string; canSpeak: boolean;
   const speech = useMemo(() => toSpeechText(text), [text]);
 
   /* Đo sau khi render: chỉ khi nội dung vượt mức thu gọn mới hiện nút mở rộng.
-   * Thu gọn bằng max-height (CSS) chứ KHÔNG cắt chuỗi — cắt chuỗi sẽ làm vỡ HTML. */
+   * Thu gọn bằng max-height (CSS) chứ KHÔNG cắt chuỗi — cắt chuỗi sẽ làm vỡ HTML.
+   * Dùng ResizeObserver để đo lại cả khi panel được hiện ra (trạng thái ẩn/hiện
+   * bằng CSS) — nếu không, câu trả lời kết thúc lúc tab đang ẩn sẽ thiếu nút mở. */
   useEffect(() => {
     const el = bodyRef.current;
     if (!el || open) return;
-    setOverflowing(el.scrollHeight > el.clientHeight + 8);
+    const measure = (): void => setOverflowing(el.scrollHeight > el.clientHeight + 8);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [html, open]);
 
   return (
@@ -110,6 +146,8 @@ function BotBubble({ text, canSpeak, speak }: { text: string; canSpeak: boolean;
         </button>
       )}
 
+      {guardrail?.tier && <ChatGuardrailNote guardrail={guardrail} />}
+
       {canSpeak && speech && (
         <button type="button" className="elder-btn w-full" onClick={() => speak(speech)}>
           <i className="bi bi-volume-up-fill elder-icon" aria-hidden="true"></i> Đọc to câu trả lời
@@ -122,10 +160,12 @@ function BotBubble({ text, canSpeak, speak }: { text: string; canSpeak: boolean;
 export default function ElderChat({
   canSpeak,
   speak,
+  stopSpeak,
   seed,
 }: {
   canSpeak: boolean;
   speak: (t: string) => void;
+  stopSpeak: () => void;
   /** Câu hỏi mồi từ nơi khác trong trang (kèm số lần để gửi lại được nhiều lần). */
   seed: { text: string; n: number };
 }) {
@@ -134,11 +174,70 @@ export default function ElderChat({
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState('');
+  const [autoRead, setAutoRead] = useState(true);
+  const [listening, setListening] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastSeed = useRef(0);
+  const srCtor = useMemo(() => getSpeechRecognition(), []);
+  const srRef = useRef<SpeechRecognitionLike | null>(null);
+
+  /* Nhớ lựa chọn "tự động đọc" giữa các lần dùng. */
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('elder_chat_autoread');
+      if (v === '0') setAutoRead(false);
+      else if (v === '1') setAutoRead(true);
+    } catch {
+      /* bỏ qua */
+    }
+  }, []);
+
+  const pickAutoRead = useCallback((v: boolean) => {
+    setAutoRead(v);
+    try {
+      localStorage.setItem('elder_chat_autoread', v ? '1' : '0');
+    } catch {
+      /* bỏ qua */
+    }
+  }, []);
+
+  const toggleListen = useCallback(() => {
+    if (!srCtor) return;
+    if (listening) {
+      try {
+        srRef.current?.stop();
+      } catch {
+        /* bỏ qua */
+      }
+      setListening(false);
+      return;
+    }
+    try {
+      const rec = new srCtor();
+      rec.lang = 'vi-VN';
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onresult = (e) => {
+        const said = e.results?.[0]?.[0]?.transcript ?? '';
+        if (said) setInput((prev) => (prev ? `${prev} ${said}` : said));
+      };
+      rec.onerror = () => {
+        setListening(false);
+        setError('Cháu chưa nghe được. Bác bấm micro và nói lại, hoặc tự viết câu hỏi nhé.');
+      };
+      rec.onend = () => setListening(false);
+      srRef.current = rec;
+      setError('');
+      rec.start();
+      setListening(true);
+    } catch {
+      setError('Máy bác chưa hỗ trợ nhập bằng giọng nói. Bác tự viết câu hỏi giúp cháu nhé.');
+    }
+  }, [listening, srCtor]);
 
   /* Câu trả lời mới thì cuộn xuống cuối khung chat. */
   useEffect(() => {
@@ -152,6 +251,15 @@ export default function ElderChat({
       const next = [...prev];
       const last = next[next.length - 1];
       if (last && last.from === 'bot') next[next.length - 1] = { ...last, text: last.text + chunk };
+      return next;
+    });
+  }, []);
+
+  const setLastBotGuardrail = useCallback((guardrail: GuardrailData) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last && last.from === 'bot') next[next.length - 1] = { ...last, guardrail };
       return next;
     });
   }, []);
@@ -185,6 +293,7 @@ export default function ElderChat({
       }
 
       let gotText = false;
+      let finalText = '';
       try {
         await openSseStream({
           url: `${apiBase()}/chat/stream/`,
@@ -200,8 +309,11 @@ export default function ElderChat({
           onEvent: (ev: StreamEvent) => {
             if (ev.type === 'delta' && ev.text) {
               gotText = true;
+              finalText += ev.text;
               setWaiting(false);
               appendToLastBot(ev.text);
+            } else if (ev.type === 'guardrail') {
+              setLastBotGuardrail(ev.guardrail as GuardrailData);
             } else if (ev.type === 'error') {
               appendToLastBot(`\n(Cháu gặp trục trặc: ${ev.message})`);
               setWaiting(false);
@@ -226,8 +338,13 @@ export default function ElderChat({
         setWaiting(false);
         abortRef.current = null;
       }
+
+      /* Tự động đọc câu trả lời (nếu bác bật) — đỡ phải bấm thêm một lần. */
+      if (autoRead && canSpeak && finalText.trim()) {
+        speak(toSpeechText(finalText));
+      }
     },
-    [appendToLastBot, busy, input],
+    [appendToLastBot, setLastBotGuardrail, busy, input, autoRead, canSpeak, speak],
   );
 
   /* Nhận câu hỏi mồi (ví dụ từ nút "Hỏi trợ lý ảo" ở phần kết quả kiểm tra). */
@@ -252,6 +369,25 @@ export default function ElderChat({
         Bác viết câu hỏi như nói chuyện bình thường, ví dụ: &quot;Số 0987… có phải lừa đảo không?&quot;. Cháu là trợ lý
         ảo trả lời tự động, câu trả lời có thể sai — việc quan trọng bác hãy kiểm tra qua số chính thức.
       </p>
+
+      {/* Điều khiển trợ năng: tự động đọc câu trả lời + dừng đọc */}
+      {canSpeak && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoRead}
+            onClick={() => pickAutoRead(!autoRead)}
+            className="elder-btn elder-btn--sm"
+          >
+            <i className={`bi ${autoRead ? 'bi-toggle-on' : 'bi-toggle-off'} elder-icon`} aria-hidden="true"></i>
+            Tự động đọc câu trả lời: {autoRead ? 'Bật' : 'Tắt'}
+          </button>
+          <button type="button" className="elder-btn elder-btn--sm" onClick={stopSpeak}>
+            <i className="bi bi-stop-circle-fill elder-icon" aria-hidden="true"></i> Dừng đọc
+          </button>
+        </div>
+      )}
 
       {/* Câu hỏi gợi ý: bấm một lần là gửi luôn, không phải gõ */}
       <div className="space-y-3">
@@ -285,7 +421,7 @@ export default function ElderChat({
               <p className="elder-body whitespace-pre-wrap break-words font-semibold">{m.text}</p>
             </div>
           ) : m.text ? (
-            <BotBubble key={i} text={m.text} canSpeak={canSpeak} speak={speak} />
+            <BotBubble key={i} text={m.text} guardrail={m.guardrail} canSpeak={canSpeak} speak={speak} />
           ) : (
             <div key={i} className="elder-card flex items-center gap-3">
               <i className="bi bi-hourglass-split elder-icon animate-pulse text-brand-300" aria-hidden="true"></i>
@@ -314,19 +450,33 @@ export default function ElderChat({
         <label className="elder-label" htmlFor="elder-chat-input">
           Câu hỏi của bác
         </label>
-        <input
-          id="elder-chat-input"
-          ref={inputRef}
-          type="text"
-          className="elder-input"
-          placeholder="Ví dụ: Số này có phải lừa đảo không?"
-          value={input}
-          disabled={busy}
-          onChange={(e) => setInput(e.target.value)}
-          aria-describedby="elder-chat-hint"
-        />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            id="elder-chat-input"
+            ref={inputRef}
+            type="text"
+            className="elder-input flex-1"
+            placeholder="Ví dụ: Số này có phải lừa đảo không?"
+            value={input}
+            disabled={busy}
+            onChange={(e) => setInput(e.target.value)}
+            aria-describedby="elder-chat-hint"
+          />
+          {srCtor && (
+            <button
+              type="button"
+              onClick={toggleListen}
+              disabled={busy}
+              aria-pressed={listening}
+              className={`elder-btn ${listening ? 'elder-btn--brand' : ''}`}
+            >
+              <i className="bi bi-mic-fill elder-icon" aria-hidden="true"></i>
+              {listening ? 'Đang nghe… bấm để dừng' : 'Nói câu hỏi'}
+            </button>
+          )}
+        </div>
         <p id="elder-chat-hint" className="elder-note">
-          Bác bấm nút bên dưới để gửi. Không cần đăng nhập.
+          Bác viết câu hỏi, hoặc bấm &quot;Nói câu hỏi&quot; rồi đọc. Sau đó bấm nút Gửi bên dưới. Không cần đăng nhập.
         </p>
 
         <button type="submit" className="elder-btn elder-btn--xl elder-btn--brand" disabled={busy || !input.trim()}>
@@ -336,7 +486,7 @@ export default function ElderChat({
             </>
           ) : (
             <>
-              <i className="bi bi-send-fill elder-icon" aria-hidden="true"></i> GỬI CÂU HỎI
+              <i className="bi bi-send-fill elder-icon" aria-hidden="true"></i> Gửi câu hỏi
             </>
           )}
         </button>

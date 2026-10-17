@@ -508,7 +508,7 @@ def send_new_lesson_email(user_emails, lesson_title, lesson_url):
 
     # Gui RIENG tung nguoi qua 1 ket noi SMTP (truoc day truyen ca batch vao
     # To: -> moi nguoi nhan thay email cua ca batch = ro ri PII hang loat).
-    from django.core.mail import EmailMessage, get_connection
+    from django.core.mail import EmailMultiAlternatives, get_connection
     addrs = [str(a or '').strip() for a in (user_emails or [])]
     addrs = [a for a in addrs if a and '@' in a]
     if not addrs:
@@ -520,7 +520,7 @@ def send_new_lesson_email(user_emails, lesson_title, lesson_url):
         try:
             for addr in addrs:
                 try:
-                    msg = EmailMessage(
+                    msg = EmailMultiAlternatives(
                         subject, plain_message, settings.DEFAULT_FROM_EMAIL, [addr],
                         connection=connection,
                     )

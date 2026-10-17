@@ -263,13 +263,24 @@ export default function Email() {
   const prevention = asArr<string>(result?.['prevention_measures']);
   const emlSize = emlFile ? `${(emlFile.size / 1024).toFixed(1)} KB` : '';
 
-  // Deep-link ?email= tự quét sau mount
+  // Deep-link ?email= tự quét sau mount. Chờ Turnstile sẵn sàng (render bất
+  // đồng bộ) rồi mới submit, tránh thiếu token dẫn tới không quét được.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('email');
-    if (q) {
-      setEmail(q);
-      submit(q);
-    }
+    if (!q) return;
+    setEmail(q);
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      if (getTsToken()) {
+        window.clearInterval(timer);
+        submit(q);
+      } else if (tries >= 40) {
+        window.clearInterval(timer);
+        showToast('Chưa xác minh anti-spam xong. Vui lòng bấm kiểm tra để thử lại.', 'warning');
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

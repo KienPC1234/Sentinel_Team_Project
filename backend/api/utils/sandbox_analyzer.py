@@ -447,12 +447,18 @@ class LocalSandboxAnalyzer:
             with open(abs_path, 'rb') as f:
                 b64_data = base64.b64encode(f.read()).decode('utf-8')
             daemon_timeout = min(effective_timeout, self.default_daemon_timeout)
+            # Token bảo vệ daemon (nếu cấu hình ở server). Rỗng -> không gửi.
+            _headers = {}
+            _token = os.getenv('SANDBOX_DAEMON_TOKEN') or (_get_setting('SANDBOX_DAEMON_TOKEN') or '')
+            if _token:
+                _headers['X-Sandbox-Token'] = _token
             resp = requests.post(
                 scan_url,
                 json={
                     'file_base64': b64_data,
                     'file_name': os.path.basename(abs_path),
                 },
+                headers=_headers,
                 timeout=daemon_timeout
             )
             if resp.status_code == 200:

@@ -5,7 +5,7 @@ from rest_framework.test import APIClient
 
 from django.test import TestCase
 
-from api.core.models import Report
+from api.core.models import Report, ScanEvent
 
 User = get_user_model()
 
@@ -54,3 +54,20 @@ class RadarPrivacyTest(TestCase):
         # Cache 120s giu ket qua cu
         self.assertEqual(
             second.data['reports_this_week'], first.data['reports_this_week'])
+
+
+class RadarScanTargetPrivacyTest(TestCase):
+    """Radar công khai KHÔNG được lộ địa chỉ email (PII) từ scan ẩn danh."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_radar_hides_email_scan_targets(self):
+        ScanEvent.objects.create(
+            scan_type='email', normalized_input='victim@example.com',
+            status='completed', risk_score=90, risk_level='RED', result_json={},
+        )
+        resp = self.client.get('/api/v1/trends/radar-stats/?filter=all&timeRange=7d')
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('victim@example.com', str(resp.data))
+        self.assertIn('Nội dung nhạy cảm', str(resp.data))

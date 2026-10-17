@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '../../lib/api';
 
-import { renderMd } from '../../lib/chat/markdown';
+import { renderMd, safeUrl } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
 import {
   ScanGuide,
@@ -84,13 +84,25 @@ export default function Phone() {
       });
   }, []);
 
-  // Tự động quét khi mở link ?phone= (y bản gốc requestSubmit; SSR-safe)
+  // Tự động quét khi mở link ?phone=. Turnstile render BẤT ĐỒNG BỘ nên phải
+  // CHỜ token sẵn sàng rồi mới submit (trước đây submit ngay -> thiếu token ->
+  // không bao giờ quét, chỉ hiện toast cảnh báo).
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('phone');
-    if (q) {
-      setPhone(q);
-      submit(q);
-    }
+    if (!q) return;
+    setPhone(q);
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      if (getTsToken()) {
+        window.clearInterval(timer);
+        submit(q);
+      } else if (tries >= 40) {
+        window.clearInterval(timer);
+        showToast('Chưa xác minh anti-spam xong. Vui lòng bấm SCAN để thử lại.', 'warning');
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -296,7 +308,7 @@ export default function Phone() {
                       <div className="space-y-2">
                         {matches.map((src, i) => (
                           <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                            <a href={src.url} target="_blank" rel="noopener" className="text-xs font-bold text-brand-400 hover:text-brand-300 transition-colors">
+                            <a href={safeUrl(src.url)} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-brand-400 hover:text-brand-300 transition-colors">
                               {src.title || src.url}
                             </a>
                             <p className="text-[11px] text-white/55 mt-1 line-clamp-2">{src.snippet}</p>

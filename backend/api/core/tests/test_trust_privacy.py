@@ -3,7 +3,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from api.utils.privacy import redact_pii, redact_for_external_llm
-from api.utils.trust_guard import apply_guardrail, source_catalog
+from api.utils.trust_guard import apply_guardrail, chat_guardrail, source_catalog
 from api.utils.vn_sources import tinnhiem_dataset_stats
 
 
@@ -37,6 +37,7 @@ class ExternalLLMRedactionTest(TestCase):
         seen = {}
 
         class FakeMsg:
+            role = 'assistant'
             content = 'ok'
             tool_calls = None
 
@@ -61,6 +62,7 @@ class ExternalLLMRedactionTest(TestCase):
         seen = {}
 
         class FakeMsg:
+            role = 'assistant'
             content = 'ok'
             tool_calls = None
 
@@ -104,6 +106,55 @@ class GuardrailTest(TestCase):
             self.assertIn('limits', s)
         keys = {s['key'] for s in source_catalog()}
         self.assertTrue({'tinnhiemmang', 'ai_model', 'community'} <= keys)
+
+
+class ChatGuardrailTest(TestCase):
+    def test_chat_guardrail_never_asserts_safe_by_default(self):
+        g = chat_guardrail('Toi nghi so nay co dau hieu lua dao.')
+        self.assertEqual(g['tier'], 'INSUFFICIENT')
+        self.assertFalse(g['is_conclusive'])
+        self.assertTrue(g['requires_verification'])
+        self.assertTrue(any('AI' in c for c in g['cautions']))
+        self.assertTrue(len(g['official_channels']) >= 1)
+        self.assertEqual(g['kind'], 'chat')
+
+    def test_chat_guardrail_flags_absolute_safety_claim(self):
+        g = chat_guardrail('Yen tam, so nay 100% an toan, khong co van de gi.')
+        self.assertTrue(g['answer_asserts_absolute_safety'])
+        self.assertEqual(g['tier'], 'INSUFFICIENT')
+        self.assertFalse(g['is_conclusive'])
+
+    def test_chat_guardrail_confirmed_from_tool_evidence(self):
+        g = chat_guardrail(
+            'So nay co dau hieu lua dao.',
+            tool_results=[{
+                'risk_score': 90,
+                'tinnhiem': {'status': 'scam', 'record': {'impersonated': 'VCB', 'url': 'https://x'}},
+            }],
+        )
+        self.assertEqual(g['tier'], 'CONFIRMED_RISK')
+        self.assertTrue(g['is_conclusive'])
+        self.assertTrue(any(e['source'] == 'tinnhiemmang' for e in g.get('evidence', [])))
+
+    def test_chat_guardrail_decisive_when_evidence_is_clean(self):
+        """Có bằng chứng sạch độ tin cậy cao -> KẾT LUẬN quyết đoán (LIKELY_SAFE), không hạ xuống INSUFFICIENT."""
+        g = chat_guardrail(
+            'Da doi chieu, URL nay sach tren nhieu engine.',
+            tool_results=[{
+                'virustotal': {
+                    'available': True,
+                    'stats': {'malicious': 0, 'suspicious': 0},
+                    'total_engines': 90,
+                    'permalink': 'https://www.virustotal.com/x',
+                },
+            }],
+        )
+        self.assertEqual(g['tier'], 'LIKELY_SAFE')
+        self.assertTrue(any(e['supports'] == 'benign' for e in g['evidence']))
+
+    def test_chat_guardrail_skips_general_chit_chat(self):
+        """Chat kiến thức/hướng dẫn thông thường không bị gắn nhãn (giữ quyết đoán, tránh nhiễu)."""
+        self.assertIsNone(chat_guardrail('OTP la ma dung mot lan, ban nen giu kin no.'))
 
 
 class VNSourcesTest(TestCase):

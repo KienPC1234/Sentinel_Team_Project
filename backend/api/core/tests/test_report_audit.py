@@ -75,3 +75,31 @@ class ReportDuplicateTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         blob = str(resp.data)
         self.assertNotIn('report_auditor', blob)
+
+    def test_lookup_excludes_private_scans_and_masks_sensitive(self):
+        from api.core.models import ScanEvent, ScanStatus
+        stranger = User.objects.create_user(username='secret_scanner', password='x')
+        ScanEvent.objects.create(
+            user=stranger,
+            scan_type='message',
+            raw_input='Mat khau bi mat cua toi la supersecret123',
+            status=ScanStatus.COMPLETED,
+            risk_score=90,
+            risk_level='RED',
+            is_public_referable=False,
+        )
+        ScanEvent.objects.create(
+            user=stranger,
+            scan_type='message',
+            raw_input='Tin nhan lua dao trung thuong 500 trieu',
+            status=ScanStatus.COMPLETED,
+            risk_score=95,
+            risk_level='RED',
+            is_public_referable=True,
+        )
+        anon = APIClient()
+        resp = anon.get('/api/v1/scan/lookup/?type=message')
+        self.assertEqual(resp.status_code, 200)
+        blob = str(resp.data)
+        self.assertNotIn('supersecret123', blob)
+        self.assertIn('******', blob)

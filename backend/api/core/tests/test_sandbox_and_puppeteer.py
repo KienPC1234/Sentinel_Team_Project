@@ -180,7 +180,7 @@ class DockerSandboxAndPuppeteerTests(TestCase):
     @unittest.skipUnless(PUPPETEER_HOST_UP, 'Node Puppeteer host not reachable')
     def test_puppeteer_live_render(self):
         """Test Puppeteer host renders an external safe URL and extracts title & body."""
-        res = fetch_with_puppeteer_host('https://example.com', timeout_ms=8000)
+        res = fetch_with_puppeteer_host('https://example.com', timeout_ms=15000)
         self.assertTrue(res.get('ok'))
         self.assertEqual(res.get('status_code'), 200)
         self.assertIn('Example Domain', res.get('title', ''))

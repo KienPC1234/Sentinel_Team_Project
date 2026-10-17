@@ -1,5 +1,6 @@
 """ShieldCall VN – Trend Views"""
 import logging
+import re
 from datetime import datetime, time, timedelta
 
 from django.db.models import Count, Max, Q
@@ -23,6 +24,8 @@ class TrendDailyView(APIView):
             days = int(request.query_params.get('days', 7))
         except (TypeError, ValueError):
             days = 7
+        # Chặn biên trên để tránh truy vấn/khối lượng dữ liệu quá lớn.
+        days = max(1, min(days, 365))
         scam_type = request.query_params.get('scam_type')
         since = timezone.now().date() - timedelta(days=days)
 
@@ -170,7 +173,10 @@ class ScamRadarStatsView(APIView):
 
             scam_labels = dict(ScamType.choices)
             hot_counter = {}
-            sensitive_scan_types = {'message', 'qr'}
+            # Ẩn hoàn toàn mục tiêu nhạy cảm (nội dung tin nhắn, QR, ĐỊA CHỈ EMAIL,
+            # tên tệp, âm thanh) khỏi radar công khai — tránh rò rỉ PII. Trước đây
+            # 'email' bị lọt vì không nằm trong danh sách này.
+            sensitive_scan_types = {'message', 'qr', 'email', 'file', 'audio'}
             sensitive_placeholder = '[Nội dung nhạy cảm đã được ẩn]'
 
             # Chi xet 10000 bao cao moi nhat de gioi han memory (DB lon dan
@@ -230,11 +236,16 @@ class ScamRadarStatsView(APIView):
                 if not normalized_input:
                     continue
                 mapped_type = map_scan_target_type(scan_type)
+                safe_value = (
+                    sensitive_placeholder if mapped_type in sensitive_scan_types
+                    else normalized_input
+                )
                 key = f"scan:{scan_type}:{normalized_input}"
                 if key not in hot_counter:
                     hot_counter[key] = {
                         'target_type': mapped_type,
-                        'target_value': normalized_input,
+                        # Không trả raw target_value cho loại nhạy cảm (email/message/qr/file/audio).
+                        'target_value': safe_value,
                         'masked': mask_target(mapped_type, normalized_input),
                         'count': 0,
                         'label': f"AI scan {scan_type}",
@@ -401,7 +412,17 @@ class ScanLookupView(APIView):
         results = []
 
         # --- ScanEvent search ---
-        scan_qs = ScanEvent.objects.filter(status=ScanStatus.COMPLETED)
+        if request.user.is_authenticated:
+            scan_qs = ScanEvent.objects.filter(
+                status=ScanStatus.COMPLETED
+            ).filter(
+                Q(user=request.user) | Q(is_public_referable=True)
+            )
+        else:
+            scan_qs = ScanEvent.objects.filter(
+                status=ScanStatus.COMPLETED,
+                is_public_referable=True,
+            )
         if q:
             scan_qs = scan_qs.filter(
                 Q(raw_input__icontains=q) | Q(normalized_input__icontains=q)
@@ -423,12 +444,28 @@ class ScanLookupView(APIView):
 
         for scan in scan_qs.order_by('-created_at')[:200]:
             rj = scan.result_json if isinstance(scan.result_json, dict) else {}
+            raw_target = scan.normalized_input or scan.raw_input
+            if scan.scan_type in ('message', 'file', 'audio'):
+                compact = re.sub(r'\s+', ' ', str(raw_target or '')).strip()
+                if len(compact) <= 12:
+                    safe_target = f'{compact[:2]}******' if len(compact) > 2 else '******'
+                else:
+                    safe_target = f'{compact[:6]}******{compact[-3:]}'
+            elif scan.scan_type == 'phone' and len(str(raw_target or '')) > 6:
+                t_str = str(raw_target or '')
+                safe_target = f'{t_str[:4]}****{t_str[-2:]}'
+            elif scan.scan_type == 'account' and len(str(raw_target or '')) > 6:
+                t_str = str(raw_target or '')
+                safe_target = f'{t_str[:3]}*****{t_str[-3:]}'
+            else:
+                safe_target = str(raw_target or '')[:500]
+
             results.append({
                 'id': scan.id,
                 'kind': 'scan',
                 'type': scan.scan_type,
                 'type_display': scan_type_labels.get(scan.scan_type, scan.scan_type),
-                'target': scan.normalized_input or scan.raw_input,
+                'target': safe_target,
                 'risk_score': scan.risk_score,
                 'risk_level': scan.risk_level,
                 'risk_display': verdict_display(rj),

@@ -462,7 +462,7 @@ export default function Message() {
                     variant="outline"
                     size="sm"
                     className="rounded-xl border-white/10 bg-white/5 text-white/70 hover:text-white"
-                    onClick={() => showToast('Đã lưu!', 'success')}
+                    onClick={() => showToast('Tính năng lưu đang được phát triển.', 'info')}
                   >
                     <i className="bi bi-bell mr-1.5"></i> Watchlist
                   </Button>

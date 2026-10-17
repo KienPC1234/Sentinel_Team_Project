@@ -60,6 +60,14 @@
   font-size: 0.95em;
   color: var(--muted-foreground);
 }
+/* Chữ phụ nhưng VẪN co giãn theo cỡ chữ bác chọn (dùng `em`, không dùng
+   utility Tailwind `text-xs/sm` vì các utility đó cố định theo `rem`). */
+.elder-small {
+  font-size: 0.95em;
+}
+.elder-tag {
+  font-size: 0.9em;
+}
 .elder-icon {
   font-size: 1.35em;
   line-height: 1;

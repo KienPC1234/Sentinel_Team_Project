@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { api } from '../../lib/api';
+import { warmTts, playAudio, stopAudio, hasBrowserVoice } from '../../lib/tts';
 import ElderChat from './ElderChat';
 import ElderLearn from './ElderLearn';
 import ElderEmergency from './ElderEmergency';
@@ -256,7 +257,7 @@ function verdictOf(tone: string): EldVerdict {
     return {
       tone: 'danger',
       icon: 'bi-exclamation-octagon-fill',
-      label: 'NGUY HIỂM — ĐỪNG LÀM THEO',
+      label: 'Nguy hiểm — đừng làm theo',
       plain: 'Số này, đường link này hoặc tài khoản này đã có người báo là lừa đảo.',
       todos: [
         'Không chuyển tiền cho số hay tài khoản này.',
@@ -269,7 +270,7 @@ function verdictOf(tone: string): EldVerdict {
     return {
       tone: 'warn',
       icon: 'bi-exclamation-triangle-fill',
-      label: 'CẨN THẬN — CÓ DẤU HIỆU LẠ',
+      label: 'Cẩn thận — có dấu hiệu lạ',
       plain: 'Có dấu hiệu đáng ngờ. Bác nên kiểm tra lại cho chắc trước khi làm theo.',
       todos: [
         'Chưa chuyển tiền, chưa đọc mã OTP.',
@@ -282,7 +283,7 @@ function verdictOf(tone: string): EldVerdict {
     return {
       tone: 'safe',
       icon: 'bi-shield-check',
-      label: 'CHƯA THẤY DẤU HIỆU XẤU',
+      label: 'Chưa thấy dấu hiệu xấu',
       plain: 'Trong dữ liệu của cháu chưa thấy dấu hiệu lừa đảo. Nhưng điều này KHÔNG có nghĩa là chắc chắn an toàn.',
       todos: [
         'Vẫn cẩn thận nếu họ đòi tiền hoặc đòi mã OTP.',
@@ -293,7 +294,7 @@ function verdictOf(tone: string): EldVerdict {
   return {
     tone: 'neutral',
     icon: 'bi-question-circle-fill',
-    label: 'CHƯA CÓ ĐỦ THÔNG TIN',
+    label: 'Chưa có đủ thông tin',
     plain: 'Cháu chưa có đủ dữ liệu để kết luận. Đây KHÔNG phải là đã an toàn.',
     todos: [
       'Đừng vội chuyển tiền hay đọc mã OTP.',
@@ -338,8 +339,9 @@ export default function ElderHub() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [checkedLabel, setCheckedLabel] = useState('');
   const [error, setError] = useState('');
+  const [errorField, setErrorField] = useState('');
   const [copied, setCopied] = useState(false);
-  const [canSpeak, setCanSpeak] = useState(false);
+  const [ttsMode, setTtsMode] = useState<'probing' | 'server' | 'browser' | 'none'>('probing');
   const [seed, setSeed] = useState<{ text: string; n: number }>({ text: '', n: 0 });
 
   const resultRef = useRef<HTMLDivElement>(null);
@@ -408,7 +410,6 @@ export default function ElderHub() {
 
   useEffect(() => {
     const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
-    setCanSpeak(!!synth);
     if (!synth) return;
     const pick = (): void => {
       try {
@@ -435,6 +436,7 @@ export default function ElderHub() {
   useEffect(
     () => () => {
       speakIdRef.current += 1;
+      stopAudio();
       try {
         window.speechSynthesis?.cancel();
       } catch {
@@ -444,7 +446,20 @@ export default function ElderHub() {
     [],
   );
 
-  const speak = useCallback(
+  /* Thăm dò năng lực TTS của server (đồng thời warm sẵn câu mở đầu). Server
+   * không sẵn sàng → fallback giọng trình duyệt; cả hai đều không có → ẩn nút. */
+  useEffect(() => {
+    let alive = true;
+    warmTts([INTRO_SPEECH]).then((ok) => {
+      if (!alive) return;
+      setTtsMode(ok ? 'server' : hasBrowserVoice() ? 'browser' : 'none');
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const browserSpeak = useCallback(
     (text: string) => {
       try {
         const synth = window.speechSynthesis;
@@ -481,6 +496,7 @@ export default function ElderHub() {
 
   const stopSpeak = useCallback(() => {
     speakIdRef.current += 1;
+    stopAudio();
     try {
       window.speechSynthesis?.cancel();
     } catch {
@@ -488,8 +504,25 @@ export default function ElderHub() {
     }
   }, []);
 
+  /* Ưu tiên giọng SERVER; nếu không phát được (mạng/503) tự chuyển sang giọng
+   * trình duyệt. Nếu server chưa sẵn sàng thì dùng thẳng giọng trình duyệt. */
+  const speak = useCallback(
+    (text: string) => {
+      const t = String(text || '').trim();
+      if (!t) return;
+      stopSpeak();
+      if (ttsMode === 'server') {
+        playAudio(t, { onError: () => browserSpeak(t) });
+        return;
+      }
+      browserSpeak(t);
+    },
+    [browserSpeak, stopSpeak, ttsMode],
+  );
+
   const verdict = verdictOf(guardrailTone(result));
   const channels = channelsOf(result);
+  const canSpeak = ttsMode !== 'none';
 
   const speechForResult = useCallback((): string => {
     const parts = [`Bác đã kiểm tra ${checkedLabel}.`, verdict.label, verdict.plain, ...verdict.todos];
@@ -516,8 +549,9 @@ export default function ElderHub() {
     el.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
   }, [result]);
 
-  const fail = useCallback((msg: string) => {
+  const fail = useCallback((msg: string, field = '') => {
     setError(msg);
+    setErrorField(field);
     showToast(msg, 'warning');
   }, []);
 
@@ -540,12 +574,12 @@ export default function ElderHub() {
       if (kind === 'phone') {
         const typed = phone.trim();
         if (!typed) {
-          fail('Bác chưa nhập số điện thoại. Bác đánh số cần kiểm tra vào ô trên nhé.');
+          fail('Bác chưa nhập số điện thoại. Bác đánh số cần kiểm tra vào ô trên nhé.', 'elder-phone');
           return;
         }
         const normalized = normalizePhone(typed);
         if (!normalized) {
-          fail('Số điện thoại chưa đúng. Số di động có 10 chữ số (ví dụ 0978123456), số bàn có 11 chữ số (ví dụ 02838234567). Bác kiểm tra lại giúp cháu.');
+          fail('Số điện thoại chưa đúng. Số di động có 10 chữ số (ví dụ 0978123456), số bàn có 11 chữ số (ví dụ 02838234567). Bác kiểm tra lại giúp cháu.', 'elder-phone');
           return;
         }
         path = '/scan/phone/';
@@ -554,7 +588,7 @@ export default function ElderHub() {
       } else if (kind === 'message') {
         const typed = message.trim();
         if (typed.length < 5) {
-          fail('Bác chưa dán tin nhắn. Bác chép tin nhắn rồi dán vào ô trên giúp cháu nhé.');
+          fail('Bác chưa dán tin nhắn. Bác chép tin nhắn rồi dán vào ô trên giúp cháu nhé.', 'elder-message');
           return;
         }
         path = '/scan/message/?sync=true';
@@ -563,7 +597,7 @@ export default function ElderHub() {
       } else if (kind === 'website') {
         const typed = url.trim();
         if (!typed) {
-          fail('Bác chưa dán đường link. Bác dán đường link trong tin nhắn vào ô trên nhé (đừng bấm vào link đó).');
+          fail('Bác chưa dán đường link. Bác dán đường link trong tin nhắn vào ô trên nhé (đừng bấm vào link đó).', 'elder-url');
           return;
         }
         path = '/scan/domain/';
@@ -571,12 +605,12 @@ export default function ElderHub() {
         label = typed;
       } else {
         if (!bank) {
-          fail('Bác chưa chọn ngân hàng. Bác bấm vào ô "Ngân hàng" để chọn tên ngân hàng trong tin nhắn nhé.');
+          fail('Bác chưa chọn ngân hàng. Bác bấm vào ô "Ngân hàng" để chọn tên ngân hàng trong tin nhắn nhé.', 'elder-bank');
           return;
         }
         const typed = account.trim();
         if (!typed) {
-          fail('Bác chưa nhập số tài khoản. Bác đánh số tài khoản mà người ta gửi cho bác nhé.');
+          fail('Bác chưa nhập số tài khoản. Bác đánh số tài khoản mà người ta gửi cho bác nhé.', 'elder-account');
           return;
         }
         path = '/scan/account/';
@@ -608,13 +642,14 @@ export default function ElderHub() {
   );
 
   const askAboutResult = useCallback(() => {
+    stopSpeak();
     setSeed((s) => ({
       text: `Cháu vừa kiểm tra ${checkedLabel}, kết quả là "${verdict.label}". Bác cần làm gì bây giờ ạ?`,
       n: s.n + 1,
     }));
     setCurrentTab('chat');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [checkedLabel, verdict.label]);
+  }, [checkedLabel, stopSpeak, verdict.label]);
 
   const resetCheck = useCallback(() => {
     stopSpeak();
@@ -660,8 +695,38 @@ export default function ElderHub() {
     id,
     className: cls,
     'aria-describedby': `${id}-hint`,
-    'aria-invalid': error ? true : undefined,
+    'aria-invalid': error && errorField === id ? true : undefined,
   });
+
+  /* Giữ MỌI panel luôn mounted, chỉ ẩn/hiện bằng CSS. Nhờ vậy: lịch sử chat,
+     tiến trình bài học/quiz và captcha KHÔNG bị xoá mỗi lần bác đổi tab. */
+  const panelCls = (t: ElderTab): string => (currentTab === t ? '' : 'hidden');
+
+  const selectTab = useCallback(
+    (t: ElderTab) => {
+      setCurrentTab(t);
+      stopSpeak();
+    },
+    [stopSpeak],
+  );
+
+  /* Điều hướng tab bằng phím mũi tên/Home/End theo chuẩn ARIA (roving tabindex). */
+  const onTabKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const ids = TABS.map((t) => t.id);
+      const i = ids.indexOf(currentTab);
+      let next = i;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % ids.length;
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + ids.length) % ids.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = ids.length - 1;
+      else return;
+      e.preventDefault();
+      selectTab(ids[next]);
+      document.getElementById(`tab-${ids[next]}`)?.focus();
+    },
+    [currentTab, selectTab],
+  );
 
   return (
     <div className={`elder elder-size-${textSize} max-w-3xl mx-auto px-4 pt-6 pb-24 space-y-8`}>
@@ -669,7 +734,7 @@ export default function ElderHub() {
       <header className="space-y-4 text-center">
         <span className="inline-flex items-center gap-2 rounded-full border border-safe-500/30 bg-safe-500/10 px-3 py-1.5 text-safe-200 elder-note">
           <i className="bi bi-shield-check" aria-hidden="true"></i>
-          Dễ dùng · Chữ to · Không cần đăng nhập · Không lưu số của bác
+          Dễ dùng · Chữ to · Không cần đăng nhập · Không lưu số trong máy bác
         </span>
 
         <h1 className="elder-h1">Trợ giúp bác phòng chống lừa đảo</h1>
@@ -678,7 +743,7 @@ export default function ElderHub() {
           Cháu giúp bác kiểm tra số lạ, học cách vạch trần kẻ gian và gọi cứu trợ khẩn cấp bất cứ lúc nào.
         </p>
 
-        {canSpeak && voiceState === 'other' && (
+        {ttsMode === 'browser' && voiceState === 'other' && (
           <p className="elder-note max-w-xl mx-auto" role="note">
             Máy của bác chưa có giọng đọc tiếng Việt nên nút “đọc to” có thể khó nghe. Bác nhờ con cháu mở phần Cài đặt
             của máy, thêm giọng tiếng Việt giúp cháu nhé.
@@ -719,26 +784,27 @@ export default function ElderHub() {
           <div className="flex items-center gap-3">
             <i className="bi bi-exclamation-octagon-fill elder-icon text-danger-300" aria-hidden="true"></i>
             <div>
-              <strong className="block text-sm sm:text-base">Có người đang gọi giục bác chuyển tiền?</strong>
-              <span className="text-xs sm:text-sm text-danger-200">Bác dừng lại ngay, đừng chuyển tiền.</span>
+              <strong className="elder-small block">Có người đang gọi giục bác chuyển tiền?</strong>
+              <span className="elder-small text-danger-200">Bác dừng lại ngay, đừng chuyển tiền.</span>
             </div>
           </div>
           <button
             type="button"
             className="elder-alert-banner__btn"
             onClick={() => {
-              setCurrentTab('emergency');
+              selectTab('emergency');
+              document.getElementById('tab-emergency')?.focus();
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
           >
             <i className="bi bi-lightning-charge-fill" aria-hidden="true"></i>
-            XỬ LÝ GẤP
+            Xử lý gấp
           </button>
         </div>
       )}
 
       {/* ── THANH CHUYỂN TAB CHÍNH ─────────────────────────────────────── */}
-      <nav aria-label="Các phần chính" role="tablist" className="elder-nav-tabs">
+      <nav aria-label="Các phần chính" role="tablist" className="elder-nav-tabs" onKeyDown={onTabKeyDown}>
         {TABS.map((t) => {
           const isSelected = currentTab === t.id;
           return (
@@ -748,12 +814,10 @@ export default function ElderHub() {
               id={`tab-${t.id}`}
               aria-selected={isSelected}
               aria-controls={`panel-${t.id}`}
+              tabIndex={isSelected ? 0 : -1}
               type="button"
               className={`elder-tab-btn ${t.danger ? 'elder-tab-btn--danger' : ''}`}
-              onClick={() => {
-                setCurrentTab(t.id);
-                stopSpeak();
-              }}
+              onClick={() => selectTab(t.id)}
             >
               <i className={`bi ${t.icon} elder-tab-icon`} aria-hidden="true"></i>
               <span className="elder-tab-title">{t.title}</span>
@@ -766,8 +830,7 @@ export default function ElderHub() {
       {/* ══════════════════════════════════════════════════════════════════
           TAB 1: KIỂM TRA AN TOÀN
          ══════════════════════════════════════════════════════════════════ */}
-      {currentTab === 'check' && (
-        <div className="space-y-6" role="tabpanel" id="panel-check" aria-labelledby="tab-check">
+      <div className={`space-y-6 ${panelCls('check')}`} role="tabpanel" id="panel-check" aria-labelledby="tab-check">
           <section className="space-y-5" aria-labelledby="elder-check">
             <h2 id="elder-check" className="elder-h2">
               <i className="bi bi-search elder-h-icon text-brand-300" aria-hidden="true"></i>
@@ -908,7 +971,7 @@ export default function ElderHub() {
                       banks={banks}
                       value={bank}
                       labelledBy="elder-bank-label"
-                      invalid={!!error}
+                      invalid={!!error && errorField === 'elder-bank'}
                       onPick={(v) => {
                         setBank(v);
                         setError('');
@@ -978,7 +1041,7 @@ export default function ElderHub() {
                   </>
                 ) : (
                   <>
-                    <i className="bi bi-search elder-icon" aria-hidden="true"></i> KIỂM TRA NGAY
+                    <i className="bi bi-search elder-icon" aria-hidden="true"></i> Kiểm tra ngay
                   </>
                 )}
               </button>
@@ -1057,37 +1120,35 @@ export default function ElderHub() {
             </div>
           </section>
         </div>
-      )}
 
       {/* ══════════════════════════════════════════════════════════════════
           TAB 2: HỌC NHẬN BIẾT LỪA ĐẢO (LEARN)
          ══════════════════════════════════════════════════════════════════ */}
-      {currentTab === 'learn' && (
+      <div className={panelCls('learn')}>
         <ElderLearn canSpeak={canSpeak} speak={speak} />
-      )}
+      </div>
 
       {/* ══════════════════════════════════════════════════════════════════
           TAB 3: NHẮN TIN HỎI CHÁU (AI CHAT)
          ══════════════════════════════════════════════════════════════════ */}
-      {currentTab === 'chat' && (
-        <div role="tabpanel" id="panel-chat" aria-labelledby="tab-chat">
-          <ElderChat canSpeak={canSpeak} speak={speak} seed={seed} />
-        </div>
-      )}
+      <div className={panelCls('chat')} role="tabpanel" id="panel-chat" aria-labelledby="tab-chat">
+        <ElderChat canSpeak={canSpeak} speak={speak} stopSpeak={stopSpeak} seed={seed} />
+      </div>
 
       {/* ══════════════════════════════════════════════════════════════════
           TAB 4: KHẨN CẤP & CỨU TRỢ
          ══════════════════════════════════════════════════════════════════ */}
-      {currentTab === 'emergency' && (
+      <div className={panelCls('emergency')}>
         <ElderEmergency canSpeak={canSpeak} speak={speak} />
-      )}
+      </div>
 
       {/* ── Chân trang ─────────────────────────────────────────────────── */}
       <footer className="pt-6 border-t border-border/60 text-center space-y-2">
         <p className="elder-note">
-          Trang Trợ giúp Người cao tuổi ShieldCall — Không cần đăng nhập, bảo vệ thông tin người dùng.
+          Trang Trợ giúp Người cao tuổi ShieldCall — Không cần đăng nhập. Số bác kiểm tra được dùng để tra cứu cảnh báo
+          và không gắn với tài khoản nào của bác.
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="elder-note">
           Cháu chúc bác luôn bình an và cảnh giác trước mọi thủ đoạn lừa đảo!
         </p>
       </footer>

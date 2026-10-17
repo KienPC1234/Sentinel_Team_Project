@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { warmTts } from '../../lib/tts';
 
 interface Hotline {
   name: string;
@@ -95,6 +96,11 @@ export default function ElderEmergency({
     'Việc khẩn cấp cần làm ngay: Một, dừng lại không chuyển tiền. Hai, gọi khóa tài khoản ngân hàng ngay. '
     + 'Ba, giữ lại bằng chứng và gọi công an 113 hoặc 156. Bác có thể bấm trực tiếp các nút gọi trên màn hình.';
 
+  /* Build trước audio cho đoạn "3 việc cần làm" ở server. */
+  useEffect(() => {
+    void warmTts([speechText]);
+  }, [speechText]);
+
   return (
     <div className="space-y-8" role="tabpanel" id="panel-emergency" aria-labelledby="tab-emergency">
       {/* ── 3 Bước khẩn cấp ────────────────────────────────────────── */}
@@ -153,7 +159,7 @@ export default function ElderEmergency({
             aria-label="Bấm để gọi ngay Công an 113"
           >
             <i className="bi bi-telephone-outbound-fill elder-icon" aria-hidden="true"></i>
-            GỌI CÔNG AN 113 NGAY
+            Gọi Công an 113 ngay
           </a>
           <a
             href="tel:156"
@@ -161,7 +167,7 @@ export default function ElderEmergency({
             aria-label="Bấm để gọi tổng đài 156 báo lừa đảo"
           >
             <i className="bi bi-telephone-fill elder-icon text-brand-300" aria-hidden="true"></i>
-            GỌI TỔNG ĐÀI 156 (BÁO LỪA ĐẢO)
+            Gọi Tổng đài 156 (báo lừa đảo)
           </a>
         </div>
       </section>
@@ -179,7 +185,7 @@ export default function ElderEmergency({
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-bold text-foreground">{h.name}</span>
                   {h.tag && (
-                    <span className="rounded-md bg-brand-500/20 px-2 py-0.5 text-xs font-semibold text-brand-200">
+                    <span className="elder-tag rounded-md bg-brand-500/20 px-2 py-0.5 font-semibold text-brand-200">
                       {h.tag}
                     </span>
                   )}
@@ -212,12 +218,12 @@ export default function ElderEmergency({
           {BANK_HOTLINES.map((b) => (
             <div key={b.name} className="elder-card flex flex-col justify-between space-y-2">
               <div>
-                <span className="block text-lg font-bold text-foreground">{b.name}</span>
+                <span className="elder-h3 block font-bold text-foreground">{b.name}</span>
                 <span className="block elder-note">{b.desc}</span>
               </div>
               <a
                 href={`tel:${b.phone}`}
-                className="elder-btn elder-btn--safe w-full text-base font-bold"
+                className="elder-btn elder-btn--safe w-full font-bold"
                 aria-label={`Gọi ngân hàng ${b.name} số ${b.phone}`}
               >
                 <i className="bi bi-telephone-fill elder-icon" aria-hidden="true"></i> Gọi {b.phone}
@@ -271,7 +277,7 @@ export default function ElderEmergency({
               onClick={() => void install()}
             >
               <i className="bi bi-download elder-icon" aria-hidden="true"></i>
-              {busy ? 'Đang mở phần cài đặt…' : 'CÀI ỨNG DỤNG VỀ MÁY'}
+              {busy ? 'Đang mở phần cài đặt…' : 'Cài ứng dụng về máy'}
             </button>
 
             {showSteps && (

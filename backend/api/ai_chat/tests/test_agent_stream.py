@@ -258,6 +258,41 @@ class ChatAIStreamViewEndpointTest(TestCase):
         self.assertEqual(messages[1].message, 'Chào bạn! Tôi là trợ lý ShieldCall.')
 
     @patch('api.utils.vector_db.vector_db.search', return_value=[])
+    @patch('api.utils.ai_agent.AIAgent.generate_title', return_value='Kiểm tra an toàn')
+    @patch('api.utils.ollama_client._chat_stream_with_retry')
+    @patch('api.ai_chat.views.classify_message', return_value={'suggested_action': 'NONE'})
+    async def test_stream_emits_structured_guardrail(self, mock_classify, mock_llm, mock_title, mock_vdb):
+        """Luồng chat phải phát event `guardrail` có cấu trúc + lưu vào metadata (góp ý #1)."""
+        mock_llm.return_value = [MockChunk(content="Yên tâm, số này 100% an toàn.")]
+
+        response = await self.async_client.post(
+            reverse('chat-stream'),
+            data=json.dumps({'user_message': 'Kiểm tra số 0912345678'}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+
+        chunks = []
+        async for chunk in response.streaming_content:
+            chunks.append(chunk.decode('utf-8') if isinstance(chunk, bytes) else chunk)
+        events = parse_sse_events("".join(chunks))
+
+        guard_events = [e for e in events if e.get('type') == 'guardrail']
+        self.assertEqual(len(guard_events), 1)
+        guard = guard_events[0]['guardrail']
+        self.assertEqual(guard['tier'], 'INSUFFICIENT')
+        self.assertFalse(guard['is_conclusive'])
+        self.assertTrue(guard['answer_asserts_absolute_safety'])
+        self.assertTrue(any('AI' in c for c in guard['cautions']))
+        self.assertTrue(guard['official_channels'])
+
+        # Guardrail phải được lưu cùng tin nhắn trợ lý để còn hiển thị lại.
+        session_id = done_events(events)[0].get('session_id')
+        session = await ChatSession.objects.aget(id=session_id)
+        assistant = await ChatMessage.objects.aget(session=session, role='assistant')
+        self.assertEqual((assistant.metadata or {}).get('guardrail', {}).get('tier'), 'INSUFFICIENT')
+
+    @patch('api.utils.vector_db.vector_db.search', return_value=[])
     @patch('api.utils.ai_agent.AIAgent.generate_title', return_value='Tra cứu STK')
     @patch('api.utils.ollama_client._chat_stream_with_retry')
     @patch('api.ai_chat.views.classify_message', return_value={'suggested_action': 'NONE'})

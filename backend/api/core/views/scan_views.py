@@ -36,7 +36,7 @@ from api.core.serializers import (
     DomainSerializer, BankAccountSerializer,
     ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer,
     ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
-    ScanAccountSerializer, ScanImageSerializer, ScanEmailSerializer,
+    ScanAccountSerializer, ScanImageSerializer,
     ScanEventListSerializer, TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
 )
 
@@ -59,7 +59,13 @@ def _verify_turnstile_or_api_key(request):
     # NOTE: no client-header bypass — anonymous playground users must solve Turnstile.
     # API-key / authenticated sessions are exempted above.
     cf_token = request.data.get('cf-turnstile-response')
-    if not verify_turnstile_token(cf_token):
+    # Gửi kèm remote_ip (IP đáng tin) để Turnstile ràng buộc theo IP.
+    try:
+        from api.core.throttling import client_ip as _client_ip
+        _remote_ip = _client_ip(request)
+    except Exception:
+        _remote_ip = None
+    if not verify_turnstile_token(cf_token, remote_ip=_remote_ip):
         return Response({'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.'}, status=400)
     return None
 
@@ -177,7 +183,7 @@ def _document_scan_for_admin(scan_event: ScanEvent, *, force_report: bool = Fals
 
 from api.utils.normalization import normalize_phone, normalize_phone_e164, normalize_domain
 from api.utils.vt_client import VTClient
-from api.utils.trust_guard import apply_guardrail
+from api.utils.trust_guard import apply_guardrail, level_from_score as _level_from_score
 
 import math
 import phonenumbers
@@ -473,14 +479,8 @@ def _phone_risk_score(phone_number: str) -> dict:
     final_score = min(100.0, reputation_score + metadata_score + behavior_score)
     final_score_int = int(round(final_score))
     
-    # Determine level (operational thresholds)
-    level = RiskLevel.SAFE
-    if final_score_int > 80:
-        level = RiskLevel.RED
-    elif final_score_int > 50:
-        level = RiskLevel.YELLOW
-    elif final_score_int > 20:
-        level = RiskLevel.GREEN
+    # Determine level (ngưỡng canonical 70/40/10 — nhất quán toàn hệ thống)
+    level = _level_from_score(final_score_int)
 
     # Action map aligned with thresholds
     suggested_action = 'ALLOW'
@@ -629,6 +629,10 @@ class ScanEmailView(APIView):
 
         file_obj = request.FILES.get('file')
         content_text = request.data.get('content') or request.data.get('email_content', '')
+        # Chặn DoS: giới hạn độ dài nội dung email nhận từ client trước khi
+        # đưa vào regex/DNS/LLM (upload .eml vẫn đi theo nhánh file_obj riêng).
+        if isinstance(content_text, str) and len(content_text) > 200_000:
+            content_text = content_text[:200_000]
         sender_input = request.data.get('email') or request.data.get('sender_email', '')
         
         email_data = {
@@ -1142,7 +1146,9 @@ def _analyze_network(url: str, domain: str) -> dict:
                      network_info['cert_details']['valid_from'] = str(cert['notBefore'])
                      network_info['cert_details']['valid_to'] = str(cert['notAfter'])
                 else:
-                    network_info['cert_age_days'] = 0 # Default safe
+                    # KHÔNG parse được ngày -> để None (bỏ qua luật "chứng chỉ mới").
+                    # Trước đây gán 0 khiến luật `cert_age_days < 3` báo động nhầm.
+                    network_info['cert_age_days'] = None
 
     except Exception as e:
         network_info['ssl_valid'] = False
@@ -1158,7 +1164,9 @@ def _analyze_network(url: str, domain: str) -> dict:
             network_info['error'] = 'Địa chỉ IP nội bộ bị chặn vì lý do an toàn.'
             return network_info
 
-        response = requests.get(req_url, headers=headers, timeout=5, allow_redirects=True)
+        # safe_get xác thực TỪNG bước redirect (chống SSRF qua 302 tới IP nội bộ).
+        from api.utils.security import safe_get
+        response = safe_get(req_url, headers=headers, timeout=5)
         
         network_info['redirects'] = len(response.history)
         network_info['final_url'] = response.url
@@ -1268,12 +1276,13 @@ def _analyze_domain(url: str) -> dict:
     # 1. Network Analysis (SSL, Redirects, Headers)
     network_info = _analyze_network(full_url, domain)
     
+    cert_age_days = network_info.get('cert_age_days')
     if not network_info['ssl_valid']:
         score += 15
         details.append('Chứng chỉ SSL không hợp lệ hoặc không có HTTPS')
-    elif network_info.get('cert_age_days', 0) < 3:
+    elif cert_age_days is not None and cert_age_days < 3:
         score += 20
-        details.append(f"Chứng chỉ SSL mới tạo ({network_info['cert_age_days']} ngày) - Rủi ro cao")
+        details.append(f"Chứng chỉ SSL mới tạo ({cert_age_days} ngày) - Rủi ro cao")
         
     issuer = str(network_info.get('cert_issuer', '')).lower()
     if 'let\'s encrypt' in issuer or 'cloudflare' in issuer:
@@ -2034,6 +2043,10 @@ class ScanStatusView(APIView):
             if isinstance(result_payload, dict) and 'guardrail' not in result_payload:
                 try:
                     apply_guardrail(result_payload, kind=event.scan_type or 'generic')
+                    # Lưu lại để lịch sử/lookup/MCP cũng có evidence + guardrail
+                    # (trước đây chỉ sửa trong bộ nhớ -> mất khi serialize lại).
+                    event.result_json = result_payload
+                    event.save(update_fields=['result_json'])
                 except Exception:
                     pass
             return Response({
@@ -2059,7 +2072,16 @@ class ScanReportAdminView(APIView):
         except ScanEvent.DoesNotExist:
             return Response({'error': 'Scan không tồn tại.'}, status=404)
 
-        if event.user_id and event.user_id != request.user.id and not request.user.is_staff:
+        # Chống lạm dụng: chỉ chủ sở hữu (user hoặc phiên ẩn danh đã tạo scan)
+        # hoặc staff mới được yêu cầu admin verify. Trước đây scan ẩn danh
+        # (user_id None) bị bỏ qua kiểm tra -> người dùng đăng nhập bất kỳ có
+        # thể ép tạo report cho scan của người khác.
+        active_scans = request.session.get('active_scan_ids', []) if hasattr(request, 'session') else []
+        is_in_session = (
+            scan_id in active_scans or str(scan_id) in [str(x) for x in (active_scans or [])]
+        )
+        owns = bool(event.user_id and event.user_id == request.user.id)
+        if not (request.user.is_staff or owns or is_in_session):
             return Response({'error': 'Bạn không có quyền gửi xác minh cho scan này.'}, status=403)
 
         if event.status != ScanStatus.COMPLETED:
@@ -2075,30 +2097,5 @@ class ScanReportAdminView(APIView):
             'report_id': report.id,
             'scan_id': event.id,
         })
-
-
-def _extract_entities_from_text(text: str) -> dict:
-    """Extract phone numbers, URLs, bank accounts from OCR text"""
-    entities = {'phones': [], 'urls': [], 'accounts': [], 'otp_codes': []}
-    if not text:
-        return entities
-
-    # Phone numbers (Vietnamese format)
-    phones = re.findall(r'(?:\+84|0)\d{9,10}', text)
-    entities['phones'] = list(set(phones))
-
-    # URLs
-    urls = re.findall(r'https?://[^\s<>"]+', text)
-    entities['urls'] = list(set(urls))
-
-    # Bank account patterns (6-19 digits)
-    accounts = re.findall(r'\b\d{6,19}\b', text)
-    entities['accounts'] = list(set(accounts))[:5]
-
-    # OTP codes (4-8 digit codes)
-    otp = re.findall(r'\b\d{4,8}\b', text)
-    entities['otp_codes'] = list(set(otp))[:3]
-
-    return entities
 
 

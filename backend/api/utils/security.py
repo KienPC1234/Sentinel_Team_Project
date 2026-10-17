@@ -43,6 +43,36 @@ def is_safe_url(url: str) -> bool:
         return False
 
 
+def safe_get(url: str, *, timeout: float = 5.0, headers: dict = None,
+             max_redirects: int = 5, verify: bool = True):
+    """GET tới URL AN TOÀN (chống SSRF), xác thực TỪNG bước redirect.
+
+    `requests.get(..., allow_redirects=True)` chỉ kiểm tra URL ban đầu, nên một
+    host công khai có thể 302 sang `http://169.254.169.254/` hoặc `http://127.0.0.1`
+    để chạm dịch vụ nội bộ. Hàm này tự điều hướng thủ công và chặn mỗi đích.
+
+    Trả về `requests.Response` của bước cuối; raise `ValueError` nếu URL/redirect
+    không an toàn, hoặc `requests.RequestException` nếu lỗi mạng.
+    """
+    from urllib.parse import urljoin
+    current = url
+    for _ in range(max_redirects + 1):
+        if not is_safe_url(current):
+            raise ValueError(f'Unsafe URL blocked: {current}')
+        resp = requests.get(
+            current, timeout=timeout, headers=headers,
+            allow_redirects=False, verify=verify,
+        )
+        if resp.is_redirect:
+            location = resp.headers.get('Location')
+            if not location:
+                return resp
+            current = urljoin(current, location)
+            continue
+        return resp
+    raise ValueError('Too many redirects')
+
+
 def sanitize_filename(filename: str, default_ext: str = '') -> str:
     """
     Sanitize filename against path traversal, null bytes, and malicious characters.

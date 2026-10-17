@@ -44,7 +44,9 @@ interface PublicResp {
 /* Port từ PKV/templates/Auth/public_profile.html. API: GET /user/profile/<username>/. */
 export default function PublicProfile({ usernameProp }: { usernameProp?: string } = {}) {
   const { username: routeUsername } = useParams<{ username: string }>();
-  const username = usernameProp || routeUsername;
+  const rawUsername = usernameProp || routeUsername || '';
+  const decoded = decodeURIComponent(rawUsername).trim();
+  const username = decoded.startsWith('@') ? decoded.slice(1).trim() : decoded;
   const [data, setData] = useState<PublicResp | null>(null);
   const [error, setError] = useState('');
 

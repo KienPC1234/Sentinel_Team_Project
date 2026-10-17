@@ -76,6 +76,9 @@ export default function Status() {
   useEffect(() => {
     if (!id) return;
     let alive = true;
+    // Đánh dấu khi phiên đã kết thúc (completed/failed/denied) để onclose KHÔNG
+    // tự kết nối lại vô hạn sau khi chủ động đóng socket.
+    let terminated = false;
 
     const fetchStatus = (): void => {
       api
@@ -84,6 +87,7 @@ export default function Status() {
           if (!alive) return;
           const st = asStr(data.status).toLowerCase();
           if (st === 'completed') {
+            terminated = true;
             setStatus('completed');
             setResult({
               ...(data.result || {}),
@@ -98,6 +102,7 @@ export default function Status() {
               /* bỏ qua */
             }
           } else if (st === 'failed') {
+            terminated = true;
             setStatus('failed');
             if (pollRef.current != null) window.clearInterval(pollRef.current);
           } else {
@@ -110,6 +115,7 @@ export default function Status() {
            * gọi mỗi 5s vô hạn. Lỗi mạng thoáng qua thì giữ trạng thái thử lại. */
           if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
             if (!alive) return;
+            terminated = true;
             setStatus('denied');
             if (pollRef.current != null) window.clearInterval(pollRef.current);
             try {
@@ -153,6 +159,7 @@ export default function Status() {
             const step = asStr(data['step']);
             const st = asStr(data['status']);
             if (step === 'completed' || st === 'completed') {
+              terminated = true;
               const inner = data['data'] as Record<string, unknown> | undefined;
               if (inner && inner['result']) {
                 const r = inner['result'] as ScanResult;
@@ -168,6 +175,7 @@ export default function Status() {
               if (pollRef.current != null) window.clearInterval(pollRef.current);
             }
             if (step === 'error' || st === 'failed') {
+              terminated = true;
               setStatus('failed');
               if (pollRef.current != null) window.clearInterval(pollRef.current);
             }
@@ -177,10 +185,10 @@ export default function Status() {
         };
         ws.onclose = () => {
           clearInterval(pingInterval);
-          if (!alive) return;
+          if (!alive || terminated) return;
           setWsState('disconnected');
           window.setTimeout(() => {
-            if (alive) connectWs();
+            if (alive && !terminated) connectWs();
           }, 3000);
         };
       } catch {

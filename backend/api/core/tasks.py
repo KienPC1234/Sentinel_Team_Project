@@ -13,6 +13,9 @@ from django.core.cache import cache
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
+# Ngưỡng rủi ro canonical dùng chung cho mọi loại quét (điểm #1 — nhất quán).
+from api.utils.trust_guard import level_from_score as _level_from_score
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 if not logger.handlers:
@@ -24,6 +27,50 @@ if not logger.handlers:
     except Exception:
         pass
     logger.addHandler(fh)
+
+
+def _run_with_timeout(fn, timeout: float = 15.0, default=None):
+    """Chạy `fn()` có giới hạn thời gian (chống treo khi gọi mạng không timeout).
+
+    Trả `default` nếu quá hạn hoặc lỗi. Thread nền (nếu treo) tự kết thúc khi
+    syscall trả về; ta không chặn worker chờ nó.
+    """
+    import concurrent.futures as _cf
+    ex = _cf.ThreadPoolExecutor(max_workers=1)
+    fut = ex.submit(fn)
+    try:
+        return fut.result(timeout=timeout)
+    except _cf.TimeoutError:
+        logger.warning(f"[Task] operation timed out after {timeout}s")
+        return default
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[Task] operation failed: {e}")
+        return default
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+
+@shared_task(name='core.reap_stale_scans')
+def reap_stale_scans(max_age_minutes: int = 15):
+    """Đánh dấu FAILED cho scan kẹt PENDING/PROCESSING quá lâu (worker mất job,...).
+
+    Trước đây job bị mất/hang khiến ScanEvent kẹt vô hạn và frontend poll mãi.
+    """
+    from api.core.models import ScanEvent, ScanStatus
+    cutoff = timezone.now() - timedelta(minutes=max_age_minutes)
+    stale = list(ScanEvent.objects.filter(
+        status__in=[ScanStatus.PENDING, ScanStatus.PROCESSING],
+        created_at__lt=cutoff,
+    )[:500])
+    for ev in stale:
+        rj = dict(ev.result_json) if isinstance(ev.result_json, dict) else {}
+        rj.setdefault('error', 'Quá thời gian xử lý — đã đánh dấu thất bại. Vui lòng thử lại.')
+        ev.status = ScanStatus.FAILED
+        ev.result_json = rj
+        ev.save(update_fields=['status', 'result_json'])
+    if stale:
+        logger.warning(f"[Reaper] Đánh dấu {len(stale)} scan kẹt thành FAILED.")
+    return {'reaped': len(stale)}
 
 
 def _broadcast_forum_live_event(event_name: str, payload: dict):
@@ -710,10 +757,24 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         all_emails = set()
         all_bank_accounts = set()
 
-        for i, img_b64 in enumerate(images_data):
+        for i, item in enumerate(images_data):
             try:
                 send_progress(f"Đang phân tích ảnh {i+1}/{num_images} (OCR + QR)...", step="ocr")
-                if ',' in img_b64: img_b64 = img_b64.split(',')[1]
+                if isinstance(item, dict):
+                    img_b64 = item.get('content') or item.get('base64') or item.get('data') or ''
+                    img_name = item.get('name') or f"image_{i}.png"
+                else:
+                    img_b64 = str(item or '')
+                    img_name = f"image_{i}.png"
+
+                if ',' in img_b64:
+                    img_b64 = img_b64.split(',', 1)[1]
+                img_b64 = img_b64.strip()
+                if not img_b64:
+                    continue
+                if len(img_b64) % 4 != 0:
+                    img_b64 += '=' * ((4 - len(img_b64) % 4) % 4)
+
                 # 0. Native vision primary (bool-gated): model nhìn trực tiếp,
                 # OCR chỉ chạy khi vision tắt hoặc thất bại (fallback).
                 try:
@@ -735,7 +796,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
                     send_progress(f"Ảnh {i+1}: Vision không khả dụng, chuyển sang OCR...", step="vision_fallback")
                 img_bytes = base64.b64decode(img_b64)
                 img_file = io.BytesIO(img_bytes)
-                img_file.name = f"image_{i}.png"
+                img_file.name = img_name
                 img_file.size = len(img_bytes)
                 
                 ocr_result = extract_ocr_with_boxes(img_file)
@@ -826,10 +887,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
 
         # Determine level correctly (vision trực tiếp và OCR-AI lấy verdict nặng hơn)
         score = max(int(ai_res.get('risk_score') or 0), vision_score)
-        level = RiskLevel.SAFE
-        if score >= 80: level = RiskLevel.RED
-        elif score >= 50: level = RiskLevel.YELLOW
-        elif score >= 20: level = RiskLevel.GREEN
+        level = _level_from_score(score)
 
         # Map reason to explanation if needed
         explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
@@ -865,11 +923,12 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             'annotated_image': annotated_images[0] if annotated_images else '',
         }
 
-        # Save to DB without large annotated images (they bloat the JSON field)
-        scan_event.result_json = _attach_guardrail(
-            {k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')},
-            'qr',
-        )
+        # Gắn guardrail NGAY trên `result` (để payload WS cũng có), rồi lưu DB
+        # bỏ ảnh annotate cho nhẹ JSON field.
+        _attach_guardrail(result, 'qr')
+        scan_event.result_json = {
+            k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')
+        }
         scan_event.risk_score = score
         scan_event.risk_level = level
         scan_event.status = ScanStatus.COMPLETED
@@ -991,13 +1050,7 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
 
         # ── Step 3: Determine risk level and save ──
         score = ai_res.get('risk_score', 0)
-        level = RiskLevel.SAFE
-        if score >= 80:
-            level = RiskLevel.RED
-        elif score >= 50:
-            level = RiskLevel.YELLOW
-        elif score >= 20:
-            level = RiskLevel.GREEN
+        level = _level_from_score(score)
 
         explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
 
@@ -1052,9 +1105,26 @@ def perform_web_scrapping_task(self, scan_event_id, url):
     """
     from api.core.models import ScanEvent, ScanStatus, RiskLevel
     from api.utils.ollama_client import analyze_text_for_scam
-    import whois
-    import dns.resolver
-    from ipwhois import IPWhois, IPDefinedError
+    # Import phụ thuộc ngoài theo cách "mềm": thiếu thư viện (vd python-whois)
+    # KHÔNG được làm task ném lỗi trước khối try/except khiến scan kẹt PROCESSING.
+    try:
+        import whois
+    except Exception as _imp_err:  # noqa: BLE001
+        logger.warning(f"[WebScan] python-whois unavailable: {_imp_err}")
+        whois = None
+    try:
+        import dns.resolver
+    except Exception as _imp_err:  # noqa: BLE001
+        logger.warning(f"[WebScan] dnspython unavailable: {_imp_err}")
+        dns = None
+    try:
+        from ipwhois import IPWhois, IPDefinedError
+    except Exception as _imp_err:  # noqa: BLE001
+        logger.warning(f"[WebScan] ipwhois unavailable: {_imp_err}")
+        IPWhois = None
+
+        class IPDefinedError(Exception):
+            pass
     from api.utils.normalization import normalize_domain
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
@@ -1127,7 +1197,8 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         send_progress(f"Bắt đầu phân tích website...", step="init")
         
         domain = normalize_domain(url)
-        logger.info(f"[WebScan] Event {scan_event_id}: Starting analysis for URL: {url};  Normalized: {domain}")
+        # Chỉ log DOMAIN (URL đầy đủ có thể chứa token/query PII).
+        logger.info(f"[WebScan] Event {scan_event_id}: Starting analysis for domain: {domain}")
         send_progress(f"Tên miền: {domain}", step="init")
 
         content = ""
@@ -1142,8 +1213,8 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             # 1. WHOIS Age
             try:
                 send_progress("Đang tra cứu WHOIS (tuổi tên miền, chủ sở hữu)...", step="whois")
-                w = whois.whois(domain)
-                creation_date = w.creation_date
+                w = _run_with_timeout(lambda: whois.whois(domain), timeout=15) if whois else None
+                creation_date = getattr(w, 'creation_date', None)
                 if isinstance(creation_date, list):
                     creation_date = creation_date[0]
                 
@@ -1195,9 +1266,11 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                 send_progress("Đang kiểm tra ASN / IP Reputation...", step="asn")
                 import socket
                 ip = socket.gethostbyname(domain)
+                if not IPWhois:
+                    raise RuntimeError('ipwhois unavailable')
                 obj = IPWhois(ip)
                 try:
-                    res = obj.lookup_rdap(depth=1)
+                    res = _run_with_timeout(lambda: obj.lookup_rdap(depth=1), timeout=15, default={}) or {}
                     asn_desc = res.get('asn_description', '') or res.get('asn_registry', '')
                     
                     # Check for known bad ASNs or cheap hosting
@@ -1283,11 +1356,10 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         # 1b. FALLBACK: Fetch Content using requests + BeautifulSoup if Puppeteer fails
         if not fetch_success:
             try:
-                from api.utils.security import is_safe_url
+                from api.utils.security import is_safe_url, safe_get
                 if not is_safe_url(target_url):
                     raise ValueError(f"Blocked internal/unsafe URL: {target_url}")
 
-                import requests as http_requests
                 from bs4 import BeautifulSoup
 
                 send_progress("Đang tải nội dung bằng requests (fallback)...", step="scraping_fallback")
@@ -1297,7 +1369,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
                 }
-                resp = http_requests.get(target_url, headers=headers, timeout=15, verify=True, allow_redirects=True)
+                resp = safe_get(target_url, headers=headers, timeout=15, verify=True)
                 resp.raise_for_status()
 
                 html_text = _decode_html_response(resp)
@@ -1320,7 +1392,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                 # Try HTTP fallback if HTTPS failed and no content
                 if not fetch_success and target_url.startswith('https://'):
                     http_url = target_url.replace('https://', 'http://', 1)
-                    resp = http_requests.get(http_url, headers=headers, timeout=15, verify=False, allow_redirects=True)
+                    resp = safe_get(http_url, headers=headers, timeout=15, verify=False)
                     resp.raise_for_status()
                     html_text = _decode_html_response(resp)
                     soup = BeautifulSoup(html_text, 'html.parser')
@@ -1427,13 +1499,8 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             'web_context': ai_res.get('web_context', '')
         }
         
-        # Adjust risk level based on network score
-        if final_risk_score >= 80:
-            result['risk_level'] = RiskLevel.RED
-        elif final_risk_score >= 40:
-             result['risk_level'] = RiskLevel.YELLOW
-        elif final_risk_score >= 10:
-             result['risk_level'] = RiskLevel.GREEN
+        # Adjust risk level based on network score (ngưỡng canonical 70/40/10)
+        result['risk_level'] = _level_from_score(final_risk_score)
 
         scan_event.result_json = _attach_guardrail(result, 'domain')
         scan_event.risk_score = result['risk_score']
@@ -1883,12 +1950,25 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             from api.utils.media_utils import extract_ocr_with_boxes
             from django.core.files.uploadedfile import InMemoryUploadedFile
 
-            for idx, img_b64 in enumerate(images_b64):
+            for idx, item in enumerate(images_b64):
                 send_progress(f"Đang nhận dạng text từ ảnh {idx+1}/{len(images_b64)}...", step="ocr")
                 try:
+                    if isinstance(item, dict):
+                        img_b64 = item.get('content') or item.get('base64') or item.get('data') or ''
+                        img_name = item.get('name') or f"image_{idx}.png"
+                    else:
+                        img_b64 = str(item or '')
+                        img_name = f"image_{idx}.png"
+                    if ',' in img_b64:
+                        img_b64 = img_b64.split(',', 1)[1]
+                    img_b64 = img_b64.strip()
+                    if not img_b64:
+                        continue
+                    if len(img_b64) % 4 != 0:
+                        img_b64 += '=' * ((4 - len(img_b64) % 4) % 4)
                     img_bytes = base64.b64decode(img_b64)
                     img_file = io.BytesIO(img_bytes)
-                    img_file.name = f"image_{idx}.png"
+                    img_file.name = img_name
                     img_file.size = len(img_bytes)
 
                     ocr_result = extract_ocr_with_boxes(img_file)
@@ -2011,6 +2091,11 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                 ai_score = ai_result_data.get('risk_score', 0) or 0
                 ai_explanation = _sanitize_ai_explanation(ai_result_data.get('explanation') or '')
                 ai_notice = ai_result_data.get('ai_notice')
+                # Payload fallback (thiếu dữ liệu) KHÔNG tính là AI khả dụng — nếu
+                # không, điểm quy tắc bị bỏ qua và kết quả bị hạ về SAFE.
+                if ai_result_data.get('insufficient_input'):
+                    ai_available = False
+                    ai_explanation = ''
                 if ai_notice:
                     send_progress(ai_notice, step="ai_retry_notice")
                 send_progress("AI đã hoàn tất phân tích.", step="ai_done")
@@ -2025,7 +2110,8 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         # 5. Final scoring
         send_progress("Đang tổng hợp kết quả...", step="finalizing")
         rule_score = min(100, len(patterns_found) * 15 + max_domain_score)
-        final_score = max(ai_score, max_domain_score) if ai_available else rule_score
+        # Luôn lấy tối đa giữa AI và luật nội bộ (đồng nhất với luồng đồng bộ).
+        final_score = max(ai_score, rule_score, max_domain_score) if ai_available else rule_score
         final_score = max(0, min(100, final_score))
 
         if final_score >= 70:
@@ -2070,10 +2156,12 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             'web_context': (ai_result_data or {}).get('web_context', ''),
         }
 
-        scan_event.result_json = _attach_guardrail(
-            {k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')},
-            'message',
-        )
+        # Gắn guardrail NGAY trên `result` (để payload WS cũng có), rồi lưu DB
+        # bỏ ảnh annotate cho nhẹ JSON field.
+        _attach_guardrail(result, 'message')
+        scan_event.result_json = {
+            k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')
+        }
         scan_event.risk_score = final_score
         scan_event.risk_level = level
         scan_event.status = ScanStatus.COMPLETED
@@ -2239,7 +2327,13 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             if not is_basic_mode:
                 send_progress("Đang tra cứu cơ sở dữ liệu lừa đảo + tìm kiếm web...", step="web_search")
             analysis = analyze_text_for_scam(analysis_input, use_web_search=(not is_basic_mode))
-            logger.info(f"[EmailScan] Event {scan_event_id}: AI Result: {analysis}")
+            # Không log toàn bộ payload AI (có thể chứa subject/body) — chỉ log cờ tổng hợp.
+            logger.info(
+                f"[EmailScan] Event {scan_event_id}: AI done "
+                f"(is_scam={bool(analysis and analysis.get('is_scam'))}, "
+                f"score={(analysis or {}).get('risk_score')}, "
+                f"insufficient={bool(analysis and analysis.get('insufficient_input'))})"
+            )
             ai_notice = analysis.get('ai_notice') if analysis else None
             if ai_notice:
                 send_progress(ai_notice, step="ai_retry_notice")
@@ -2249,7 +2343,13 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
                 send_progress(f"Nguồn tình báo: {src_list}", step="web_sources_ok")
             send_progress("AI đã hoàn tất phân tích nội dung.", step="ai_done")
             
-            if analysis:
+            # AI fallback (thiếu dữ liệu / lỗi) KHÔNG được phép làm GIẢM điểm rủi ro:
+            # trước đây is_scam=False + risk_score=0 -> ai_bonus=-10 hạ điểm oan.
+            ai_fallback = bool(
+                analysis
+                and (analysis.get('insufficient_input') or analysis.get('ai_notice'))
+            )
+            if analysis and not ai_fallback:
                 if analysis.get('is_scam'):
                     ai_bonus = min(35, int((analysis.get('risk_score', 0) or 0) * 0.45))
                 else:
@@ -2283,12 +2383,7 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             deduped_details.append(text)
         
         # Determine Risk Level
-        if final_score >= 80:
-            scan_event.risk_level = RiskLevel.RED
-        elif final_score >= 40:
-            scan_event.risk_level = RiskLevel.YELLOW
-        else:
-            scan_event.risk_level = RiskLevel.GREEN
+        scan_event.risk_level = _level_from_score(final_score)
             
         scan_event.risk_score = final_score
         result_json['analysis_result'] = deduped_details[:40]
@@ -2318,7 +2413,8 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             result_json['web_sources'] = analysis.get('web_sources', [])
             result_json['web_context'] = analysis.get('web_context', '')
             result_json['searched_urls'] = analysis.get('searched_urls', [])
-        scan_event.result_json = result_json
+        # Gắn guardrail/evidence ngay khi lưu (đồng nhất với các loại quét khác).
+        scan_event.result_json = _attach_guardrail(result_json, 'email')
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
         
@@ -2440,17 +2536,30 @@ def perform_file_scan_task(self, scan_event_id, file_path):
             scan_event.risk_score = risk_score
             scan_event.risk_level = risk_level
         else:
+            # Sandbox không trả kết quả => ĐÂY LÀ THẤT BẠI, không được trình bày là
+            # "GREEN/an toàn". Trước đây đánh dấu COMPLETED/GREEN/0 và push "[An toàn]".
             logger.warning(f"[FileScan] Event {scan_event_id}: Sandbox returned no result after {elapsed:.1f}s")
-            scan_event.result_json = {
+            err_payload = {
                 'file_name': display_name,
                 'file_size': file_size,
                 'risk_score': 0,
-                'risk_level': RiskLevel.GREEN,
+                'error': 'Không thể hoàn tất phân tích tệp tin (sandbox không trả kết quả). Vui lòng thử lại.',
+                'insufficient_input': True,
                 'details': ['Không thể hoàn tất phân tích tệp tin. Vui lòng thử lại.'],
                 'summary': 'Quét tệp tin thất bại.',
             }
+            try:
+                from api.utils.trust_guard import apply_guardrail as _apply_guardrail
+                _apply_guardrail(err_payload, kind='file')
+            except Exception as _gr_err:
+                logger.warning(f"[FileScan] Guardrail error: {_gr_err}")
+            scan_event.result_json = err_payload
             scan_event.risk_score = 0
-            scan_event.risk_level = RiskLevel.GREEN
+            scan_event.risk_level = RiskLevel.YELLOW
+            scan_event.status = ScanStatus.FAILED
+            scan_event.save()
+            _notify_scan_complete(scan_event, f"Quét file '{display_name}' thất bại")
+            return
 
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()

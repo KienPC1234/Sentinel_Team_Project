@@ -2,7 +2,7 @@
  *
  * Giao thức: mỗi dòng `data:` là một JSON có `type` do backend phát ra:
  *   delta | thinking | status | metadata | tool_calls | tool_result | image
- *   | title | error | done | debug_prompt
+ *   | title | guardrail | error | done | debug_prompt
  *
  * Mọi consumer chỉ cần xử lý union StreamEvent ở dưới.
  */
@@ -17,6 +17,7 @@ export type StreamEvent =
   | { type: 'tool_result'; tool: string; status?: string; args?: unknown; result?: unknown }
   | { type: 'image'; annotated_image: string }
   | { type: 'title'; value: string }
+  | { type: 'guardrail'; guardrail: Record<string, unknown> }
   | { type: 'error'; message: string }
   | { type: 'done'; session_id?: string | null; title?: string; action_suggested?: string }
   | { type: 'debug_prompt'; messages: unknown };
@@ -60,6 +61,7 @@ export function normalizeStreamEvent(raw: Record<string, unknown>): StreamEvent 
       return { type: 'tool_result', tool: str(raw.tool), status: str(raw.status) || undefined, args: raw.args, result: raw.result };
     case 'image': return { type: 'image', annotated_image: str(raw.annotated_image) };
     case 'title': return { type: 'title', value: str(raw.value) };
+    case 'guardrail': return { type: 'guardrail', guardrail: (raw.guardrail as Record<string, unknown>) || {} };
     case 'error': return { type: 'error', message: str(raw.message) || 'Lỗi không xác định' };
     case 'debug_prompt': return { type: 'debug_prompt', messages: raw.messages };
     case 'done':

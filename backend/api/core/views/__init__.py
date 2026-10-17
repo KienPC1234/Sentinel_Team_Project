@@ -28,6 +28,7 @@ from .forum_views import (ForumPostListCreateView, ForumPostCommentView, ForumPo
                           ForumPostReportView, ForumPostDetailView, ForumCommentLikeView, ForumCommentReportView,
                           ForumCommentReactionView, ForumPostReactionMutualView, ForumPostLikeMutualView, ForumStatsView)
 from .utils_views import EditorImageUploadView, EditorFetchUrlView, MentionUserListView, EditorMediaLibraryView, HealthCheckView
+from .tts_views import TtsView, TtsWarmView
 from .notification_views import (TestPushView, ResetRAGView, PushPublicKeyView,
                                 NotificationListView, NotificationUnreadCountView,
                                 NotificationMarkReadView, NotificationMarkAllReadView,
@@ -119,6 +120,7 @@ __all__ = [
     'SourceCatalogView', 'TrustPolicyView', 'VNOfficialChannelsView',
     'PrivacyNoticeView', 'RedactPreviewView', 'StorageStatusView',
     'PasswordResetRequestView', 'PasswordResetConfirmView',
+    'TtsView', 'TtsWarmView',
 ]
 
 

@@ -58,9 +58,10 @@ class ReportCreateView(APIView):
 
         # Anti-spam verification (bypassed for authenticated API Keys)
         if not is_api_client:
-            # Basic anti-spam throttle: 8 report submits / 10 minutes / IP
-            client_ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', 'unknown')
-            throttle_key = f"report_submit_ip:{client_ip}"
+            # Basic anti-spam throttle: 8 report submits / 10 minutes / IP.
+            # Dùng IP đáng tin (CF-Connecting-IP/REMOTE_ADDR), KHÔNG tin XFF thô.
+            from api.core.throttling import client_ip as _client_ip
+            throttle_key = f"report_submit_ip:{_client_ip(request)}"
             current_hits = int(cache.get(throttle_key, 0))
             if current_hits >= 8:
                 return Response({'error': 'Bạn gửi quá nhanh. Vui lòng thử lại sau vài phút.'}, status=429)

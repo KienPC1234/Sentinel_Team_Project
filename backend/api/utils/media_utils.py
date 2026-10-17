@@ -337,6 +337,13 @@ def extract_ocr_with_boxes(image_file):
             })
 
         full_text = clean_ocr_text('\n'.join(text_parts).strip())
+        if not full_text:
+            try:
+                fallback = extract_ocr_text(image_data)
+                if fallback:
+                    full_text = fallback
+            except Exception as fe:
+                logger.warning(f"Fallback OCR text extraction failed: {fe}")
 
         # 3. Draw Bounding Boxes
         try:
@@ -531,6 +538,20 @@ def get_whisper_model():
             device = 'cpu'
 
         compute_type = 'int8' if device == 'cpu' else 'float16'
+        if device != 'cpu':
+            try:
+                import ctypes
+                import nvidia.cublas.lib
+                _cublas_dir = nvidia.cublas.lib.__path__[0]
+                _lt = os.path.join(_cublas_dir, 'libcublasLt.so.12')
+                _cub = os.path.join(_cublas_dir, 'libcublas.so.12')
+                if os.path.exists(_lt):
+                    ctypes.CDLL(_lt, mode=ctypes.RTLD_GLOBAL)
+                if os.path.exists(_cub):
+                    ctypes.CDLL(_cub, mode=ctypes.RTLD_GLOBAL)
+            except Exception as _ce:
+                logger.debug(f"Preloading cublas12 skipped: {_ce}")
+
         logger.info(
             f"Loading Faster-Whisper model '{model_size}' on device='{device}', "
             f"compute_type='{compute_type}' …"
@@ -618,17 +639,38 @@ def transcribe_audio(audio_file, language=None):
         if language:
             transcribe_kwargs['language'] = language
 
-        segments_iter, info = model.transcribe(file_for_model, **transcribe_kwargs)
-
         segments = []
         full_text_parts = []
-        for seg in segments_iter:
-            segments.append({
-                'start': round(seg.start, 2),
-                'end':   round(seg.end, 2),
-                'text':  seg.text.strip(),
-            })
-            full_text_parts.append(seg.text.strip())
+        try:
+            segments_iter, info = model.transcribe(file_for_model, **transcribe_kwargs)
+            for seg in segments_iter:
+                segments.append({
+                    'start': round(seg.start, 2),
+                    'end':   round(seg.end, 2),
+                    'text':  seg.text.strip(),
+                })
+                full_text_parts.append(seg.text.strip())
+        except Exception as te:
+            err_msg = str(te).lower()
+            if any(k in err_msg for k in ('cublas', 'cuda', 'cudnn', 'device', 'library')):
+                logger.warning(f"Whisper GPU execution failed ({te}), falling back to CPU model...")
+                from faster_whisper import WhisperModel
+                from django.conf import settings
+                cpu_model = WhisperModel(getattr(settings, 'WHISPER_MODEL_SIZE', 'small'), device='cpu', compute_type='int8')
+                global _WHISPER_MODEL
+                _WHISPER_MODEL = cpu_model
+                segments_iter, info = cpu_model.transcribe(file_for_model, **transcribe_kwargs)
+                segments = []
+                full_text_parts = []
+                for seg in segments_iter:
+                    segments.append({
+                        'start': round(seg.start, 2),
+                        'end':   round(seg.end, 2),
+                        'text':  seg.text.strip(),
+                    })
+                    full_text_parts.append(seg.text.strip())
+            else:
+                raise
 
         transcript = ' '.join(full_text_parts)
         detected_lang = getattr(info, 'language', language or '')

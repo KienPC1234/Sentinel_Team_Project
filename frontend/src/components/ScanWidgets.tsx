@@ -77,11 +77,22 @@ export function guardrailTone(result: ScanResult | null | undefined): string {
   return level;
 }
 
+const RAW_LEVEL_VI: Record<string, string> = {
+  RED: 'Nguy cơ cao',
+  CRITICAL: 'Nguy hiểm',
+  HIGH: 'Nguy cơ cao',
+  YELLOW: 'Cần thận trọng',
+  MEDIUM: 'Cần thận trọng',
+};
+
 export function guardrailLabel(result: ScanResult | null | undefined): string {
   const g = (result?.['guardrail'] || {}) as Record<string, unknown>;
   const label = asStr(g['label']);
   if (label) return label;
-  return asStr(result?.['risk_level']) || 'CHƯA ĐỦ CƠ SỞ XÁC MINH';
+  // Không guardrail (dữ liệu cũ): KHÔNG trả về nhãn tiếng Anh thô như "SAFE"/"GREEN"
+  // (dễ gây hiểu nhầm là đã xác minh an toàn). Mức thấp -> "CHƯA ĐỦ CƠ SỞ XÁC MINH".
+  const level = asStr(result?.['risk_level']).toUpperCase();
+  return RAW_LEVEL_VI[level] || 'CHƯA ĐỦ CƠ SỞ XÁC MINH';
 }
 
 export function apiBase(): string {
@@ -219,8 +230,6 @@ export function TurnstileWidget({ onToken }: { onToken?: (token: string) => void
     };
     void loadTsScript().then(() => {
       if (!alive || !boxRef.current || !window.turnstile) return;
-      if (boxRef.current.dataset.rendered === '1') return;
-      boxRef.current.dataset.rendered = '1';
       try {
         const id = window.turnstile.render(boxRef.current, {
           sitekey: siteKey,
@@ -387,12 +396,15 @@ export function useScanTracker(
       }
       cbRef.current.onError?.(msg);
     };
+    let pollFailures = 0;
+    const maxPollFailures = 8;
     const pollOnce = (): void => {
       if (finished || !alive) return;
       api
         .get<StatusPayload>(`/scan/status/${scanId}/`)
         .then((data) => {
           if (finished || !alive || !data) return;
+          pollFailures = 0;
           const st = asStr(data.status).toLowerCase();
           if (st === 'completed' && data.result) {
             finishOk({ ...data, result: data.result });
@@ -400,8 +412,18 @@ export function useScanTracker(
             finishErr('Phân tích thất bại.');
           }
         })
-        .catch(() => {
-          /* giữ polling, WS hoặc lần sau sẽ lấy */
+        .catch((e: unknown) => {
+          if (finished || !alive) return;
+          // 403/404: không có quyền / không tồn tại -> dừng ngay, không poll vô hạn.
+          const statusCode = (e as { status?: number } | null)?.status;
+          if (statusCode === 403 || statusCode === 404) {
+            finishErr('Không tìm thấy hoặc không có quyền xem phiên quét này.');
+            return;
+          }
+          pollFailures += 1;
+          if (pollFailures >= maxPollFailures) {
+            finishErr('Không thể lấy trạng thái phân tích. Vui lòng thử lại sau.');
+          }
         });
     };
     const scheduleReconnect = (): void => {
@@ -837,7 +859,7 @@ export function OsintSection({ result }: { result: ScanResult }): ReactNode {
 
 /* ============ TrustGuardrailPanel (guardrail + evidence — góp ý hội đồng #1/#4) ============ */
 
-interface GuardrailData {
+export interface GuardrailData {
   tier?: string;
   label?: string;
   confidence?: number;
@@ -849,6 +871,9 @@ interface GuardrailData {
   official_channels?: Array<{ name?: string; phone?: string; url?: string; description?: string }>;
   evidence_count?: number;
   sources_used?: string[];
+  evidence?: EvidenceItem[];
+  answer_asserts_absolute_safety?: boolean;
+  kind?: string;
 }
 
 interface EvidenceItem {
@@ -1049,6 +1074,116 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
           </details>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ============ ChatGuardrailNote (guardrail cấu trúc cho chat — góp ý hội đồng #1) ============
+ * Bản compact của TrustGuardrailPanel, dùng trong bong bóng chat (Assistant/ChatWidget/ElderChat):
+ * kết luận guardrail + cảnh báo AI có thể sai + bằng chứng + kênh xác minh chính thức. */
+export function ChatGuardrailNote({ guardrail }: { guardrail?: GuardrailData | null }): ReactNode {
+  const [openEvidence, setOpenEvidence] = useState(false);
+  const g = guardrail || {};
+  if (!g.tier) return null;
+
+  const tier = g.tier;
+  const meta = TIER_META[tier] || TIER_META.INSUFFICIENT;
+  const evidence = asArr<EvidenceItem>(g.evidence);
+  const channels = g.official_channels || [];
+  const visible = openEvidence ? evidence : evidence.slice(0, 3);
+  const conf = typeof g.confidence === 'number' ? Math.round(g.confidence * 100) : null;
+
+  return (
+    <div className={`mt-2 rounded-xl border p-3 space-y-2 ${meta.ring}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <i className={`bi ${meta.icon} text-sm ${meta.cls}`}></i>
+        <span className={`text-[11px] font-black uppercase tracking-wide ${meta.cls}`}>{g.label || tier}</span>
+        {conf !== null && (
+          <span className="px-2 py-0.5 rounded-full bg-white/5 text-white/50 text-[9px] font-black border border-white/10">
+            {conf}%
+          </span>
+        )}
+        <span className="px-2 py-0.5 rounded-full bg-white/5 text-white/50 text-[9px] font-black border border-white/10">
+          {g.is_conclusive ? 'Có bằng chứng xác thực' : 'Cần xác minh thêm'}
+        </span>
+      </div>
+
+      {g.answer_asserts_absolute_safety && (
+        <p className="text-[10px] text-warn-400/90 leading-relaxed">
+          <i className="bi bi-exclamation-triangle-fill me-1"></i>
+          Câu trả lời có khẳng định chắc chắn — hệ thống không xác nhận mức độ an toàn tuyệt đối.
+        </p>
+      )}
+
+      {(g.cautions || []).length > 0 && (
+        <ul className="space-y-1">
+          {(g.cautions || []).slice(0, 3).map((c, i) => (
+            <li key={i} className="flex items-start gap-1.5 text-[10px] text-white/55 leading-relaxed">
+              <i className="bi bi-dot text-brand-400 mt-0.5"></i>
+              <span>{c}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {evidence.length > 0 && (
+        <div className="pt-1 border-t border-white/5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">
+              <i className="bi bi-list-check me-1"></i>{evidence.length} bằng chứng
+            </span>
+            {evidence.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setOpenEvidence(!openEvidence)}
+                className="text-[9px] font-black text-brand-400 hover:text-brand-300"
+              >
+                {openEvidence ? 'Thu gọn' : 'Xem thêm'}
+              </button>
+            )}
+          </div>
+          <div className="mt-1.5 space-y-1">
+            {visible.map((e, i) => (
+              <div key={i} className="text-[10px] text-white/55 leading-relaxed">
+                <span className="font-bold text-white/75">{e.source_name || e.source}</span>
+                {e.reliability && (
+                  <span className="ml-1 text-white/35">
+                    [{RELIABILITY_META[String(e.reliability)]?.label || e.reliability}]
+                  </span>
+                )}
+                {' — '}
+                {e.detail}
+                {e.url && (
+                  <a href={e.url} target="_blank" rel="noopener noreferrer" className="ml-1 text-brand-400">
+                    <i className="bi bi-box-arrow-up-right text-[9px]"></i>
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {channels.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
+          {channels.slice(0, 4).map((c, i) => (
+            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-brand-500/[0.06] border border-brand-500/20 text-[9px]">
+              <i className="bi bi-building-check text-brand-400"></i>
+              <span className="text-white/65 font-bold">{c.name}</span>
+              {c.phone && (
+                <a href={`tel:${String(c.phone).replace(/[^0-9+]/g, '')}`} className="text-brand-400 font-black">
+                  {c.phone}
+                </a>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[9px] text-white/35 leading-relaxed">
+        <i className="bi bi-info-circle me-1"></i>
+        {g.disclaimer || 'Kết quả phân tích tự động chỉ mang tính tham khảo, không thay thế kết luận của cơ quan chức năng.'}
+      </p>
     </div>
   );
 }

@@ -24,6 +24,10 @@ from analyze import (
 )
 
 PORT = int(os.getenv('SANDBOX_PORT', '5005'))
+BIND_HOST = os.getenv('SANDBOX_BIND_HOST', '0.0.0.0')
+# Token tuỳ chọn bảo vệ daemon (bật bằng cách đặt SANDBOX_DAEMON_TOKEN ở CẢ
+# server và client). Mặc định rỗng = không bật (tương thích ngược).
+AUTH_TOKEN = os.getenv('SANDBOX_DAEMON_TOKEN', '')
 
 
 class SandboxRequestHandler(BaseHTTPRequestHandler):
@@ -64,6 +68,9 @@ class SandboxRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == '/scan':
+            if AUTH_TOKEN and self.headers.get('X-Sandbox-Token', '') != AUTH_TOKEN:
+                self._send_json(401, {'error': 'Unauthorized'})
+                return
             target_file_path = None
             is_temp = False
             try:
@@ -127,8 +134,11 @@ class SandboxRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_daemon():
-    server = ThreadingHTTPServer(('0.0.0.0', PORT), SandboxRequestHandler)
-    sys.stderr.write(f"🚀 Sentinel Malware Sandbox Daemon (Multi-Threaded) running on port {PORT}\n")
+    server = ThreadingHTTPServer((BIND_HOST, PORT), SandboxRequestHandler)
+    sys.stderr.write(
+        f"🚀 Sentinel Malware Sandbox Daemon (Multi-Threaded) running on {BIND_HOST}:{PORT}"
+        f"{' [token-protected]' if AUTH_TOKEN else ''}\n"
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

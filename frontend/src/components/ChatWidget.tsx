@@ -3,13 +3,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { renderMd, safeUrl } from '../lib/chat/markdown';
 import { StreamHttpError, openSseStream } from '../lib/chat/stream';
 import { MarkdownView } from './ui';
+import { ChatGuardrailNote, type GuardrailData } from './ScanWidgets';
 import { showToast } from '../lib/ui/feedback';
 
 /* Port đầy đủ từ PKV/templates/ai_chat/chat_widget_inline.html + PKV/static/js/chat/widget.js
  * (Alpine x-data="chatWidget()" -> React useState). Floating widget, tự quản open/state.
  */
 interface SrcItem { title?: string; url?: string; }
-interface WMeta { web_search?: SrcItem[] | null; internal_knowledge?: SrcItem[] | null; }
+interface WMeta { web_search?: SrcItem[] | null; internal_knowledge?: SrcItem[] | null; guardrail?: GuardrailData | null; }
 interface WMsg {
   from: 'bot' | 'user';
   text: string;
@@ -213,12 +214,16 @@ export default function ChatWidget() {
               patch((x) => ({
                 ...x,
                 metadata: {
-                  web_search: (md.web_search as SrcItem[] | undefined) || null,
-                  internal_knowledge: (md.internal_knowledge as SrcItem[] | undefined) || null,
+                  ...(x.metadata || {}),
+                  web_search: (md.web_search as SrcItem[] | undefined) ?? (x.metadata?.web_search || null),
+                  internal_knowledge: (md.internal_knowledge as SrcItem[] | undefined) ?? (x.metadata?.internal_knowledge || null),
                 },
               }));
               break;
             }
+            case 'guardrail':
+              patch((x) => ({ ...x, metadata: { ...(x.metadata || {}), guardrail: (ev.guardrail as GuardrailData) } }));
+              break;
             case 'title':
               if (ev.value && ev.value !== 'Guest Session') setChatTitle(ev.value);
               break;
@@ -297,6 +302,9 @@ export default function ChatWidget() {
                   )}
                   <MarkdownView html={msg.html || msg.text} className="text-xs" />
                   {msg.streaming && <span className="streaming-cursor"></span>}
+                  {msg.from === 'bot' && !msg.streaming && msg.metadata?.guardrail?.tier && (
+                    <ChatGuardrailNote guardrail={msg.metadata.guardrail} />
+                  )}
                   {msg.from === 'bot' && !msg.streaming && msg.metadata && ((msg.metadata.web_search || []).length + (msg.metadata.internal_knowledge || []).length > 0) && (
                     <div className="search-results-container mt-2">
                       <button

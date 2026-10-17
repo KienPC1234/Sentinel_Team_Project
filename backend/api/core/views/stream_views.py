@@ -37,6 +37,22 @@ class ScanAnalyzeSSEView(APIView):
         scan_data = request.data.get('scan_data')
         raw_input = request.data.get('raw_input', '')
 
+        # Chuẩn hoá kiểu: chống 500 khi client gửi raw_input không phải chuỗi
+        # (trước đây `raw_input[:50]` raise TypeError -> 500 chưa bắt).
+        if raw_input is None:
+            raw_input = ''
+        elif not isinstance(raw_input, str):
+            raw_input = str(raw_input)
+        if scan_type is not None and not isinstance(scan_type, str):
+            scan_type = str(scan_type)
+
+        # Chỉ dùng target gốc (allow_pii=True) cho người dùng đã xác thực / API key
+        # hoặc khi được phép xem scan; ẩn danh chưa rõ chủ sở hữu -> redact PII.
+        allow_pii = bool(
+            getattr(request.user, 'is_authenticated', False)
+            or getattr(request, 'is_api_key_auth', False)
+        )
+
         if scan_id:
             from api.core.models import ScanEvent
             try:
@@ -61,8 +77,12 @@ class ScanAnalyzeSSEView(APIView):
             except Exception:
                 pass
 
-        logger.info(f"SSE Request: type={scan_type}, raw_input={raw_input[:50]}...")
-        logger.debug(f"SSE scan_data: {scan_data}")
+        try:
+            from api.utils.privacy import redact_pii as _redact
+            _safe_preview = _redact(raw_input[:50])
+        except Exception:
+            _safe_preview = ''
+        logger.info(f"SSE Request: type={scan_type}, raw_input={_safe_preview}...")
 
         if not scan_type:
             logger.error("SSE Error: Missing scan_type")
@@ -154,8 +174,9 @@ class ScanAnalyzeSSEView(APIView):
                 else:
                     prompt = f"Hãy phân tích rủi ro an ninh mạng cho {scan_type} sau bằng tiếng Việt: {raw_input}. Dữ liệu kèm theo: {json.dumps(scan_data, ensure_ascii=False)}"
 
-                # Giai thich ket qua quet can dung target goc -> allow_pii + audit.
-                for chunk in stream_response(prompt, system_prompt=CHAT_SYSTEM_PROMPT, allow_pii=True):
+                # Giải thích kết quả quét: chỉ dùng target gốc khi caller đã xác
+                # thực; người dùng ẩn danh được redact PII trước khi gửi LLM cloud.
+                for chunk in stream_response(prompt, system_prompt=CHAT_SYSTEM_PROMPT, allow_pii=allow_pii):
                     if not chunk or chunk.startswith('__'):
                         continue
                     yield f"data: {json.dumps({'type': 'delta', 'text': chunk}, ensure_ascii=False)}\n\n"

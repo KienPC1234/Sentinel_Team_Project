@@ -469,7 +469,8 @@ class ScanPhoneSerializer(serializers.Serializer):
 
 
 class ScanMessageSerializer(serializers.Serializer):
-    message = serializers.CharField(required=False, allow_blank=True)
+    # Giới hạn độ dài để tránh DoS (regex + LLM + VirusTotal trên văn bản khổng lồ).
+    message = serializers.CharField(required=False, allow_blank=True, max_length=20000)
 
     def validate(self, attrs):
         # We check request.FILES in the view for multi-image

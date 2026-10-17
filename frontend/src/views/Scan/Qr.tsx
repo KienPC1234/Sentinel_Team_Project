@@ -153,6 +153,7 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
   const entities = (result?.['entities'] as QrEntities | undefined) || null;
   const patterns = asArr<unknown>(result?.['patterns_found']);
   const explanation = asStr(result?.['explanation']);
+  const ocrText = asStr(result?.['ocr_text']);
 
   return (
     <div className="max-w-7xl mx-auto px-4 pt-16 sm:pt-20 pb-20 lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 lg:items-start">
@@ -445,6 +446,20 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
                           </div>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {ocrText && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-white/55 uppercase tracking-widest flex items-center gap-2">
+                        <i className="bi bi-file-earmark-text"></i> Nội dung văn bản trích xuất (OCR)
+                      </h4>
+                      <span className="text-[10px] text-white/40 font-mono">{ocrText.length} ký tự</span>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 max-h-60 overflow-y-auto custom-scrollbar font-mono text-xs text-white/80 whitespace-pre-wrap leading-relaxed select-all">
+                      {ocrText}
                     </div>
                   </div>
                 )}

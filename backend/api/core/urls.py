@@ -187,6 +187,10 @@ urlpatterns = [
     # Health check probe
     path('health/', views.HealthCheckView.as_view(), name='health-check'),
 
+    # Text-to-Speech tiếng Việt (chế độ người cao tuổi) — giọng server
+    path('tts/', views.TtsView.as_view(), name='tts'),
+    path('tts/warm/', views.TtsWarmView.as_view(), name='tts-warm'),
+
     # Backward-compatible and cross-subsystem URL aliases
     path('forum/announcements/', views.AnnouncementListCreateView.as_view(), name='forum-announcements-alias'),
     path('scam-radar/', views.ScamRadarStatsView.as_view(), name='scam-radar-alias'),

@@ -250,7 +250,17 @@ class PublicProfileView(APIView):
 
     @extend_schema(responses={200: serializers.DictField()})
     def get(self, request, username):
-        user = get_object_or_404(User.objects.select_related('profile'), username=username)
+        from urllib.parse import unquote
+        from django.http import Http404
+        clean_username = unquote(username).strip()
+        if clean_username.startswith('@'):
+            clean_username = clean_username[1:].strip()
+        user = User.objects.select_related('profile').filter(username__iexact=clean_username).first()
+        if not user:
+            user = User.objects.select_related('profile').filter(username__iexact=username.strip()).first()
+        if not user:
+            raise Http404("Người dùng không tồn tại.")
+
         posts = ForumPost.objects.filter(author=user).order_by('-created_at')[:10]
         
         return Response({

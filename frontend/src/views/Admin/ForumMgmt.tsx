@@ -194,8 +194,23 @@ function mapBan(b: ApiBan): BanRow {
 }
 
 const CAT_COLORS: Record<string, string> = {
-  warning: 'var(--sc-danger-500)', discussion: 'var(--sc-brand-500)', experience: 'var(--sc-brand2-500)',
-  question: 'var(--sc-warn-500)', news: 'var(--sc-safe-500)', guide: 'var(--sc-brand-500)',
+  warning: '#ef4444',
+  discussion: '#06b6d4',
+  experience: '#a855f7',
+  question: '#f59e0b',
+  news: '#10b981',
+  guide: '#3b82f6',
+  alert: '#f43f5e',
+};
+
+const CAT_LABELS: Record<string, string> = {
+  warning: 'Cảnh báo',
+  discussion: 'Thảo luận',
+  experience: 'Chia sẻ kinh nghiệm',
+  question: 'Hỏi đáp',
+  news: 'Tin tức',
+  guide: 'Hướng dẫn',
+  alert: 'Khẩn cấp',
 };
 
 function timeAgo(iso?: string): string {
@@ -376,12 +391,12 @@ export default function ForumMgmt() {
             datasets: [{
               label: 'Bài viết',
               data: dailyData.map((d) => d.count),
-              borderColor: 'var(--sc-brand-500)',
-              backgroundColor: 'rgba(6,182,212,0.1)',
+              borderColor: '#06b6d4',
+              backgroundColor: 'rgba(6,182,212,0.15)',
               borderWidth: 2,
               fill: true,
               tension: 0.4,
-              pointBackgroundColor: 'var(--sc-brand-500)',
+              pointBackgroundColor: '#06b6d4',
               pointRadius: 3,
               pointHoverRadius: 5,
             }],
@@ -402,10 +417,10 @@ export default function ForumMgmt() {
         charts.push(new Chart(categoryRef.current, {
           type: 'doughnut',
           data: {
-            labels: categoryData.map((d) => d.category || 'Khác'),
+            labels: categoryData.map((d) => CAT_LABELS[d.category] || d.category || 'Khác'),
             datasets: [{
               data: categoryData.map((d) => d.count),
-              backgroundColor: categoryData.map((d) => CAT_COLORS[d.category] || 'var(--sc-gray-500)'),
+              backgroundColor: categoryData.map((d) => CAT_COLORS[d.category] || '#64748b'),
               borderWidth: 0,
               hoverOffset: 6,
             }],
@@ -426,7 +441,7 @@ export default function ForumMgmt() {
             labels: ['Chờ', 'Duyệt', 'Từ chối', 'AI Flag'],
             datasets: [{
               data: [reportData.pending, reportData.approved, reportData.rejected, reportData.ai_flagged],
-              backgroundColor: ['var(--sc-warn-500)', 'var(--sc-safe-500)', 'var(--sc-danger-500)', 'var(--sc-warn-500)'],
+              backgroundColor: ['#f59e0b', '#10b981', '#ef4444', '#06b6d4'],
               borderWidth: 0,
             }],
           },

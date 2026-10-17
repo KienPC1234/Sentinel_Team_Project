@@ -22,6 +22,7 @@ import { api } from '../../lib/api';
 import { escapeHtml, escapeRegExp, renderMd, safeUrl } from '../../lib/chat/markdown';
 import { openSseStream } from '../../lib/chat/stream';
 import { MarkdownView } from '../../components/ui';
+import { ChatGuardrailNote, type GuardrailData } from '../../components/ScanWidgets';
 import { useAuth } from '../../components/AuthContext';
 
 import { toast } from 'sonner';
@@ -65,7 +66,7 @@ import {
 interface ChatSession { id: string; title?: string; folder?: number | null; }
 interface ChatFolder { id: number; name: string; }
 interface SrcItem { title?: string; url?: string; text?: string; }
-interface MsgMeta { internal_knowledge?: SrcItem[]; web_search?: SrcItem[]; }
+interface MsgMeta { internal_knowledge?: SrcItem[]; web_search?: SrcItem[]; guardrail?: GuardrailData; }
 interface ChatMsg { id?: number; role: string; message: string; images?: string[]; metadata?: MsgMeta | null; rating?: number; created_at?: string; }
 interface ToolCall { tool: string; args?: Record<string, unknown>; result?: unknown; done: boolean; label: string; }
 interface SavedMsg { id: number; message_role: string; message_text: string; session_title?: string; session_id?: string; }
@@ -406,7 +407,7 @@ const MessageRow = memo(function MessageRow({
             </button>
           )}
           {m.showThinking !== false && m.thinking && (
-            <div className="mb-3 max-h-56 overflow-y-auto border-l-2 border-white/15 pl-4 text-[13.5px] whitespace-pre-wrap text-[var(--gpt-muted)]">{m.thinking}</div>
+            <div className="mb-3 max-h-56 overflow-y-auto border-l-2 border-white/15 pl-4 text-[13px] whitespace-pre-wrap text-[var(--gpt-muted)]">{m.thinking}</div>
           )}
           {(m.tools || []).map((t, k) => <ToolCard key={`${t.tool}-${k}`} t={t} />)}
           <div className="text-[var(--gpt-text)]">
@@ -426,6 +427,9 @@ const MessageRow = memo(function MessageRow({
           )}
           {m.metadata && ((m.metadata.internal_knowledge || []).length + (m.metadata.web_search || []).length > 0) && (
             <SourcesAccordion meta={m.metadata} />
+          )}
+          {!m.streaming && m.metadata?.guardrail?.tier && (
+            <ChatGuardrailNote guardrail={m.metadata.guardrail} />
           )}
           {!m.streaming && m.message && (
             <div className="hover-reveal mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -487,6 +491,8 @@ export default function Assistant() {
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [navWidth, setNavWidth] = useState(NAV_DEFAULT);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const pendingImagesRef = useRef<string[]>([]);
+  pendingImagesRef.current = pendingImages;
   const [editId, setEditId] = useState<number | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -536,6 +542,7 @@ export default function Assistant() {
   const [atBottom, setAtBottom] = useState(true);
   const [composerH, setComposerH] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastPasteTimeRef = useRef<number>(0);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const seqRef = useRef(0);
   const cfgTimer = useRef<number | null>(null);
@@ -830,8 +837,8 @@ export default function Assistant() {
     }
   }, [routeSession, loadDetail, resetHome]);
 
-  const addFiles = (files: File[]) => {
-    let room = 4 - pendingImages.length;
+  const addFiles = useCallback((files: File[]) => {
+    let room = 4 - pendingImagesRef.current.length;
     let warned = false;
     files.forEach((f) => {
       if (!f.type.startsWith('image/')) return;
@@ -847,11 +854,98 @@ export default function Assistant() {
       const r = new FileReader();
       r.onload = (ev) => {
         const dataUrl = String(ev.target?.result || '');
+        if (!dataUrl) return;
         setPendingImages((p) => (p.length >= 4 ? p : [...p, dataUrl]));
       };
       r.readAsDataURL(f);
     });
-  };
+  }, [notify]);
+
+  const extractImagesFromClipboard = useCallback((e: React.ClipboardEvent | ClipboardEvent): File[] => {
+    const data = e.clipboardData;
+    if (!data) return [];
+    const imageFiles: File[] = [];
+
+    // 1. Check data.items (standard for screenshots copied to clipboard)
+    if (data.items && data.items.length > 0) {
+      for (let i = 0; i < data.items.length; i++) {
+        const item = data.items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            const ext = file.type.split('/')[1] || 'png';
+            const cleanName = file.name && file.name !== 'image.png'
+              ? file.name
+              : `screenshot-${Date.now()}.${ext}`;
+            const namedFile = new File([file], cleanName, { type: file.type });
+            imageFiles.push(namedFile);
+          }
+        }
+      }
+    }
+
+    // 2. Check data.files fallback
+    if (imageFiles.length === 0 && data.files && data.files.length > 0) {
+      for (let i = 0; i < data.files.length; i++) {
+        const file = data.files[i];
+        if (file.type.startsWith('image/')) {
+          imageFiles.push(file);
+        }
+      }
+    }
+
+    return imageFiles;
+  }, []);
+
+  const onPaste = useCallback((e: React.ClipboardEvent) => {
+    const now = Date.now();
+    if (now - lastPasteTimeRef.current < 400) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    const images = extractImagesFromClipboard(e);
+    if (images.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      lastPasteTimeRef.current = now;
+      addFiles(images);
+      notify(`Đã dán ${images.length} ảnh từ bộ nhớ tạm`, 'info');
+    }
+  }, [extractImagesFromClipboard, addFiles, notify]);
+
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        !target ||
+        target === inputRef.current ||
+        composerRef.current?.contains(target) ||
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastPasteTimeRef.current < 400) {
+        e.preventDefault();
+        return;
+      }
+      const images = extractImagesFromClipboard(e);
+      if (images.length > 0) {
+        e.preventDefault();
+        lastPasteTimeRef.current = now;
+        addFiles(images);
+        notify(`Đã dán ${images.length} ảnh từ bộ nhớ tạm`, 'info');
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => {
+      window.removeEventListener('paste', handleGlobalPaste);
+    };
+  }, [extractImagesFromClipboard, addFiles, notify]);
 
   const onFiles = (e: FormEvent<HTMLInputElement>) => {
     addFiles(Array.from((e.target as HTMLInputElement).files || []));
@@ -966,6 +1060,9 @@ export default function Assistant() {
             }
             case 'metadata':
               patchBot((m) => ({ ...m, metadata: { ...(m.metadata || {}), ...(ev.metadata as MsgMeta) } }));
+              break;
+            case 'guardrail':
+              patchBot((m) => ({ ...m, metadata: { ...(m.metadata || {}), guardrail: ev.guardrail as GuardrailData } }));
               break;
             case 'tool_calls':
               for (const raw of ev.calls as ToolCallPayload[]) {
@@ -1815,7 +1912,8 @@ export default function Assistant() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (streaming) stop(); else void send(); } }}
-                    placeholder={editId ? 'Đang chỉnh sửa...' : 'Nhập tin nhắn...'}
+                    onPaste={onPaste}
+                    placeholder={editId ? 'Đang chỉnh sửa...' : 'Nhập tin nhắn... (hoặc dán ảnh Ctrl+V)'}
                     className="max-h-48 flex-1 resize-none border-0 bg-transparent py-2.5 text-[15px] leading-6 text-[var(--gpt-text)] placeholder:text-[var(--gpt-faint)] focus:outline-none"
                   />
                   <div className="flex items-center gap-0.5 pb-1 pr-1">
@@ -1834,7 +1932,7 @@ export default function Assistant() {
                           <input type="file" multiple accept="image/*" className="hidden" onChange={onFiles} />
                         </label>
                       </TooltipTrigger>
-                      <TooltipContent side="top">Đính kèm ảnh</TooltipContent>
+                      <TooltipContent side="top">Đính kèm ảnh (hoặc dán ảnh Ctrl+V)</TooltipContent>
                     </Tooltip>
                     <Button
                       type="button"

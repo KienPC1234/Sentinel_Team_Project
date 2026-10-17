@@ -53,6 +53,29 @@ function formatTimestamp(seconds: unknown): string {
   return `${m}:${s}`;
 }
 
+function computeAcousticLevel(analyser: AnalyserNode, timeBuffer: Uint8Array): number {
+  analyser.getByteTimeDomainData(timeBuffer as unknown as Parameters<AnalyserNode['getByteTimeDomainData']>[0]);
+  let sumSquares = 0;
+  let maxDev = 0;
+  for (let i = 0; i < timeBuffer.length; i++) {
+    const dev = Math.abs(timeBuffer[i] - 128);
+    if (dev > maxDev) maxDev = dev;
+    const norm = dev / 128;
+    sumSquares += norm * norm;
+  }
+  // Noise gate: baseline silence or idle floor (deviation <= 1 out of 128)
+  if (maxDev <= 1) return 0;
+
+  const rms = Math.sqrt(sumSquares / timeBuffer.length);
+  // Blended metric: peak gives instantaneous reaction, RMS gives sustained power
+  const metric = Math.max(rms * 1.5, (maxDev - 1) / 127);
+  if (metric < 0.008) return 0;
+
+  // Power curve gives smooth and responsive VU meter response (0 - 100)
+  const scaled = Math.pow(Math.min(1, metric), 0.45) * 110;
+  return Math.min(100, Math.round(scaled));
+}
+
 export default function Audio() {
   const [mode, setMode] = useState<'upload' | 'record'>('upload');
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -72,6 +95,7 @@ export default function Audio() {
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [micTesting, setMicTesting] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
+  const [silenceWarning, setSilenceWarning] = useState(false);
 
   const audioInputRef = useRef<HTMLInputElement>(null);
   const audioPreviewRef = useRef<HTMLAudioElement>(null);
@@ -82,9 +106,28 @@ export default function Audio() {
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const muteNodeRef = useRef<GainNode | null>(null);
   const animRef = useRef<number>(0);
   const timerRef = useRef<number | null>(null);
-  const micTestRef = useRef<{ stream: MediaStream | null; frame: number }>({ stream: null, frame: 0 });
+  const recordingStartTimeRef = useRef<number>(0);
+  const micTestRef = useRef<{
+    stream: MediaStream | null;
+    frame: number;
+    audioCtx: AudioContext | null;
+    source: MediaStreamAudioSourceNode | null;
+    muteNode: GainNode | null;
+  }>({
+    stream: null,
+    frame: 0,
+    audioCtx: null,
+    source: null,
+    muteNode: null,
+  });
+  const lastLevelUpdateRef = useRef<number>(0);
+  const silenceWarningRef = useRef<boolean>(false);
+  const silenceStartTimeRef = useRef<number>(0);
+  const hasDetectedVoiceRef = useRef<boolean>(false);
 
   const MAX_RECORD = 1800;
   const MIN_RECORD = 2;
@@ -111,12 +154,34 @@ export default function Audio() {
 
   const refreshDevices = async (): Promise<void> => {
     try {
-      const temp = await navigator.mediaDevices.getUserMedia({ audio: true });
-      temp.getTracks().forEach((t) => t.stop());
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      let temp: MediaStream | null = null;
+      try {
+        temp = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        /* quyền micro chưa cấp hoặc bị đóng */
+      }
+      temp?.getTracks().forEach((t) => t.stop());
+
       const devices = await navigator.mediaDevices.enumerateDevices();
-      setAudioDevices(
-        devices.filter((d) => d.kind === 'audioinput').map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Microphone ${i + 1}` })),
-      );
+      const seen = new Set<string>();
+      const audioInputs: AudioDevice[] = [];
+
+      devices.forEach((d, i) => {
+        if (d.kind !== 'audioinput') return;
+        // Loại bỏ ID ảo 'default' và 'communications' của Windows/Chromium để tránh trùng với option mặc định
+        if (!d.deviceId || d.deviceId === 'default' || d.deviceId === 'communications') return;
+        if (seen.has(d.deviceId)) return;
+        seen.add(d.deviceId);
+
+        const cleanLabel = d.label
+          ? d.label.replace(/^(Default|Communications)\s*-\s*/i, '').trim()
+          : `Microphone ${i + 1}`;
+
+        audioInputs.push({ deviceId: d.deviceId, label: cleanLabel });
+      });
+
+      setAudioDevices(audioInputs);
     } catch {
       setAudioDevices([]);
     }
@@ -127,46 +192,117 @@ export default function Audio() {
     return () => {
       if (timerRef.current != null) window.clearInterval(timerRef.current);
       cancelAnimationFrame(animRef.current);
+      muteNodeRef.current?.disconnect();
+      sourceNodeRef.current?.disconnect();
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      micTestRef.current.muteNode?.disconnect();
+      micTestRef.current.source?.disconnect();
       if (micTestRef.current.stream) micTestRef.current.stream.getTracks().forEach((t) => t.stop());
+      if (micTestRef.current.audioCtx) micTestRef.current.audioCtx.close().catch(() => undefined);
       cancelAnimationFrame(micTestRef.current.frame);
     };
   }, []);
 
+  useEffect(() => {
+    if (recordedBlob && recordedPreviewRef.current) {
+      const url = URL.createObjectURL(recordedBlob);
+      recordedPreviewRef.current.src = url;
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    }
+  }, [recordedBlob]);
+
   const stopMicTest = (): void => {
     setMicTesting(false);
     setMicLevel(0);
+    setSilenceWarning(false);
+    silenceWarningRef.current = false;
+    silenceStartTimeRef.current = 0;
+    hasDetectedVoiceRef.current = false;
     cancelAnimationFrame(micTestRef.current.frame);
+    micTestRef.current.muteNode?.disconnect();
+    micTestRef.current.muteNode = null;
+    micTestRef.current.source?.disconnect();
+    micTestRef.current.source = null;
     micTestRef.current.stream?.getTracks().forEach((t) => t.stop());
     micTestRef.current.stream = null;
+    if (micTestRef.current.audioCtx) {
+      micTestRef.current.audioCtx.close().catch(() => undefined);
+      micTestRef.current.audioCtx = null;
+    }
   };
 
-  const testSelectedMic = async (): Promise<void> => {
+  const testSelectedMic = async (deviceIdToTest?: string): Promise<void> => {
+    const targetDeviceId = typeof deviceIdToTest === 'string' ? deviceIdToTest : selectedDeviceId;
+    if (micTesting && deviceIdToTest === undefined) {
+      stopMicTest();
+      return;
+    }
     stopMicTest();
     try {
-      const constraints: MediaStreamConstraints = {
-        audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true,
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
       };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (targetDeviceId) audioConstraints.deviceId = { ideal: targetDeviceId };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       micTestRef.current.stream = stream;
       setMicTesting(true);
+      silenceStartTimeRef.current = Date.now();
+      silenceWarningRef.current = false;
+      hasDetectedVoiceRef.current = false;
+      setSilenceWarning(false);
+
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
       if (ctx.state === 'suspended') await ctx.resume();
+      micTestRef.current.audioCtx = ctx;
+
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.3;
+
+      const muteNode = ctx.createGain();
+      muteNode.gain.setValueAtTime(0, ctx.currentTime);
+
       source.connect(analyser);
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      analyser.connect(muteNode);
+      muteNode.connect(ctx.destination);
+
+      micTestRef.current.source = source;
+      micTestRef.current.muteNode = muteNode;
+
+      const timeBuffer = new Uint8Array(analyser.fftSize);
       const update = (): void => {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        setMicLevel(Math.min(100, (sum / dataArray.length) * 1.5));
+        const level = computeAcousticLevel(analyser, timeBuffer);
+        const now = Date.now();
+        if (now - lastLevelUpdateRef.current > 40) {
+          lastLevelUpdateRef.current = now;
+          setMicLevel(level);
+
+          if (level >= 3) {
+            hasDetectedVoiceRef.current = true;
+            silenceStartTimeRef.current = now;
+            if (silenceWarningRef.current) {
+              silenceWarningRef.current = false;
+              setSilenceWarning(false);
+            }
+          } else {
+            if (silenceStartTimeRef.current > 0 && now - silenceStartTimeRef.current > 3500) {
+              if (!silenceWarningRef.current) {
+                silenceWarningRef.current = true;
+                setSilenceWarning(true);
+              }
+            }
+          }
+        }
         micTestRef.current.frame = requestAnimationFrame(update);
       };
       update();
-      window.setTimeout(() => stopMicTest(), 5000);
     } catch (err) {
       showToast('Không thể truy cập micro đã chọn: ' + (err instanceof Error ? err.message : ''), 'error');
       setMicTesting(false);
@@ -188,25 +324,51 @@ export default function Audio() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    const freqData = new Uint8Array(bufferLength);
+    const timeBuffer = new Uint8Array(analyser.fftSize);
+
     const draw = (): void => {
       animRef.current = requestAnimationFrame(draw);
-      analyser.getByteFrequencyData(dataArray);
+      analyser.getByteFrequencyData(freqData);
+
+      const level = computeAcousticLevel(analyser, timeBuffer);
+      const now = Date.now();
+      if (now - lastLevelUpdateRef.current > 40) {
+        lastLevelUpdateRef.current = now;
+        setMicLevel(level);
+
+        if (level >= 3) {
+          hasDetectedVoiceRef.current = true;
+          silenceStartTimeRef.current = now;
+          if (silenceWarningRef.current) {
+            silenceWarningRef.current = false;
+            setSilenceWarning(false);
+          }
+        } else {
+          if (silenceStartTimeRef.current > 0 && now - silenceStartTimeRef.current > 3500) {
+            if (!silenceWarningRef.current) {
+              silenceWarningRef.current = true;
+              setSilenceWarning(true);
+            }
+          }
+        }
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const barCount = 64;
-      const barWidth = canvas.width / barCount - 1;
+      const barCount = 48;
+      const barWidth = canvas.width / barCount - 2;
       const step = Math.floor(bufferLength / barCount);
       for (let i = 0; i < barCount; i++) {
-        const val = dataArray[i * step] / 255;
-        const barHeight = Math.max(2, val * canvas.height * 0.9);
-        const x = i * (barWidth + 1);
+        const val = freqData[i * step] / 255;
+        const barHeight = Math.max(3, val * canvas.height * 0.95);
+        const x = i * (barWidth + 2);
         const y = (canvas.height - barHeight) / 2;
         const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
-        gradient.addColorStop(0, `rgba(139, 92, 246, ${0.3 + val * 0.7})`);
-        gradient.addColorStop(1, `rgba(217, 70, 239, ${0.2 + val * 0.6})`);
+        gradient.addColorStop(0, `rgba(6, 182, 212, ${0.4 + val * 0.6})`);
+        gradient.addColorStop(1, `rgba(168, 85, 247, ${0.3 + val * 0.7})`);
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, barHeight, 2);
+        ctx.roundRect(x, y, barWidth, barHeight, 3);
         ctx.fill();
       }
     };
@@ -215,6 +377,12 @@ export default function Audio() {
 
   const stopWaveform = (): void => {
     cancelAnimationFrame(animRef.current);
+    muteNodeRef.current?.disconnect();
+    muteNodeRef.current = null;
+    sourceNodeRef.current?.disconnect();
+    sourceNodeRef.current = null;
+    analyserRef.current?.disconnect();
+    analyserRef.current = null;
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => undefined);
       audioCtxRef.current = null;
@@ -226,12 +394,11 @@ export default function Audio() {
     try {
       const audioConstraints: MediaTrackConstraints = {
         echoCancellation: true,
-        noiseSuppression: false,
+        noiseSuppression: true,
         autoGainControl: true,
-        sampleRate: 44100,
         channelCount: 1,
       };
-      if (selectedDeviceId) audioConstraints.deviceId = { exact: selectedDeviceId };
+      if (selectedDeviceId) audioConstraints.deviceId = { ideal: selectedDeviceId };
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       const track = stream.getAudioTracks()[0];
       if (!track || track.readyState !== 'live') {
@@ -240,24 +407,34 @@ export default function Audio() {
         return;
       }
       chunksRef.current = [];
+      recordingStartTimeRef.current = Date.now();
+      silenceStartTimeRef.current = Date.now();
+      silenceWarningRef.current = false;
+      hasDetectedVoiceRef.current = false;
+      setSilenceWarning(false);
       setRecordingDuration(0);
       setRecordedBlob(null);
       streamRef.current = stream;
 
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const audioCtx = new Ctx({ sampleRate: 44100 });
+      const audioCtx = new Ctx();
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       audioCtxRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
-      const gainNode = audioCtx.createGain();
-      gainNode.gain.value = 2.5;
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.3;
       analyserRef.current = analyser;
-      const destination = audioCtx.createMediaStreamDestination();
-      source.connect(gainNode);
-      gainNode.connect(analyser);
-      gainNode.connect(destination);
+
+      const muteNode = audioCtx.createGain();
+      muteNode.gain.setValueAtTime(0, audioCtx.currentTime);
+
+      source.connect(analyser);
+      analyser.connect(muteNode);
+      muteNode.connect(audioCtx.destination);
+
+      sourceNodeRef.current = source;
+      muteNodeRef.current = muteNode;
 
       const candidates = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/mp4', ''];
       let mimeType = '';
@@ -269,19 +446,23 @@ export default function Audio() {
       }
       const recOpts: MediaRecorderOptions = { audioBitsPerSecond: 128000 };
       if (mimeType) recOpts.mimeType = mimeType;
-      const recorder = new MediaRecorder(destination.stream, recOpts);
+      const recorder = new MediaRecorder(stream, recOpts);
       recorderRef.current = recorder;
       recorder.ondataavailable = (e: BlobEvent) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
+        const durationSec = recordingStartTimeRef.current > 0
+          ? Math.max(1, Math.round((Date.now() - recordingStartTimeRef.current) / 1000))
+          : 0;
+        setRecordingDuration(durationSec);
         const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
         setRecordedBlob(blob);
         setProcessingRecording(false);
         streamRef.current?.getTracks().forEach((t) => t.stop());
-        destination.stream.getTracks().forEach((t) => t.stop());
         stopWaveform();
-        if (recordingDuration < MIN_RECORD) {
+        setMicLevel(0);
+        if (durationSec < MIN_RECORD) {
           showToast('Ghi âm quá ngắn (tối thiểu 2 giây). Vui lòng thử lại.', 'warning');
           setRecordedBlob(null);
           return;
@@ -291,24 +472,23 @@ export default function Audio() {
           setRecordedBlob(null);
           return;
         }
-        window.setTimeout(() => {
-          if (recordedPreviewRef.current) recordedPreviewRef.current.src = URL.createObjectURL(blob);
-        }, 0);
+        if (!hasDetectedVoiceRef.current) {
+          showToast('Hệ thống không phát hiện tín hiệu giọng nói trong đoạn ghi âm. Vui lòng kiểm tra micro nếu kết quả nhận diện không chính xác.', 'warning');
+        }
       };
       recorder.onerror = () => {
         showToast('Lỗi ghi âm không xác định', 'error');
         stopRecording();
       };
-      recorder.start(100);
+      recorder.start(1000);
       setIsRecording(true);
       timerRef.current = window.setInterval(() => {
-        setRecordingDuration((d) => {
-          if (d + 1 >= MAX_RECORD) {
-            showToast('Đã đạt thời gian tối đa (30 phút). Tự động dừng.', 'info');
-            stopRecording();
-          }
-          return d + 1;
-        });
+        const elapsed = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+        setRecordingDuration(elapsed);
+        if (elapsed >= MAX_RECORD) {
+          showToast('Đã đạt thời gian tối đa (30 phút). Tự động dừng.', 'info');
+          stopRecording();
+        }
       }, 1000);
       drawWaveform();
     } catch (err) {
@@ -331,9 +511,16 @@ export default function Audio() {
   const stopRecording = (): void => {
     setIsRecording(false);
     setProcessingRecording(true);
+    setSilenceWarning(false);
+    silenceWarningRef.current = false;
+    silenceStartTimeRef.current = 0;
     if (timerRef.current != null) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+    if (recordingStartTimeRef.current > 0) {
+      const elapsed = Math.max(1, Math.round((Date.now() - recordingStartTimeRef.current) / 1000));
+      setRecordingDuration(elapsed);
     }
     stopWaveform();
     const rec = recorderRef.current;
@@ -358,14 +545,20 @@ export default function Audio() {
   const discardRecording = (): void => {
     setRecordedBlob(null);
     chunksRef.current = [];
+    recordingStartTimeRef.current = 0;
     setRecordingDuration(0);
     setProcessingRecording(false);
+    setSilenceWarning(false);
+    silenceWarningRef.current = false;
+    silenceStartTimeRef.current = 0;
+    hasDetectedVoiceRef.current = false;
   };
 
   const resetAll = (): void => {
     setAudioFile(null);
     setRecordedBlob(null);
     chunksRef.current = [];
+    recordingStartTimeRef.current = 0;
     setRecordingDuration(0);
     setResult(null);
     setLoading(false);
@@ -373,6 +566,10 @@ export default function Audio() {
     setLiveTranscript('');
     setScanId(null);
     setTrackOn(false);
+    setSilenceWarning(false);
+    silenceWarningRef.current = false;
+    silenceStartTimeRef.current = 0;
+    hasDetectedVoiceRef.current = false;
     tracker.clear();
     stopMicTest();
     if (audioInputRef.current) audioInputRef.current.value = '';
@@ -567,45 +764,174 @@ export default function Audio() {
                         <Select
                           value={selectedDeviceId || 'default'}
                           onValueChange={(v) => {
-                            setSelectedDeviceId(v === 'default' ? '' : v);
-                            void testSelectedMic();
+                            const nextId = v === 'default' ? '' : v;
+                            setSelectedDeviceId(nextId);
+                            if (micTesting) {
+                              void testSelectedMic(nextId);
+                            }
                           }}
                         >
                           <SelectTrigger
-                            className="w-full bg-white/[0.03] border border-white/10 text-white/80 text-sm font-bold rounded-xl pl-11 pr-10 py-3 h-auto focus:border-brand2-500/50 cursor-pointer"
+                            className="w-full bg-white/[0.03] border border-white/10 text-white/80 text-sm font-bold rounded-xl pl-11 pr-4 py-3 min-h-[48px] h-auto focus:border-brand2-500/50 cursor-pointer"
                             aria-label="Chọn micro"
                           >
-                            <SelectValue placeholder="Micro mặc định" />
+                            <SelectValue placeholder="Micro mặc định (Hệ thống)" />
                           </SelectTrigger>
-                          <SelectContent className="max-h-72">
-                            <SelectItem value="default">Micro mặc định</SelectItem>
+                          <SelectContent
+                            position="popper"
+                            align="start"
+                            sideOffset={6}
+                            className="w-[var(--radix-select-trigger-width)] min-w-[260px] bg-slate-900 border border-white/15 text-white shadow-2xl backdrop-blur-xl rounded-xl p-1.5 z-50 max-h-72"
+                          >
+                            <SelectItem value="default" className="text-white/85 focus:bg-brand2-500/20 focus:text-white rounded-lg px-3 py-2 cursor-pointer text-sm">
+                              Micro mặc định (Hệ thống)
+                            </SelectItem>
                             {audioDevices.map((d) => (
-                              <SelectItem key={d.deviceId} value={d.deviceId}>{d.label}</SelectItem>
+                              <SelectItem key={d.deviceId} value={d.deviceId} className="text-white/85 focus:bg-brand2-500/20 focus:text-white rounded-lg px-3 py-2 cursor-pointer text-sm">
+                                {d.label}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void refreshDevices()}
-                        className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white/55 hover:text-brand2-400 hover:border-brand2-500/30 transition-all text-xs font-black uppercase tracking-widest"
-                        title="Làm mới danh sách micro"
-                      >
-                        <i className="bi bi-arrow-clockwise"></i>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void testSelectedMic()}
+                          className={`px-4 py-3 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                            micTesting
+                              ? 'bg-brand2-500/20 border-brand2-500/40 text-brand2-300 shadow-lg shadow-brand2-500/20'
+                              : 'bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10'
+                          }`}
+                          title="Bật/Tắt kiểm tra âm lượng micro"
+                        >
+                          <i className={`bi ${micTesting ? 'bi-soundwave text-brand2-400 animate-pulse' : 'bi-volume-up'}`}></i>
+                          <span>{micTesting ? 'Dừng thử' : 'Thử micro'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void refreshDevices()}
+                          className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white/55 hover:text-brand2-400 hover:border-brand2-500/30 transition-all text-xs font-black uppercase tracking-widest"
+                          title="Làm mới danh sách micro"
+                        >
+                          <i className="bi bi-arrow-clockwise"></i>
+                        </button>
+                      </div>
                     </div>
                   )}
 
-                  {micTesting && !isRecording && (
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/5">
-                      <span className="text-[10px] font-black text-white/45 uppercase tracking-widest shrink-0">Mức thu</span>
-                      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-100 ${micLevel > 60 ? 'bg-safe-500' : micLevel > 20 ? 'bg-warn-400' : 'bg-white/20'}`}
-                          style={{ width: `${micLevel}%` }}
-                        ></div>
+                  {/* VU METER / THANH ĐỘ LỚN ÂM THANH */}
+                  {(isRecording || micTesting) ? (
+                    <div className="p-4 rounded-2xl bg-slate-900/90 border border-white/10 shadow-xl space-y-3 animate-fadein">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-danger-500 animate-ping' : 'bg-brand2-400 animate-pulse'}`}></span>
+                          <span className="font-bold text-white uppercase tracking-wider text-[11px]">
+                            {isRecording ? 'Độ lớn âm thanh đang ghi (VU Meter)' : 'Độ lớn micro thử nghiệm (Live Mic Monitor)'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 font-mono text-xs">
+                          <span className={
+                            silenceWarning
+                              ? 'text-amber-400 font-bold flex items-center gap-1'
+                              : micLevel > 65
+                              ? 'text-danger-400 font-bold'
+                              : micLevel > 15
+                              ? 'text-safe-400 font-bold'
+                              : micLevel > 2
+                              ? 'text-warn-400'
+                              : 'text-white/40'
+                          }>
+                            {silenceWarning ? (
+                              <>
+                                <i className="bi bi-volume-mute"></i> Không nhận được tín hiệu
+                              </>
+                            ) : micLevel > 65 ? (
+                              'Âm lượng to'
+                            ) : micLevel > 15 ? (
+                              'Tín hiệu tốt'
+                            ) : micLevel > 2 ? (
+                              'Âm lượng nhỏ'
+                            ) : (
+                              'Không có âm thanh'
+                            )}
+                          </span>
+                          <span className={`font-bold px-2.5 py-0.5 rounded-lg border font-mono ${
+                            silenceWarning ? 'text-amber-300 bg-amber-500/15 border-amber-500/40' : 'text-white/80 bg-white/10 border-white/10'
+                          }`}>
+                            {Math.round(micLevel)}%
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-mono text-white/35">{Math.round(micLevel)}%</span>
+
+                      <div className="h-3.5 w-full bg-black/60 rounded-full p-0.5 border border-white/10 overflow-hidden relative">
+                        <div
+                          className={`h-full rounded-full transition-all duration-75 ${
+                            micLevel > 70
+                              ? 'bg-gradient-to-r from-safe-500 via-warn-400 to-danger-500'
+                              : micLevel > 25
+                              ? 'bg-gradient-to-r from-brand-500 via-safe-500 to-warn-400'
+                              : 'bg-gradient-to-r from-brand2-500 to-brand-500'
+                          }`}
+                          style={{ width: `${Math.max(2, Math.min(100, micLevel))}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] text-white/40 font-mono">
+                        <span>0% (Im lặng)</span>
+                        <span>50% (Bình thường)</span>
+                        <span>100% (Cực đại)</span>
+                      </div>
+
+                      {/* Cảnh báo khi thanh âm lượng giữ ở mức 0 quá lâu */}
+                      {silenceWarning && (
+                        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadein">
+                          <div className="flex items-start gap-2.5">
+                            <i className="bi bi-exclamation-triangle-fill text-amber-400 text-base shrink-0 mt-0.5"></i>
+                            <div>
+                              <p className="font-bold text-white text-xs">Cảnh báo: Không phát hiện tín hiệu giọng nói (Mức âm lượng: 0%)</p>
+                              <p className="text-[11px] text-white/75 mt-0.5 leading-relaxed">
+                                Micro có thể đang bị gạt nút tắt tiếng (Mute) vật lý, chưa bật volume trong Cài đặt âm thanh hệ thống, hoặc thiết bị đã chọn bị xung đột.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {selectedDeviceId && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDeviceId('');
+                                  if (micTesting) void testSelectedMic('');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] border border-amber-500/40 transition-colors whitespace-nowrap"
+                              >
+                                Đổi về Micro mặc định
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => void refreshDevices()}
+                              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/90 font-bold text-[11px] border border-white/20 transition-colors whitespace-nowrap"
+                            >
+                              Làm mới thiết bị
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : !recordedBlob && (
+                    <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/[0.02] border border-white/5 text-xs text-white/50">
+                      <div className="flex items-center gap-2">
+                        <i className="bi bi-info-circle text-brand2-400"></i>
+                        <span>Thanh độ lớn âm thanh sẽ tự động hiển thị khi bạn bấm <strong>&quot;Thử micro&quot;</strong> hoặc bấm <strong>Ghi âm</strong>.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void testSelectedMic()}
+                        className="text-brand2-400 hover:text-brand2-300 font-bold underline shrink-0 ml-2"
+                      >
+                        Bật thử ngay
+                      </button>
                     </div>
                   )}
 

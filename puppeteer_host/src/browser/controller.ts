@@ -2,7 +2,7 @@ import type { Page } from 'puppeteer';
 import { config } from '../config';
 import { logger } from '../logger';
 import { launchBrowser, incrementRenderCount } from './manager';
-import { getRandomUA, applyHumanizedPageSetup } from './security';
+import { getRandomUA, applyHumanizedPageSetup, isSafeExternalUrl } from './security';
 
 export interface RenderResult {
   title: string;
@@ -124,12 +124,28 @@ export async function renderPage(url: string, timeout = 25000): Promise<RenderRe
 
     // Optimize memory & bandwidth: drop heavy resources
     await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const resourceType = req.resourceType();
-      if (['media', 'font', 'websocket'].includes(resourceType)) {
-        req.abort();
-      } else {
-        req.continue();
+    page.on('request', async (req) => {
+      try {
+        const resourceType = req.resourceType();
+        if (['media', 'font', 'websocket'].includes(resourceType)) {
+          await req.abort();
+          return;
+        }
+        // Chống SSRF qua REDIRECT: xác thực IP đích của MỌI request http(s),
+        // không chỉ URL ban đầu. Chặn 302 -> 169.254.169.254/localhost/nội bộ.
+        const reqUrl = req.url();
+        if (/^https?:/i.test(reqUrl) && !(await isSafeExternalUrl(reqUrl))) {
+          logger.warn('Render', `Blocked unsafe request (possible redirect SSRF): ${reqUrl}`);
+          await req.abort();
+          return;
+        }
+        await req.continue();
+      } catch {
+        try {
+          await req.abort();
+        } catch {
+          /* ignore */
+        }
       }
     });
 
