@@ -33,9 +33,52 @@
   box-shadow: 0 0 0 2px var(--background), 0 0 0 4px color-mix(in oklab, var(--ring) 70%, transparent);
 }
 
-/* Tiêu đề thẻ: bỏ giãn chữ quá rộng để dễ đọc với tiếng Việt có dấu */
+/* Tiêu đề thẻ: giữ giãn chữ BÌNH THƯỜNG — letter-spacing âm làm dấu tiếng
+   Việt (ế, ộ, ằ...) chồng sát chữ bên cạnh, khó đọc. */
 .learn-card h3 {
-  letter-spacing: -0.005em;
+  letter-spacing: normal;
+}
+
+/* ═══ Nội dung bài viết / bài học (/learn/... và /learn/lesson/...) ═══════
+   Khối .ai-markdown mặc định bị liquid-glass.css ép `font-size: 0.85rem`
+   (13.6px) và tiêu đề chỉ ~0.9rem → chữ nhỏ, dấu tiếng Việt bị dính.
+   Hai class này nằm CÙNG một thẻ (<div class="ai-markdown rich-text-content">)
+   nên tăng độ đặc hiệu .ai-markdown.rich-text-content là đủ để thắng mà
+   không cần !important và không ảnh hưởng các chỗ dùng .ai-markdown khác. */
+.ai-markdown.rich-text-content {
+  font-size: 1.0625rem; /* 17px */
+  line-height: 1.85;    /* thoáng dòng để dấu không chạm dòng trên/dưới */
+  letter-spacing: 0.003em; /* dương nhẹ: dấu tiếng Việt không chồng nhau */
+}
+@media (min-width: 640px) {
+  .ai-markdown.rich-text-content {
+    font-size: 1.125rem; /* 18px trên màn hình rộng */
+  }
+}
+.ai-markdown.rich-text-content p {
+  margin: 0.7em 0;
+}
+.ai-markdown.rich-text-content li {
+  margin: 0.35em 0;
+  line-height: 1.75;
+}
+.ai-markdown.rich-text-content h1,
+.ai-markdown.rich-text-content h2,
+.ai-markdown.rich-text-content h3,
+.ai-markdown.rich-text-content h4 {
+  letter-spacing: normal;
+  line-height: 1.35;
+  font-weight: 800;
+}
+.ai-markdown.rich-text-content h1 { font-size: 1.7em;  margin: 1em 0 0.5em; }
+.ai-markdown.rich-text-content h2 { font-size: 1.45em; margin: 1.1em 0 0.45em; }
+.ai-markdown.rich-text-content h3 { font-size: 1.2em;  margin: 1em 0 0.4em; }
+.ai-markdown.rich-text-content h4 { font-size: 1.08em; margin: 0.9em 0 0.35em; }
+.ai-markdown.rich-text-content blockquote {
+  line-height: 1.75;
+}
+.ai-markdown.rich-text-content table {
+  font-size: 0.98em;
 }
 
 /* Ẩn thanh cuộn cho khung hội thoại diễn tập kịch bản */

@@ -521,12 +521,20 @@ def _phone_risk_score(phone_number: str) -> dict:
     elif level == RiskLevel.YELLOW: status_label = "CẢNH GIÁC CAO"
     elif level == RiskLevel.GREEN: status_label = "CÓ RỦI RO THẤP"
 
-    analysis_result = f"Số điện thoại {phone_number} (`{country_name}`) hiện đang ở mức `{status_label}`. "
-    analysis_result += f"Đây là một thuê bao thuộc nhà mạng **{carrier_info}** ({line_type}). "
-    analysis_result += f"Hệ thống ghi nhận tổng cộng {approved_count + pending_count} báo cáo từ cộng đồng. "
+    action_map = {
+        'ALLOW': 'Có thể nghe máy bình thường',
+        'WARN': 'Thận trọng khi nghe máy, tuyệt đối không cung cấp thông tin cá nhân',
+        'VOICEMAIL_OR_WARN': 'Cảnh giác cao độ, không làm theo các hướng dẫn nạp tiền hay chuyển khoản',
+        'BLOCK': 'Chặn số ngay lập tức, tuyệt đối không nghe máy hay gọi lại',
+    }
+    action_text = action_map.get(suggested_action, 'Cần xác minh độc lập')
+
+    analysis_result = f"Số điện thoại {phone_number} ({country_name}) thuộc nhà mạng {carrier_info} ({line_type}). Mức độ rủi ro: {status_label}. "
+    if approved_count + pending_count > 0:
+        analysis_result += f"Hệ thống ghi nhận {approved_count + pending_count} lượt báo cáo từ cộng đồng. "
     if is_virtual:
-        analysis_result += "Đây là một số điện thoại ảo (Virtual/VoIP), thường được dùng để che giấu danh tính. "
-    analysis_result += f"Hành động khuyến nghị: **{suggested_action}**."
+        analysis_result += "Đây là đầu số ảo hoặc tổng đài VoIP qua Internet, thường bị kẻ gian lợi dụng để mạo danh cơ quan chức năng. "
+    analysis_result += f"Khuyến nghị: {action_text}."
 
     return {
         'phone': phone_number,
@@ -870,18 +878,18 @@ def _actions_for_guardrail(guardrail: dict, fallback_actions: list) -> list:
     """
     tier = (guardrail or {}).get('tier')
     if tier in ('CONFIRMED_RISK', 'HIGH_RISK'):
-        return ['🚫 KHÔNG chuyển tiền', '🚫 KHÔNG cung cấp OTP',
-                '📞 Gọi 113 báo công an', '📸 Lưu bằng chứng']
+        return ['Tuyệt đối không chuyển tiền', 'Tuyệt đối không cung cấp mã OTP',
+                'Gọi 113 báo cơ quan công an', 'Lưu lại toàn bộ tin nhắn làm bằng chứng']
     if tier == 'SUSPICIOUS':
-        return ['⚠️ Kiểm tra lại nguồn gửi', '🔍 Tìm kiếm số/link trên ShieldCall',
-                '📝 Báo cáo nếu nghi ngờ']
+        return ['Kiểm tra lại nguồn gửi và danh tính người liên hệ', 'Tra cứu số điện thoại hoặc link trên ShieldCall',
+                'Báo cáo cảnh báo nếu có dấu hiệu gian lận']
     if tier == 'LIKELY_SAFE':
-        return ['ℹ️ Không phát hiện dấu hiệu rõ ràng, nhưng luôn cảnh giác với yêu cầu bất thường',
-                '🔍 Vẫn kiểm tra kỹ link/người gửi lạ']
-    # INSUFFICIENT hoặc không xác định — tuyệt đối không nói "an toàn".
-    return ['❓ Chưa đủ cơ sở để kết luận — hãy xác minh qua kênh chính thức (156/113)',
-            '🚫 Không chuyển tiền, không cung cấp OTP khi chưa xác minh',
-            '📝 Báo cáo nếu thấy nghi ngờ']
+        return ['Không phát hiện dấu hiệu xấu rõ ràng, nhưng luôn cảnh giác với yêu cầu bất thường',
+                'Vẫn kiểm tra kỹ liên kết và người gửi lạ']
+    # INSUFFICIENT hoặc không xác định: tuyệt đối không nói "an toàn".
+    return ['Chưa đủ cơ sở để kết luận: hãy xác minh qua kênh chính thức (156 hoặc 113)',
+            'Tuyệt đối không chuyển tiền, không cung cấp OTP khi chưa xác minh',
+            'Báo cáo nếu phát hiện nghi vấn']
 
 
 def _analyze_message_text(text: str) -> dict:
@@ -962,21 +970,21 @@ def _analyze_message_text(text: str) -> dict:
 
     # Lời khuyên ban đầu theo điểm; sẽ được ĐỒNG BỘ lại theo guardrail bên dưới.
     if final_score >= 70:
-        actions = ['🚫 KHÔNG chuyển tiền', '🚫 KHÔNG cung cấp OTP',
-                   '📞 Gọi 113 báo công an', '📸 Lưu bằng chứng']
+        actions = ['Tuyệt đối không chuyển tiền', 'Tuyệt đối không cung cấp mã OTP',
+                   'Gọi 113 báo cơ quan công an', 'Lưu lại bằng chứng']
     elif final_score >= 40:
-        actions = ['⚠️ Kiểm tra lại nguồn gửi', '🔍 Tìm kiếm số/link trên ShieldCall',
-                   '📝 Báo cáo nếu nghi ngờ']
+        actions = ['Kiểm tra lại nguồn gửi', 'Tra cứu số điện thoại hoặc liên kết trên ShieldCall',
+                   'Báo cáo nếu nghi ngờ']
     else:
-        actions = ['❓ Chưa đủ cơ sở để kết luận — hãy xác minh qua kênh chính thức (156/113)',
-                   '🚫 Không chuyển tiền, không cung cấp OTP khi chưa xác minh',
-                   '🔍 Vẫn nên cẩn thận với link/người gửi lạ']
+        actions = ['Chưa đủ cơ sở để kết luận: hãy xác minh qua kênh chính thức (156 hoặc 113)',
+                   'Không chuyển tiền, không cung cấp OTP khi chưa xác minh',
+                   'Vẫn nên cẩn thận với liên kết hoặc người gửi lạ']
 
     # Build explanation — prefer AI's if available, else use rule summary
     if ai_available and ai_explanation and (not ai_result or not ai_result.get('ai_notice')):
         explanation = ai_explanation
     elif patterns_found or domain_risks:
-        explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu đáng ngờ (phân tích quy tắc: {", ".join(patterns_found)}).'
+        explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu đáng ngờ từ nội dung tin nhắn và liên kết đính kèm.'
     else:
         explanation = 'Không phát hiện dấu hiệu lừa đảo rõ ràng.'
 

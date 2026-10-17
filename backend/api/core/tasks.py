@@ -64,7 +64,7 @@ def reap_stale_scans(max_age_minutes: int = 15):
     )[:500])
     for ev in stale:
         rj = dict(ev.result_json) if isinstance(ev.result_json, dict) else {}
-        rj.setdefault('error', 'Quá thời gian xử lý — đã đánh dấu thất bại. Vui lòng thử lại.')
+        rj.setdefault('error', 'Quá thời gian xử lý: đã đánh dấu thất bại. Vui lòng thử lại.')
         ev.status = ScanStatus.FAILED
         ev.result_json = rj
         ev.save(update_fields=['status', 'result_json'])
@@ -850,7 +850,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             ai_res = {
                 'risk_score': vision_score,
                 'risk_level': _vision_best.get('risk_level', 'SAFE'),
-                'explanation': f"[Vision trực tiếp, không qua OCR] {vision_expl}",
+                'explanation': _sanitize_ai_explanation(vision_expl),
                 'scam_type': _vision_best.get('scam_type', 'Không xác định'),
                 'vision_direct': True,
             }
@@ -892,7 +892,10 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         # Map reason to explanation if needed
         explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
         if vision_score > int(ai_res.get('risk_score') or 0) and not ai_res.get('vision_direct') and vision_expl:
-            explanation = f"[Vision trực tiếp: {vision_score}/100] {vision_expl} | {explanation}"
+            clean_vision = _sanitize_ai_explanation(vision_expl)
+            if clean_vision and clean_vision.lower() not in explanation.lower():
+                explanation = f"{clean_vision}. {explanation}" if explanation else clean_vision
+        explanation = _sanitize_ai_explanation(explanation)
 
         # Build entities dict
         entities = {}
@@ -1346,9 +1349,10 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                     f"({len(content)} chars), captcha_detected={captcha_detected}"
                 )
             else:
+                err_detail = js_result.get('error') or ('empty page content' if js_result.get('ok') else 'unknown error')
                 logger.warning(
                     f"[WebScan] Event {scan_event_id}: Puppeteer host unavailable/failed: "
-                    f"{js_result.get('error', 'unknown error')} - falling back to requests"
+                    f"{err_detail} - falling back to requests"
                 )
         except Exception as e:
             logger.warning(f"[WebScan] Event {scan_event_id}: Puppeteer host error: {e} - falling back to requests")

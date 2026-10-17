@@ -53,7 +53,7 @@ function formatTimestamp(seconds: unknown): string {
   return `${m}:${s}`;
 }
 
-function computeAcousticLevel(analyser: AnalyserNode, timeBuffer: Uint8Array): number {
+function computeAcousticLevel(analyser: AnalyserNode, timeBuffer: Uint8Array, freqBuffer?: Uint8Array): number {
   analyser.getByteTimeDomainData(timeBuffer as unknown as Parameters<AnalyserNode['getByteTimeDomainData']>[0]);
   let sumSquares = 0;
   let maxDev = 0;
@@ -63,17 +63,129 @@ function computeAcousticLevel(analyser: AnalyserNode, timeBuffer: Uint8Array): n
     const norm = dev / 128;
     sumSquares += norm * norm;
   }
-  // Noise gate: baseline silence or idle floor (deviation <= 1 out of 128)
-  if (maxDev <= 1) return 0;
+
+  let freqEnergy = 0;
+  if (freqBuffer && freqBuffer.length > 0) {
+    analyser.getByteFrequencyData(freqBuffer as unknown as Parameters<AnalyserNode['getByteFrequencyData']>[0]);
+    let freqSum = 0;
+    for (let i = 0; i < freqBuffer.length; i++) {
+      freqSum += freqBuffer[i];
+    }
+    freqEnergy = (freqSum / freqBuffer.length) / 255;
+  }
+
+  // Noise gate: baseline silence or idle floor
+  if (maxDev <= 1 && freqEnergy < 0.008) return 0;
 
   const rms = Math.sqrt(sumSquares / timeBuffer.length);
-  // Blended metric: peak gives instantaneous reaction, RMS gives sustained power
-  const metric = Math.max(rms * 1.5, (maxDev - 1) / 127);
-  if (metric < 0.008) return 0;
+  // Blended metric: peak gives instantaneous reaction, RMS gives sustained power, freqEnergy catches vocal resonance
+  const metric = Math.max(rms * 1.8, (maxDev - 1) / 127, freqEnergy * 1.4);
+  if (metric < 0.005) return 0;
 
-  // Power curve gives smooth and responsive VU meter response (0 - 100)
-  const scaled = Math.pow(Math.min(1, metric), 0.45) * 110;
+  // Power curve gives smooth and responsive VU meter response (0 to 100)
+  const scaled = Math.pow(Math.min(1, metric), 0.42) * 115;
   return Math.min(100, Math.round(scaled));
+}
+
+function audioBufferToWavBlob(buffer: AudioBuffer): Blob {
+  const numChannels = 1;
+  const sampleRate = buffer.sampleRate;
+  const format = 1; // PCM
+  const bitDepth = 16;
+  const channelData = buffer.getChannelData(0);
+  const numSamples = channelData.length;
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numSamples * blockAlign;
+  const bufferSize = 44 + dataSize;
+  const arrayBuffer = new ArrayBuffer(bufferSize);
+  const view = new DataView(arrayBuffer);
+
+  const writeString = (offset: number, str: string): void => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    const s = Math.max(-1, Math.min(1, channelData[i]));
+    const val = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    view.setInt16(offset, val, true);
+    offset += 2;
+  }
+
+  return new Blob([arrayBuffer], { type: 'audio/wav' });
+}
+
+async function compressAudioForUpload(fileOrBlob: File | Blob): Promise<File | Blob> {
+  const type = (fileOrBlob.type || '').toLowerCase();
+  const name = 'name' in fileOrBlob ? (fileOrBlob as File).name.toLowerCase() : '';
+  const isCompressedFormat =
+    type.includes('webm') ||
+    type.includes('ogg') ||
+    type.includes('mp3') ||
+    type.includes('aac') ||
+    type.includes('m4a') ||
+    name.endsWith('.mp3') ||
+    name.endsWith('.ogg') ||
+    name.endsWith('.webm') ||
+    name.endsWith('.m4a') ||
+    name.endsWith('.aac');
+
+  if (fileOrBlob.size <= 1.5 * 1024 * 1024 && isCompressedFormat) {
+    return fileOrBlob;
+  }
+
+  try {
+    const arrayBuffer = await fileOrBlob.arrayBuffer();
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return fileOrBlob;
+
+    const tempCtx = new Ctx();
+    let decodedBuffer: AudioBuffer;
+    try {
+      decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+    } finally {
+      await tempCtx.close().catch(() => undefined);
+    }
+
+    const targetSampleRate = 16000;
+    const targetLength = Math.max(1, Math.ceil(decodedBuffer.duration * targetSampleRate));
+
+    const offlineCtx = new OfflineAudioContext(1, targetLength, targetSampleRate);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = decodedBuffer;
+    source.connect(offlineCtx.destination);
+    source.start(0);
+
+    const renderedBuffer = await offlineCtx.startRendering();
+    const wavBlob = audioBufferToWavBlob(renderedBuffer);
+
+    if (wavBlob.size < fileOrBlob.size || !isCompressedFormat) {
+      const origName = 'name' in fileOrBlob ? (fileOrBlob as File).name : 'audio.wav';
+      const baseName = origName.replace(/\.[^/.]+$/, '');
+      return new File([wavBlob], `${baseName}_16k.wav`, { type: 'audio/wav' });
+    }
+  } catch (err) {
+    console.warn('Audio optimization skipped:', err);
+  }
+  return fileOrBlob;
 }
 
 export default function Audio() {
@@ -277,8 +389,9 @@ export default function Audio() {
       micTestRef.current.muteNode = muteNode;
 
       const timeBuffer = new Uint8Array(analyser.fftSize);
+      const freqBuffer = new Uint8Array(analyser.frequencyBinCount);
       const update = (): void => {
-        const level = computeAcousticLevel(analyser, timeBuffer);
+        const level = computeAcousticLevel(analyser, timeBuffer, freqBuffer);
         const now = Date.now();
         if (now - lastLevelUpdateRef.current > 40) {
           lastLevelUpdateRef.current = now;
@@ -318,20 +431,18 @@ export default function Audio() {
   };
 
   const drawWaveform = (): void => {
-    const canvas = waveCanvasRef.current;
     const analyser = analyserRef.current;
-    if (!canvas || !analyser) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!analyser) return;
     const bufferLength = analyser.frequencyBinCount;
     const freqData = new Uint8Array(bufferLength);
     const timeBuffer = new Uint8Array(analyser.fftSize);
 
     const draw = (): void => {
       animRef.current = requestAnimationFrame(draw);
-      analyser.getByteFrequencyData(freqData);
+      const currentAnalyser = analyserRef.current;
+      if (!currentAnalyser) return;
 
-      const level = computeAcousticLevel(analyser, timeBuffer);
+      const level = computeAcousticLevel(currentAnalyser, timeBuffer, freqData);
       const now = Date.now();
       if (now - lastLevelUpdateRef.current > 40) {
         lastLevelUpdateRef.current = now;
@@ -354,6 +465,12 @@ export default function Audio() {
         }
       }
 
+      const canvas = waveCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      currentAnalyser.getByteFrequencyData(freqData);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const barCount = 48;
       const barWidth = canvas.width / barCount - 2;
@@ -397,6 +514,7 @@ export default function Audio() {
         noiseSuppression: true,
         autoGainControl: true,
         channelCount: 1,
+        sampleRate: 16000,
       };
       if (selectedDeviceId) audioConstraints.deviceId = { ideal: selectedDeviceId };
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
@@ -444,7 +562,7 @@ export default function Audio() {
           break;
         }
       }
-      const recOpts: MediaRecorderOptions = { audioBitsPerSecond: 128000 };
+      const recOpts: MediaRecorderOptions = { audioBitsPerSecond: 32000 };
       if (mimeType) recOpts.mimeType = mimeType;
       const recorder = new MediaRecorder(stream, recOpts);
       recorderRef.current = recorder;
@@ -575,7 +693,7 @@ export default function Audio() {
     if (audioInputRef.current) audioInputRef.current.value = '';
   };
 
-  const startScan = (): void => {
+  const startScan = async (): Promise<void> => {
     if (!hasAudio) return;
     if (mode === 'record' && recordedBlob && recordingDuration < MIN_RECORD) {
       showToast('Ghi âm quá ngắn. Vui lòng ghi âm ít nhất 2 giây.', 'warning');
@@ -598,15 +716,42 @@ export default function Audio() {
     setScanId(null);
     setTrackOn(false);
     tracker.clear();
+    tracker.push('Đang tối ưu và nén âm thanh trước khi gửi...', 'compressing');
+
+    let payloadFile: File | Blob | null = null;
+    let fileName = '';
+
+    try {
+      if (mode === 'upload' && audioFile) {
+        const compressed = await compressAudioForUpload(audioFile);
+        payloadFile = compressed;
+        fileName = 'name' in compressed ? (compressed as File).name : audioFile.name;
+      } else if (mode === 'record' && recordedBlob) {
+        let finalBlob = recordedBlob;
+        if (recordedBlob.size > 2 * 1024 * 1024) {
+          finalBlob = (await compressAudioForUpload(recordedBlob)) as Blob;
+        }
+        const isWav = finalBlob.type.includes('wav') || ('name' in finalBlob && (finalBlob as File).name.endsWith('.wav'));
+        const ext = isWav ? 'wav' : (finalBlob.type.includes('ogg') ? 'ogg' : 'webm');
+        payloadFile = finalBlob;
+        fileName = `recording.${ext}`;
+      }
+    } catch (err) {
+      console.warn('Nén âm thanh gặp sự cố, chuyển sang tệp gốc:', err);
+      payloadFile = (mode === 'upload' ? audioFile : recordedBlob) as File | Blob;
+      fileName = mode === 'upload' && audioFile ? audioFile.name : 'recording.webm';
+    }
+
+    if (!payloadFile) {
+      setLoading(false);
+      showToast('Không có dữ liệu âm thanh để tải lên.', 'error');
+      return;
+    }
+
     tracker.push('Đang tải âm thanh lên hệ thống...', 'uploading');
 
     const formData = new FormData();
-    if (mode === 'upload' && audioFile) {
-      formData.append('audio', audioFile);
-    } else if (mode === 'record' && recordedBlob) {
-      const ext = recordedBlob.type.includes('ogg') ? 'ogg' : 'webm';
-      formData.append('audio', recordedBlob, `recording.${ext}`);
-    }
+    formData.append('audio', payloadFile, fileName);
     formData.append('cf-turnstile-response', tsToken);
 
     api
@@ -1020,7 +1165,7 @@ export default function Audio() {
               {hasAudio && !loading && !scanning && (
                 <div className="mt-8 flex flex-col items-center gap-6">
                   <TurnstileWidget />
-                  <button type="button" onClick={startScan} className="relative group/scan overflow-hidden rounded-2xl w-full sm:w-auto">
+                  <button type="button" onClick={() => void startScan()} className="relative group/scan overflow-hidden rounded-2xl w-full sm:w-auto">
                     <div className="absolute inset-0 bg-gradient-to-r from-brand2-600 to-brand-600 opacity-0 group-hover/scan:opacity-100 transition-opacity"></div>
                     <div className="relative bg-brand2-500 hover:bg-brand2-400 text-white px-14 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] shadow-xl shadow-brand2-500/25 flex items-center justify-center gap-3 transition-all group-hover/scan:scale-[1.02]">
                       <i className="bi bi-shield-shaded text-lg"></i> Phân tích âm thanh

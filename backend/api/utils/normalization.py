@@ -110,3 +110,55 @@ def normalize_bank_account(account: str) -> str:
         return ""
     return re.sub(r'[\s\-._]', '', account.strip()).upper()
 
+
+MAJOR_PUBLIC_PLATFORMS = {
+    'facebook.com',
+    'fb.com',
+    'messenger.com',
+    'instagram.com',
+    'threads.net',
+    'whatsapp.com',
+    'google.com',
+    'google.com.vn',
+    'gmail.com',
+    'youtube.com',
+    'youtu.be',
+    'microsoft.com',
+    'live.com',
+    'office.com',
+    'outlook.com',
+    'bing.com',
+    'linkedin.com',
+    'apple.com',
+    'icloud.com',
+    'github.com',
+    'gitlab.com',
+    'telegram.org',
+    't.me',
+    'zalo.me',
+    'tiktok.com',
+    'douyin.com',
+    'twitter.com',
+    'x.com',
+    'dropbox.com',
+    'mediafire.com',
+}
+
+
+def is_major_platform_domain(domain_or_url: str) -> bool:
+    """Check if a domain or URL belongs to a major public platform.
+
+    These platforms host user-generated content and their apex or root services
+    must not be flagged as scam/malicious targets at the domain level.
+    """
+    if not domain_or_url:
+        return False
+    domain = normalize_domain(domain_or_url)
+    if not domain:
+        return False
+    domain = domain.lower()
+    for platform in MAJOR_PUBLIC_PLATFORMS:
+        if domain == platform or domain.endswith('.' + platform):
+            return True
+    return False
+

@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 from api.utils.vn_sources import VN_OFFICIAL_CHANNELS, lookup_vn_bank_hotline, bank_official_site
 
 DISCLAIMER = (
-    "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định — "
+    "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định, "
     "không thay thế kết luận của cơ quan chức năng. Hãy luôn xác minh qua kênh chính thức."
 )
 
@@ -380,9 +380,9 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
             tier, conf = "INSUFFICIENT", 0.3
 
     labels = {
-        "CONFIRMED_RISK": "NGUY HIỂM — Có bằng chứng xác thực",
+        "CONFIRMED_RISK": "NGUY HIỂM: Có bằng chứng xác thực",
         "HIGH_RISK": "NGUY CƠ CAO",
-        "SUSPICIOUS": "ĐÁNG NGỜ — Cần thận trọng",
+        "SUSPICIOUS": "ĐÁNG NGỜ: Cần thận trọng",
         "INSUFFICIENT": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
         "LIKELY_SAFE": "CÓ KHẢ NĂNG AN TOÀN (không bảo đảm 100%)",
     }
@@ -390,15 +390,15 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
     cautions: List[str] = []
     if tier == "INSUFFICIENT":
         cautions.append(
-            "Hệ thống chưa thu thập đủ bằng chứng để kết luận. KHÔNG xem đây là 'an toàn' — "
-            "hãy xác minh qua kênh chính thức trước khi giao dịch/chia sẻ thông tin."
+            "Hệ thống chưa thu thập đủ bằng chứng để kết luận. KHÔNG xem đây là 'an toàn', "
+            "hãy xác minh qua kênh chính thức trước khi giao dịch hoặc chia sẻ thông tin."
         )
     if tier in ("HIGH_RISK", "SUSPICIOUS"):
         cautions.append("Không chuyển tiền, không cung cấp OTP/mật khẩu, không cài ứng dụng lạ.")
     if tier == "LIKELY_SAFE":
         cautions.append("Không có dấu hiệu xấu từ các nguồn hiện có, nhưng luôn cảnh giác với yêu cầu bất thường.")
     if any(e.get("reliability") == "low" for e in mal_ev):
-        cautions.append("Một phần nhận định đến từ mô hình AI — cần đối chiếu bằng chứng gốc bên dưới.")
+        cautions.append("Một phần nhận định đến từ mô hình AI, cần đối chiếu bằng chứng gốc bên dưới.")
     if not evidence:
         cautions.append("Không có bằng chứng nào được ghi nhận cho nội dung này.")
 
@@ -441,8 +441,8 @@ def trust_policy() -> Dict[str, Any]:
     """Tóm tắt chính sách tin cậy để hiển thị (điểm #3)."""
     return {
         "principle": "Không kết luận khi chưa đủ cơ sở; mọi nhận định phải kèm bằng chứng & nguồn.",
-        "gray_zone": "Điểm rủi ro 10–39 được coi là vùng xám: chỉ cảnh báo, không kết luận an toàn.",
-        "ai_role": "Mô hình AI chỉ diễn giải/hỗ trợ; không phải bằng chứng gốc.",
+        "gray_zone": "Điểm rủi ro 10-39 được coi là vùng xám: chỉ cảnh báo, không kết luận an toàn.",
+        "ai_role": "Mô hình AI chỉ diễn giải, hỗ trợ; không phải bằng chứng gốc.",
         "sources": source_catalog(),
         "disclaimer": DISCLAIMER,
     }
@@ -473,18 +473,51 @@ _ABSOLUTE_SAFE_PATTERN = re.compile(
     r")"
 )
 
-# Câu trả lời có ĐƯA RA NHẬN ĐỊNH an toàn/rủi ro (để quyết định có gắn guardrail hay không).
-# Chỉ những lượt chat liên quan an toàn – rủi ro mới cần guardrail; chat kiến thức chung
-# (định nghĩa, hướng dẫn thông thường) KHÔNG bị gắn nhãn để giữ sự quyết đoán, tránh nhiễu.
-_RISK_ASSERT_PATTERN = re.compile(
-    r"(?i)(lừa đảo|lua dao|scam|nguy hiểm|nguy hiem|đáng ngờ|dang ngo|cảnh báo|canh bao|"
-    r"mạo danh|mao danh|giả mạo|gia mao|phishing|rủi ro|rui ro|bất thường|bat thuong|"
-    r"độc hại|doc hai|tấn công|tan cong|dính bẫy|dinh bay)"
+# Mau nhan dien cau chao hoi, gioi thieu ban than tro ly hoac mo ta tinh nang chung
+_BOT_INTRO_OR_GREETING_PATTERN = re.compile(
+    r"(?i)(?:^|\n)\s*(?:"
+    r"chào(?:\s+bạn|\s+quý\s+khách|\s+anh|\s+chị)?|"
+    r"xin\s+chào|"
+    r"mình\s+là\s+.*?(?:trợ\s+lý|ai|shieldcall|fairspace)|"
+    r"tôi\s+là\s+.*?(?:trợ\s+lý|ai|shieldcall|fairspace)|"
+    r"rất\s+vui\s+được\s+hỗ\s+trợ|"
+    r"luôn\s+sẵn\s+sàng\s+đồng\s+hành|"
+    r"mình\s+có\s+thể\s+giúp\s+bạn|"
+    r"tôi\s+có\s+thể\s+giúp\s+bạn|"
+    r"bạn\s+đang\s+cần\s+kiểm\s+tra\s+hay\s+tìm\s+hiểu\s+điều\s+gì"
+    r")"
+)
+
+# Mau nhan dien cau chao hoi hoac xa giao tu nguoi dung
+_USER_GREETING_PATTERN = re.compile(
+    r"(?i)^\s*(?:"
+    r"chào(?:\s+bạn|\s+bot|\s+ad|\s+nha|\s+nhé|\s+nhe|\s+anh|\s+em|\s+mn)?|"
+    r"xin\s+chào|"
+    r"hello|hi|hey|alo|halo|"
+    r"cảm\s+ơn(?:\s+bạn|\s+nhiều|\s+nhé|\s+nha)?|thanks|thank\s+you|"
+    r"tạm\s+biệt|bye|goodbye|"
+    r"bạn\s+là\s+ai|bạn\s+tên\s+gì|bạn\s+giúp\s+được\s+gì|bạn\s+làm\s+được\s+gì|"
+    r"hướng\s+dẫn\s+sử\s+dụng|hướng\s+dẫn|"
+    r"ok|oke|okie|ừ|uh|được\s+rồi|vâng|dạ"
+    r")[\s.!?~-]*$"
+)
+
+# Nhan dinh rui ro THUC SU tren mot doi tuong cu the hoac ket luan danh gia ro rang
+_TARGET_RISK_ASSERT_PATTERN = re.compile(
+    r"(?i)(?:"
+    r"(?:đây|day|số\s+này|so\s+nay|link\s+này|link\s+nay|đường\s+link|duong\s+link|website|trang\s+web|tài\s+khoản|tai\s+khoan|stk|tin\s+nhắn|tin\s+nhan|cuộc\s+gọi|cuoc\s+goi|người\s+này|nguoi\s+nay|bên\s+này|ben\s+nay|trường\s+hợp|truong\s+hop|vụ\s+việc|vu\s+viec|email|nội\s+dung\s+này|noi\s+dung\s+nay)\s+"
+    r"(?:có|co|chính\s+là|chinh\s+la|là|la|mang|chứa|chua|tiềm\s+ẩn|tiem\s+an)?\s*"
+    r"(?:dấu\s+hiệu|dau\s+hieu|nguy\s+cơ|nguy\s+co|hành\s+vi|hanh\s+vi|thủ\s+đoạn|thu\s+doan|mục\s+đích|muc\s+dich)?\s*"
+    r"(?:lừa\s+đảo|lua\s+dao|mạo\s+danh|mao\s+danh|giả\s+mạo|gia\s+mao|chiếm\s+đoạt|chiem\s+doat|đáng\s+ngờ|dang\s+ngo|bất\s+thường|bat\s+thuong|độc\s+hại|doc\s+hai|scam)|"
+    r"(?:to\s+nghi|toi\s+nghi|đánh\s+giá|danh\s+gia|kết\s+luận|ket\s+luan|nhận\s+thấy|nhan\s+thay|phát\s+hiện|phat\s+hien)\s+.*?(?:dấu\s+hiệu|dau\s+hieu|nguy\s+cơ|nguy\s+co|lừa\s+đảo|lua\s+dao|scam|giả\s+mạo|gia\s+mao)|"
+    r"(?:có\s+dấu\s+hiệu\s+lừa\s+đảo|co\s+dau\s+hieu\s+lua\s+dao|nguy\s+cơ\s+lừa\s+đảo|nguy\s+co\s+lua\s+dao|dấu\s+hiệu\s+chiếm\s+đoạt|dau\s+hieu\s+chiem\s+doat|hành\s+vi\s+lừa\s+đảo|hanh\s+vi\s+lua\s+dao|chiêu\s+trò\s+lừa\s+đảo|chieu\s+tro\s+lua\s+dao|bẫy\s+lừa\s+đảo|bay\s+lua\s+dao|hình\s+thức\s+lừa\s+đảo|hinh\s+thuc\s+lua\s+dao)|"
+    r"(?:cảnh\s+báo:\s*(?:đây|tuyệt\s+đối|nguy\s+cơ|dấu\s+hiệu)|canh\s+bao:\s*(?:day|tuyet\s+doi|nguy\s+co|dau\s+hieu)|tuyệt\s+đối\s+không\s+(?:chuyển\s+tiền|cung\s+cấp\s+otp|bấm\s+vào)|tuyet\s+doi\s+khong\s+(?:chuyen\s+tien|cung\s+cap\s+otp|bam\s+vao))"
+    r")"
 )
 
 CHAT_AI_CAUTION = (
     "Trợ lý AI có thể nhận diện SAI. Câu trả lời này là ý kiến tham khảo, KHÔNG phải "
-    "kết luận đã xác minh — hãy kiểm chứng qua kênh chính thức trước khi giao dịch/chia sẻ thông tin."
+    "kết luận đã xác minh: hãy kiểm chứng qua kênh chính thức trước khi giao dịch hoặc chia sẻ thông tin."
 )
 
 
@@ -495,8 +528,12 @@ def detect_absolute_safety_claim(text: str) -> Optional[str]:
 
 
 def asserts_risk_or_safety(text: str) -> bool:
-    """Có nhận định liên quan an toàn – rủi ro không (cần guardrail)."""
-    return bool(_RISK_ASSERT_PATTERN.search(text or ""))
+    """Có nhận định liên quan an toàn rủi ro đối với đối tượng cụ thể không (cần guardrail)."""
+    if not text:
+        return False
+    if _BOT_INTRO_OR_GREETING_PATTERN.search(text) and "bạn đang cần kiểm tra hay tìm hiểu" in text.lower():
+        return False
+    return bool(_TARGET_RISK_ASSERT_PATTERN.search(text))
 
 
 def _result_risk_score(result: Dict[str, Any]) -> int:
@@ -513,21 +550,22 @@ def _result_risk_score(result: Dict[str, Any]) -> int:
 
 
 def chat_guardrail(answer_text: str = "", tool_results: Optional[List[Any]] = None,
-                   *, used_web_search: bool = False, used_knowledge: bool = False) -> Optional[Dict[str, Any]]:
+                   *, used_web_search: bool = False, used_knowledge: bool = False,
+                   user_message: str = "") -> Optional[Dict[str, Any]]:
     """Khối guardrail có cấu trúc cho hội thoại chat (đồng nhất với luồng quét).
 
-    Nguyên tắc (cân bằng an toàn & QUYẾT ĐOÁN):
-    - CHỈ gắn guardrail cho lượt chat có nội dung an toàn – rủi ro (có công cụ kiểm chứng
-      đã chạy, có tra cứu web/OSINT, hoặc câu trả lời đưa ra nhận định an toàn/rủi ro).
-      Chat kiến thức/hướng dẫn thông thường KHÔNG bị gắn nhãn -> trả `None`.
-    - Khi CÓ bằng chứng, dùng đúng phân tầng của `assess()` và **kết luận dứt khoát**
-      (CONFIRMED/HIGH/SUSPICIOUS/LIKELY_SAFE) — không hạ nhãn xuống "chưa đủ cơ sở".
-    - CHỈ trả `INSUFFICIENT` khi bằng chứng thực sự thiếu (đúng vùng xám).
-    - Nếu câu trả lời khẳng định quá mức ("100% an toàn", "chắc chắn không sao"...) thì
-      gắn cảnh báo riêng, KHÔNG tự ý xoá bỏ kết luận dựa trên bằng chứng.
-    - Luôn kèm disclaimer + kênh xác minh chính thức + cảnh báo AI có thể sai.
+    Nguyên tắc:
+    - Bo qua cac luot chat chao hoi, cam on, xa giao hoac hoi dap kien thuc chung khong danh gia doi tuong.
+    - CHI gan guardrail khi co cong cu kiem chung chay, co tra cuu web OSINT, co khang dinh an toan tuyet doi,
+      hoac cau tra loi dua ra nhan dinh rui ro doi voi doi tuong cu the.
     """
+    if user_message and _USER_GREETING_PATTERN.match(user_message.strip()):
+        return None
+
     results = [r for r in (tool_results or []) if isinstance(r, dict)]
+
+    if not results and not used_web_search and _BOT_INTRO_OR_GREETING_PATTERN.search(answer_text or ""):
+        return None
 
     score = 0
     evidence: List[Dict[str, Any]] = []
@@ -536,7 +574,6 @@ def chat_guardrail(answer_text: str = "", tool_results: Optional[List[Any]] = No
         score = max(score, _result_risk_score(r))
         found = build_evidence(r)
         if not found and _result_risk_score(r) >= 10:
-            # Công cụ trả mức rủi ro nhưng chưa có evidence chuẩn hoá -> tạo một mục từ summary.
             found = [_mk_evidence(
                 "heuristic",
                 r.get("summary") or f"Công cụ nội bộ trả mức rủi ro {r.get('risk_level') or 'cao'}.",
@@ -559,7 +596,7 @@ def chat_guardrail(answer_text: str = "", tool_results: Optional[List[Any]] = No
 
     claim = detect_absolute_safety_claim(answer_text)
 
-    # Cổng phát guardrail: chỉ khi có việc-để-xác-minh thực sự.
+    # Cong phat guardrail: chi khi co cong cu chay, web search, khang dinh an toan, hoac nhan dinh rui ro ro rang
     relevant = bool(results) or used_web_search or bool(claim) or asserts_risk_or_safety(answer_text)
     if not relevant:
         return None

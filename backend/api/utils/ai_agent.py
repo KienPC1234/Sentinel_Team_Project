@@ -39,6 +39,9 @@ QUY TẮC QUAN TRỌNG:
       + Cảnh báo/Lừa đảo: <div class="callout-box callout-danger" style="margin:14px 0;padding:12px 18px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);border-radius:12px;color:#fee2e2;">...</div>
       + Cần lưu ý: <div class="callout-box callout-warning" style="margin:14px 0;padding:12px 18px;background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.35);border-radius:12px;color:#fef9c3;">...</div>
     Tuyệt đối KHÔNG sử dụng màu nền sáng (như #ffffff, #d4edda, #f8d7da, #fff3cd).
+11. NGUYÊN TẮC NGẮT ĐOẠN VĂN KHI DÙNG CÔNG CỤ:
+    - Khi nói lời thông báo mở đầu trước lúc gọi công cụ (ví dụ: "để mình kiểm tra ngay cho bạn nhé...") và khi phân tích kết luận sau khi có kết quả công cụ (ví dụ: "Mình kiểm tra xong rồi..."), bắt buộc phải ngắt đoạn bằng hai dấu xuống dòng liên tiếp (\n\n).
+    - Tuyệt đối không viết nối liền các câu sau khi dùng công cụ khiến chữ bị dính vào câu trước. Luôn trình bày chuyên nghiệp, phân tách đoạn văn rõ ràng.
 
 HÔM NAY LÀ: {current_time}
 """
@@ -58,6 +61,7 @@ QUY TẮC THỨ THÁI & BAO TRÙM (SAFE-TONE):
 5. CHỮA LÀNH (HEALING): Đưa ra các lời động viên nhẹ nhàng, giúp người dùng bình tâm trước khi thực hiện các bước xử lý kỹ thuật.
 6. CHỐNG THIÊN KIẾN: Thúc đẩy sự bình đẳng và an toàn tuyệt đối.
 7. XỬ LÝ ẢNH: Tuyệt đối không nhắc đến thuật ngữ "OCR" hay lỗi bóc tách ảnh kỹ thuật trước mặt người dùng, không lấy lỗi chính tả do nhận diện ảnh làm căn cứ đánh giá lừa đảo.
+8. NGẮT ĐOẠN CHUYÊN NGHIỆP: Khi đưa ra lời trấn an trước khi kiểm tra và phân tích kết quả sau khi gọi công cụ, luôn ngắt đoạn bằng hai dấu xuống dòng (\n\n) để văn bản thoáng đãng, tuyệt đối không viết dính chữ.
 
 HÔM NAY LÀ: {current_time}
 """
@@ -146,9 +150,31 @@ class AIAgent:
             logger.error(f"Error loading chatbot config: {e}")
         return ""
 
+    def _is_greeting_or_smalltalk(self, query: str) -> bool:
+        if not query:
+            return True
+        clean = query.strip().lower()
+        if len(clean) < 2:
+            return True
+        if len(clean) <= 30 and re.match(r'^(chào|xin chào|chao|xin chao|hello|hi|hey|alo|halo|helo)\b', clean):
+            return True
+        patterns = [
+            r'^(chào|xin chào|chao|xin chao|hello|hi|hey|alo|halo)( bạn| bot| ad| nha| nhé| nhe| a| em| mn)?[\s.!?~-]*$',
+            r'^(cảm ơn|cam on|thanks|thank you|cảm ơn bạn|tks)( nhé| nha| nhiều)?[\s.!?~-]*$',
+            r'^(tạm biệt|tam biet|bye|goodbye|see you)[\s.!?~-]*$',
+            r'^(bạn là ai|ban la ai|bạn tên gì|ban ten gi|bạn giúp được gì|ban giup duoc gi|ai tạo ra bạn|ai tao ra ban)[\s.!?~-]*$',
+            r'^(bạn làm được gì|ban lam duoc gi|chức năng của bạn|hướng dẫn sử dụng|huong dan su dung)[\s.!?~-]*$',
+            r'^(ok|oke|okie|ừ|uh|được rồi|duoc roi|rồi|roi|dạ|da|vâng|vang)[\s.!?~-]*$',
+        ]
+        for p in patterns:
+            if re.match(p, clean):
+                return True
+        return False
+
     def _get_rag_context(self, user_query: str) -> str:
-        # We can't yield directly from a helper if it's not a generator
-        # but we can log or just let chat_stream handle the status.
+        if self._is_greeting_or_smalltalk(user_query):
+            return "", []
+
         results = vector_db.search(user_query, k=2)
         if not results:
             logger.info(f"RAG: No hits found for query: '{user_query[:50]}'")
@@ -207,15 +233,19 @@ class AIAgent:
                         logger.error(f"Error saving chat image: {e}")
 
         # 2. Get Context & History
-        yield {"type": "status", "value": "searching_knowledge"}
-        history = self._get_history()
-        
-        rag_context, rag_results = self._get_rag_context(user_message)
-        
+        is_greeting = self._is_greeting_or_smalltalk(user_message)
+        rag_context = ""
+        rag_results = []
         current_metadata = {}
-        if rag_results:
-            current_metadata['internal_knowledge'] = rag_results
-            yield {"type": "metadata", "metadata": {"internal_knowledge": rag_results}}
+
+        if not is_greeting:
+            yield {"type": "status", "value": "searching_knowledge"}
+            rag_context, rag_results = self._get_rag_context(user_message)
+            if rag_results:
+                current_metadata['internal_knowledge'] = rag_results
+                yield {"type": "metadata", "metadata": {"internal_knowledge": rag_results}}
+
+        history = self._get_history()
         
         # 3. Construct Final Prompt
         from datetime import datetime
@@ -318,10 +348,8 @@ class AIAgent:
                         tool_results.append(res)
                 yield ev
 
-            # 3b. Guardrail có cấu trúc cho chat (góp ý hội đồng #1) — chỉ gắn cho
-            #     lượt chat có nội dung an toàn–rủi ro (có kiểm chứng/nhận định).
-            #     Khi CÓ bằng chứng thì kết luận dứt khoát; giữ cảnh báo AI có thể sai.
-            if full_response.strip():
+            # 3b. Guardrail có cấu trúc cho chat: chỉ gắn khi có công cụ quét chạy và có phát hiện rủi ro cụ thể
+            if full_response.strip() and not is_greeting and tool_results:
                 try:
                     from api.utils.trust_guard import chat_guardrail
                     guard = chat_guardrail(
@@ -329,8 +357,9 @@ class AIAgent:
                         tool_results=tool_results,
                         used_web_search=used_web_search,
                         used_knowledge=bool(rag_results),
+                        user_message=user_message,
                     )
-                    if guard:
+                    if guard and guard.get('tier') not in (None, '', 'INSUFFICIENT'):
                         current_metadata['guardrail'] = guard
                         yield {"type": "guardrail", "guardrail": guard}
                 except Exception as ge:

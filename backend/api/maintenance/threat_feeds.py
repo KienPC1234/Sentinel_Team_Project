@@ -19,7 +19,7 @@ from django.db import connection
 from django.utils import timezone
 
 from api.core.models import Domain, ScamType
-from api.utils.normalization import normalize_domain
+from api.utils.normalization import normalize_domain, is_major_platform_domain
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,9 @@ def clean_domain_target(target: str) -> Optional[str]:
     norm = norm.lower().strip()
     if norm.startswith("www."):
         norm = norm[4:]
+
+    if is_major_platform_domain(norm):
+        return None
 
     if is_valid_public_domain_or_ip(norm):
         return norm

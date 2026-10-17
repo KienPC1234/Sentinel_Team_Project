@@ -10,6 +10,8 @@ import base64
 import io
 import logging
 import os
+import asyncio
+import threading
 
 from .models import ChatFolder, ChatSession, ChatMessage, ChatAction, ChatMessageImage, ChatbotConfig, SavedMessage
 from django.core.files.base import ContentFile
@@ -399,19 +401,43 @@ class ChatAIStreamView(APIView):
                 # Start classification in parallel
                 class_future = executor.submit(classify_message, user_message or ocr_text)
 
-                # Use sync_to_async for the blocking generator
-                agent_stream = await sync_to_async(agent.chat_stream)(final_query, images_data=images_data, debug=debug, safe_mode=safe_mode)
+                # Chạy generator đồng bộ của agent trong LUỒNG riêng, đẩy event vào
+                # asyncio.Queue; vòng lặp async đọc queue theo timeout để phát
+                # heartbeat. Tránh proxy (Cloudflare ~100s) cắt kết nối khi agent
+                # chạy công cụ/model lâu mà không phát byte nào.
+                loop = asyncio.get_running_loop()
+                q: "asyncio.Queue" = asyncio.Queue()
+                DONE = object()
 
-                # AIAgent phát ra event dạng dict {'type': ...} -> serialize thẳng ra SSE.
-                def get_next_event(gen):
+                def _put(item):
                     try:
-                        return next(gen)
-                    except StopIteration:
-                        return None
+                        if not loop.is_closed():
+                            asyncio.run_coroutine_threadsafe(q.put(item), loop)
+                    except Exception:
+                        pass
 
+                def _producer():
+                    try:
+                        for ev in agent.chat_stream(
+                            final_query, images_data=images_data, debug=debug, safe_mode=safe_mode
+                        ):
+                            _put(ev)
+                    except Exception as exc:  # noqa: BLE001
+                        logging.getLogger(__name__).error(f"Agent stream error: {exc}")
+                        _put({'type': 'error', 'message': str(exc)})
+                    finally:
+                        _put(DONE)
+
+                threading.Thread(target=_producer, name='chat-agent', daemon=True).start()
+
+                # Vòng lặp đọc queue + heartbeat ': ping' khi agent im lặng > 15s.
                 while True:
-                    event = await sync_to_async(get_next_event)(agent_stream)
-                    if event is None:
+                    try:
+                        event = await asyncio.wait_for(q.get(), timeout=15)
+                    except asyncio.TimeoutError:
+                        yield ": ping\n\n"
+                        continue
+                    if event is DONE:
                         break
                     if isinstance(event, dict):
                         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"

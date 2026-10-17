@@ -295,7 +295,7 @@ export default function ArticleDetail() {
           </span>
         </div>
 
-        <h1 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-[1.1] selection:bg-brand-500/30">
+        <h1 className="text-4xl sm:text-6xl font-black text-white tracking-normal leading-[1.15] selection:bg-brand-500/30">
           {article.title}
         </h1>
 

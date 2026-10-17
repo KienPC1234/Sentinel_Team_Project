@@ -49,6 +49,12 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 import requests
 
+try:
+    from api.utils.normalization import is_major_platform_domain
+except Exception:
+    def is_major_platform_domain(domain_or_url: str) -> bool:
+        return False
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -1612,6 +1618,8 @@ def lookup_local_domain(domain: str, base_dir: Optional[Path] = None,
             dbs.append((cat, db))
     for cand in _domain_candidates(host):
         for cat, db in dbs:
+            if cat == "fake" and is_major_platform_domain(cand):
+                continue
             rec = _fetch_one(db, cand)
             if rec:
                 out = {

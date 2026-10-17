@@ -51,6 +51,9 @@ def _get_craft():
     if _CRAFT is None:
         import os
         import torch
+        import torchvision.models.vgg as vgg
+        if not hasattr(vgg, "model_urls"):
+            vgg.model_urls = {"vgg16_bn": "https://download.pytorch.org/models/vgg16_bn-6c64b313.pth"}
         from craft_text_detector import Craft
         dev = (os.getenv("VIETOCR_DEVICE") or "auto").strip().lower()
         use_cuda = torch.cuda.is_available() and dev != "cpu"
@@ -86,22 +89,49 @@ def _detect_boxes(path: str, img):
 
 def _detect_boxes_projection(img):
     import cv2
+    import numpy as np
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-    if float(bw.mean()) > 127.0:  # nền tối → nhầm cực tính
-        bw = cv2.bitwise_not(bw)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
-    dil = cv2.dilate(bw, kernel, iterations=1)
-    contours, _ = cv2.findContours(dil, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     H, W = gray.shape
-    boxes = []
-    for c in contours:
-        x, y, w, h = cv2.boundingRect(c)
-        if w < 10 or h < 8:
-            continue
-        if w * h > 0.9 * W * H:
-            continue
-        boxes.append((x, y, x + w, y + h))
+
+    def extract_from_binary(bw_img):
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
+        dil = cv2.dilate(bw_img, kernel, iterations=1)
+        contours, _ = cv2.findContours(dil, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        found = []
+        for c in contours:
+            x, y, w, h = cv2.boundingRect(c)
+            if w < 10 or h < 8:
+                continue
+            if w * h > 0.9 * W * H:
+                continue
+            found.append((x, y, x + w, y + h))
+        return found
+
+    # 1. Otsu thresholding
+    bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+    if float(bw.mean()) > 127.0:
+        bw = cv2.bitwise_not(bw)
+    boxes = extract_from_binary(bw)
+
+    # 2. Adaptive threshold fallback (for complex backgrounds, dark mode, gradient chat bubbles)
+    if not boxes:
+        bw_adapt = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 10)
+        boxes = extract_from_binary(bw_adapt)
+
+    # 3. Horizontal line slicing fallback if image has gradient content
+    if not boxes:
+        edges = cv2.Canny(gray, 50, 150)
+        row_sums = np.sum(edges, axis=1)
+        active_rows = np.where(row_sums > 0)[0]
+        if len(active_rows) > 0:
+            band_h = 32
+            for y in range(0, H, band_h):
+                boxes.append((0, y, W, min(H, y + band_h)))
+
+    # 4. Final safety net: full image crop
+    if not boxes:
+        boxes.append((0, 0, W, H))
+
     return boxes
 
 

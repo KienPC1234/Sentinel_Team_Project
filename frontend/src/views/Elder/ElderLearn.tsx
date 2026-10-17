@@ -58,6 +58,21 @@ const SIGNS = [
     text: 'Báo bác trúng thưởng xe máy, tiền mặt hoặc quà tri ân nhưng bắt nộp trước phí vận chuyển hay thuế.',
     tip: 'Bắt nộp tiền trước để nhận quà thì 100% là lừa đảo.',
   },
+  {
+    icon: 'bi-bank',
+    text: 'Đòi chuyển tiền vào một tài khoản mang tên NGƯỜI LẠ (không phải tên bác hay người nhà) vì bất cứ lý do gì.',
+    tip: 'Tiền vào tài khoản người lạ là mất luôn. Người thân thật sẽ cho bác biết trước tên chủ tài khoản.',
+  },
+  {
+    icon: 'bi-android2',
+    text: 'Yêu cầu bác tải và cài một ứng dụng ngoài kho CH Play / App Store (file .apk hoặc link tải trực tiếp).',
+    tip: 'Chỉ cài ứng dụng từ CH Play (Android) hoặc App Store (iPhone). App ngoài chợ có thể chiếm quyền điện thoại.',
+  },
+  {
+    icon: 'bi-envelope-exclamation-fill',
+    text: 'Tin nhắn, email báo bác vi phạm, nợ cước, bị khóa sim/tài khoản và đòi xử lý gấp qua đường link trong tin nhắn.',
+    tip: 'Đừng bấm link trong tin nhắn. Bác tự mở app hoặc website chính thức để kiểm tra, hoặc gọi tổng đài in trên thẻ.',
+  },
 ];
 
 const SCENARIOS: ScenarioItem[] = [
@@ -105,6 +120,50 @@ const SCENARIOS: ScenarioItem[] = [
     truth: 'Không có cơ quan, nhãn hàng uy tín nào bắt người trúng thưởng phải nộp tiền trước qua tài khoản cá nhân để nhận quà.',
     action: 'Xóa ngay tin nhắn, dập máy ngay. Tuyệt đối không chuyển một đồng nào.',
   },
+  {
+    id: 'parcel',
+    title: 'Giả nhân viên giao hàng báo đơn thất lạc, đòi phí phát lại',
+    icon: 'bi-box-seam-fill',
+    tag: 'Đánh vào thói quen mua hàng',
+    scammerSays:
+      'Chào bác, đơn hàng của bác giao không thành công do sai địa chỉ. Bác thanh toán phí phát lại 25.000 đồng tại đường link này để shipper giao lại nhé, kẻo mai hàng hoàn về kho.',
+    seniorTrap: 'Bác đang chờ hàng, thấy số tiền nhỏ nên chủ quan bấm link và điền thông tin thẻ.',
+    truth: 'Đơn vị vận chuyển không bao giờ thu phí phát lại qua link lạ. Trang sau đường link là web giả mạo để lấy số thẻ và mã OTP.',
+    action: 'Không bấm link. Bác mở app hoặc website chính thức của đơn vị vận chuyển, nhập mã vận đơn để tự kiểm tra.',
+  },
+  {
+    id: 'investment',
+    title: 'Mời góp vốn "sàn" đầu tư lãi cao, rút được vài lần rồi bị chặn',
+    icon: 'bi-graph-up-arrow',
+    tag: 'Nuôi rồi mổ',
+    scammerSays:
+      'Cháu có sàn tài chính lãi 20% một tuần, an toàn lắm. Bác nạp 50 triệu, tuần sau rút cả gốc lẫn lãi. Bác thử rút 5 triệu trước cho tin nhé.',
+    seniorTrap: 'Bác cho rút thử vài lần thật nên tin tưởng, rồi nạp số lớn thì bị chặn rút và bị đòi thêm tiền phí.',
+    truth: 'Không có đầu tư nào lãi cao mà chắc thắng. Sàn "ảo" cho rút nhỏ để tạo niềm tin rồi chiếm đoạt số tiền lớn.',
+    action: 'Không nạp thêm. Chỉ đầu tư qua tổ chức được cấp phép; bác tra cứu trên website Ủy ban Chứng khoán Nhà nước.',
+  },
+  {
+    id: 'romance',
+    title: 'Kết bạn làm quen qua mạng rồi hỏi mượn tiền, xin quà',
+    icon: 'bi-heart-fill',
+    tag: 'Nhẹ dạ cả tin',
+    scammerSays:
+      'Bác à, cháu sắp sang Việt Nam thăm bác nhưng bị giữ ở sân bay, cần đóng 30 triệu tiền phạt. Bác cho cháu vay, sang cháu trả gấp đôi.',
+    seniorTrap: 'Bác coi người quen qua mạng như người thân thật, thương hoàn cảnh nên cho vay tiền.',
+    truth: 'Sau khi nhận tiền, "người quen" sẽ chặn liên lạc. Đây là chiêu lừa tình cảm rất phổ biến với người cao tuổi.',
+    action: 'Dừng ngay, không chuyển khoản cho người chưa từng gặp mặt. Kể lại câu chuyện này cho con cháu.',
+  },
+  {
+    id: 'sim',
+    title: 'Giả nhân viên viễn thông báo khóa SIM, dọa cắt liên lạc',
+    icon: 'bi-sim-fill',
+    tag: 'Dọa khóa dịch vụ',
+    scammerSays:
+      'Thuê bao của bác sắp bị khóa 2 chiều trong 30 phút tới. Bác đọc mã OTP vừa nhận để cháu gia hạn, không thì bị cắt liên lạc hết.',
+    seniorTrap: 'Sợ bị cắt liên lạc với con cháu nên bác vội làm theo và đọc mã OTP.',
+    truth: 'Nhà mạng không bao giờ gọi đòi OTP để gia hạn. Kẻ gian cần mã OTP để chiếm tài khoản ngân hàng và ứng dụng của bác.',
+    action: 'Không đọc OTP. Dập máy, gọi tổng đài chính thức của nhà mạng in trên hợp đồng/thẻ để kiểm tra.',
+  },
 ];
 
 const FALLBACK_LESSONS: CuratedLesson[] = [
@@ -151,6 +210,53 @@ const FALLBACK_LESSONS: CuratedLesson[] = [
       '1. Đặt một từ khóa bí mật giữa bác và con cháu trong nhà (ví dụ tên con vật cưng, tên quê quán xưa).\n'
       + '2. Khi có cuộc gọi gấp nhờ chuyển tiền, chỉ cần hỏi từ khóa này, kẻ gian sẽ chịu thua ngay.\n'
       + '3. Khi gặp chuyện lo lắng, việc đầu tiên là thở sâu và gọi điện cho con cháu chia sẻ.',
+  },
+  {
+    id: 'lesson-5',
+    title: 'Lỡ chuyển tiền cho kẻ lừa đảo — 3 việc làm ngay trong ngày',
+    category: 'Cấp cứu khẩn',
+    icon: 'bi-life-preserver',
+    summary: 'Càng làm sớm càng có cơ hội giữ lại tiền. Bác làm theo đúng thứ tự dưới đây.',
+    content:
+      '1. Gọi NGAY tổng đài ngân hàng in ở mặt sau thẻ ATM, yêu cầu khóa thẻ/tài khoản và báo có giao dịch gian lận để tra soát.\n'
+      + '2. Giữ nguyên bằng chứng: tin nhắn, số điện thoại, ảnh chuyển tiền, nội dung trò chuyện. Không xóa gì cả.\n'
+      + '3. Ra cơ quan Công an gần nhất trình báo, hoặc gọi tổng đài 156 (báo lừa đảo) và 113 nếu bị đe dọa. Nhờ con cháu đi cùng.',
+  },
+  {
+    id: 'lesson-6',
+    title: '4 bước kiểm tra trước khi chuyển khoản cho bất kỳ ai',
+    category: 'Trước khi mất tiền',
+    icon: 'bi-shield-check',
+    summary: 'Một phút kiểm tra kỹ giúp bác tránh mất cả số tiền tiết kiệm.',
+    content:
+      '1. Tự hỏi: chuyển cho AI, tên chủ tài khoản có đúng người bác thật sự biết không?\n'
+      + '2. Gọi lại bằng SỐ CŨ đã lưu trong máy — không gọi số vừa gọi đến, không chỉ nhắn Zalo.\n'
+      + '3. Không chịu áp lực thời gian: nếu bị giục gấp thì càng phải dừng lại hỏi con cháu.\n'
+      + '4. Đang phân vân thì KHOAN bấm nút chuyển — để mai hãy làm cũng chưa muộn.',
+  },
+  {
+    id: 'lesson-7',
+    title: 'An toàn khi dùng điện thoại thông minh hằng ngày',
+    category: 'Mẹo an toàn',
+    icon: 'bi-phone',
+    summary: 'Vài thói quen nhỏ giúp điện thoại của bác khó bị kẻ gian tấn công hơn.',
+    content:
+      '1. Đặt mật khẩu/PIN cho điện thoại và bật khóa bằng vân tay/khuôn mặt nếu máy hỗ trợ.\n'
+      + '2. Bật cập nhật tự động cho hệ điều hành và ứng dụng; chỉ cài app từ CH Play/App Store.\n'
+      + '3. Không nhấn vào link trong tin nhắn lạ; không cài file .apk gửi qua tin nhắn/Zalo.\n'
+      + '4. Không lưu ảnh chụp 2 mặt thẻ căn cước hay mật khẩu trong ghi chú, ảnh, tin nhắn.',
+  },
+  {
+    id: 'lesson-8',
+    title: 'Nhận biết tin nhắn, email lừa đảo trong 30 giây',
+    category: 'Nhìn dấu hiệu',
+    icon: 'bi-envelope-exclamation',
+    summary: 'Kẻ gian thường để lộ vài dấu hiệu chỉ cần để ý là thấy ngay.',
+    content:
+      '1. Tên người gửi/tên miền lạ hoặc sai chính tả so với thương hiệu thật (ví dụ vietcombank-luudan.com).\n'
+      + '2. Nội dung tạo cảm giác GẤP, dọa phạt/khóa tài khoản, hoặc báo bác trúng thưởng.\n'
+      + '3. Có đường link rút gọn hoặc link lạ; nhìn kỹ tên miền trước khi bấm — tốt nhất là KHÔNG bấm.\n'
+      + '4. Yêu cầu cung cấp OTP, mật khẩu, số thẻ hoặc chuyển tiền. Ngân hàng thật không bao giờ hỏi những thứ này.',
   },
 ];
 
@@ -219,6 +325,70 @@ const QUIZ_LIST: QuizItem[] = [
       },
     ],
   },
+  {
+    id: 5,
+    question: 'Tin nhắn từ số lạ xưng là đơn vị giao hàng, bảo đơn thất lạc và đòi 25.000 đồng phí phát lại qua đường link, bác làm gì?',
+    options: [
+      {
+        text: 'Không bấm link. Mở app/website chính thức của đơn vị giao hàng để tự kiểm tra mã vận đơn.',
+        correct: true,
+        explanation: 'Chuẩn bác ơi! Đơn vị vận chuyển không thu phí phát lại qua link lạ. Tự tra trên kênh chính thức là an toàn nhất.',
+      },
+      {
+        text: 'Bấm link đóng 25.000 đồng cho nhanh vì tiền nhỏ.',
+        correct: false,
+        explanation: 'Nguy hiểm! Trang sau link là web giả để lấy số thẻ và mã OTP, không phải chỉ 25.000 đồng đâu bác.',
+      },
+    ],
+  },
+  {
+    id: 6,
+    question: 'Người lạ nhắn Zalo bảo bác tải file .apk rồi cài để "cập nhật căn cước", bác làm gì?',
+    options: [
+      {
+        text: 'Không cài. Chỉ cài ứng dụng từ CH Play hoặc App Store.',
+        correct: true,
+        explanation: 'Chính xác! File .apk ngoài chợ ứng dụng là mã độc, có thể chiếm quyền điện thoại và tự chuyển tiền.',
+      },
+      {
+        text: 'Cài thử xem sao, không được thì xóa.',
+        correct: false,
+        explanation: 'Đừng bác ơi! Mã độc chạy ngầm ngay khi cài, có thể đọc tin nhắn OTP và rút tiền trước khi bác phát hiện.',
+      },
+    ],
+  },
+  {
+    id: 7,
+    question: 'Bác phát hiện vừa chuyển nhầm 30 triệu cho kẻ lừa đảo. Việc cần làm NGAY là gì?',
+    options: [
+      {
+        text: 'Gọi ngay tổng đài ngân hàng (in sau thẻ) để khóa tài khoản/báo gian lận, giữ bằng chứng rồi trình báo công an.',
+        correct: true,
+        explanation: 'Rất đúng! Làm càng sớm càng có cơ hội giữ lại tiền; giữ nguyên bằng chứng và trình báo công an/156.',
+      },
+      {
+        text: 'Chờ vài ngày xem có lấy lại được không đã.',
+        correct: false,
+        explanation: 'Chậm là mất! Tiền có thể bị rút/chuyển tiếp trong vài phút. Phải gọi ngân hàng khóa tài khoản ngay.',
+      },
+    ],
+  },
+  {
+    id: 8,
+    question: 'Quảng cáo trên mạng bán điện thoại đời mới giá rẻ hơn một nửa, bắt chuyển khoản trước rồi mới gửi hàng, bác làm gì?',
+    options: [
+      {
+        text: 'Cảnh giác, không chuyển trước cho người bán lạ. Ưu tiên nơi cho kiểm tra hàng hoặc thanh toán khi nhận.',
+        correct: true,
+        explanation: 'Chuẩn bác! Giá rẻ bất thường cộng với đòi chuyển trước là dấu hiệu lừa. Mua nơi uy tín, có bảo hành.',
+      },
+      {
+        text: 'Chuyển khoản trước cho rẻ, tiếc gì vài phút.',
+        correct: false,
+        explanation: 'Coi chừng mất tiền! Nhiều vụ "bán rẻ" là bẫy: nhận tiền xong chặn liên lạc, không giao hàng.',
+      },
+    ],
+  },
 ];
 
 export default function ElderLearn({
@@ -251,7 +421,7 @@ export default function ElderLearn({
         if (!alive) return;
         const list = asList<{ id?: number; slug: string; title: string; summary?: string; content?: string }>(res);
         if (list.length > 0) {
-          const mapped: CuratedLesson[] = list.slice(0, 6).map((l, i) => ({
+          const mapped: CuratedLesson[] = list.slice(0, 12).map((l, i) => ({
             id: l.id || l.slug || i,
             slug: l.slug,
             title: l.title,
@@ -386,7 +556,7 @@ export default function ElderLearn({
           onClick={() => setSubTab('signs')}
         >
           <i className="bi bi-bookmark-star-fill elder-icon text-warn-300" aria-hidden="true"></i>
-          5 Dấu hiệu nhận biết
+          {SIGNS.length} dấu hiệu nhận biết
         </button>
         <button
           type="button"
@@ -421,9 +591,9 @@ export default function ElderLearn({
             <div>
               <h2 id="elder-signs-heading" className="elder-h2">
                 <i className="bi bi-bookmark-star-fill elder-h-icon text-warn-300" aria-hidden="true"></i>
-                5 Dấu hiệu nhận biết lừa đảo kinh điển
+                {SIGNS.length} dấu hiệu nhận biết lừa đảo kinh điển
               </h2>
-              <p className="elder-note mt-1">Gặp bất kỳ dấu hiệu nào trong 5 điều này, bác hãy dừng lại ngay.</p>
+              <p className="elder-note mt-1">Gặp bất kỳ dấu hiệu nào trong {SIGNS.length} điều này, bác hãy dừng lại ngay.</p>
             </div>
             {canSpeak && (
               <button
@@ -437,7 +607,7 @@ export default function ElderLearn({
                   )
                 }
               >
-                <i className="bi bi-volume-up-fill elder-icon" aria-hidden="true"></i> Đọc to 5 dấu hiệu
+                <i className="bi bi-volume-up-fill elder-icon" aria-hidden="true"></i> Đọc to {SIGNS.length} dấu hiệu
               </button>
             )}
           </div>

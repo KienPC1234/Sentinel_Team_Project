@@ -61,6 +61,13 @@ cover/
 local_settings.py
 *.sqlite3
 *.sqlite3-journal
+# SQLite sidecar files (WAL/SHM/journal) — chỉ sinh ra lúc chạy, không commit.
+# Lưu ý: *.sqlite vẫn được TRACK (là dữ liệu mẫu), nên không ignore ở đây.
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Flask stuff:
 instance/
@@ -151,6 +158,11 @@ activemq-data/
 # Environments
 .env
 .envrc
+.env.*.bak
+.env.bak
+.env.bak.*
+*.env.bak
+*.env.bak.*
 .venv
 env/
 venv/

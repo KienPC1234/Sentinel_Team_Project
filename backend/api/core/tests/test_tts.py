@@ -37,6 +37,17 @@ class TtsEndpointTest(TestCase):
         first = next(resp.streaming_content)
         self.assertEqual(first[:4], b'RIFF')  # header WAV
 
+    def test_conditional_get_304(self):
+        text = 'Câu kiểm thử ETag và 304.'
+        first = self.client.get('/api/v1/tts/', {'text': text})
+        self.assertEqual(first.status_code, 200)
+        etag = first.headers.get('ETag')
+        self.assertTrue(etag)
+        self.assertIn('no-cache', first.headers.get('Cache-Control', ''))
+        # Gửi lại ETag → 304 (không tải lại nội dung).
+        second = self.client.get('/api/v1/tts/', {'text': text}, HTTP_IF_NONE_MATCH=etag)
+        self.assertEqual(second.status_code, 304)
+
     def test_mp3_when_configured(self):
         import soundfile as sf
         if 'MP3' not in sf.available_formats():

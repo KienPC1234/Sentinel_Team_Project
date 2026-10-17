@@ -203,7 +203,7 @@ export default function LessonDetail() {
             </span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-[1.1] selection:bg-brand-500/30">
+          <h1 className="text-4xl sm:text-6xl font-black text-white tracking-normal leading-[1.15] selection:bg-brand-500/30">
             {lesson.title}
           </h1>
 
@@ -287,7 +287,7 @@ export default function LessonDetail() {
               </div>
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Thử thách kiến thức</h2>
+              <h2 className="text-2xl font-black text-white tracking-normal">Thử thách kiến thức</h2>
               <p className="text-[10px] font-black text-white/45 uppercase tracking-[0.3em] mt-1">
                 {quizzes.length} CÂU HỎI DIỄN TẬP
               </p>
@@ -581,7 +581,7 @@ function ScenarioPlayer({ scenario, steps: rawSteps }: { scenario: Scenario; ste
           </div>
         </div>
         <div>
-          <h2 className="text-2xl font-black text-white tracking-tight">Mô phỏng tình huống</h2>
+          <h2 className="text-2xl font-black text-white tracking-normal">Mô phỏng tình huống</h2>
           <p className="text-[10px] font-black text-white/45 uppercase tracking-[0.3em] mt-1">{scenario.title}</p>
         </div>
       </div>

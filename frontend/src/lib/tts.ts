@@ -15,9 +15,15 @@ export interface SpeakOptions {
   onError?: () => void;
 }
 
-/** URL audio cho một đoạn văn bản (server sinh + cache theo nội dung). */
+/** URL audio cho một đoạn văn bản (server sinh + cache theo nội dung).
+ *
+ * ``v`` là PHIÊN BẢN cache phía trình duyệt — BUMP khi đổi giọng/engine để buộc
+ * trình duyệt bỏ bản audio cũ đã lưu (server bỏ qua tham số này).
+ */
+const TTS_CACHE_VERSION = 'v2';
+
 export function ttsUrl(text: string): string {
-  return `${apiBase()}/tts/?text=${encodeURIComponent(text)}`;
+  return `${apiBase()}/tts/?v=${TTS_CACHE_VERSION}&text=${encodeURIComponent(text)}`;
 }
 
 /**

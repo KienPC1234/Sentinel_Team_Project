@@ -177,7 +177,7 @@ function LessonCard({ lesson, onOpen }: { lesson: Lesson; onOpen: () => void }) 
             {fmtDate(lesson.created_at)}
           </span>
         </div>
-        <h3 className="text-[17px] font-bold leading-snug text-white line-clamp-2 tracking-tight group-hover:text-brand-400 transition-colors">
+        <h3 className="text-[17px] font-bold leading-snug text-white line-clamp-2 group-hover:text-brand-400 transition-colors">
           {lesson.title}
         </h3>
         <p className="text-white/75 text-[14px] font-medium leading-relaxed line-clamp-3 min-h-[63px]">
@@ -246,7 +246,7 @@ function ArticleListItem({ article, onOpen }: { article: Article; onOpen: () => 
             {fmtDate(article.created_at)}
           </span>
         </div>
-        <h3 className="text-[15px] sm:text-[16px] font-bold leading-snug text-white line-clamp-2 tracking-tight group-hover:text-brand-400 transition-colors">
+        <h3 className="text-[15px] sm:text-[16px] font-bold leading-snug text-white line-clamp-2 group-hover:text-brand-400 transition-colors">
           {article.title}
         </h3>
         <p className="hidden sm:block text-white/70 text-[13px] font-medium leading-relaxed line-clamp-2">
@@ -964,42 +964,13 @@ export default function LearnHub() {
         >
           <i className="bi bi-book-half text-4xl"></i>
         </div>
-        <h1 className="text-4xl font-bold text-white tracking-tight leading-none">
+        <h1 className="text-4xl font-bold text-white tracking-normal leading-tight">
           <span className="glow-text">Học cách phòng tránh</span>
         </h1>
         <p className="text-white/75 text-sm font-medium tracking-wide prose-sm">
           Kiến thức là vũ khí tốt nhất để bảo vệ bản thân và gia đình
         </p>
       </div>
-
-      {/* Lối vào dành cho người cao tuổi — đặt ngay TRÊN các tab để dễ thấy nhất */}
-      <section
-        aria-labelledby="learn-elder"
-        className="rounded-2xl border-2 border-safe-500/40 bg-safe-500/10 p-5 sm:p-6"
-      >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex flex-1 items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-safe-500/40 bg-safe-500/15 text-safe-300">
-              <i className="bi bi-person-hearts text-2xl" aria-hidden="true"></i>
-            </div>
-            <div className="min-w-0">
-              <h2 id="learn-elder" className="text-[18px] font-bold leading-snug text-white">
-                Dành cho người cao tuổi
-              </h2>
-              <p className="mt-1.5 text-[15px] font-medium leading-relaxed text-white/80">
-                Trang chữ to, nút to, đọc được thành tiếng: kiểm tra số điện thoại, tin nhắn, đường link, số tài khoản.
-                Không cần đăng nhập.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/nguoi-cao-tuoi/"
-            className="inline-flex min-h-[56px] shrink-0 items-center justify-center gap-2 rounded-xl border border-safe-500/50 bg-safe-500/20 px-6 text-[15px] font-bold text-safe-100 transition-colors hover:bg-safe-500/30"
-          >
-            <i className="bi bi-box-arrow-up-right" aria-hidden="true"></i> Mở trang chữ to
-          </Link>
-        </div>
-      </section>
 
       {/* Tab Navigation — cuộn ngang gọn trên màn hình hẹp */}
       <div className="learn-filter-scroll max-w-full pb-1">

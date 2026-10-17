@@ -1054,14 +1054,64 @@ def filter_tool_call_artifacts(text: str, preserve_edges: bool = False) -> str:
         return cleaned
     return cleaned.strip()
 
+def _repair_truncated_json(text: str) -> Optional[dict]:
+    """
+    Repair a JSON object that was truncated mid-stream (e.g. hitting num_predict limit).
+    Closes open strings and balancing brackets/braces from the last clean token.
+    """
+    if not text:
+        return None
+    start_idx = text.find('{')
+    if start_idx == -1:
+        return None
+    s = text[start_idx:].strip()
+
+    # Strip ASCII control characters
+    s = re.sub(r'[\x00-\x1F\x7F]', ' ', s)
+
+    # Successively cut back to previous boundaries to handle truncated string or token
+    for end_cutoff in range(len(s), max(0, len(s) - 400), -1):
+        candidate = s[:end_cutoff]
+        in_quote = False
+        escaped = False
+        stack = []
+        for ch in candidate:
+            if escaped:
+                escaped = False
+                continue
+            if ch == '\\':
+                escaped = True
+                continue
+            if ch == '"':
+                in_quote = not in_quote
+                continue
+            if not in_quote:
+                if ch in ('{', '['):
+                    stack.append('}' if ch == '{' else ']')
+                elif ch in ('}', ']'):
+                    if stack and stack[-1] == ch:
+                        stack.pop()
+        attempt = candidate
+        if in_quote:
+            attempt += '"'
+        attempt = re.sub(r',\s*([}\]])', r'\1', attempt)
+        attempt = re.sub(r',\s*$', '', attempt)
+        attempt += ''.join(reversed(stack))
+        try:
+            parsed = json.loads(attempt)
+            if isinstance(parsed, dict) and ('risk_score' in parsed or 'is_scam' in parsed or len(parsed) >= 2):
+                return parsed
+        except Exception:
+            continue
+    return None
+
+
 def _extract_json(text: str) -> Optional[dict]:
     """
     Extract and parse the first JSON object from an LLM response.
 
-    Handles markdown fenced code blocks, trailing commas, and ASCII control
-    characters.  Works cleanly on `message.content` which, when the official
-    chat-loop pattern is used with think=True, contains only the final answer
-    (no thinking prose to confuse the extractor).
+    Handles markdown fenced code blocks, trailing commas, ASCII control
+    characters, and truncated JSON recovery when reasoning tokens exhaust num_predict.
     """
     if not text:
         return None
@@ -1073,22 +1123,28 @@ def _extract_json(text: str) -> Optional[dict]:
     if candidate is None:
         # 2. Outermost { … } block
         brace_match = re.search(r'\{.*\}', text, re.DOTALL)
-        if not brace_match:
-            return None
-        candidate = brace_match.group(0)
+        if brace_match:
+            candidate = brace_match.group(0)
 
-    # Strip ASCII control characters
-    candidate = re.sub(r'[\x00-\x1F\x7F]', ' ', candidate)
-
-    try:
-        return json.loads(candidate)
-    except json.JSONDecodeError:
-        # Remove trailing commas (common model mistake) and retry
-        fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+    if candidate:
+        # Strip ASCII control characters
+        candidate = re.sub(r'[\x00-\x1F\x7F]', ' ', candidate)
         try:
-            return json.loads(fixed)
+            return json.loads(candidate)
         except json.JSONDecodeError:
-            return None
+            # Remove trailing commas (common model mistake) and retry
+            fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+            try:
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                pass
+
+    # 3. Fallback: attempt truncated JSON repair
+    repaired = _repair_truncated_json(text)
+    if repaired:
+        return repaired
+
+    return None
 
 
 def message_to_dict(msg) -> Dict[str, Any]:
@@ -1211,6 +1267,7 @@ def generate_response(
     max_loop_iterations: int = 15,
     skip_filter: bool = False,
     allow_pii: bool = False,
+    think: Any = "low",
 ) -> Optional[str]:
     """
     Generate a non-streamed response from Ollama.
@@ -1221,6 +1278,7 @@ def generate_response(
     Args:
         skip_filter: If True, skip filter_hallucinations on the output.
                      Use for long-form content where CJK stripping could corrupt text.
+        think: Control reasoning/thinking token generation ("low", "medium", "high", or False).
     """
     # Diem #5 (bao mat du lieu): mac dinh AN thong tin ca nhan truoc khi gui
     # toi mo hinh cloud. Chi giu nguyen khi caller khang dinh can PII de phan
@@ -1275,7 +1333,7 @@ def generate_response(
                 'model': model,
                 'messages': messages,
                 'options': options,
-                'think': "low",
+                'think': think,
             }
             if tools:
                 chat_kwargs['tools'] = tools
@@ -1622,6 +1680,9 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
         'tinnhiem': None,
     }
 
+    from api.utils.normalization import is_major_platform_domain
+    is_platform = is_major_platform_domain(clean_domain) or is_major_platform_domain(apex_domain)
+
     # 1. Query Internal Database (Domain & Reports)
     try:
         from api.core.models import Domain, Report, EntityLink
@@ -1630,16 +1691,20 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
         if dom_obj:
             report_payload['internal_database']['found'] = True
             report_payload['internal_database']['matched_domain'] = dom_obj.domain_name
-            report_payload['internal_database']['is_scam'] = (dom_obj.risk_score >= 60)
-            report_payload['internal_database']['risk_score'] = dom_obj.risk_score
-            report_payload['internal_database']['domain_age_days'] = dom_obj.domain_age_days
-            report_payload['internal_database']['ssl_valid'] = dom_obj.ssl_valid
-            report_payload['internal_database']['report_count'] = dom_obj.report_count
-            report_payload['internal_database']['scam_type'] = dom_obj.scam_type
-            report_payload['risk_score'] = dom_obj.risk_score
-            report_payload['is_scam'] = (dom_obj.risk_score >= 60)
-            if dom_obj.risk_score >= 60:
-                report_payload['summary'] = f"Cảnh báo: Tên miền nằm trong danh sách đen lừa đảo (Điểm rủi ro {dom_obj.risk_score}/100)"
+            if is_platform:
+                report_payload['internal_database']['is_scam'] = False
+                report_payload['internal_database']['risk_score'] = 0
+            else:
+                report_payload['internal_database']['is_scam'] = (dom_obj.risk_score >= 60)
+                report_payload['internal_database']['risk_score'] = dom_obj.risk_score
+                report_payload['internal_database']['domain_age_days'] = dom_obj.domain_age_days
+                report_payload['internal_database']['ssl_valid'] = dom_obj.ssl_valid
+                report_payload['internal_database']['report_count'] = dom_obj.report_count
+                report_payload['internal_database']['scam_type'] = dom_obj.scam_type
+                report_payload['risk_score'] = dom_obj.risk_score
+                report_payload['is_scam'] = (dom_obj.risk_score >= 60)
+                if dom_obj.risk_score >= 60:
+                    report_payload['summary'] = f"Cảnh báo: Tên miền nằm trong danh sách đen lừa đảo (Điểm rủi ro {dom_obj.risk_score}/100)"
 
             if dom_obj.whois_snapshot and isinstance(dom_obj.whois_snapshot, dict):
                 feed_source = dom_obj.whois_snapshot.get('source')
@@ -1665,24 +1730,25 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
                     'confidence': link.confidence,
                 })
 
-        reps = Report.objects.filter(
-            Q(target_type='domain', target_value__icontains=clean_domain) |
-            Q(target_value__icontains=clean_domain) |
-            Q(target_value__icontains=apex_domain)
-        ).order_by('-created_at')[:5]
-        if reps.exists():
-            report_payload['is_scam'] = True
-            report_payload['risk_score'] = max(report_payload['risk_score'], 80)
-            report_payload['summary'] = f"Cảnh báo: Có {reps.count()} đơn tố cáo lừa đảo liên quan đến trang web này"
+        if not is_platform:
+            reps = Report.objects.filter(
+                Q(target_type='domain', target_value__icontains=clean_domain) |
+                Q(target_value__icontains=clean_domain) |
+                Q(target_value__icontains=apex_domain)
+            ).order_by('-created_at')[:5]
+            if reps.exists():
+                report_payload['is_scam'] = True
+                report_payload['risk_score'] = max(report_payload['risk_score'], 80)
+                report_payload['summary'] = f"Cảnh báo: Có {reps.count()} đơn tố cáo lừa đảo liên quan đến trang web này"
 
-        for r in reps:
-            report_payload['sentinel_reports'].append({
-                'scam_type': r.scam_type,
-                'severity': r.severity,
-                'status': r.status,
-                'description': r.description[:500] if r.description else '',
-                'date': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
-            })
+            for r in reps:
+                report_payload['sentinel_reports'].append({
+                    'scam_type': r.scam_type,
+                    'severity': r.severity,
+                    'status': r.status,
+                    'description': r.description[:500] if r.description else '',
+                    'date': r.created_at.strftime('%d/%m/%Y') if r.created_at else '',
+                })
     except Exception as e:
         logger.warning(f"_assistant_scan_url DB query error: {e}")
 
@@ -1703,20 +1769,21 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
                 'source': 'tinnhiemmang.vn',
             }
             if tk['status'] == 'scam':
-                impersonated = rec.get('impersonated') or rec.get('owner')
-                report_payload['is_scam'] = True
-                report_payload['risk_score'] = max(report_payload['risk_score'], 90)
-                msg = 'Cảnh báo (Tín nhiệm mạng/NCSC): tên miền nằm trong DANH SÁCH LỪA ĐẢO'
-                if impersonated:
-                    msg += f' — mạo danh {impersonated}'
-                report_payload['summary'] = msg
+                if not is_platform:
+                    impersonated = rec.get('impersonated') or rec.get('owner')
+                    report_payload['is_scam'] = True
+                    report_payload['risk_score'] = max(report_payload['risk_score'], 90)
+                    msg = 'Cảnh báo (Tín nhiệm mạng/NCSC): tên miền nằm trong DANH SÁCH LỪA ĐẢO'
+                    if impersonated:
+                        msg += f': mạo danh {impersonated}'
+                    report_payload['summary'] = msg
             elif tk['status'] == 'trusted':
                 owner = rec.get('owner') or rec.get('name')
                 report_payload['risk_score'] = max(0, report_payload['risk_score'] - 20)
                 if not report_payload['is_scam']:
                     report_payload['summary'] = (
                         'Tín nhiệm mạng (NCSC): website đã được chứng nhận TÍN NHIỆM'
-                        + (f' — {owner}' if owner else '')
+                        + (f': {owner}' if owner else '')
                     )
     except Exception as e:
         logger.warning(f"_assistant_scan_url tinnhiem error: {e}")
@@ -1736,9 +1803,10 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
             content_lower = content.lower()
             indicators = []
             if any(k in content_lower for k in ('nhập mật khẩu', 'password', 'mã otp', 'nhập otp', 'internet banking', 'smartbanking')):
-                indicators.append('Phát hiện trường yêu cầu nhập mật khẩu / mã OTP hoặc thông tin ngân hàng')
-                report_payload['risk_score'] = max(report_payload['risk_score'], 75)
-                report_payload['is_scam'] = True
+                if not is_platform:
+                    indicators.append('Phát hiện trường yêu cầu nhập mật khẩu / mã OTP hoặc thông tin ngân hàng')
+                    report_payload['risk_score'] = max(report_payload['risk_score'], 75)
+                    report_payload['is_scam'] = True
             if any(k in content_lower for k in ('tài khoản bị khóa', 'xác minh danh tính khẩn cấp', 'nhận quà tri ân', 'trúng thưởng')):
                 indicators.append('Dấu hiệu thúc giục / giả mạo cơ quan chức năng hoặc quà tặng bất thường')
             if 't.me/' in content_lower or 'zalo.me/' in content_lower:
@@ -1774,7 +1842,13 @@ def _assistant_scan_url(url: str) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"_assistant_scan_url web search error: {e}")
 
-    if not report_payload['is_scam'] and report_payload['threat_intel']['tranco_top_rank']:
+    if is_platform:
+        final_domain = re.sub(r'^https?://', '', report_payload['stealth_browser_inspection'].get('final_url') or '').split('/')[0].strip().lower()
+        if not final_domain or is_major_platform_domain(final_domain):
+            report_payload['is_scam'] = False
+            report_payload['risk_score'] = 0
+            report_payload['summary'] = f"Tên miền chính thức của nền tảng dịch vụ lớn ({clean_domain}), đã được xác minh toàn cầu."
+    elif not report_payload['is_scam'] and report_payload['threat_intel']['tranco_top_rank']:
         rank = report_payload['threat_intel']['tranco_top_rank'].get('rank')
         if rank and isinstance(rank, int) and rank <= 50000:
             report_payload['summary'] = f"Trang web thuộc Top {rank} phổ biến toàn cầu (Tranco), mức độ tin cậy cao"
@@ -2407,6 +2481,7 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
     max_loops = 10
     iteration = 0
     done = False
+    accumulated_content = []
 
     while iteration < max_loops and not done:
         max_stream_retries = 3
@@ -2435,6 +2510,7 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                 current_content = []
                 current_thinking = []
                 is_thinking = False
+                needs_boundary_newline = bool(accumulated_content and "".join(accumulated_content).strip())
 
                 for chunk in stream:
                     # Handle both dict-like and object-like access for chunk/message
@@ -2463,8 +2539,24 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                         if is_thinking:
                             is_thinking = False
                             yield {"type": "status", "value": "answering"}
+
+                        if needs_boundary_newline:
+                            prev_text = "".join(accumulated_content)
+                            if prev_text.endswith('\n\n') or content.startswith('\n\n'):
+                                sep = ""
+                            elif prev_text.endswith('\n') or content.startswith('\n'):
+                                sep = "\n"
+                            else:
+                                sep = "\n\n"
+                            if sep:
+                                yield {"type": "delta", "text": sep}
+                                current_content.append(sep)
+                                accumulated_content.append(sep)
+                            needs_boundary_newline = False
+
                         yield {"type": "delta", "text": content}
                         current_content.append(content)
+                        accumulated_content.append(content)
 
                     # Collect Tool Calls
                     tool_calls = getattr(msg, 'tool_calls', [])
@@ -2477,9 +2569,9 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                 # Mark stream as successfully completed
                 stream_success = True
 
-                # If no tool calls, we are done — exit both loops
+                # If no tool calls, we are done
                 if not current_tool_calls:
-                    full_resp_text = "".join(current_content)
+                    full_resp_text = "".join(accumulated_content)
                     sys_prompt = next((m['content'] for m in messages if m.get('role') == 'system'), None)
                     _log_llm("Chat history...", full_resp_text, system_prompt=sys_prompt)
                     done = True
@@ -3453,7 +3545,7 @@ def search_agent(
                 ],
                 'options': {
                     'temperature': LLM_TEMPERATURE,
-                    'num_predict': 4000,  # Increased to prevent cutoff
+                    'num_predict': 8192,  # Expanded to prevent cutoff during reasoning
                 },
             }
             if think:
@@ -3805,12 +3897,12 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                 query=(
                     f"Kiểm tra xem trang/nội dung sau có phải là lừa đảo không: {search_query}\n"
                     "Sử dụng các công cụ theo thứ tự sau:\n"
-                    f"1. _tool_lookup_scamwave    — tìm báo cáo lừa đảo về số điện thoại/tài khoản/tên trong văn bản\n"
-                    f"2. _tool_lookup_trustpilot  — kiểm tra điểm số và đánh giá người dùng trên Trustpilot\n"
-                    f"3. _tool_lookup_sitejabber  — kiểm tra điểm số và đánh giá người dùng trên Sitejabber\n"
-                    f"4. _tool_lookup_tranco      — kiểm tra thứ hạng mức độ phổ biến (Tranco Rank). Xếp hạng càng nhỏ (vd < 1000) càng uy tín.\n"
-                    "5. _tool_lookup_tratencongty — (chỉ khi nghi ngờ doanh nghiệp Việt Nam) tra cứu MST/tên công ty để đối chiếu pháp lý.\n"
-                    "6. _tool_web_search         — tìm đánh giá trên Reddit, v.v. (dùng query 'site:reddit.com <domain>', ...)\n"
+                    f"1. _tool_lookup_scamwave: tìm báo cáo lừa đảo về số điện thoại/tài khoản/tên trong văn bản\n"
+                    f"2. _tool_lookup_trustpilot: kiểm tra điểm số và đánh giá người dùng trên Trustpilot\n"
+                    f"3. _tool_lookup_sitejabber: kiểm tra điểm số và đánh giá người dùng trên Sitejabber\n"
+                    f"4. _tool_lookup_tranco: kiểm tra thứ hạng mức độ phổ biến (Tranco Rank). Xếp hạng càng nhỏ (vd < 1000) càng uy tín.\n"
+                    "5. _tool_lookup_tratencongty: (chỉ khi nghi ngờ doanh nghiệp Việt Nam) tra cứu MST/tên công ty để đối chiếu pháp lý.\n"
+                    "6. _tool_web_search: tìm đánh giá trên Reddit, v.v. (dùng query 'site:reddit.com <domain>', ...)\n"
                     "QUAN TRỌNG: Tập trung vào việc kiểm tra chính trang/nội dung được cung cấp có phải là lừa đảo không.\n"
                     "ÁP DỤNG THỦ ĐOẠN LỪA ĐẢO KHI PHÂN TÍCH: domain giả mạo/typosquat/Unicode lookalike, link rút gọn, "
                     "subdomain takeover, web dựng trên nền tảng miễn phí, thông điệp giật gân trúng thưởng, yêu cầu dữ liệu nhạy cảm, "
@@ -3833,7 +3925,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                     "Sau khi liệt kê tất cả nguồn, nếu muốn viết kết luận tổng hợp thì BẮT BUỘC dùng:\n"
                     "### [Kết luận chung]\n"
                     "Nội dung kết luận...\n"
-                    "TUYỆT ĐỐI KHÔNG dùng **Kết luận chung**: hay **Tổng kết**: hay bất kỳ dạng bold nào — phải là header ### đầy đủ."
+                    "TUYỆT ĐỐI KHÔNG dùng **Kết luận chung**: hay **Tổng kết**: hay bất kỳ dạng bold nào, phải là header ### đầy đủ."
                 ),
                 model=model,
                 think='low',
@@ -3920,20 +4012,24 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"3. SỬ DỤNG THÔNG TIN TÌNH BÁO: Dựa vào kết quả từ ScamAdviser, ScamWave và các báo cáo để đưa ra kết luận.\n"
         f"4. ĐỐI CHIẾU DOANH NGHIỆP VIỆT NAM: Nếu có dữ liệu TraTenCongTy, kiểm tra mức độ khớp tên pháp lý, MST, địa chỉ, đại diện pháp luật với website.\n"
         f"5. THỦ ĐOẠN LỪA ĐẢO: Ưu tiên phát hiện typo domain/Unicode, shortlink che đích, subdomain takeover, free-host phishing, yêu cầu dữ liệu nhạy cảm, thanh toán khó truy vết.\n\n"
-        f"QUY TẮC CHO 'explanation':\n"
-        f"1. Tóm tắt nội dung chính từ các nguồn tình báo (web_section) một cách ngắn gọn, súc tích.\n"
-        f"2. Loại bỏ các thông tin rác từ giao diện web (nếu có trong dữ liệu thô) như 'Read Reviews', 'Log in', 'Follow on Facebook'.\n"
-        f"3. Nếu nguồn tình báo KHÔNG có thông tin liên quan, chỉ ghi 'Không tìm thấy dữ liệu từ các nguồn uy tín'.\n"
-        f"4. Viết bằng TIẾNG VIỆT, tập trung vào kết luận rủi ro.\n"
-        f"5. 'prevention_measures': Đưa ra 3-5 bước hành động cụ thể để bảo vệ bản thân trước hình thức lừa đảo này.\n"
-        f"6. 'advice': Lời khuyên ngắn gọn, mang tính khích lệ và cảnh giác.\n\n"
+        f"QUY TẮC BẮT BUỘC CHO 'explanation':\n"
+        f"1. GIỌNG VĂN: Tự nhiên, rõ ràng, quyết đoán, dễ hiểu cho người dân phổ thông và người lớn tuổi. Tuyệt đối không dùng thuật ngữ kỹ thuật khó hiểu hay câu từ quan liêu.\n"
+        f"2. TUYỆT ĐỐI KHÔNG NÊU TÊN CÔNG CỤ HOẶC DATABASE NỘI BỘ: Tuyệt đối không nhắc đến các từ như ScamWave, Trustpilot, Sitejabber, Tranco, TraTenCongTy, VirusTotal, whois, OCR, LLM, mô hình AI. Thay vào đó, diễn giải trực tiếp bản chất thực tế: 'không có thông tin đăng ký doanh nghiệp chính danh', 'không thuộc hệ thống chính thức của doanh nghiệp', 'chưa ghi nhận tiền sử cảnh báo'.\n"
+        f"3. CẤU TRÚC 3 ĐẾN 4 CÂU RÕ RÀNG:\n"
+        f"   - Câu 1 (Bản chất): Nêu trực diện đây là hình thức gì (ví dụ: mạo danh sàn thương mại điện tử tuyển dụng, giả danh cơ quan nhà nước, mồi chài đầu tư tài chính, hoặc bẫy đánh cắp tài khoản ngân hàng).\n"
+        f"   - Câu 2 (Thủ đoạn/Mồi nhử): Chỉ rõ bẫy lừa người dùng đang gặp phải (ví dụ: dụ dỗ làm nhiệm vụ nhận hoa hồng, yêu cầu nạp tiền cọc, chuyển khoản vào số tài khoản cá nhân, hoặc dụ dỗ bấm vào liên kết lạ).\n"
+        f"   - Câu 3 (Căn cứ bất thường): Nêu rõ dấu hiệu vi phạm thực tế (ví dụ: tổ chức chính thống không bao giờ tuyển dụng qua tin nhắn riêng, tài khoản nhận tiền là tài khoản cá nhân không rõ nguồn gốc pháp nhân).\n"
+        f"   - Câu 4 (Hành động tức thì): Khuyên người dùng việc cần làm ngay (Tuyệt đối không chuyển tiền, không bấm vào liên kết lạ, chặn liên lạc và cảnh báo người thân).\n"
+        f"4. 'prevention_measures': Đưa ra 3-4 hành động cụ thể, ngắn gọn, thiết thực nhất để tự bảo vệ.\n"
+        f"5. 'advice': 1 câu lời khuyên chuyên gia súc tích, dứt khoát.\n"
+        f"6. Không dùng emoji, không dùng gạch nối dài em-dash.\n\n"
         f"Nội dung cần phân tích:\n{text_snippet}"
     )
 
     # Phan tich can noi dung goc (SĐT/tin nhan/email) -> allow_pii + audit log.
     response = generate_response(
-        prompt, model, num_ctx=8192, max_tokens=2048, tools=[], format_schema=SCAM_ANALYSIS_SCHEMA,
-        allow_pii=True,
+        prompt, model, num_ctx=16384, max_tokens=8192, tools=[], format_schema=SCAM_ANALYSIS_SCHEMA,
+        allow_pii=True, think="low",
     )
 
     # Frontend should display only structured intelligence context,
@@ -3962,15 +4058,16 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
             "{is_scam: bool, risk_score: int 0-100, indicators: [string], explanation: string, web_sources: [string]}\n"
             "Chỉ trả JSON thuần, không markdown, không giải thích.\n\n"
             "Nội dung cần sửa:\n"
-            f"{response[:2500]}"
+            f"{response[:4000]}"
         )
         repaired = generate_response(
             repair_prompt,
             model,
-            num_ctx=4096,
-            max_tokens=1024,
+            num_ctx=8192,
+            max_tokens=4096,
             tools=[],
             format_schema=SCAM_ANALYSIS_SCHEMA,
+            think=False,
         )
         parsed_result = _extract_json(repaired) if repaired else None
 
@@ -3980,10 +4077,12 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         response_retry = generate_response(
             prompt,
             model,
-            num_ctx=8192,
-            max_tokens=2048,
+            num_ctx=16384,
+            max_tokens=8192,
             tools=[],
             format_schema=SCAM_ANALYSIS_SCHEMA,
+            allow_pii=True,
+            think="low",
         )
         parsed_result = _extract_json(response_retry) if response_retry else None
 
@@ -4079,7 +4178,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
             result['ai_retry_used'] = False
             result['ai_retry_count'] = 0
 
-        # Sanitize any legacy hesitation prefix in explanation if present
+        # Remove any legacy hesitation prefix in explanation if present
         explanation = str(result.get('explanation', '') or '').strip()
         explanation = re.sub(r'^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+', '', explanation).strip()
         result['explanation'] = explanation
@@ -4208,7 +4307,7 @@ def analyze_image_with_vision(image_b64: str, hint: str = '', model: str = None)
             resp = _ollama_chat_with_retry(
                 model=use_model,
                 messages=[{'role': 'user', 'content': prompt, 'images': [b64]}],
-                options={'temperature': LLM_TEMPERATURE, 'num_predict': min(LLM_MAX_TOKENS, 2048)},
+                options={'temperature': LLM_TEMPERATURE, 'num_predict': 4096},
                 think='low',
             )
             content = getattr(getattr(resp, 'message', None), 'content', '') or ''

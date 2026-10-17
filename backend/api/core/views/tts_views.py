@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import os
 
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponseNotModified
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -62,9 +62,19 @@ class TtsView(APIView):
         except OSError:
             size = None
 
+        etag = f'"{key}"'
+        cache_control = 'private, no-cache'  # lưu được nhưng PHẢI hỏi lại (ETag) → đổi giọng là nhận ngay
+
+        # Conditional GET: trình duyệt còn bản cũ thì trả 304, khỏi tải lại.
+        if request.headers.get('If-None-Match', '').find(etag) != -1:
+            not_modified = HttpResponseNotModified()
+            not_modified['ETag'] = etag
+            not_modified['Cache-Control'] = cache_control
+            return not_modified
+
         resp = FileResponse(open(path, 'rb'), content_type=tts_service.content_type())
-        resp['Cache-Control'] = 'public, max-age=31536000, immutable'
-        resp['ETag'] = f'"{key}"'
+        resp['Cache-Control'] = cache_control
+        resp['ETag'] = etag
         if size is not None:
             resp['Content-Length'] = str(size)
         return resp

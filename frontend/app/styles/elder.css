@@ -72,10 +72,26 @@
   font-size: 1.35em;
   line-height: 1;
 }
-/* Icon đứng trong tiêu đề mục: chỉ nhỉnh hơn chữ một chút */
+/* Icon đứng trong tiêu đề mục: chỉ nhỉnh hơn chữ một chút + CHỪA KHOẢNG với chữ */
 .elder-h-icon {
   font-size: 1.15em;
   line-height: 1;
+  margin-right: 0.5em;
+}
+/* Tiêu đề nào đã dùng flex + gap (Tailwind) thì bỏ margin để không bị cách đôi */
+.elder-h1.flex > .elder-h-icon,
+.elder-h2.flex > .elder-h-icon,
+.elder-h3.flex > .elder-h-icon {
+  margin-right: 0;
+}
+/* Icon đứng ĐẦU đoạn văn/tiêu đề (không flex) — tránh chữ dính sát icon */
+.elder-lead > .bi:first-child,
+.elder-body > .bi:first-child,
+.elder-note > .bi:first-child,
+.elder-h1:not(.flex) > .bi:first-child,
+.elder-h2:not(.flex) > .bi:first-child,
+.elder-h3:not(.flex) > .bi:first-child {
+  margin-right: 0.45em;
 }
 .elder-value {
   font-size: 1.15em;

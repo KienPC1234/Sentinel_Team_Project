@@ -1,10 +1,11 @@
-"""ShieldCall VN — HTML sanitization helpers (XSS defense).
+"""ShieldCall VN: HTML and AI output sanitization helpers.
 
 Server-side layer: bleach-based allowlist cleaning for user-generated
 rich content (forum posts/comments). Client-side templates must still
 escape/sanitize before innerHTML/x-html (see base.html sanitizeHtml).
 """
 import logging
+import re
 
 import bleach
 
@@ -129,3 +130,4 @@ def sanitize_plain_text(value: str, limit: int = 200) -> str:
     if not value:
         return ''
     return bleach.clean(str(value), tags=[], strip=True).strip()[:limit]
+

@@ -428,8 +428,8 @@ const MessageRow = memo(function MessageRow({
           {m.metadata && ((m.metadata.internal_knowledge || []).length + (m.metadata.web_search || []).length > 0) && (
             <SourcesAccordion meta={m.metadata} />
           )}
-          {!m.streaming && m.metadata?.guardrail?.tier && (
-            <ChatGuardrailNote guardrail={m.metadata.guardrail} />
+          {!m.streaming && m.metadata?.guardrail && (
+            <GuardrailAccordion guardrail={m.metadata.guardrail} />
           )}
           {!m.streaming && m.message && (
             <div className="hover-reveal mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -1008,6 +1008,7 @@ export default function Assistant() {
     });
     let full = '';
     let thinking = '';
+    let hadToolExecution = false;
     const patchBot = (fn: (m: UiMsg) => UiMsg) => {
       setMessages((ms) => ms.map((m, i) => (i === botIdxRef.i ? fn(m) : m)));
     };
@@ -1021,6 +1022,18 @@ export default function Assistant() {
             case 'delta': {
               if (!ev.text) break;
               setStatus('AI đang trả lời...');
+              if (hadToolExecution && full.trim()) {
+                if (!full.endsWith('\n\n')) {
+                  if (full.endsWith('\n') || ev.text.startsWith('\n')) {
+                    if (!full.endsWith('\n') && !ev.text.startsWith('\n\n')) {
+                      full += '\n';
+                    }
+                  } else {
+                    full += '\n\n';
+                  }
+                }
+                hadToolExecution = false;
+              }
               full += ev.text;
               const snapshot = full;
               patchBot((m) => ({
@@ -1080,6 +1093,7 @@ export default function Assistant() {
               break;
             case 'tool_result': {
               if (!ev.tool) break;
+              hadToolExecution = true;
               const tool = ev.tool;
               patchBot((m) => {
                 const tools = [...(m.tools || [])];
@@ -2143,6 +2157,22 @@ function ToolResultView({ result }: { result: unknown }) {
   return <div className="text-[11px] text-[var(--gpt-text)]/90">{String(data)}</div>;
 }
 
+function formatSubVal(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'boolean') return v ? 'Có' : 'Không';
+  if (typeof v === 'object') {
+    if (Array.isArray(v)) {
+      if (!v.length) return '';
+      return v.map(formatSubVal).filter(Boolean).join(', ');
+    }
+    return Object.entries(v as Record<string, unknown>)
+      .filter(([, subV]) => subV !== null && subV !== '' && subV !== undefined)
+      .map(([subK, subV]) => `${RESULT_LABELS[subK] || subK}: ${formatSubVal(subV)}`)
+      .join(', ');
+  }
+  return String(v);
+}
+
 function ToolResultEntry({ name, val }: { name: string; val: unknown }) {
   const label = RESULT_LABELS[name] || name;
 
@@ -2193,6 +2223,18 @@ function ToolResultEntry({ name, val }: { name: string; val: unknown }) {
     );
   }
 
+  if (val === null || val === undefined) return null;
+
+  if (typeof val === 'boolean') {
+    return (
+      <ToolRow label={label}>
+        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium', val ? 'bg-rose-500/15 text-rose-300' : 'bg-emerald-500/15 text-emerald-300')}>
+          {val ? 'Phát hiện rủi ro' : 'Bình thường'}
+        </span>
+      </ToolRow>
+    );
+  }
+
   if (Array.isArray(val)) {
     if (!val.length) return null;
     return (
@@ -2200,8 +2242,8 @@ function ToolResultEntry({ name, val }: { name: string; val: unknown }) {
         {val.slice(0, 5).map((item, i) => (
           <div key={i} className="border-b border-white/[0.04] py-1 text-[10px] last:border-0">
             {isRecord(item)
-              ? Object.entries(item).map(([ik, iv]) => <span key={ik}><strong>{ik}:</strong> {String(iv ?? '')} · </span>)
-              : String(item)}
+              ? Object.entries(item).map(([ik, iv]) => <span key={ik}><strong>{RESULT_LABELS[ik] || ik}:</strong> {formatSubVal(iv)} · </span>)
+              : formatSubVal(item)}
           </div>
         ))}
       </ToolRow>
@@ -2210,14 +2252,15 @@ function ToolResultEntry({ name, val }: { name: string; val: unknown }) {
 
   if (isRecord(val)) {
     const summary = Object.entries(val)
-      .filter(([, v]) => v !== null && v !== '' && (!Array.isArray(v) || v.length > 0))
-      .map(([k, v]) => `${RESULT_LABELS[k] || k}: ${String(v).substring(0, 200)}`)
+      .filter(([, v]) => v !== null && v !== '' && v !== undefined && (!Array.isArray(v) || v.length > 0))
+      .map(([k, v]) => `${RESULT_LABELS[k] || k}: ${formatSubVal(v).substring(0, 200)}`)
+      .filter((s) => !s.endsWith(': '))
       .join(' · ');
     if (!summary) return null;
     return <ToolRow label={label}>{summary}</ToolRow>;
   }
 
-  const strVal = val == null ? '' : String(val);
+  const strVal = formatSubVal(val);
   if (!strVal.trim()) return null;
   const displayVal = strVal.length > 400 ? `${strVal.substring(0, 400)}…` : strVal;
   return <ToolRow label={label}>{displayVal}</ToolRow>;
@@ -2258,6 +2301,31 @@ function SourcesAccordion({ meta }: { meta: MsgMeta }) {
               </a>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GuardrailAccordion({ guardrail }: { guardrail?: GuardrailData }) {
+  const [open, setOpen] = useState(false);
+  if (!guardrail || !guardrail.tier || guardrail.tier === 'INSUFFICIENT') return null;
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-white/[0.05]"
+      >
+        <ShieldCheck className="size-4 shrink-0 text-amber-400" />
+        <span className="text-[12px] font-medium text-[var(--gpt-text)]">Đánh giá kiểm chứng an toàn</span>
+        <Badge variant="outline" className="border-white/15 text-[10px] text-amber-400">{guardrail.label || guardrail.tier}</Badge>
+        <ChevronDown className={cn('ml-auto size-4 shrink-0 text-[var(--gpt-faint)] transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="border-t border-white/[0.06] p-3">
+          <ChatGuardrailNote guardrail={guardrail} />
         </div>
       )}
     </div>
