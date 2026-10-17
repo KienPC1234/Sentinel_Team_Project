@@ -348,8 +348,12 @@ class AIAgent:
                         tool_results.append(res)
                 yield ev
 
-            # 3b. Guardrail có cấu trúc cho chat: chỉ gắn khi có công cụ quét chạy và có phát hiện rủi ro cụ thể
-            if full_response.strip() and not is_greeting and tool_results:
+            # 3b. Guardrail có cấu trúc cho chat (góp ý hội đồng #1): ``chat_guardrail``
+            #     tự quyết định có gắn hay không (bỏ qua chào hỏi/xã giao/không liên quan
+            #     an toàn–rủi ro). Phải PHÁT cả tier INSUFFICIENT — đó chính là cảnh báo
+            #     "chưa đủ cơ sở xác minh" khi câu trả lời lỡ khẳng định an toàn tuyệt đối;
+            #     nuốt mất nó là vô hiệu hoá đúng mục đích của guardrail.
+            if full_response.strip():
                 try:
                     from api.utils.trust_guard import chat_guardrail
                     guard = chat_guardrail(
@@ -359,7 +363,7 @@ class AIAgent:
                         used_knowledge=bool(rag_results),
                         user_message=user_message,
                     )
-                    if guard and guard.get('tier') not in (None, '', 'INSUFFICIENT'):
+                    if guard:
                         current_metadata['guardrail'] = guard
                         yield {"type": "guardrail", "guardrail": guard}
                 except Exception as ge:

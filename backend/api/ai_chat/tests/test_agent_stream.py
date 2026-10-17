@@ -1,6 +1,6 @@
 import json
 from unittest.mock import patch, MagicMock
-from django.test import TestCase, AsyncClient
+from django.test import TestCase, TransactionTestCase, AsyncClient
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
@@ -178,7 +178,7 @@ class StreamChatAILoopTest(TestCase):
         self.assertIn('https://example.com/warn', json.dumps(search_ev.get('metadata')))
 
 
-class ChatAIStreamViewEndpointTest(TestCase):
+class ChatAIStreamViewEndpointTest(TransactionTestCase):
     """
     Tests ChatAIStreamView SSE endpoint, database persistence, and session lifecycle.
     """

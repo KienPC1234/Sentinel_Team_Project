@@ -250,6 +250,29 @@ def is_available() -> bool:
 
 
 # ── Nạp / tổng hợp ───────────────────────────────────────────────────────────
+def _force_hf_no_symlinks() -> None:
+    """Bắt ``huggingface_hub`` tải mỗi tệp thành BẢN SAO thật trong thư mục snapshot.
+
+    Mặc định hub tạo symlink snapshot → blob, nên ``vieneu_prefill.onnx`` và
+    ``vieneu_backbone_shared.data`` trỏ về hai thư mục blob khác nhau. ONNX Runtime
+    từ chối external-data nằm ngoài thư mục model:
+        "External data path escapes model directory".
+    Đặt biến môi trường KHÔNG đủ nếu ``huggingface_hub`` đã được import (nó đọc env
+    lúc import), nên phải ghi thẳng vào hằng số đã nạp.
+    """
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+    try:
+        import huggingface_hub.constants as hf_constants
+        hf_constants.HF_HUB_DISABLE_SYMLINKS = True
+    except Exception:  # pragma: no cover - không cài huggingface_hub
+        pass
+
+
+# Áp dụng càng sớm càng tốt, trước mọi lần tải model từ HuggingFace.
+_force_hf_no_symlinks()
+
+
 def _preload_cuda_libs() -> None:
     """Nạp trước cuDNN/cuBLAS của các wheel ``nvidia-*`` (torch kéo về) để
     CUDAExecutionProvider của onnxruntime tìm thấy.
@@ -331,7 +354,7 @@ def _load_vieneu():
     thử lại vài lần cho qua giai đoạn khởi động.
     """
     global _vieneu_voice_resolved
-    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
+    _force_hf_no_symlinks()
 
     t0 = time.time()
     model = None
@@ -341,10 +364,17 @@ def _load_vieneu():
             from vieneu import Vieneu
             model = Vieneu()
             break
+        except ImportError as exc:
+            # Lỗi import do ĐUA với luồng khởi động Django đang import transformers
+            # (module import dở) → thử lại. Các lỗi khác (thiếu/không nạp được model,
+            # ONNX Runtime...) là lỗi thật, thử lại chỉ tốn thời gian vô ích.
+            last_exc = exc
+            logger.info("Nạp VieNeu lỗi import (thử %d/4): %s", attempt + 1, exc)
+            time.sleep(3)
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
-            logger.info("Nạp VieNeu lỗi (thử %d/4): %s", attempt + 1, exc)
-            time.sleep(3)
+            logger.info("Nạp VieNeu lỗi: %s", exc)
+            break
     if model is None:
         raise TtsUnavailable(f"VieNeu không nạp được: {last_exc}")
 
