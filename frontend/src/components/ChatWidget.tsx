@@ -166,9 +166,11 @@ export default function ChatWidget() {
     const payloadText = text || 'Hãy phân tích các hình ảnh tôi vừa gửi.';
     setInput(''); setPreviews([]);
     setTyping(true);
-    let sid: string | null = null;
-    try { sid = localStorage.getItem('chat_session_id'); } catch { /* ignore */ }
-    if (!sid) sid = window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2);
+    let sid: string | undefined = undefined;
+    try {
+      const stored = localStorage.getItem('chat_session_id');
+      if (stored && stored.trim()) sid = stored.trim();
+    } catch { /* ignore */ }
     const botIdx = { i: -1 };
     setMessages((m) => {
       botIdx.i = m.length;
@@ -185,14 +187,15 @@ export default function ChatWidget() {
         thinkingOpen: v === 'thinking' || v === 'reasoning' ? true : (v === 'answering' ? false : x.thinkingOpen),
       }));
     };
-    try {
+
+    const runStream = async (sessionParam?: string) => {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       const scanCtx = sessionStorage.getItem('sc_widget_scan_ctx') || undefined;
       await openSseStream({
         url: '/api/v1/chat/stream/',
         signal: ctrl.signal,
-        body: { user_message: payloadText, session_id: sid, context: 'chat', images: imgs, scan_context: scanCtx, safe_mode: safeMode },
+        body: { user_message: payloadText, session_id: sessionParam, context: 'chat', images: imgs, scan_context: scanCtx, safe_mode: safeMode },
         onEvent: (ev) => {
           switch (ev.type) {
             case 'delta': {
@@ -243,6 +246,21 @@ export default function ChatWidget() {
         },
       });
       sessionStorage.removeItem('sc_widget_scan_ctx');
+    };
+
+    try {
+      try {
+        await runStream(sid);
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError' && e instanceof StreamHttpError && (e.status === 404 || e.status === 403) && sid) {
+          try { localStorage.removeItem('chat_session_id'); } catch { /* ignore */ }
+          full = '';
+          think = '';
+          await runStream(undefined);
+        } else {
+          throw e;
+        }
+      }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
         const msg = e instanceof StreamHttpError ? `Lỗi kết nối (HTTP ${e.status})` : 'Lỗi kết nối mạng.';

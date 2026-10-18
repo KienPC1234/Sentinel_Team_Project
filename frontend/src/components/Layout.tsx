@@ -16,6 +16,8 @@ import {
 import { Button } from './ui/button';
 import { SITE_CONFIG } from '../lib/site-config';
 import { cn } from '../lib/utils';
+import { mediaUrl } from '../lib/api';
+import type { Me } from '../lib/api';
 
 const LANGS = [
   { code: 'vi', label: 'Tiếng Việt', short: 'VN', bg: 'rgba(239,68,68,0.1)' },
@@ -91,7 +93,7 @@ const REPORT_MENU: MenuItem[] = [
   { to: '/my-reports/', icon: 'bi-journal-text', title: 'Báo cáo của tôi', desc: 'Lịch sử báo cáo đã gửi' },
 ];
 
-function UserMenu({ user }: { user: { username: string; is_staff?: boolean; is_superuser?: boolean } }) {
+function UserMenu({ user }: { user: Me }) {
   const { logout } = useAuth();
   const itemCls =
     "flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white rounded-xl cursor-pointer hover:bg-white/[0.08] w-full transition-colors no-underline";
@@ -101,15 +103,29 @@ function UserMenu({ user }: { user: { username: string; is_staff?: boolean; is_s
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="h-9 pl-1.5 pr-3.5 rounded-full hidden sm:inline-flex items-center gap-2.5 bg-white/[0.06] border border-white/15 hover:border-cyan-500/40 hover:bg-white/[0.10] transition-all outline-none cursor-pointer shadow-sm backdrop-blur-md data-[state=open]:border-cyan-400 data-[state=open]:bg-white/[0.10] shrink-0"
+          className="h-9 pl-1.5 pr-2 sm:pr-3.5 rounded-full inline-flex items-center gap-2 sm:gap-2.5 bg-white/[0.06] border border-white/15 hover:border-cyan-500/40 hover:bg-white/[0.10] transition-all outline-none cursor-pointer shadow-sm backdrop-blur-md data-[state=open]:border-cyan-400 data-[state=open]:bg-white/[0.10] shrink-0"
         >
-          <span className="w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-xs shrink-0">
-            <i className="bi bi-person-fill leading-none"></i>
+          <span className="w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-xs shrink-0 overflow-hidden relative">
+            {user.avatar ? (
+              <>
+                <i className="bi bi-person-fill leading-none absolute"></i>
+                <img
+                  src={mediaUrl(user.avatar)}
+                  alt={user.username}
+                  className="w-full h-full object-cover relative z-10"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </>
+            ) : (
+              <i className="bi bi-person-fill leading-none"></i>
+            )}
           </span>
-          <span className="font-bold text-slate-100 text-xs max-w-[120px] truncate leading-normal">
+          <span className="font-bold text-slate-100 text-xs max-w-[120px] truncate leading-normal hidden sm:inline">
             {user.username}
           </span>
-          <i className="bi bi-chevron-down text-[10px] text-slate-400 opacity-70 leading-none"></i>
+          <i className="bi bi-chevron-down text-[10px] text-slate-400 opacity-70 leading-none hidden sm:inline"></i>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -118,8 +134,22 @@ function UserMenu({ user }: { user: { username: string; is_staff?: boolean; is_s
         className="w-64 p-1.5 border border-border bg-popover/98 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)]"
       >
         <div className="px-3 py-2.5 border-b border-white/10 mb-1 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-sm shrink-0">
-            <i className="bi bi-person-fill leading-none"></i>
+          <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-sm shrink-0 overflow-hidden relative">
+            {user.avatar ? (
+              <>
+                <i className="bi bi-person-fill leading-none absolute"></i>
+                <img
+                  src={mediaUrl(user.avatar)}
+                  alt={user.username}
+                  className="w-full h-full object-cover relative z-10"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </>
+            ) : (
+              <i className="bi bi-person-fill leading-none"></i>
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold text-white truncate leading-tight">{user.username}</div>
@@ -161,6 +191,11 @@ function UserMenu({ user }: { user: { username: string; is_staff?: boolean; is_s
         <DropdownMenuItem asChild>
           <Link href="/mcp/" className={itemCls}>
             <i className="bi bi-plug text-cyan-300 text-sm leading-none"></i> MCP Server
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/helps/" className={itemCls}>
+            <i className="bi bi-question-circle text-slate-400 text-sm leading-none"></i> Trợ giúp & Hướng dẫn
           </Link>
         </DropdownMenuItem>
         {(user.is_staff || user.is_superuser) && (
@@ -403,6 +438,7 @@ export function Navbar() {
             {user ? (
               <>
                 <Link href="/my-reports/" className="flex-1 text-center p-2.5 rounded-xl bg-white/5 text-sm font-bold text-white/70">Báo cáo</Link>
+                <Link href="/helps/" className="flex-1 text-center p-2.5 rounded-xl bg-white/5 text-sm font-bold text-white/70">Trợ giúp</Link>
                 {(user.is_staff || user.is_superuser) && (
                   <Link href="/admin-cp/" className="flex-1 text-center p-2.5 rounded-xl bg-warn-500/10 text-sm font-bold text-warn-400">Admin</Link>
                 )}

@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiBase, ChatGuardrailNote, type GuardrailData } from '../../components/ScanWidgets';
 import { MarkdownView } from '../../components/ui';
 import { renderMd } from '../../lib/chat/markdown';
-import { openSseStream } from '../../lib/chat/stream';
+import { openSseStream, StreamHttpError } from '../../lib/chat/stream';
 import type { StreamEvent } from '../../lib/chat/stream';
 
 interface Msg {
@@ -278,29 +278,24 @@ export default function ElderChat({
       const ac = new AbortController();
       abortRef.current = ac;
 
-      let sid = '';
+      let sid: string | undefined = undefined;
       try {
-        sid = localStorage.getItem('chat_session_id') || '';
+        const stored = localStorage.getItem('chat_session_id');
+        if (stored && stored.trim()) sid = stored.trim();
       } catch {
         /* bỏ qua */
-      }
-      if (!sid) {
-        try {
-          sid = crypto.randomUUID();
-        } catch {
-          sid = '';
-        }
       }
 
       let gotText = false;
       let finalText = '';
-      try {
+
+      const runElderStream = async (sessionParam?: string) => {
         await openSseStream({
           url: `${apiBase()}/chat/stream/`,
           signal: ac.signal,
           body: {
             user_message: text,
-            session_id: sid,
+            session_id: sessionParam,
             context: 'chat',
             images: [],
             scan_context: TONE_HINT,
@@ -326,6 +321,19 @@ export default function ElderChat({
             }
           },
         });
+      };
+
+      try {
+        try {
+          await runElderStream(sid);
+        } catch (e) {
+          if ((e as Error).name !== 'AbortError' && e instanceof StreamHttpError && (e.status === 404 || e.status === 403) && sid) {
+            try { localStorage.removeItem('chat_session_id'); } catch { /* ignore */ }
+            await runElderStream(undefined);
+          } else {
+            throw e;
+          }
+        }
       } catch {
         appendToLastBot(
           gotText
