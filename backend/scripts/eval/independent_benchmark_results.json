@@ -1,0 +1,1517 @@
+{
+  "metadata": {
+    "dataset": "independent_test_set_vn.jsonl",
+    "total_samples": 80,
+    "positives_scam": 40,
+    "negatives_legit": 40,
+    "timestamp": "2026-11-04 11:08:03"
+  },
+  "summary": {
+    "Heuristic Only": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 6,
+        "fp": 3,
+        "tn": 37,
+        "fn": 34,
+        "precision": 0.6667,
+        "recall": 0.15,
+        "f1": 0.2449,
+        "accuracy": 0.5375,
+        "specificity": 0.925,
+        "confusion_matrix": {
+          "matrix": [
+            [
+              37,
+              3
+            ],
+            [
+              34,
+              6
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 24,
+        "fp": 6,
+        "tn": 34,
+        "fn": 16,
+        "precision": 0.8,
+        "recall": 0.6,
+        "f1": 0.6857,
+        "accuracy": 0.725,
+        "specificity": 0.85,
+        "confusion_matrix": {
+          "matrix": [
+            [
+              34,
+              6
+            ],
+            [
+              16,
+              24
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 0.26,
+        "min_ms": 0.12,
+        "max_ms": 5.72,
+        "p95_ms": 0.24
+      }
+    },
+    "LLM Only": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 40,
+        "fp": 4,
+        "tn": 36,
+        "fn": 0,
+        "precision": 0.9091,
+        "recall": 1.0,
+        "f1": 0.9524,
+        "accuracy": 0.95,
+        "specificity": 0.9,
+        "confusion_matrix": {
+          "matrix": [
+            [
+              36,
+              4
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 40,
+        "fp": 6,
+        "tn": 34,
+        "fn": 0,
+        "precision": 0.8696,
+        "recall": 1.0,
+        "f1": 0.9302,
+        "accuracy": 0.925,
+        "specificity": 0.85,
+        "confusion_matrix": {
+          "matrix": [
+            [
+              34,
+              6
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 6839.88,
+        "min_ms": 3877.05,
+        "max_ms": 14761.15,
+        "p95_ms": 11469.63
+      }
+    },
+    "Ensemble (Heuristic + LLM)": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 40,
+        "fp": 7,
+        "tn": 33,
+        "fn": 0,
+        "precision": 0.8511,
+        "recall": 1.0,
+        "f1": 0.9195,
+        "accuracy": 0.9125,
+        "specificity": 0.825,
+        "confusion_matrix": {
+          "matrix": [
+            [
+              33,
+              7
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 40,
+        "fp": 12,
+        "tn": 28,
+        "fn": 0,
+        "precision": 0.7692,
+        "recall": 1.0,
+        "f1": 0.8696,
+        "accuracy": 0.85,
+        "specificity": 0.7,
+        "confusion_matrix": {
+          "matrix": [
+            [
+              28,
+              12
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 6840.14,
+        "min_ms": 3877.19,
+        "max_ms": 14761.37,
+        "p95_ms": 11469.79
+      }
+    },
+    "Full Pipeline": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 40,
+        "fp": 9,
+        "tn": 31,
+        "fn": 0,
+        "precision": 0.8163,
+        "recall": 1.0,
+        "f1": 0.8989,
+        "accuracy": 0.8875,
+        "specificity": 0.775,
+        "confusion_matrix": {
+          "matrix": [
+            [
+              31,
+              9
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 40,
+        "fp": 13,
+        "tn": 27,
+        "fn": 0,
+        "precision": 0.7547,
+        "recall": 1.0,
+        "f1": 0.8602,
+        "accuracy": 0.8375,
+        "specificity": 0.675,
+        "confusion_matrix": {
+          "matrix": [
+            [
+              27,
+              13
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 7566.73,
+        "min_ms": 3397.4,
+        "max_ms": 25378.17,
+        "p95_ms": 15821.63
+      }
+    }
+  },
+  "error_analysis": {
+    "false_positives_count": 9,
+    "false_positives": [
+      {
+        "id": "legit_02",
+        "category": "real_banking_otp",
+        "text": "Techcombank: Ma OTP cua ban la 583192 cho giao dich chuyen khoan 2.000.000 VND toi NGUYEN VAN A. Khong chia se ma OTP de phong tranh lua dao.",
+        "true_label": 0,
+        "predicted_score": 80,
+        "heuristic_score": 80,
+        "llm_score": 20,
+        "patterns": [
+          "Yêu cầu OTP / mã xác thực",
+          "Yêu cầu chuyển tiền/nộp phí",
+          "Yêu cầu OTP",
+          "Giao dịch tài chính"
+        ],
+        "explanation": "Đây là tin nhắn thông báo mã OTP cho một giao dịch chuyển khoản, có dạng giống thông báo chính thức của ngân hàng. Nội dung không yêu cầu bạn bấm vào liên kết lạ hay cung cấp mã OTP cho người khác, mà còn nhắc bạn không chia sẻ mã. Tuy nhiên, nếu bạn không thực hiện giao dịch chuyển 2.000.000 VND đến người nhận NGUYEN VAN A, đây là dấu hiệu tài khoản có thể đang bị người khác lợi dụng. Khi đó, hãy gọi ngay tổng đài chính thức của ngân hàng, khóa giao dịch trực tuyến và tuyệt đối không đọc mã OTP cho bất kỳ ai."
+      },
+      {
+        "id": "legit_04",
+        "category": "real_account_fluctuation",
+        "text": "SD: +15,000,000 VND luc 10:30 04/11/2026. ND: CONG TY CO PHAN CONG NGHE TRA LUONG THANG 10/2026. So du hien tai: 28,450,000 VND.",
+        "true_label": 0,
+        "predicted_score": 85,
+        "heuristic_score": 0,
+        "llm_score": 65,
+        "patterns": [],
+        "explanation": "Đây là dạng tin nhắn báo có tiền vào tài khoản nhưng không phải thông báo chính thức từ ngân hàng, rất dễ bị làm giả để tạo niềm tin. Kẻ gian thường dùng chiêu này để dụ người bán hàng giao hàng trước, hoặc yêu cầu chuyển lại tiền thừa, chuyển tiền cọc cho đối tác. Dấu hiệu bất thường là ngày giao dịch 04/11/2026 nằm ở tương lai, tên doanh nghiệp chung chung và không có mã giao dịch hay thông tin xác thực rõ ràng. Bạn tuyệt đối không giao hàng, không chuyển tiền lại và chỉ kiểm tra số dư trong ứng dụng ngân hàng chính thức."
+      },
+      {
+        "id": "legit_05",
+        "category": "real_account_fluctuation",
+        "text": "TB: Tai khoan 0011002345678 tai Vietcombank -65,000 VND luc 08:15 04/11/2026 tai HIGHLANDS COFFEE. So du: 4,120,000 VND.",
+        "true_label": 0,
+        "predicted_score": 85,
+        "heuristic_score": 0,
+        "llm_score": 70,
+        "patterns": [],
+        "explanation": "Đây là tin nhắn giả mạo thông báo giao dịch ngân hàng nhằm đánh lừa người dùng. Kẻ gian gửi thông báo trừ tiền với ngày trong tương lai để tạo tâm lý lo lắng, thúc giục bạn kiểm tra tài khoản hoặc liên hệ với số điện thoại giả mạo. Ngân hàng chính thống không bao giờ thông báo giao dịch khi chưa xảy ra, và mọi thông báo đều được gửi qua kênh chính thức có xác thực. Bạn tuyệt đối không được làm theo hướng dẫn trong tin nhắn, hãy kiểm tra số dư trực tiếp qua ứng dụng ngân hàng chính thức hoặc gọi tổng đài đã biết."
+      },
+      {
+        "id": "legit_07",
+        "category": "official_police_anti_scam_warning",
+        "text": "Bộ Công an khuyến cáo người dân: Tuyệt đối không cài đặt các ứng dụng lạ không rõ nguồn gốc từ đường link lạ, không cung cấp mã OTP, thông tin tài khoản ngân hàng cho bất kỳ ai xưng danh là công an hoặc cán bộ nhà nước qua điện thoại.",
+        "true_label": 0,
+        "predicted_score": 100,
+        "heuristic_score": 100,
+        "llm_score": 5,
+        "patterns": [
+          "Yêu cầu OTP / mã xác thực",
+          "Mạo danh cơ quan chức năng",
+          "Dụ bấm link / xác minh danh tính",
+          "Yêu cầu OTP",
+          "Mạo danh cơ quan chức năng"
+        ],
+        "explanation": "Nội dung này là khuyến cáo an toàn của cơ quan công an, không phải lừa đảo. Văn bản cảnh báo người dân không cài ứng dụng lạ, không cung cấp mã OTP hay thông tin ngân hàng cho người tự xưng là cán bộ nhà nước. Bản thân nội dung không yêu cầu chuyển tiền, không đưa liên kết lạ và không đòi dữ liệu cá nhân. Người đọc nên làm theo khuyến cáo và chỉ liên hệ cơ quan chức năng qua kênh chính thức khi cần."
+      },
+      {
+        "id": "legit_08",
+        "category": "official_police_anti_scam_warning",
+        "text": "Công an Thành phố Hà Nội phát đi thông báo: Cơ quan điều tra không làm việc, không yêu cầu người dân chuyển tiền qua mạng xã hội hay điện thoại. Mọi trường hợp yêu cầu chuyển tiền đều là lừa đảo.",
+        "true_label": 0,
+        "predicted_score": 80,
+        "heuristic_score": 80,
+        "llm_score": 5,
+        "patterns": [
+          "Yêu cầu chuyển tiền/nộp phí",
+          "Mạo danh cơ quan chức năng",
+          "Giao dịch tài chính",
+          "Mạo danh cơ quan chức năng"
+        ],
+        "explanation": "Đây là thông báo cảnh báo chính thức từ Công an Thành phố Hà Nội, không phải nội dung lừa đảo. Nội dung nêu rõ cơ quan điều tra không làm việc và không yêu cầu người dân chuyển tiền qua mạng xã hội hay điện thoại. Bất kỳ ai yêu cầu chuyển tiền trong các trường hợp như vậy đều là đối tượng lừa đảo, nên thông báo này giúp người dân nhận diện và phòng tránh. Người dân nên ghi nhớ khuyến cáo, không chuyển tiền cho người lạ và báo ngay cho cơ quan công an khi gặp dấu hiệu bất thường."
+      },
+      {
+        "id": "legit_09",
+        "category": "real_utility_notice",
+        "text": "Tong cong ty Dien luc mien Bac (EVNNPC) thong bao: Hoa don tien dien thang 10/2026 cua ma khach hang PA01HN091823 la 678.000d. Quy khach vui long thanh toan truoc ngay 15/11. CSKH: 19006769.",
+        "true_label": 0,
+        "predicted_score": 72,
+        "heuristic_score": 0,
+        "llm_score": 78,
+        "patterns": [],
+        "explanation": "Đây là tin nhắn có dấu hiệu mạo danh Tổng công ty Điện lực miền Bắc để đòi tiền điện. Thủ đoạn là gửi thông báo hóa đơn với số tiền và hạn thanh toán cụ thể, tạo áp lực để người dùng gọi vào số CSKH hoặc làm theo hướng dẫn mà không kiểm tra. Điểm bất thường là hóa đơn cho tháng 10/2026 trong khi thời điểm hiện tại chưa tới, nội dung không có thông tin định danh đầy đủ và mã khách hàng không được xác minh với kênh chính thức. Người dùng tuyệt đối không chuyển tiền, không gọi theo số trong tin nhắn nếu chưa kiểm tra, hãy chặn liên lạc và cảnh báo người thân."
+      },
+      {
+        "id": "legit_10",
+        "category": "real_utility_notice",
+        "text": "Công ty Cổ phần Cấp nước Chợ Lớn: Thông báo tiền nước kỳ 10/2026 danh bộ 1204819 là 145.000 VND. Quý khách có thể đóng tiền qua ứng dụng ngân hàng hoặc cửa hàng tiện lợi.",
+        "true_label": 0,
+        "predicted_score": 70,
+        "heuristic_score": 0,
+        "llm_score": 25,
+        "patterns": [],
+        "explanation": "Đây là tin nhắn có dấu hiệu mạo danh Công ty Cấp nước Chợ Lớn để thông báo tiền nước, nhưng kỳ thanh toán 10/2026 là thời điểm chưa tới nên không hợp lý với hóa đơn thực tế. Kẻ gian thường dùng hóa đơn giả hoặc thông báo sai kỳ để dụ người dân chuyển tiền vào tài khoản không chính thức hoặc bấm vào liên kết giả mạo. Công ty cấp nước chính thống phải cung cấp mã khách hàng, địa chỉ, kênh thanh toán rõ ràng và không bao giờ yêu cầu chuyển tiền qua tin nhắn không xác minh. Bạn tuyệt đối không chuyển tiền theo nội dung này, hãy gọi tổng đài hoặc tra cứu trên ứng dụng chính thức của công ty nước để kiểm tra."
+      },
+      {
+        "id": "legit_12",
+        "category": "real_ecommerce_delivery",
+        "text": "Shipper Viettel Post dang giao don hang 1928374 cho ban, tien COD: 0d. Vui long nghe may khi shipper goi.",
+        "true_label": 0,
+        "predicted_score": 80,
+        "heuristic_score": 20,
+        "llm_score": 55,
+        "patterns": [
+          "Giả mạo giao hàng/bưu phẩm"
+        ],
+        "explanation": "Đây là hình thức mạo danh đơn vị vận chuyển để dẫn dụ người nhận. Thủ đoạn là thông báo có đơn hàng với mã số và tiền COD 0đ nhằm khiến bạn tò mò nghe máy, sau đó kẻ xấu có thể giả danh shipper yêu cầu cung cấp thông tin, chuyển khoản hoặc bấm vào liên kết lạ. Dấu hiệu bất thường là tin nhắn không có mã vận đơn đủ để tra cứu trên kênh chính thức, không nêu rõ người gửi và số tiền 0đ rất vô lý. Bạn tuyệt đối không chuyển tiền, không bấm vào liên kết lạ, không cung cấp mã xác thực và nên chặn số gửi tin nhắn."
+      },
+      {
+        "id": "legit_21",
+        "category": "real_carrier_telecom",
+        "text": "Vinaphone thong bao: Tai khoan chinh cua quy khach con 15.000d. Quy khach nap the vao ngay vang ngay mai de duoc tang 20% gia tri the nap vao tai khoan khuyen mai.",
+        "true_label": 0,
+        "predicted_score": 82,
+        "heuristic_score": 20,
+        "llm_score": 82,
+        "patterns": [
+          "Lừa đảo nạp thẻ/game"
+        ],
+        "explanation": "Đây là tin nhắn có dấu hiệu mạo danh nhà mạng VinaPhone để dụ người dùng nạp thẻ nhận khuyến mãi. Tin nhắn tạo cảm giác gấp gáp bằng cách báo số dư thấp và hứa tặng 20% nếu nạp thẻ vào ngày mai, trong khi không có kênh xác thực chính thức nào đi kèm. Nhà mạng chính thống thường thông báo qua ứng dụng, website hoặc đầu số chính thức và không ép người dùng nạp thẻ qua tin nhắn không rõ nguồn. Bạn tuyệt đối không nạp thẻ hay cung cấp mã thẻ, mã OTP theo tin nhắn này, hãy kiểm tra trực tiếp trên ứng dụng VinaPhone chính thức hoặc gọi tổng đài và cảnh báo người thân."
+      }
+    ],
+    "false_negatives_count": 0,
+    "false_negatives": []
+  },
+  "category_breakdown": {
+    "police_authority_impersonation": {
+      "total": 3,
+      "correct_70": 3,
+      "correct_40": 3,
+      "label": 1
+    },
+    "vneid_public_service": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "banking_otp_phishing": {
+      "total": 4,
+      "correct_70": 4,
+      "correct_40": 4,
+      "label": 1
+    },
+    "recruitment_ctv_task": {
+      "total": 4,
+      "correct_70": 4,
+      "correct_40": 4,
+      "label": 1
+    },
+    "investment_crypto_forex": {
+      "total": 3,
+      "correct_70": 3,
+      "correct_40": 3,
+      "label": 1
+    },
+    "fake_loan_black_credit": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "delivery_customs_fee": {
+      "total": 3,
+      "correct_70": 3,
+      "correct_40": 3,
+      "label": 1
+    },
+    "prize_lottery_telecom": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "urgent_relative_hospital": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "sim_block_telecom": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "tax_refund_fraud": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "utility_impersonation": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "fake_friend_urgent_loan": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "bhxh_impersonation": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 1
+    },
+    "deepfake_video_call_pretext": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 1
+    },
+    "hacked_account_loan": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 1
+    },
+    "fake_qr_code_payment": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 1
+    },
+    "teen_code_obfuscated_scam": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 1
+    },
+    "fake_travel_ticket_booking": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 1
+    },
+    "real_banking_otp": {
+      "total": 3,
+      "correct_70": 2,
+      "correct_40": 0,
+      "label": 0
+    },
+    "real_account_fluctuation": {
+      "total": 3,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "official_police_anti_scam_warning": {
+      "total": 2,
+      "correct_70": 0,
+      "correct_40": 0,
+      "label": 0
+    },
+    "real_utility_notice": {
+      "total": 2,
+      "correct_70": 0,
+      "correct_40": 0,
+      "label": 0
+    },
+    "real_ecommerce_delivery": {
+      "total": 3,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 0
+    },
+    "real_workplace_communication": {
+      "total": 3,
+      "correct_70": 3,
+      "correct_40": 3,
+      "label": 0
+    },
+    "casual_family_chat": {
+      "total": 3,
+      "correct_70": 3,
+      "correct_40": 3,
+      "label": 0
+    },
+    "real_carrier_telecom": {
+      "total": 2,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "personal_money_transfer_chat": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 1,
+      "label": 0
+    },
+    "job_interview_invitation": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "health_appointment_notice": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "school_academic_notice": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "flight_ticket_notice": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "bank_legitimate_customer_service": {
+      "total": 2,
+      "correct_70": 2,
+      "correct_40": 2,
+      "label": 0
+    },
+    "real_charity_official": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "library_book_reminder": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "cinema_ticket_booking": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "apartment_management_notice": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "gym_fitness_renewal": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "car_service_maintenance": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "real_hotel_booking": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "study_group_university": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "social_greeting_birthday": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    },
+    "store_membership_points": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 0,
+      "label": 0
+    },
+    "official_administrative_notice": {
+      "total": 1,
+      "correct_70": 1,
+      "correct_40": 1,
+      "label": 0
+    }
+  },
+  "raw_samples": [
+    {
+      "id": "scam_01",
+      "category": "police_authority_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 99,
+        "ensemble": 99,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_02",
+      "category": "police_authority_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 97
+      }
+    },
+    {
+      "id": "scam_03",
+      "category": "police_authority_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 99,
+        "ensemble": 99,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_04",
+      "category": "vneid_public_service",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_05",
+      "category": "vneid_public_service",
+      "label": 1,
+      "scores": {
+        "heuristic": 100,
+        "llm": 98,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_06",
+      "category": "banking_otp_phishing",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_07",
+      "category": "banking_otp_phishing",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 99,
+        "ensemble": 99,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_08",
+      "category": "banking_otp_phishing",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_09",
+      "category": "banking_otp_phishing",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_10",
+      "category": "recruitment_ctv_task",
+      "label": 1,
+      "scores": {
+        "heuristic": 100,
+        "llm": 95,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_11",
+      "category": "recruitment_ctv_task",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_12",
+      "category": "recruitment_ctv_task",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 96
+      }
+    },
+    {
+      "id": "scam_13",
+      "category": "recruitment_ctv_task",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 97
+      }
+    },
+    {
+      "id": "scam_14",
+      "category": "investment_crypto_forex",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_15",
+      "category": "investment_crypto_forex",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_16",
+      "category": "investment_crypto_forex",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_17",
+      "category": "fake_loan_black_credit",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_18",
+      "category": "fake_loan_black_credit",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_19",
+      "category": "delivery_customs_fee",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_20",
+      "category": "delivery_customs_fee",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 99,
+        "ensemble": 99,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_21",
+      "category": "delivery_customs_fee",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_22",
+      "category": "prize_lottery_telecom",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_23",
+      "category": "prize_lottery_telecom",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_24",
+      "category": "urgent_relative_hospital",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_25",
+      "category": "urgent_relative_hospital",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_26",
+      "category": "sim_block_telecom",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_27",
+      "category": "sim_block_telecom",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_28",
+      "category": "tax_refund_fraud",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_29",
+      "category": "tax_refund_fraud",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_30",
+      "category": "utility_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_31",
+      "category": "utility_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_32",
+      "category": "fake_friend_urgent_loan",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_33",
+      "category": "fake_friend_urgent_loan",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 88,
+        "ensemble": 88,
+        "full_pipeline": 90
+      }
+    },
+    {
+      "id": "scam_34",
+      "category": "bhxh_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_35",
+      "category": "deepfake_video_call_pretext",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_36",
+      "category": "hacked_account_loan",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_37",
+      "category": "fake_qr_code_payment",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 82,
+        "ensemble": 82,
+        "full_pipeline": 78
+      }
+    },
+    {
+      "id": "scam_38",
+      "category": "teen_code_obfuscated_scam",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_39",
+      "category": "teen_code_obfuscated_scam",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_40",
+      "category": "fake_travel_ticket_booking",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "legit_01",
+      "category": "real_banking_otp",
+      "label": 0,
+      "scores": {
+        "heuristic": 40,
+        "llm": 10,
+        "ensemble": 40,
+        "full_pipeline": 40
+      }
+    },
+    {
+      "id": "legit_02",
+      "category": "real_banking_otp",
+      "label": 0,
+      "scores": {
+        "heuristic": 80,
+        "llm": 20,
+        "ensemble": 80,
+        "full_pipeline": 80
+      }
+    },
+    {
+      "id": "legit_03",
+      "category": "real_banking_otp",
+      "label": 0,
+      "scores": {
+        "heuristic": 40,
+        "llm": 20,
+        "ensemble": 40,
+        "full_pipeline": 45
+      }
+    },
+    {
+      "id": "legit_04",
+      "category": "real_account_fluctuation",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 65,
+        "ensemble": 65,
+        "full_pipeline": 85
+      }
+    },
+    {
+      "id": "legit_05",
+      "category": "real_account_fluctuation",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 70,
+        "ensemble": 70,
+        "full_pipeline": 85
+      }
+    },
+    {
+      "id": "legit_06",
+      "category": "real_account_fluctuation",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 20,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_07",
+      "category": "official_police_anti_scam_warning",
+      "label": 0,
+      "scores": {
+        "heuristic": 100,
+        "llm": 5,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "legit_08",
+      "category": "official_police_anti_scam_warning",
+      "label": 0,
+      "scores": {
+        "heuristic": 80,
+        "llm": 5,
+        "ensemble": 80,
+        "full_pipeline": 80
+      }
+    },
+    {
+      "id": "legit_09",
+      "category": "real_utility_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 78,
+        "ensemble": 78,
+        "full_pipeline": 72
+      }
+    },
+    {
+      "id": "legit_10",
+      "category": "real_utility_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 25,
+        "ensemble": 25,
+        "full_pipeline": 70
+      }
+    },
+    {
+      "id": "legit_11",
+      "category": "real_ecommerce_delivery",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 25,
+        "ensemble": 25,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_12",
+      "category": "real_ecommerce_delivery",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 55,
+        "ensemble": 55,
+        "full_pipeline": 80
+      }
+    },
+    {
+      "id": "legit_13",
+      "category": "real_ecommerce_delivery",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 15,
+        "ensemble": 20,
+        "full_pipeline": 25
+      }
+    },
+    {
+      "id": "legit_14",
+      "category": "real_workplace_communication",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 10
+      }
+    },
+    {
+      "id": "legit_15",
+      "category": "real_workplace_communication",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_16",
+      "category": "real_workplace_communication",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 35,
+        "ensemble": 35,
+        "full_pipeline": 35
+      }
+    },
+    {
+      "id": "legit_17",
+      "category": "casual_family_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 3,
+        "ensemble": 3,
+        "full_pipeline": 1
+      }
+    },
+    {
+      "id": "legit_18",
+      "category": "casual_family_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_19",
+      "category": "casual_family_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 3,
+        "ensemble": 3,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_20",
+      "category": "real_carrier_telecom",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 12,
+        "ensemble": 12,
+        "full_pipeline": 35
+      }
+    },
+    {
+      "id": "legit_21",
+      "category": "real_carrier_telecom",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 82,
+        "ensemble": 82,
+        "full_pipeline": 82
+      }
+    },
+    {
+      "id": "legit_22",
+      "category": "personal_money_transfer_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 40,
+        "llm": 35,
+        "ensemble": 40,
+        "full_pipeline": 40
+      }
+    },
+    {
+      "id": "legit_23",
+      "category": "personal_money_transfer_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 0,
+        "ensemble": 0,
+        "full_pipeline": 3
+      }
+    },
+    {
+      "id": "legit_24",
+      "category": "job_interview_invitation",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 15,
+        "ensemble": 15,
+        "full_pipeline": 15
+      }
+    },
+    {
+      "id": "legit_25",
+      "category": "health_appointment_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 10,
+        "ensemble": 20,
+        "full_pipeline": 30
+      }
+    },
+    {
+      "id": "legit_26",
+      "category": "school_academic_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 20,
+        "ensemble": 20,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_27",
+      "category": "flight_ticket_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 30,
+        "ensemble": 30,
+        "full_pipeline": 15
+      }
+    },
+    {
+      "id": "legit_28",
+      "category": "bank_legitimate_customer_service",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 20,
+        "ensemble": 20,
+        "full_pipeline": 25
+      }
+    },
+    {
+      "id": "legit_29",
+      "category": "bank_legitimate_customer_service",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 18,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_30",
+      "category": "real_charity_official",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 20,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_31",
+      "category": "library_book_reminder",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 8
+      }
+    },
+    {
+      "id": "legit_32",
+      "category": "cinema_ticket_booking",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 30,
+        "ensemble": 30,
+        "full_pipeline": 12
+      }
+    },
+    {
+      "id": "legit_33",
+      "category": "apartment_management_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_34",
+      "category": "gym_fitness_renewal",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 25,
+        "ensemble": 25,
+        "full_pipeline": 15
+      }
+    },
+    {
+      "id": "legit_35",
+      "category": "car_service_maintenance",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 10
+      }
+    },
+    {
+      "id": "legit_36",
+      "category": "real_hotel_booking",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 10
+      }
+    },
+    {
+      "id": "legit_37",
+      "category": "study_group_university",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_38",
+      "category": "social_greeting_birthday",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 0,
+        "ensemble": 0,
+        "full_pipeline": 0
+      }
+    },
+    {
+      "id": "legit_39",
+      "category": "store_membership_points",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 90,
+        "ensemble": 90,
+        "full_pipeline": 65
+      }
+    },
+    {
+      "id": "legit_40",
+      "category": "official_administrative_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 15
+      }
+    }
+  ]
+}

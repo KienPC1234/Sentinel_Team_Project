@@ -1,0 +1,788 @@
+{
+  "metadata": {
+    "title": "Báo Cáo Đánh Giá Tập Kiểm Thử Độc Lập Thứ Hai (Holdout Set B - 40 mẫu)",
+    "dataset": "holdout_test_set_b.jsonl",
+    "total_samples": 40,
+    "positives_scam": 20,
+    "negatives_legit": 20,
+    "timestamp": "2026-11-04 11:28:18"
+  },
+  "summary": {
+    "Heuristic Only": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 3,
+        "fp": 1,
+        "tn": 19,
+        "fn": 17,
+        "precision": 0.75,
+        "precision_ci95": [
+          0.3006,
+          0.9544
+        ],
+        "recall": 0.15,
+        "recall_ci95": [
+          0.0524,
+          0.3604
+        ],
+        "f1": 0.25,
+        "accuracy": 0.55,
+        "specificity": 0.95,
+        "specificity_ci95": [
+          0.7639,
+          0.9911
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              19,
+              1
+            ],
+            [
+              17,
+              3
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 9,
+        "fp": 2,
+        "tn": 18,
+        "fn": 11,
+        "precision": 0.8182,
+        "precision_ci95": [
+          0.523,
+          0.9486
+        ],
+        "recall": 0.45,
+        "recall_ci95": [
+          0.2582,
+          0.6579
+        ],
+        "f1": 0.5806,
+        "accuracy": 0.675,
+        "specificity": 0.9,
+        "specificity_ci95": [
+          0.699,
+          0.9721
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              18,
+              2
+            ],
+            [
+              11,
+              9
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 0.38,
+        "min_ms": 0.11,
+        "max_ms": 5.75,
+        "p95_ms": 0.39
+      }
+    },
+    "LLM Only": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 20,
+        "fp": 0,
+        "tn": 20,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.8389,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.8389,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.8389,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              20,
+              0
+            ],
+            [
+              0,
+              20
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 20,
+        "fp": 0,
+        "tn": 20,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.8389,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.8389,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.8389,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              20,
+              0
+            ],
+            [
+              0,
+              20
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 5317.98,
+        "min_ms": 2946.23,
+        "max_ms": 9463.33,
+        "p95_ms": 7419.15
+      }
+    },
+    "Calibrated Ensemble": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 20,
+        "fp": 0,
+        "tn": 20,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.8389,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.8389,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.8389,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              20,
+              0
+            ],
+            [
+              0,
+              20
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 20,
+        "fp": 0,
+        "tn": 20,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.8389,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.8389,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.8389,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              20,
+              0
+            ],
+            [
+              0,
+              20
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 5318.35,
+        "min_ms": 2946.34,
+        "max_ms": 9463.5,
+        "p95_ms": 7419.42
+      }
+    },
+    "Full Pipeline": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 20,
+        "fp": 0,
+        "tn": 20,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.8389,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.8389,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.8389,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              20,
+              0
+            ],
+            [
+              0,
+              20
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 20,
+        "fp": 0,
+        "tn": 20,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.8389,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.8389,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.8389,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              20,
+              0
+            ],
+            [
+              0,
+              20
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 5082.79,
+        "min_ms": 3340.96,
+        "max_ms": 7571.35,
+        "p95_ms": 7201.19
+      }
+    }
+  },
+  "error_analysis": {
+    "false_positives_count": 0,
+    "false_positives": [],
+    "false_negatives_count": 0,
+    "false_negatives": []
+  },
+  "raw_samples": [
+    {
+      "id": "holdout_scam_01",
+      "category": "fake_vetc_toll",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 97
+      }
+    },
+    {
+      "id": "holdout_scam_02",
+      "category": "fake_electricity_meter",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "holdout_scam_03",
+      "category": "fake_airline_hotline",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 92
+      }
+    },
+    {
+      "id": "holdout_scam_04",
+      "category": "fake_tax_sync",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "holdout_scam_05",
+      "category": "fake_social_housing",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "holdout_scam_06",
+      "category": "fake_loan_insurance",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 96
+      }
+    },
+    {
+      "id": "holdout_scam_07",
+      "category": "fake_tuition_qr",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "holdout_scam_08",
+      "category": "fake_hospital_blood",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "holdout_scam_09",
+      "category": "fake_lazada_wheel",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "holdout_scam_10",
+      "category": "fake_shopee_review",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 97
+      }
+    },
+    {
+      "id": "holdout_scam_11",
+      "category": "fake_friend_urgent",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 90
+      }
+    },
+    {
+      "id": "holdout_scam_12",
+      "category": "fake_crypto_vip",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "holdout_scam_13",
+      "category": "fake_customs_penalty",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "holdout_scam_14",
+      "category": "fake_police_summons",
+      "label": 1,
+      "scores": {
+        "heuristic": 100,
+        "llm": 98,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "holdout_scam_15",
+      "category": "fake_court_warrant",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "holdout_scam_16",
+      "category": "fake_google_recovery",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "holdout_scam_17",
+      "category": "fake_bank_upgrade",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "holdout_scam_18",
+      "category": "fake_vneid_chip",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "holdout_scam_19",
+      "category": "fake_traffic_fine",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "holdout_scam_20",
+      "category": "fake_recruitment_translation",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "holdout_legit_01",
+      "category": "real_evn_hotline",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_02",
+      "category": "real_water_meter",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 8
+      }
+    },
+    {
+      "id": "holdout_legit_03",
+      "category": "real_hospital_discharge",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 10,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "holdout_legit_04",
+      "category": "real_atm_withdrawal",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 10
+      }
+    },
+    {
+      "id": "holdout_legit_05",
+      "category": "real_credit_card_due",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_06",
+      "category": "real_flight_gate_change",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_07",
+      "category": "official_cybercrime_advisory",
+      "label": 0,
+      "scores": {
+        "heuristic": 100,
+        "llm": 5,
+        "ensemble": 35,
+        "full_pipeline": 35
+      }
+    },
+    {
+      "id": "holdout_legit_08",
+      "category": "real_parent_meeting",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_09",
+      "category": "real_annual_leave",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_10",
+      "category": "real_shopee_locker",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 30,
+        "ensemble": 30,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "holdout_legit_11",
+      "category": "real_grab_pickup",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 8,
+        "ensemble": 8,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_12",
+      "category": "real_university_exam",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_13",
+      "category": "real_telecom_data",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_14",
+      "category": "real_fire_drill",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_15",
+      "category": "real_dental_appointment",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 8
+      }
+    },
+    {
+      "id": "holdout_legit_16",
+      "category": "real_library_return",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_17",
+      "category": "casual_football_invite",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "holdout_legit_18",
+      "category": "casual_family_advice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 0
+      }
+    },
+    {
+      "id": "holdout_legit_19",
+      "category": "real_red_cross_receipt",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 5,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "holdout_legit_20",
+      "category": "real_interview_confirmation",
+      "label": 0,
+      "scores": {
+        "heuristic": 40,
+        "llm": 8,
+        "ensemble": 35,
+        "full_pipeline": 35
+      }
+    }
+  ]
+}

@@ -1,0 +1,1228 @@
+{
+  "metadata": {
+    "title": "Báo Cáo Đánh Giá Tập Phát Triển (Dev Set - 80 mẫu)",
+    "dataset": "dev_set_80.jsonl",
+    "total_samples": 80,
+    "positives_scam": 40,
+    "negatives_legit": 40,
+    "timestamp": "2026-11-04 11:25:49"
+  },
+  "summary": {
+    "Heuristic Only": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 6,
+        "fp": 0,
+        "tn": 40,
+        "fn": 34,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.6097,
+          1.0
+        ],
+        "recall": 0.15,
+        "recall_ci95": [
+          0.0706,
+          0.2907
+        ],
+        "f1": 0.2609,
+        "accuracy": 0.575,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.9124,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              40,
+              0
+            ],
+            [
+              34,
+              6
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 23,
+        "fp": 3,
+        "tn": 37,
+        "fn": 17,
+        "precision": 0.8846,
+        "precision_ci95": [
+          0.7102,
+          0.96
+        ],
+        "recall": 0.575,
+        "recall_ci95": [
+          0.422,
+          0.7149
+        ],
+        "f1": 0.697,
+        "accuracy": 0.75,
+        "specificity": 0.925,
+        "specificity_ci95": [
+          0.8014,
+          0.9742
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              37,
+              3
+            ],
+            [
+              17,
+              23
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 0.3,
+        "min_ms": 0.12,
+        "max_ms": 6.54,
+        "p95_ms": 0.27
+      }
+    },
+    "LLM Only": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 40,
+        "fp": 0,
+        "tn": 40,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9124,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9124,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.9124,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              40,
+              0
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 40,
+        "fp": 0,
+        "tn": 40,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9124,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9124,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.9124,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              40,
+              0
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 5556.75,
+        "min_ms": 3311.19,
+        "max_ms": 12268.69,
+        "p95_ms": 7929.83
+      }
+    },
+    "Calibrated Ensemble": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 40,
+        "fp": 0,
+        "tn": 40,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9124,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9124,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.9124,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              40,
+              0
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 40,
+        "fp": 0,
+        "tn": 40,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9124,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9124,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.9124,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              40,
+              0
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 5557.05,
+        "min_ms": 3311.38,
+        "max_ms": 12268.88,
+        "p95_ms": 7930.05
+      }
+    },
+    "Full Pipeline": {
+      "threshold_70": {
+        "threshold": 70.0,
+        "tp": 40,
+        "fp": 0,
+        "tn": 40,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9124,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9124,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.9124,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              40,
+              0
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 40,
+        "fp": 0,
+        "tn": 40,
+        "fn": 0,
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9124,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9124,
+          1.0
+        ],
+        "f1": 1.0,
+        "accuracy": 1.0,
+        "specificity": 1.0,
+        "specificity_ci95": [
+          0.9124,
+          1.0
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              40,
+              0
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
+      "latency": {
+        "avg_ms": 5155.7,
+        "min_ms": 3074.99,
+        "max_ms": 7591.41,
+        "p95_ms": 6474.74
+      }
+    }
+  },
+  "error_analysis": {
+    "false_positives_count": 0,
+    "false_positives": [],
+    "false_negatives_count": 0,
+    "false_negatives": []
+  },
+  "raw_samples": [
+    {
+      "id": "scam_01",
+      "category": "police_authority_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_02",
+      "category": "police_authority_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_03",
+      "category": "police_authority_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_04",
+      "category": "vneid_public_service",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_05",
+      "category": "vneid_public_service",
+      "label": 1,
+      "scores": {
+        "heuristic": 100,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_06",
+      "category": "banking_otp_phishing",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_07",
+      "category": "banking_otp_phishing",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 99,
+        "ensemble": 99,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_08",
+      "category": "banking_otp_phishing",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_09",
+      "category": "banking_otp_phishing",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_10",
+      "category": "recruitment_ctv_task",
+      "label": 1,
+      "scores": {
+        "heuristic": 100,
+        "llm": 98,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_11",
+      "category": "recruitment_ctv_task",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_12",
+      "category": "recruitment_ctv_task",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_13",
+      "category": "recruitment_ctv_task",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_14",
+      "category": "investment_crypto_forex",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_15",
+      "category": "investment_crypto_forex",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_16",
+      "category": "investment_crypto_forex",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 96,
+        "ensemble": 96,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_17",
+      "category": "fake_loan_black_credit",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_18",
+      "category": "fake_loan_black_credit",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_19",
+      "category": "delivery_customs_fee",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_20",
+      "category": "delivery_customs_fee",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_21",
+      "category": "delivery_customs_fee",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 97
+      }
+    },
+    {
+      "id": "scam_22",
+      "category": "prize_lottery_telecom",
+      "label": 1,
+      "scores": {
+        "heuristic": 60,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_23",
+      "category": "prize_lottery_telecom",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 99,
+        "ensemble": 99,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_24",
+      "category": "urgent_relative_hospital",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_25",
+      "category": "urgent_relative_hospital",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_26",
+      "category": "sim_block_telecom",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_27",
+      "category": "sim_block_telecom",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_28",
+      "category": "tax_refund_fraud",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 99,
+        "ensemble": 99,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_29",
+      "category": "tax_refund_fraud",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_30",
+      "category": "utility_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 96,
+        "ensemble": 96,
+        "full_pipeline": 97
+      }
+    },
+    {
+      "id": "scam_31",
+      "category": "utility_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_32",
+      "category": "fake_friend_urgent_loan",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_33",
+      "category": "fake_friend_urgent_loan",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 90,
+        "ensemble": 90,
+        "full_pipeline": 85
+      }
+    },
+    {
+      "id": "scam_34",
+      "category": "bhxh_impersonation",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_35",
+      "category": "deepfake_video_call_pretext",
+      "label": 1,
+      "scores": {
+        "heuristic": 80,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 95
+      }
+    },
+    {
+      "id": "scam_36",
+      "category": "hacked_account_loan",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 100
+      }
+    },
+    {
+      "id": "scam_37",
+      "category": "fake_qr_code_payment",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 72,
+        "ensemble": 72,
+        "full_pipeline": 75
+      }
+    },
+    {
+      "id": "scam_38",
+      "category": "teen_code_obfuscated_scam",
+      "label": 1,
+      "scores": {
+        "heuristic": 0,
+        "llm": 100,
+        "ensemble": 100,
+        "full_pipeline": 99
+      }
+    },
+    {
+      "id": "scam_39",
+      "category": "teen_code_obfuscated_scam",
+      "label": 1,
+      "scores": {
+        "heuristic": 40,
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 98
+      }
+    },
+    {
+      "id": "scam_40",
+      "category": "fake_travel_ticket_booking",
+      "label": 1,
+      "scores": {
+        "heuristic": 20,
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 97
+      }
+    },
+    {
+      "id": "legit_01",
+      "category": "real_banking_otp",
+      "label": 0,
+      "scores": {
+        "heuristic": 40,
+        "llm": 10,
+        "ensemble": 35,
+        "full_pipeline": 35
+      }
+    },
+    {
+      "id": "legit_02",
+      "category": "real_banking_otp",
+      "label": 0,
+      "scores": {
+        "heuristic": 5,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 10
+      }
+    },
+    {
+      "id": "legit_03",
+      "category": "real_banking_otp",
+      "label": 0,
+      "scores": {
+        "heuristic": 40,
+        "llm": 8,
+        "ensemble": 35,
+        "full_pipeline": 35
+      }
+    },
+    {
+      "id": "legit_04",
+      "category": "real_account_fluctuation",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_05",
+      "category": "real_account_fluctuation",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_06",
+      "category": "real_account_fluctuation",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 8,
+        "ensemble": 8,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_07",
+      "category": "official_police_anti_scam_warning",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_08",
+      "category": "official_police_anti_scam_warning",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_09",
+      "category": "real_utility_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 10
+      }
+    },
+    {
+      "id": "legit_10",
+      "category": "real_utility_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 8,
+        "ensemble": 8,
+        "full_pipeline": 10
+      }
+    },
+    {
+      "id": "legit_11",
+      "category": "real_ecommerce_delivery",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 10,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_12",
+      "category": "real_ecommerce_delivery",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 12,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_13",
+      "category": "real_ecommerce_delivery",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 8,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_14",
+      "category": "real_workplace_communication",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_15",
+      "category": "real_workplace_communication",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_16",
+      "category": "real_workplace_communication",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 27,
+        "ensemble": 27,
+        "full_pipeline": 27
+      }
+    },
+    {
+      "id": "legit_17",
+      "category": "casual_family_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 0,
+        "ensemble": 0,
+        "full_pipeline": 3
+      }
+    },
+    {
+      "id": "legit_18",
+      "category": "casual_family_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_19",
+      "category": "casual_family_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 0
+      }
+    },
+    {
+      "id": "legit_20",
+      "category": "real_carrier_telecom",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 8,
+        "ensemble": 8,
+        "full_pipeline": 7
+      }
+    },
+    {
+      "id": "legit_21",
+      "category": "real_carrier_telecom",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 25,
+        "ensemble": 25,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_22",
+      "category": "personal_money_transfer_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 40,
+        "llm": 5,
+        "ensemble": 35,
+        "full_pipeline": 35
+      }
+    },
+    {
+      "id": "legit_23",
+      "category": "personal_money_transfer_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_24",
+      "category": "job_interview_invitation",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 8,
+        "ensemble": 8,
+        "full_pipeline": 10
+      }
+    },
+    {
+      "id": "legit_25",
+      "category": "health_appointment_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 5,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_26",
+      "category": "school_academic_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 20,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_27",
+      "category": "flight_ticket_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 8
+      }
+    },
+    {
+      "id": "legit_28",
+      "category": "bank_legitimate_customer_service",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_29",
+      "category": "bank_legitimate_customer_service",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 20,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_30",
+      "category": "real_charity_official",
+      "label": 0,
+      "scores": {
+        "heuristic": 20,
+        "llm": 10,
+        "ensemble": 20,
+        "full_pipeline": 20
+      }
+    },
+    {
+      "id": "legit_31",
+      "category": "library_book_reminder",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_32",
+      "category": "cinema_ticket_booking",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_33",
+      "category": "apartment_management_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_34",
+      "category": "gym_fitness_renewal",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 12
+      }
+    },
+    {
+      "id": "legit_35",
+      "category": "car_service_maintenance",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 8
+      }
+    },
+    {
+      "id": "legit_36",
+      "category": "real_hotel_booking",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_37",
+      "category": "study_group_university",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_38",
+      "category": "social_greeting_birthday",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 0,
+        "ensemble": 0,
+        "full_pipeline": 0
+      }
+    },
+    {
+      "id": "legit_39",
+      "category": "store_membership_points",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 25,
+        "ensemble": 25,
+        "full_pipeline": 27
+      }
+    },
+    {
+      "id": "legit_40",
+      "category": "official_administrative_notice",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 8,
+        "ensemble": 8,
+        "full_pipeline": 5
+      }
+    }
+  ]
+}

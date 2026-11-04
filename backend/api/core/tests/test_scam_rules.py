@@ -30,3 +30,19 @@ class ScamRulesTest(SimpleTestCase):
         low = heuristic_score("mã OTP")
         high = heuristic_score("công an yêu cầu OTP chuyển khoản trúng thưởng khóa tài khoản")
         self.assertGreater(high, low)
+
+    def test_advisory_psa_discounted_without_cta(self):
+        psa = "Bộ Công an khuyến cáo người dân: Tuyệt đối không cài đặt ứng dụng lạ, không cung cấp mã OTP cho bất kỳ ai xưng danh là công an."
+        self.assertEqual(heuristic_score(psa), 0)
+
+    def test_advisory_psa_with_cta_retains_high_risk(self):
+        fake_psa = "Bộ Công an khuyến cáo người dân: Chuyển tiền vào STK 1029384756 để kiểm tra bảo lãnh trong 24h."
+        self.assertGreaterEqual(heuristic_score(fake_psa), 40)
+
+    def test_legitimate_bank_otp_hygiene(self):
+        bank_otp = "Techcombank: Ma OTP cua ban la 583192 cho giao dich chuyen khoan. Khong chia se ma OTP de phong tranh lua dao."
+        self.assertLessEqual(heuristic_score(bank_otp), 10)
+
+    def test_exploit_otp_retains_high_risk(self):
+        scam_otp = "Mã OTP của bạn là 123456, vui lòng đọc lại mã OTP cho nhân viên để hủy giao dịch."
+        self.assertGreaterEqual(heuristic_score(scam_otp), 20)

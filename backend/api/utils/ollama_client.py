@@ -1289,8 +1289,9 @@ def generate_response(
             prompt = _redact(prompt)
             if system_prompt:
                 system_prompt = _redact(system_prompt)
-        except Exception:
-            pass
+        except Exception as _redact_err:
+            logger.error(f"[generate_response] PII redaction failed: {_redact_err}. Aborting call to protect privacy.")
+            return "Lỗi bảo mật: Quá trình ẩn thông tin cá nhân thất bại. Đã huỷ tác vụ để bảo vệ dữ liệu riêng tư."
     model = model or DEFAULT_MODEL
     _effective_max_tokens = max_tokens or LLM_MAX_TOKENS
     logger.info(f"[generate_response] START model={model}, max_tokens={_effective_max_tokens}, "
@@ -1434,8 +1435,10 @@ def stream_response(prompt: str, system_prompt: str = None, model: str = None, m
             prompt = _redact(prompt)
             if system_prompt:
                 system_prompt = _redact(system_prompt)
-        except Exception:
-            pass
+        except Exception as _redact_err:
+            logger.error(f"[generate_stream_response] PII redaction failed: {_redact_err}. Aborting call to protect privacy.")
+            yield "Lỗi bảo mật: Quá trình ẩn thông tin cá nhân thất bại. Đã huỷ tác vụ để bảo vệ dữ liệu riêng tư."
+            return
     model = model or DEFAULT_MODEL
     messages = []
     if system_prompt:
@@ -2451,8 +2454,10 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
             for m in (messages or []):
                 if isinstance(m, dict) and m.get('content'):
                     m['content'] = _redact(m.get('content', ''))
-        except Exception:
-            pass
+        except Exception as _redact_err:
+            llm_logger.error(f"PII redaction failed during stream_chat_ai: {_redact_err}. Aborting chat.")
+            yield {"type": "chunk", "content": "Lỗi bảo mật: Quá trình ẩn thông tin cá nhân thất bại. Đã huỷ tác vụ để bảo vệ dữ liệu riêng tư."}
+            return
     try:
         from api.utils.privacy import pii_redaction_enabled as _en
         llm_logger.info(f"LLM Chat: allow_pii={bool(allow_pii)}, redaction_on={_en()}")
@@ -3996,6 +4001,11 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
             f"Hãy dùng thông tin này để hiệu chỉnh risk_score và indicators.\n"
         )
 
+    from datetime import datetime
+    _now = datetime.now()
+    _current_date_str = _now.strftime('%d/%m/%Y')
+    _current_year = _now.year
+
     prompt = (
         f"Bạn là chuyên gia an ninh mạng ShieldCall VN. Hãy phân tích CHÍNH TRANG/NỘI DUNG được cung cấp để xác định nó có phải là lừa đảo không.\n"
         f"{web_section}"
@@ -4011,7 +4021,9 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"2. TRANG LỪA ĐẢO: Nếu trang này giả mạo, lừa đảo, hoặc có dấu hiệu gian lận, đánh giá rủi ro cao.\n"
         f"3. SỬ DỤNG THÔNG TIN TÌNH BÁO: Dựa vào kết quả từ ScamAdviser, ScamWave và các báo cáo để đưa ra kết luận.\n"
         f"4. ĐỐI CHIẾU DOANH NGHIỆP VIỆT NAM: Nếu có dữ liệu TraTenCongTy, kiểm tra mức độ khớp tên pháp lý, MST, địa chỉ, đại diện pháp luật với website.\n"
-        f"5. THỦ ĐOẠN LỪA ĐẢO: Ưu tiên phát hiện typo domain/Unicode, shortlink che đích, subdomain takeover, free-host phishing, yêu cầu dữ liệu nhạy cảm, thanh toán khó truy vết.\n\n"
+        f"5. THỦ ĐOẠN LỪA ĐẢO: Ưu tiên phát hiện typo domain/Unicode, shortlink che đích, subdomain takeover, free-host phishing, yêu cầu dữ liệu nhạy cảm, thanh toán khó truy vết.\n"
+        f"6. THỜI GIAN VẬN HÀNH HIỆN TẠI: Thời điểm server hiện tại là ngày {_current_date_str} (năm {_current_year}). Mọi mốc thời gian, kỳ cước hoặc giao dịch ghi nhận trong năm {_current_year} hoặc các năm gần đây là thời điểm vận hành bình thường, không được coi là mốc thời gian tương lai bất thường. Mô hình phải phân biệt giữa tính hợp lệ của thời điểm phát sinh tin nhắn với các dấu hiệu gian lận thực sự.\n"
+        f"7. THÔNG BÁO AN TOÀN VÀ KHUYẾN CÁO: Nếu nội dung là lời cảnh báo, khuyến cáo phòng chống lừa đảo từ cơ quan chức năng hoặc tin nhắn mã OTP hợp chuẩn nhắc nhở không chia sẻ mã (không chứa liên kết lạ, không yêu cầu nộp tiền), hãy xác định an toàn (is_scam: false, risk_score <= 15).\n\n"
         f"QUY TẮC BẮT BUỘC CHO 'explanation':\n"
         f"1. GIỌNG VĂN: Tự nhiên, rõ ràng, quyết đoán, dễ hiểu cho người dân phổ thông và người lớn tuổi. Tuyệt đối không dùng thuật ngữ kỹ thuật khó hiểu hay câu từ quan liêu.\n"
         f"2. TUYỆT ĐỐI KHÔNG NÊU TÊN CÔNG CỤ HOẶC DATABASE NỘI BỘ: Tuyệt đối không nhắc đến các từ như ScamWave, Trustpilot, Sitejabber, Tranco, TraTenCongTy, VirusTotal, whois, OCR, LLM, mô hình AI. Thay vào đó, diễn giải trực tiếp bản chất thực tế: 'không có thông tin đăng ký doanh nghiệp chính danh', 'không thuộc hệ thống chính thức của doanh nghiệp', 'chưa ghi nhận tiền sử cảnh báo'.\n"

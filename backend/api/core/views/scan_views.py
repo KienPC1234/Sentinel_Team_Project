@@ -1007,9 +1007,37 @@ def _analyze_message_text(text: str) -> dict:
     # Rule-based score (heuristic + điểm domain nếu có)
     rule_score = min(100, heuristic_score(text) + max_domain_score)
 
-    # 4. Final Ensemble
-    if ai_available and ai_score > 0:
-        final_score = max(ai_score, rule_score, max_domain_score)
+    # Danh mục dấu hiệu nguy hiểm nghiêm trọng cốt lõi (Critical Threat Indicators)
+    # Tuyệt đối KHÔNG được hạ điểm heuristic khi văn bản chứa các hành vi cưỡng bức này,
+    # ngay cả khi LLM đưa ra nhận định sai (ai_score thấp).
+    critical_threat_patterns = [
+        r'(?:yêu\s*cầu|bắt\s*buộc|đề\s*nghị|phải|hãy|vui\s*lòng)\s*(?:đọc|gửi|cung\s*cấp|nhập)\s*(?:lại\s*)?(?:mã\s*)?otp',
+        r'nhập\s*mã\s*otp\s*để\s*(?:hủy|nhận)',
+        r'(?:chuyển|bắn|nộp)\s*(?:tiền\s*)?(?:vào|qua|tới)\s*(?:stk|số\s*tài\s*khoản|tài\s*khoản|tài\s*khoản\s*tạm\s*giữ)',
+        r'đến\s*ngân\s*hàng\s*chuyển\s*tiền\s*theo\s*hướng\s*dẫn',
+        r'(?:lệnh\s*bắt|bắt\s*tạm\s*giam|viện\s*kiểm\s*sát|khởi\s*tố|rửa\s*tiền|buôn\s*lậu|cấm\s*xuất\s*cảnh)',
+        r'(?:cài|tải)\s*(?:file\s*)?\.?apk',
+        r'(?:ultraviewer|anydesk|teamviewer|điều\s*khiển\s*từ\s*xa)',
+        r'(?:cấp\s*cứu|chấn\s*thương|phẫu\s*thuật\s*gấp).*?(?:chuyển|nộp)\s*(?:viện\s*phí|tiền)',
+    ]
+    has_critical_threat = any(re.search(p, text.lower()) for p in critical_threat_patterns)
+
+    # 4. Evidence-Aware Conditional Ensemble (Kết hợp đa tầng có kiểm định bằng chứng)
+    #    - Bằng chứng độc hại xác minh (max_domain_score >= 70): Không bị triệt tiêu bởi nhận định AI.
+    #    - Khi có dấu hiệu nguy hiểm nghiêm trọng (has_critical_threat): Tuyệt đối không hạ điểm heuristic.
+    #    - Chỉ khi AI tự tin kết luận an toàn (ai_score <= 20, is_scam=False), KHÔNG có domain độc hại,
+    #      và KHÔNG có hành vi đe dọa cưỡng bức: cho phép hạ trần heuristic (<= 35) để tránh bẫy từ khóa.
+    #    - Trường hợp còn lại: bảo toàn độ nhạy cao nhất max(ai_score, rule_score, max_domain_score).
+    if max_domain_score >= 70:
+        final_score = max(max_domain_score, ai_score, rule_score)
+    elif has_critical_threat:
+        final_score = max(rule_score, ai_score, max_domain_score)
+    elif ai_available and ai_score > 0:
+        is_ai_safe = (ai_score <= 20) and not (ai_result and ai_result.get('is_scam', False))
+        if is_ai_safe and max_domain_score < 40:
+            final_score = max(ai_score, min(rule_score, 35))
+        else:
+            final_score = max(ai_score, rule_score, max_domain_score)
     else:
         final_score = max(rule_score, max_domain_score)
 
@@ -1319,17 +1347,22 @@ def _analyze_domain(url: str) -> dict:
     """Domain/URL Risk Engine with VirusTotal integration and Network Analysis."""
     domain = normalize_domain(url)
 
-    # Fast path: return cached full result for repeated identical scans (TTL 5 min)
-    _full_cache_key = f'domain_scan_result:{domain}'
-    _cached_result = cache.get(_full_cache_key)
-    if _cached_result is not None:
-        return _cached_result
-
     # Ensure URL has a scheme for VT scan
     if not re.match(r'^[a-z0-9]+://', url):
         full_url = 'https://' + url
     else:
         full_url = url
+
+    # Tách bạch cache: Cache theo URL đầy đủ (path + query) thay vì cấp domain,
+    # tránh việc các path khác nhau trên cùng một tên miền dùng chung kết quả đánh giá.
+    import hashlib
+    url_canonical = full_url.strip()
+    url_hash = hashlib.sha256(url_canonical.encode('utf-8')).hexdigest()[:24]
+    _full_cache_key = f'url_scan_result:{domain}:{url_hash}'
+    _cached_result = cache.get(_full_cache_key)
+    if _cached_result is not None:
+        import copy
+        return copy.deepcopy(_cached_result)
 
     # Tách bạch 2 tầng: Heuristic Score (dấu hiệu phỏng đoán) và Evidence Floor (bằng chứng xác thực)
     heuristic_score = 0
@@ -1993,6 +2026,10 @@ class ScanFileView(APIView):
         with open(file_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
+        try:
+            os.chmod(file_path, 0o644)
+        except Exception:
+            pass
 
         # Offload to Celery
         from api.core.tasks import perform_file_scan_task
