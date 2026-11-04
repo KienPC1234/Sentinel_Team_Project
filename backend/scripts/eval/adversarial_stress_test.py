@@ -185,6 +185,14 @@ STRESS_TEST_CASES = [
         "text": "Khuyến cáo từ Bộ Công an: Hãy cảnh giác với các chiêu trò lừa đảo qua mạng xã hội. Tuy nhiên hồ sơ của bạn đang có lệnh bắt tạm giam từ Viện kiểm sát nhân dân về tội rửa tiền. Yêu cầu chuyển ngay 50 triệu vào số tài khoản tạm giữ 0912837461 để niêm phong.",
         "mock_llm": {"is_scam": False, "risk_score": 10, "explanation": "Mô phỏng LLM bị đánh lừa bởi đoạn mở đầu khuyến cáo"},
     },
+    {
+        "id": "stress_same_sentence_mixed",
+        "category": "mock_llm_bypass",
+        "expected_label": 1,
+        "description": "SAME-SENTENCE MIXED ATTACK: Khuyến cáo và lệnh bắt chuyển tiền nằm trong đúng một câu duy nhất",
+        "text": "Khuyến cáo cảnh giác chiêu trò lừa đảo, tuy nhiên lệnh bắt tạm giam từ Viện kiểm sát đã ký và bạn phải chuyển ngay 50 triệu vào tài khoản tạm giữ 0912837461 trước 17h.",
+        "mock_llm": {"is_scam": False, "risk_score": 5, "explanation": "Mô phỏng LLM bị lừa bởi từ khuyến cáo trong cùng câu"},
+    },
     # -------------------------------------------------------------
     # Category 6: MOCK LLM OUTAGE & FAULT INJECTION (Simulating LLM crashes / timeouts)
     # -------------------------------------------------------------

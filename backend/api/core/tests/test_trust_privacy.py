@@ -95,6 +95,61 @@ class PrivacyRedactionTest(TestCase):
         self.assertGreaterEqual(res['final_score'], 70)
         self.assertEqual(res['risk_level'], 'RED')
 
+    def test_same_sentence_mixed_context_anti_veto(self):
+        """
+        Kiểm tra P0.6 dứt điểm: Tín hiệu khuyến cáo KHÔNG ĐƯỢC PHÉP phủ quyết chỉ thị nguy hiểm
+        đang có hiệu lực trong cùng một câu (Same-sentence mixed-context attack).
+        """
+        from api.utils.trust_guard import _detect_severe_extortion, compute_evidence_aware_ensemble
+
+        # Tấn công pha trộn trong đúng 1 câu duy nhất (ngăn cách bằng dấu phẩy và liên từ)
+        same_sentence_attack = (
+            'Khuyến cáo cảnh giác chiêu trò lừa đảo, tuy nhiên lệnh bắt tạm giam từ Viện kiểm sát '
+            'đã ban hành và bạn phải chuyển ngay 50 triệu vào số tài khoản 0912837461 trước 17h.'
+        )
+        self.assertTrue(_detect_severe_extortion(same_sentence_attack))
+
+        # Khi LLM bị jailbreak/đánh lừa trả về an toàn (is_scam=False, risk_score=5)
+        res = compute_evidence_aware_ensemble(
+            text=same_sentence_attack,
+            ai_result={'is_scam': False, 'risk_score': 5},
+            rule_score=60,
+        )
+        # Sàn ĐỎ (>= 70) BẮT BUỘC được bảo vệ nguyên vẹn
+        self.assertGreaterEqual(res['final_score'], 70)
+        self.assertEqual(res['risk_level'], 'RED')
+        self.assertEqual(res['decision_reason'], 'severe_extortion_floor')
+
+    def test_same_sentence_otp_coercion_anti_veto(self):
+        """Kiểm tra chỉ thị đòi OTP có hiệu lực trong cùng câu không bị từ ngữ khuyến cáo vô hiệu hoá."""
+        from api.utils.trust_guard import has_active_threat_directive, compute_evidence_aware_ensemble
+
+        otp_mixed = 'Cảnh báo lừa đảo qua mạng nhưng yêu cầu cung cấp lại mã OTP 6 số để xác minh giao dịch.'
+        self.assertTrue(has_active_threat_directive(otp_mixed))
+
+        res = compute_evidence_aware_ensemble(
+            text=otp_mixed,
+            ai_result={'is_scam': False, 'risk_score': 10},
+            rule_score=50,
+        )
+        # Không được phép hạ điểm về mức an toàn (<= 35)
+        self.assertGreater(res['final_score'], 35)
+        self.assertIn(res['decision_reason'], ('critical_threat_preserved', 'severe_extortion_floor'))
+
+    def test_ambiguous_negation_scope_cannot_auto_discount(self):
+        """Khi không xác định được phạm vi phủ định thì tuyệt đối không tự động giảm xuống mức an toàn."""
+        from api.utils.trust_guard import compute_evidence_aware_ensemble
+
+        ambiguous_text = 'Thông báo phòng chống tội phạm công an yêu cầu nộp tiền vào tài khoản thanh tra.'
+        res = compute_evidence_aware_ensemble(
+            text=ambiguous_text,
+            ai_result={'is_scam': False, 'risk_score': 10},
+            rule_score=50,
+        )
+        # Safe context discount bị chặn khi phạm vi phủ định mơ hồ
+        self.assertNotEqual(res['decision_reason'], 'safe_context_discounted')
+        self.assertGreater(res['final_score'], 35)
+
     def test_redact_endpoint(self):
         client = APIClient()
         resp = client.post('/api/v1/trust/redact/', {'text': 'goi 0901112223'}, format='json')

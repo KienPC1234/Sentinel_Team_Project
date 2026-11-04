@@ -532,6 +532,8 @@ class ScanLookupView(APIView):
             target_val = report.target_value
             scammer_phone_val = report.scammer_phone
             scammer_acc_val = report.scammer_bank_account
+            scammer_name_val = report.scammer_name
+            scammer_social_val = getattr(report, 'scammer_social', '') or ''
             desc_val = report.description or ''
             custom_val = getattr(report, 'custom_fields', {}) or {}
             evidence_url_val = report.evidence_file.url if report.evidence_file else None
@@ -552,6 +554,13 @@ class ScanLookupView(APIView):
                 if scammer_acc_val:
                     scammer_acc_val = BankAccount.mask_account(scammer_acc_val)
 
+                if scammer_name_val:
+                    parts = scammer_name_val.strip().split()
+                    scammer_name_val = parts[0] + ' ***' if len(parts) > 1 else (scammer_name_val[:2] + '***' if len(scammer_name_val) > 2 else '***')
+
+                if scammer_social_val:
+                    scammer_social_val = redact_pii(scammer_social_val)
+
                 desc_val = redact_pii(desc_val)
                 custom_val = redact_obj(custom_val)
                 evidence_url_val = None
@@ -571,11 +580,11 @@ class ScanLookupView(APIView):
                 # Khong lo username nguoi bao cao tren endpoint public (truoc day
                 # lo toan bo username; chi giu nhan an danh de dem so nguoi dong gop).
                 'description': desc_val,
-                'scammer_name': report.scammer_name,
+                'scammer_name': scammer_name_val,
                 'scammer_phone': scammer_phone_val,
                 'scammer_bank_account': scammer_acc_val,
                 'scammer_bank_name': report.scammer_bank_name,
-                'scammer_social': getattr(report, 'scammer_social', ''),
+                'scammer_social': scammer_social_val,
                 'custom_fields': custom_val,
                 'evidence_url': evidence_url_val,
                 'created_at': report.created_at.isoformat(),

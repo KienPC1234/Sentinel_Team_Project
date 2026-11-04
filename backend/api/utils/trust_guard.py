@@ -740,9 +740,65 @@ ADVISORY_NEGATION_PATTERNS = [
 ]
 
 
+def has_active_threat_directive(text: str) -> bool:
+    """
+    Kiểm tra xem văn bản hoặc mệnh đề có chứa chỉ thị đe dọa / cưỡng bách đang có hiệu lực hay không.
+    Nguyên tắc bảo toàn hiệu lực (Anti-Veto Invariant):
+    - Nếu hành vi nguy hiểm (chuyển tiền, gửi OTP, tống tiền tư pháp, đòi viện phí khẩn)
+      KHÔNG được bao bọc trực tiếp bởi tiền tố phủ định -> Là chỉ thị đang có hiệu lực.
+    - Tín hiệu khuyến cáo trong cùng câu không được phép phủ quyết chỉ thị này.
+    """
+    s = (text or '').lower()
+
+    # 1. Yêu cầu cung cấp / nhập mã OTP không có tiền tố phủ định trực tiếp
+    otp_match = re.search(
+        r'(?:yêu\s*cầu|bắt\s*buộc|đề\s*nghị|phải|hãy|vui\s*lòng)\s*(?:đọc|gửi|cung\s*cấp|nhập)\s*(?:lại\s*)?(?:mã\s*)?otp',
+        s
+    )
+    if otp_match:
+        prefix = s[max(0, otp_match.start() - 60):otp_match.start()].strip()
+        if not re.search(r'(?:không|tuyệt\s*đối\s*không|không\s*bao\s*giờ|nghiêm\s*cấm|cấm|chớ|đừng)\s*(?:yêu\s*cầu|bắt\s*buộc)?\s*$', prefix):
+            return True
+
+    # 2. Yêu cầu chuyển/nộp tiền vào tài khoản / STK không có tiền tố phủ định trực tiếp
+    transfer_match = re.search(
+        r'(?:chuyển|bắn|nộp|gửi)\s+[^:;!?\n]{0,60}?(?:vào|qua|tới)\s+(?:stk|số\s*tài\s*khoản|tài\s*khoản|tài\s*khoản\s*tạm\s*giữ)',
+        s
+    )
+    if transfer_match:
+        prefix = s[max(0, transfer_match.start() - 60):transfer_match.start()].strip()
+        if not re.search(r'(?:không|tuyệt\s*đối\s*không|không\s*bao\s*giờ|không\s*có\s*việc|nghiêm\s*cấm|cấm|chớ|đừng)\s*(?:yêu\s*cầu|bắt\s*buộc)?\s*(?:người\s*dân|khách\s*hàng|ai)?\s*$', prefix):
+            return True
+
+    # 3. Đe dọa tư pháp / công quyền đi kèm tài khoản tạm giữ hoặc chuyển tiền có tính chất cụ thể
+    has_authority = bool(re.search(r'lệnh\s*bắt|bắt\s*tạm\s*giam|viện\s*kiểm\s*sát|khởi\s*tố|rửa\s*tiền|buôn\s*lậu|tòa\s*án|án\s*tù|cấm\s*xuất\s*cảnh', s))
+    has_holding_or_transfer = bool(re.search(r'tài\s*khoản\s*tạm\s*giữ|tài\s*khoản\s*thanh\s*tra|bảo\s*lãnh|niêm\s*phong|(?:chuyển|nộp)\s+(?:tiền|khoản\s*tiền)', s))
+    if has_authority and has_holding_or_transfer:
+        # Nếu có thông tin tài khoản cụ thể, số tiền, hoặc từ ngữ giục giã khẩn cấp
+        if re.search(r'\d{6,}|\d+\s*(?:triệu|tr|m|nghìn|k|đồng|vnd)|ngay|gấp|trước|hạn', s):
+            if not re.search(r'không\s*(?:bao\s*giờ\s*)?(?:yêu\s*cầu|bắt\s*buộc|đề\s*nghị)', s):
+                return True
+
+    # 4. Tống tiền viện phí / cấp cứu đòi chuyển khoản khẩn
+    has_medical = bool(re.search(r'cấp\s*cứu|chấn\s*thương|tai\s*nạn|mổ\s*gấp|viện\s*phí', s))
+    if has_medical and bool(re.search(r'(?:chuyển|nộp|đóng)\s+[^:;!?\n]{0,40}?(?:viện\s*phí|tiền|stk|tài\s*khoản)', s)):
+        if re.search(r'\d{6,}|\d+\s*(?:triệu|tr|m|nghìn|k)|ngay|gấp', s):
+            return True
+
+    return False
+
+
 def is_advisory_clause(sentence: str) -> bool:
-    """Kiểm tra một mệnh đề hoặc câu đơn lẻ có chứa từ ngữ phủ định hoặc khuyến cáo an toàn."""
+    """
+    Kiểm tra một mệnh đề hoặc câu đơn lẻ có chứa từ ngữ phủ định hoặc khuyến cáo an toàn.
+    QUY TẮC BẢO TOÀN HIỆU LỰC (Anti-Veto Invariant):
+    - Tín hiệu khuyến cáo ('cảnh báo lừa đảo', 'khuyến cáo') KHÔNG ĐƯỢC PHÉP phủ quyết
+      chỉ thị nguy hiểm đang có hiệu lực trong cùng câu/mệnh đề.
+    - Nếu câu chứa chỉ thị nguy hiểm đang có hiệu lực -> KHÔNG PHẢI advisory clause.
+    """
     s = (sentence or '').lower()
+    if has_active_threat_directive(s):
+        return False
     return any(re.search(p, s) for p in ADVISORY_NEGATION_PATTERNS)
 
 
@@ -766,28 +822,31 @@ def _check_extortion_in_text(t: str) -> bool:
 def _detect_severe_extortion(text: str) -> bool:
     """
     Nhận diện hành vi tống tiền / lừa đảo cưỡng bức nghiêm trọng cần áp sàn điểm ĐỎ.
-    XỬ LÝ THEO MỆNH ĐỀ (Clause-level Scoping - Chống Mixed-Context Attack):
-    - Không để một câu khuyến cáo/phủ định ở đầu văn bản vô hiệu hoá hành vi tống tiền xuất hiện ở câu khác.
-    - Một hành vi tống tiền chỉ được coi là phủ định nếu từ ngữ phủ định gắn liền với chính mệnh đề/câu đó.
-    - Nếu trong các câu còn lại (không có phủ định) vẫn tồn tại yêu cầu chuyển tiền/tống tiền, sàn ĐỎ vẫn BẮT BUỘC áp dụng.
+    XỬ LÝ ĐA TẦNG (Sentence & Clause Scoping - Chống Mixed-Context Attack):
+    - Tín hiệu khuyến cáo không được phủ quyết chỉ thị nguy hiểm đang có hiệu lực trong cùng câu.
+    - Nếu văn bản chứa chỉ thị nguy hiểm đang có hiệu lực -> Khóa sàn ĐỎ.
+    - Phân tách văn bản theo cả cấp độ câu và cấp độ mệnh đề để cách ly hoàn toàn phần khuyến cáo và phần đe dọa.
     """
     raw_text = text or ''
     t = raw_text.lower()
     if not _check_extortion_in_text(t):
         return False
 
-    sentences = [s.strip() for s in re.split(r'[\r\n.!?]+', raw_text) if s.strip()]
-    if not sentences:
+    # 1. Chỉ thị tống tiền đang có hiệu lực -> Bắt buộc áp sàn ĐỎ
+    if has_active_threat_directive(raw_text):
+        return True
+
+    # 2. Phân rã theo cấp độ câu và mệnh đề (ngăn chặn bypass qua liên từ hoặc cùng 1 câu)
+    delimiters = r'[\r\n.!?]+|[,;:—–-]|(?:\b(?:nhưng|tuy nhiên|song|thế nhưng|mặc dù)\b)'
+    clauses = [c.strip() for c in re.split(delimiters, raw_text) if c.strip()]
+    if not clauses:
         return False
 
-    # Lọc các câu KHÔNG chứa từ ngữ phủ định / khuyến cáo
-    active_threat_sentences = [s for s in sentences if not is_advisory_clause(s)]
-    if not active_threat_sentences:
-        # Toàn bộ các câu chứa từ khóa đều là khuyến cáo hoặc phủ định thuần túy
+    active_clauses = [c for c in clauses if not is_advisory_clause(c)]
+    if not active_clauses:
         return False
 
-    # Kiểm tra xem trong các câu chưa được phủ định có tồn tại hành vi tống tiền thực tế không
-    active_blob = ' . '.join(active_threat_sentences).lower()
+    active_blob = ' . '.join(active_clauses).lower()
     return _check_extortion_in_text(active_blob)
 
 
@@ -808,14 +867,31 @@ def compute_evidence_aware_ensemble(
 
     t = (text or '').lower()
     has_severe_extortion = _detect_severe_extortion(text)
+    has_active_directive = has_active_threat_directive(text)
 
     # Xác định xem văn bản có phải là Khuyến cáo an toàn thuần túy (Pure Advisory) hay không.
-    # Chỉ coi là Pure Advisory khi MỌI câu chứa từ khóa nguy hiểm đều gắn liền với mệnh đề khuyến cáo/phủ định.
-    # Nếu là văn bản pha trộn (Mixed Context: có cảnh báo nhưng vẫn có câu đòi chuyển tiền/OTP),
-    # tuyệt đối không coi là Pure Advisory nhằm triệt tiêu nguy cơ Mixed-context Bypass.
+    # QUY TẮC PHẠM VI PHỦ ĐỊNH (Negation Scope Invariant):
+    # - Không chứa chỉ thị nguy hiểm đang có hiệu lực (not has_active_directive).
+    # - Không chứa dấu hiệu tống tiền nghiêm trọng (not has_severe_extortion).
+    # - Có từ khóa nguy hiểm nhưng MỌI câu/mệnh đề chứa từ khóa đều là khuyến cáo/phủ định rõ ràng.
+    # - Khi phạm vi phủ định không xác định được với độ tin cậy tuyệt đối (ngữ cảnh pha trộn trong cùng câu),
+    #   tuyệt đối KHÔNG tự động giảm xuống mức an toàn (safe_context_discounted bị chặn).
     sentences = [s.strip() for s in re.split(r'[\r\n.!?]+', text or '') if s.strip()]
     threat_sentences = [s for s in sentences if any(re.search(p, s.lower()) for p in CRITICAL_THREAT_PATTERNS)]
-    is_pure_advisory = bool(threat_sentences and all(is_advisory_clause(s) for s in threat_sentences))
+
+    delimiters = r'[\r\n.!?]+|[,;:—–-]|(?:\b(?:nhưng|tuy nhiên|song|thế nhưng|mặc dù)\b)'
+    threat_clauses = [
+        c.strip() for c in re.split(delimiters, text or '')
+        if c.strip() and any(re.search(p, c.lower()) for p in CRITICAL_THREAT_PATTERNS)
+    ]
+
+    is_pure_advisory = bool(
+        not has_active_directive
+        and not has_severe_extortion
+        and threat_sentences
+        and all(is_advisory_clause(s) for s in threat_sentences)
+        and (all(is_advisory_clause(c) for c in threat_clauses) if threat_clauses else True)
+    )
 
     has_critical_threat = any(re.search(p, t) for p in CRITICAL_THREAT_PATTERNS) and not is_pure_advisory
 
