@@ -213,6 +213,18 @@ LLM_MAX_TOKENS = 16384
 OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://api.deepseek.com')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
+# Unified local AI service (OCR + embedding + Whisper) — backend/scripts/ai_service.py
+AI_SERVICE_URL = os.getenv('AI_SERVICE_URL', 'http://127.0.0.1:5010').rstrip('/')
+AI_EMBED_DEVICE = os.getenv('AI_EMBED_DEVICE', 'cpu')  # cpu tiết kiệm VRAM; cuda nếu cần
+WHISPER_DEVICE = os.getenv('WHISPER_DEVICE', 'cpu')     # fallback local; GPU thuộc AI service
+WHISPER_MODEL_SIZE = os.getenv('WHISPER_MODEL_SIZE', 'large-v3-turbo')
+WHISPER_FALLBACK_MODEL_SIZE = os.getenv('WHISPER_FALLBACK_MODEL_SIZE', 'small')
+WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'auto')  # auto | vi | en | ...
+WHISPER_INITIAL_PROMPT = os.getenv(
+    'WHISPER_INITIAL_PROMPT', 'Đây là cuộc hội thoại tiếng Việt.'
+)
+VECTOR_DB_USE_GPU = os.getenv('VECTOR_DB_USE_GPU', 'False').lower() in ('true', '1', 'yes')
+
 # Optional: local Node Puppeteer host used by web-scan fallback
 PUPPETEER_HOST_URL = os.getenv('PUPPETEER_HOST_URL', 'http://127.0.0.1:3010/render')
 

@@ -11,8 +11,8 @@
 | **Backend Core** | Django 5.x + Django REST Framework | ASGI, Monolith-first, API RESTful chuẩn |
 | **Frontend UI** | Tailwind CSS v4 + Alpine.js | Liquid Glass Aesthetic, SSE streaming |
 | **AI Engine** | Ollama (local LLM) + Cloud LLM fallback tùy chọn | Local-first; cloud chỉ khi cấu hình, có consent/log |
-| **AI Vision** | VietOCR | Trích xuất văn bản tiếng Việt từ ảnh/screenshot (venv riêng) |
-| **AI Audio** | Faster-Whisper | Phiên âm âm thanh cuộc gọi |
+| **AI Vision** | VietOCR | Trích xuất văn bản tiếng Việt từ ảnh/screenshot (AI service dùng chung) |
+| **AI Audio** | Faster-Whisper | Phiên âm tiếng Việt/Anh bằng `large-v3-turbo` (tự nhận diện ngôn ngữ) |
 | **Rich Text Editor** | CKEditor 5 Community (GPL) | Không cần license thương mại |
 | **Sandbox Phân tích mã độc** | Docker Zero-Trust Container | YARA + OLETools + PEFile + ClamAV |
 | **Async Tasks** | Celery + Redis | Scan nặng, Celery Beat định kỳ |

@@ -456,6 +456,10 @@ class ScanAudioSerializer(serializers.Serializer):
 
 class ScanPhoneSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=20)
+    # Caller-claim context is user-provided, never inferred from a foreign prefix.
+    claimed_vietnamese_entity = serializers.BooleanField(required=False, default=False)
+    # Default is LOCAL: a phone number is not sent to an external search service.
+    external_lookup_consent = serializers.BooleanField(required=False, default=False)
 
     def validate_phone(self, value):
         try:

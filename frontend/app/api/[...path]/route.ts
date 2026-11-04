@@ -48,6 +48,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
       headers,
       body,
       redirect: 'manual',
+      signal: AbortSignal.timeout(60_000),
     });
     const out = new Headers();
     upstream.headers.forEach((v, k) => {

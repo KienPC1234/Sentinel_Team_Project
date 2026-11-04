@@ -476,6 +476,14 @@ class LocalSandboxAnalyzer:
 
         # 2. Ephemeral CLI Fallback Mode
         try:
+            # Bảo đảm file có quyền đọc cho người dùng unprivileged (UID 1000) trong container
+            try:
+                cur_mode = os.stat(abs_path).st_mode
+                if not (cur_mode & 0o044):
+                    os.chmod(abs_path, cur_mode | 0o644)
+            except Exception:
+                pass
+
             cli_timeout = max(35, effective_timeout)
             cmd = [
                 self.docker_bin, 'run', '--rm',

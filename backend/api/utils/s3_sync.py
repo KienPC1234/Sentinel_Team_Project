@@ -13,6 +13,24 @@ from django.conf import settings
 _SKIP_DIRS = {'vector_index', '.cache', '__pycache__'}
 
 
+def is_private_media(key: str) -> bool:
+    """Kiểm tra đường dẫn file có thuộc diện media riêng tư/bằng chứng nhạy cảm không."""
+    norm = key.replace('\\', '/').lower().strip('/')
+    private_prefixes = ('reports/evidence', 'evidence', 'private', 'secure', 'user_uploads')
+    return any(norm.startswith(p) for p in private_prefixes)
+
+
+def generate_presigned_url(key: str, expiration: int = 3600, bucket: Optional[str] = None) -> str:
+    """Tạo URL có thời hạn (presigned URL) cho file riêng tư/bằng chứng trên S3."""
+    s3 = _client()
+    b = bucket or settings.AWS_STORAGE_BUCKET_NAME
+    return s3.generate_presigned_url(
+        'get_object',
+        Params={'Bucket': b, 'Key': key},
+        ExpiresIn=expiration,
+    )
+
+
 def _client():
     import boto3
     from botocore.config import Config
@@ -77,7 +95,8 @@ def sync_media_to_s3(
                 continue
             try:
                 ctype = mimetypes.guess_type(name)[0] or 'application/octet-stream'
-                s3.upload_file(path, bucket, key, ExtraArgs={'ContentType': ctype, 'ACL': acl})
+                file_acl = 'private' if is_private_media(key) else acl
+                s3.upload_file(path, bucket, key, ExtraArgs={'ContentType': ctype, 'ACL': file_acl})
                 uploaded += 1
             except Exception as exc:
                 errors += 1

@@ -52,7 +52,7 @@ const FRONTEND_HOST = getEnv('FRONTEND_HOST', '0.0.0.0');
 const FRONTEND_PORT = getEnv('FRONTEND_PORT', '3000');
 
 // Configurable Celery parameters
-const CELERY_CONCURRENCY = getEnv('CELERY_CONCURRENCY', '4');
+const CELERY_CONCURRENCY = getEnv('CELERY_CONCURRENCY', '8');
 const CELERY_LOGLEVEL = getEnv('CELERY_LOGLEVEL', 'info');
 const CELERY_QUEUES = getEnv('CELERY_QUEUES', 'celery,default');
 const CELERY_BEAT_LOGLEVEL = getEnv('CELERY_BEAT_LOGLEVEL', 'info');
@@ -65,6 +65,7 @@ const PUPPETEER_MAX_MEM = getEnv('PM2_PUPPETEER_MAX_MEMORY', '1G');
 const FRONTEND_MAX_MEM = getEnv('PM2_FRONTEND_MAX_MEMORY', '2G');
 const OCR_MAX_MEM = getEnv('PM2_OCR_MAX_MEMORY', '2G');
 const OCR_PORT = getEnv('OCR_SERVICE_PORT', '5010');
+const AI_MAX_MEM = getEnv('PM2_AI_MAX_MEMORY', '6G');
 
 module.exports = {
   apps: [
@@ -81,6 +82,7 @@ module.exports = {
       env: {
         DJANGO_SETTINGS_MODULE: 'PKV.settings',
         PYTHONUNBUFFERED: '1',
+        ASGI_THREADS: getEnv('ASGI_THREADS', '64'),
         PORT: WEB_PORT,
         WEB_PORT: WEB_PORT,
         WEB_HOST: WEB_HOST,
@@ -117,19 +119,33 @@ module.exports = {
       },
     },
     {
-      // OCR service thường trú (VietOCR) — giữ model trong RAM, tránh nạp lại mỗi ảnh.
-      name: 'pkv-ocr',
+      // AI service dùng chung: VietOCR + embedding (CPU) + Whisper trong MỘT
+      // process, chia sẻ một CUDA context → tiết kiệm VRAM so với 3 process rời.
+      name: 'pkv-ai',
       cwd: BACKEND_DIR,
-      script: 'scripts/ocr_service.py',
-      interpreter: OCR_PYTHON,
+      script: 'scripts/ai_service.py',
+      interpreter: VENV_PYTHON,
       instances: 1,
       autorestart: true,
       watch: false,
-      max_memory_restart: OCR_MAX_MEM,
+      max_memory_restart: AI_MAX_MEM,
       env: {
         PYTHONUNBUFFERED: '1',
+        AI_SERVICE_PORT: OCR_PORT,
         VIETOCR_DEVICE: getEnv('VIETOCR_DEVICE', 'auto'),
-        OCR_SERVICE_PORT: OCR_PORT,
+        AI_EMBED_DEVICE: getEnv('AI_EMBED_DEVICE', 'cpu'),
+        AI_EMBED_PRELOAD: getEnv('AI_EMBED_PRELOAD', 'true'),
+        WHISPER_DEVICE: getEnv('WHISPER_DEVICE', 'cuda'),
+        WHISPER_MODEL_SIZE: getEnv('WHISPER_MODEL_SIZE', 'large-v3-turbo'),
+        AI_WHISPER_COMPUTE: getEnv('AI_WHISPER_COMPUTE', 'int8_float16'),
+        AI_WHISPER_LANGUAGE: getEnv('AI_WHISPER_LANGUAGE', 'auto'),
+        AI_WHISPER_INITIAL_PROMPT: getEnv(
+          'AI_WHISPER_INITIAL_PROMPT',
+          'Đây là cuộc hội thoại tiếng Việt.'
+        ),
+        AI_WHISPER_CPU_MODEL_SIZE: getEnv('AI_WHISPER_CPU_MODEL_SIZE', 'small'),
+        AI_WHISPER_PRELOAD: getEnv('AI_WHISPER_PRELOAD', 'true'),
+        AI_WHISPER_IDLE_UNLOAD_SEC: getEnv('AI_WHISPER_IDLE_UNLOAD_SEC', '0'),
       },
     },
     {

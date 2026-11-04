@@ -5,6 +5,8 @@ import type { NextConfig } from 'next';
 const API_TARGET = process.env.API_TARGET || 'http://127.0.0.1:8001';
 
 const nextConfig: NextConfig = {
+  compress: true,
+  poweredByHeader: false,
   trailingSlash: true,
   // Không tự redirect thêm/bớt slash (xem docs skipTrailingSlashRedirect):
   // giữ nguyên path client gửi, rewrite/proxy sang Django không bị loop 301.

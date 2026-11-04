@@ -12,15 +12,17 @@ class AiChatConfig(AppConfig):
         if os.environ.get('RUN_MAIN') != 'true':
             return
 
-        # Pre-load VectorDB model and index on startup
+        # Pre-load the vector index on startup. The embedding model lives in the
+        # shared AI service now, so do NOT load it into the web process (that
+        # would consume VRAM/RAM again).
         import threading
         def preload():
             import logging
             logger = logging.getLogger(__name__)
             try:
                 from api.utils.vector_db import vector_db
-                vector_db._load_model()
-                logger.info("AI VectorDB and Model pre-loaded successfully.")
+                vector_db._maybe_reload()
+                logger.info("AI VectorDB index pre-loaded successfully.")
             except Exception as e:
                 logger.warning("Error pre-loading VectorDB: %s", e)
         

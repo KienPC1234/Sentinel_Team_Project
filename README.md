@@ -85,7 +85,7 @@ flowchart TD
  end
 
  subgraph NeuralTier["Hardware-Accelerated Neural Computing"]
- VietOCRNode["VietOCR Engine<br/>NVIDIA CUDA GPU / CPU (dedicated venv)"]
+ VietOCRNode["VietOCR Engine<br/>NVIDIA CUDA GPU / CPU (shared AI service)"]
  WhisperNode["Faster-Whisper STT<br/>NVIDIA CUDA GPU"]
  FAISSNode["FAISS Vector DB<br/>Nomic Embed 768-dim"]
  end
@@ -204,7 +204,7 @@ flowchart LR
 - **Email & Messaging Forensics**: Dissects `.eml` and text messages, validating SPF, DKIM, and DMARC DNS alignment to identify spoofed corporate or government origins.
 - **Multi-Modal AI Analysis**:
  - **Audio Streams**: Acoustic transcription via `Faster-Whisper` running on NVIDIA CUDA followed by psychological manipulation and urgency indicator extraction.
- - **Visual Media**: Image OCR via `VietOCR` (Vietnamese Transformer running in dedicated venv via `ocr_bridge.py`) combined with QR code matrix decoding and phishing banner classification.
+ - **Visual Media**: Image OCR via `VietOCR` (Vietnamese Transformer served by the shared `pkv-ai` process; `ocr_bridge.py` is the fallback) combined with QR code matrix decoding and phishing banner classification.
 - **Malware & APK Sandbox**: Dissects Windows binaries and Android APK packages in isolated Docker environments using YARA rules, PEFile, and ClamAV.
 - **Social Engineering & Crypto Forensics**: Tracks Telegram channels, Zalo groups, fake VNeID portals, and suspicious crypto wallet addresses.
 
@@ -356,7 +356,8 @@ sudo apt-get update && sudo apt-get install -y \
 
 # Start core services
 sudo systemctl enable --now mariadb redis-server docker clamav-daemon
-sudo chmod 666 /var/run/docker.sock
+# Add current service user to docker group (least-privilege model)
+sudo usermod -aG docker $USER
 ```
 
 > **GPU Acceleration is Optional** (accelerates Whisper, VietOCR, and embeddings). Without GPU, set:
@@ -390,16 +391,20 @@ OLLAMA_BASE_URL=http://localhost:11434
 LLM_MODEL=deepseek-v4.1-flash:cloud
 SMALL_MODEL=gemma4:31b-cloud
 
-# OCR engine: VietOCR runs in an ISOLATED venv (.venv-ocr) via IPC bridge/service (see 5.4)
+# OCR engine: VietOCR runs in the shared AI service (or .venv-ocr bridge as fallback)
 OCR_ENGINE=vietocr # vietocr | tesseract
 VIETOCR_DEVICE=auto # auto (GPU if available) | cpu | cuda:0
-OCR_SERVICE_URL=http://127.0.0.1:5010 # persistent OCR service (recommended); empty = subprocess bridge
+AI_SERVICE_URL=http://127.0.0.1:5010 # shared AI service: OCR + embedding + Whisper
 OCR_SERVICE_PORT=5010
 
 # Whisper / embeddings
 WHISPER_DEVICE=cuda
-WHISPER_MODEL_SIZE=small
-VECTOR_DB_USE_GPU=True
+WHISPER_MODEL_SIZE=large-v3-turbo # tốt cho tiếng Việt; small yếu hơn rõ rệt
+AI_WHISPER_COMPUTE=int8_float16 # ~1GB VRAM
+AI_WHISPER_LANGUAGE=auto # auto nhận cả vi/en; đặt vi để ép tiếng Việt
+AI_WHISPER_PRELOAD=true # nạp sẵn để request đầu không phải chờ
+AI_WHISPER_IDLE_UNLOAD_SEC=0 # >0 nếu muốn tự nhả VRAM khi rảnh
+VECTOR_DB_USE_GPU=False # embedding chạy CPU trong AI service
 
 # Anti-Bot & Auth
 TURNSTILE_SITEKEY=<cloudflare_turnstile_sitekey>
@@ -485,13 +490,16 @@ docker build -t sentinel-sandbox:latest ./backend/sandbox
 Repository structure: `backend/` (Django, Celery, Docker sandbox, OCR bridge), `frontend/` (Next.js 16), `puppeteer_host/` (TypeScript browser cluster at repository root).
 
 ```bash
-# 1) Primary Python Virtual Environment (Backend). Requires Python 3.11:
+# 1) Primary Python Virtual Environment (Backend + unified AI service). Requires Python 3.11:
 python3.11 -m venv .venv
 .venv/bin/pip install -U pip
 .venv/bin/pip install -r backend/requirements.txt
+# VietOCR for the shared AI service. --no-deps avoids pulling a second
+# opencv/imgaug/torch stack into the primary venv (see backend/requirements-ai.txt):
+.venv/bin/pip install gdown
+.venv/bin/pip install --no-deps vietocr==0.3.13
 
-# 2) Dedicated Isolated OCR Virtual Environment (VietOCR):
-# Isolates dependencies from the primary venv to eliminate conflicts (albumentations/opencv/torch).
+# 2) OPTIONAL fallback OCR venv (only if you want OCR isolated from the AI service):
 .venv/bin/python -m venv .venv-ocr
 .venv-ocr/bin/pip install -U pip
 # Install PyTorch: Select CPU or matching CUDA build (e.g. CUDA 13.0):
@@ -515,7 +523,7 @@ cd frontend && npm install && npm run build && cd ..
 docker build -t sentinel-sandbox:latest ./backend/sandbox
 ```
 
-> **Dedicated OCR Isolation:** The primary `.venv` does NOT install heavy computer vision stacks. OCR operations execute through `backend/scripts/ocr_bridge.py` delegating to `.venv-ocr` (auto-detects `../.venv-ocr/bin/python`; override via `OCR_BRIDGE_PY`). `.venv-ocr/` is ignored by git. Set `VIETOCR_DEVICE=auto` for automatic GPU acceleration. Technical details and CER benchmarks: `docs/OCR_VIETNAMESE.md`.
+> **Unified AI Service + OCR fallback:** Production runs `pkv-ai` (VietOCR + RAG embedding + Whisper) inside the primary `.venv`, sharing one CUDA context. If VietOCR or the AI service is unavailable, `backend/scripts/ocr_bridge.py` falls back to `.venv-ocr` (auto-detects `../.venv-ocr/bin/python`; override via `OCR_BRIDGE_PY`). `.venv-ocr/` is optional and ignored by git. Set `VIETOCR_DEVICE=auto` for automatic GPU acceleration. Technical details and CER benchmarks: `docs/OCR_VIETNAMESE.md`.
 
 ### 5.5 Process Management via PM2
 The system is managed via [ecosystem.config.js](./ecosystem.config.js):
@@ -535,10 +543,10 @@ pm2 logs --lines 50
 Managed cluster processes (configurable via `.env` or system environment variables):
 - `pkv-web`: ASGI server handling HTTP requests and WebSocket/SSE streams (binds to `${WEB_HOST}:${WEB_PORT}`, defaults to `0.0.0.0:8001`).
 - `pkv-frontend`: Next.js 16.4.0 App Router cluster serving production web application (binds to `0.0.0.0:3000`).
-- `pkv-celery`: Multi-threaded Celery worker handling CUDA OCR, speech transcription, and sandbox jobs (concurrency configured via `CELERY_CONCURRENCY`).
+- `pkv-celery`: Multi-threaded Celery worker for async scan jobs, RAG rebuilds, and malware sandbox tasks; OCR/speech inference is delegated to `pkv-ai`.
 - `pkv-celery-beat`: Periodic task scheduler (RAG sync, S3 backups, daily threat analytics).
 - `pkv-puppeteer`: Headless Chromium render cluster with multi-layer SSRF protection (binds to `PUPPETEER_HOST_PORT`, defaults to port `3010`).
-- `pkv-ocr`: Persistent VietOCR OCR service (runs in isolated `.venv-ocr`; binds `OCR_SERVICE_PORT`, default `5010`) — keeps the model warm to avoid ~8s reload per image.
+- `pkv-ai`: Unified local AI service — VietOCR (GPU), RAG embedding (CPU), and preloaded Whisper `large-v3-turbo` for Vietnamese (GPU, `int8_float16`, ~1 GB VRAM; `POST /unload` frees it on demand) in one process sharing a single CUDA context (binds `AI_SERVICE_PORT`, default `5010`).
 
 ---
 

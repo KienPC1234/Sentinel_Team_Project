@@ -176,15 +176,15 @@ def _analyze_network(url: str, domain: str) -> dict:
         network_info['ssl_error'] = str(e)
 
     try:
-        from api.utils.security import is_safe_url
+        from api.utils.security import is_safe_url, safe_get
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         req_url = url if url.startswith('http') else f'https://{domain}'
         if not is_safe_url(req_url):
             network_info['error'] = 'Blocked internal destination'
             return network_info
 
-        response = requests.get(req_url, headers=headers, timeout=5, allow_redirects=True)
-        network_info['redirects'] = len(response.history)
+        response = safe_get(req_url, headers=headers, timeout=5, max_redirects=5)
+        network_info['redirects'] = len(getattr(response, 'history', []))
         network_info['final_url'] = response.url
         network_info['server'] = response.headers.get('Server', '')
         network_info['status_code'] = response.status_code
@@ -193,7 +193,7 @@ def _analyze_network(url: str, domain: str) -> dict:
             'CSP': 'Content-Security-Policy' in response.headers,
             'X-Frame-Options': 'X-Frame-Options' in response.headers,
         }
-    except requests.RequestException as e:
+    except (requests.RequestException, ValueError) as e:
         if not network_info['error']:
              network_info['error'] = str(e)
     return network_info

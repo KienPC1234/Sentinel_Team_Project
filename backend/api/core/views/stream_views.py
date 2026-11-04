@@ -46,11 +46,15 @@ class ScanAnalyzeSSEView(APIView):
         if scan_type is not None and not isinstance(scan_type, str):
             scan_type = str(scan_type)
 
-        # Chỉ dùng target gốc (allow_pii=True) cho người dùng đã xác thực / API key
-        # hoặc khi được phép xem scan; ẩn danh chưa rõ chủ sở hữu -> redact PII.
+        # Đăng nhập không đồng nghĩa với đồng ý gửi PII ra mô hình LLM ngoài.
+        # Yêu cầu đồng thuận tường minh (consent_external_llm / allow_pii)
+        # kết hợp quyền xác thực của người dùng.
+        user_consent = bool(request.data.get('consent_external_llm') or request.data.get('allow_pii'))
         allow_pii = bool(
-            getattr(request.user, 'is_authenticated', False)
-            or getattr(request, 'is_api_key_auth', False)
+            user_consent and (
+                getattr(request.user, 'is_authenticated', False)
+                or getattr(request, 'is_api_key_auth', False)
+            )
         )
 
         if scan_id:

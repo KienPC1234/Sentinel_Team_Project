@@ -41,6 +41,9 @@ sentence-transformers
 # Cap below that to keep vector-index rebuilds working on fresh installs.
 transformers>=5.0,<5.17
 torch
+# AI service dùng chung (backend/scripts/ai_service.py) cần VietOCR.
+# Cài thêm theo backend/requirements-ai.txt — KHÔNG cài trực tiếp ở đây để
+# tránh kéo opencv/imgaug trùng và xung đột numpy trong CI/venv chính.
 martor
 mcp>=2.2.0
 django-storages

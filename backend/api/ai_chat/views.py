@@ -303,6 +303,8 @@ class ChatAIStreamView(APIView):
         scan_context = request.data.get('scan_context', '')
         safe_mode = request.data.get('safe_mode', False)
         debug = request.data.get('debug', False)
+        user_consent = bool(request.data.get('consent_external_llm') or request.data.get('allow_pii'))
+        allow_pii = bool(user_consent and (request.user.is_authenticated or getattr(request, 'is_api_key_auth', False)))
 
         user = request.user if request.user.is_authenticated else None
         
@@ -419,7 +421,7 @@ class ChatAIStreamView(APIView):
                 def _producer():
                     try:
                         for ev in agent.chat_stream(
-                            final_query, images_data=images_data, debug=debug, safe_mode=safe_mode
+                            final_query, images_data=images_data, debug=debug, safe_mode=safe_mode, allow_pii=allow_pii
                         ):
                             _put(ev)
                     except Exception as exc:  # noqa: BLE001

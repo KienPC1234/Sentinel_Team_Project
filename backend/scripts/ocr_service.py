@@ -2,12 +2,16 @@
 """
 ShieldCall VN — OCR Service thường trú (VietOCR) để TRÁNH NGHẼN.
 
+⚠️ Legacy: production hiện chạy `backend/scripts/ai_service.py` (gộp OCR +
+embedding + Whisper trong một process). File này vẫn dùng được độc lập khi cần
+cô lập OCR trong venv `.venv-ocr`.
+
 Vấn đề: gọi bridge qua subprocess mỗi ảnh → nạp lại torch + model (~8-9s/ảnh).
 Giải pháp: tiến trình chạy nền giữ model trong RAM; Django gọi qua HTTP (nhanh ~vài chục ms/ảnh sau warmup).
 
 Chạy (trong venv OCR):
   .venv-ocr/bin/python backend/scripts/ocr_service.py
-  # hoặc qua PM2: pm2 start ecosystem.config.js --only pkv-ocr
+  # hoặc qua PM2: pm2 start ecosystem.config.js --only pkv-ai (ai_service.py)
 
 Endpoints:
   GET  /health           → {"status","device"}

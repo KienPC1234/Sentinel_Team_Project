@@ -61,6 +61,7 @@ class DockerSandboxAndPuppeteerTests(TestCase):
         with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as f:
             f.write(b'This is a completely harmless test text file.\nAll checks should pass.\n')
             temp_path = f.name
+        os.chmod(temp_path, 0o644)
 
         try:
             result = self.analyzer.scan_file(temp_path)
@@ -83,6 +84,7 @@ class DockerSandboxAndPuppeteerTests(TestCase):
         with tempfile.NamedTemporaryFile(suffix='.com', delete=False) as f:
             f.write(eicar_bytes)
             temp_path = f.name
+        os.chmod(temp_path, 0o644)
 
         try:
             result = self.analyzer.scan_file(temp_path)
@@ -101,6 +103,7 @@ class DockerSandboxAndPuppeteerTests(TestCase):
         with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as f:
             f.write(b'Clean file content to test Docker CLI fallback mode.')
             temp_path = f.name
+        os.chmod(temp_path, 0o644)
 
         try:
             with patch('requests.post', side_effect=Exception('Daemon unavailable')):

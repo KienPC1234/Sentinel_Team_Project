@@ -100,6 +100,45 @@ class GuardrailTest(TestCase):
         srcs = [e['source'] for e in r['evidence']]
         self.assertIn('tinnhiemmang', srcs)
 
+    def test_single_virustotal_engine_is_high_risk_not_confirmed(self):
+        """1 engine đơn lẻ trên VirusTotal chỉ coi là HIGH_RISK (tránh false positive), không đưa ra CONFIRMED_RISK."""
+        r = apply_guardrail({
+            'risk_score': 65,
+            'virustotal': {
+                'available': True,
+                'stats': {'malicious': 1, 'suspicious': 0},
+                'total_engines': 70,
+                'permalink': 'https://www.virustotal.com/x',
+            },
+        }, kind='url')
+        self.assertEqual(r['guardrail']['tier'], 'HIGH_RISK')
+        self.assertNotEqual(r['guardrail']['tier'], 'CONFIRMED_RISK')
+        self.assertEqual(r['guardrail']['confidence_type'], 'rule_heuristic')
+
+    def test_multiple_virustotal_engines_yields_confirmed_risk(self):
+        """Từ 3 engine trở lên trên VirusTotal được công nhận là bằng chứng xác thực độc lập -> CONFIRMED_RISK."""
+        r = apply_guardrail({
+            'risk_score': 85,
+            'virustotal': {
+                'available': True,
+                'stats': {'malicious': 4, 'suspicious': 2},
+                'total_engines': 70,
+                'permalink': 'https://www.virustotal.com/x',
+            },
+        }, kind='url')
+        self.assertEqual(r['guardrail']['tier'], 'CONFIRMED_RISK')
+        self.assertGreaterEqual(r['guardrail']['confidence'], 0.90)
+
+    def test_heuristic_alone_never_yields_confirmed_risk(self):
+        """Dấu hiệu heuristic nội bộ dù có điểm cao vẫn chỉ là HIGH_RISK, không thể là CONFIRMED_RISK."""
+        r = apply_guardrail({
+            'risk_score': 85,
+            'reasons': ['Phát hiện từ khóa lừa đảo mạo danh ngân hàng và yêu cầu chuyển tiền gấp'],
+            'patterns_found': ['Dấu hiệu rủi ro cao từ phân tích từ vựng'],
+        }, kind='message')
+        self.assertEqual(r['guardrail']['tier'], 'HIGH_RISK')
+        self.assertNotEqual(r['guardrail']['tier'], 'CONFIRMED_RISK')
+
     def test_source_catalog_has_limits(self):
         for s in source_catalog():
             self.assertIn('reliability', s)

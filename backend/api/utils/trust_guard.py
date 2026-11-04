@@ -54,6 +54,14 @@ def level_from_score(score: Any) -> str:
 _HIGH, _MEDIUM, _LOW = "high", "medium", "low"
 
 SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
+    "phone_numbering": {
+        "name": "Cấu trúc kho số viễn thông Việt Nam (metadata)",
+        "reliability": _MEDIUM,
+        "kind": "technical_metadata",
+        "description": "Đối chiếu mã +84, đầu số di động/cố định và độ dài với metadata libphonenumber.",
+        "limits": "Đầu số có thể được cập nhật; tính hợp lệ không xác thực chủ thuê bao, vị trí thực hoặc Caller ID.",
+        "url": "https://mst.gov.vn/bo-tttt-day-manh-dinh-danh-cuoc-goi-de-ngan-ngua-lua-dao-tren-khong-gian-mang-19724111208351436.htm",
+    },
     "virustotal": {
         "name": "VirusTotal (70+ engine AV)",
         "reliability": _HIGH,
@@ -238,10 +246,12 @@ def build_evidence(result: Dict[str, Any]) -> List[Dict[str, Any]]:
         s = vt["stats"]
         mal, sus = int(s.get("malicious", 0) or 0), int(s.get("suspicious", 0) or 0)
         if mal or sus:
+            # 1-2 engine có thể là false positive từ engine nhỏ; >=3 engine mới đạt CRITICAL
+            sev = "CRITICAL" if mal >= 3 else ("HIGH" if mal > 0 else "MEDIUM")
             ev.append(_mk_evidence(
                 "virustotal",
                 f"{mal} engine gắn cờ ĐỘC HẠI, {sus} engine NGHI NGỜ trên {vt.get('total_engines', '?')} engine.",
-                "CRITICAL" if mal else "MEDIUM",
+                sev,
                 url=vt.get("permalink") or None,
                 supports="malicious",
             ))
@@ -355,29 +365,57 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
 
     mal_ev = [e for e in evidence if e.get("supports") == "malicious"]
     benign_ev = [e for e in evidence if e.get("supports") == "benign"]
-    high_mal = [e for e in mal_ev if e.get("reliability") == "high"]
     high_benign = [e for e in benign_ev if e.get("reliability") == "high"]
-    strong_signal = any(_SEV_WEIGHT.get((e.get("severity") or "INFO").upper(), 0) >= 2 for e in mal_ev)
+
+    # Phân loại bằng chứng xác thực độc lập (verified sources):
+    # 1. Cơ quan chính thống (tinnhiemmang.vn)
+    # 2. Chữ ký mã độc xác thực cục bộ (clamav, yara, sandbox)
+    # 3. Đồng thuận đa engine VirusTotal (>= 3 engine độc hại)
+    verified_mal = []
+    for e in mal_ev:
+        src = e.get("source")
+        sev = (e.get("severity") or "INFO").upper()
+        if src == "tinnhiemmang" and sev in ("CRITICAL", "HIGH"):
+            verified_mal.append(e)
+        elif src in ("clamav", "yara", "sandbox") and sev in ("CRITICAL", "HIGH"):
+            verified_mal.append(e)
+        elif src == "virustotal" and sev == "CRITICAL":
+            verified_mal.append(e)
+        elif e.get("reliability") == "high" and sev in ("CRITICAL", "HIGH") and src != "virustotal":
+            verified_mal.append(e)
+
+    # Đếm số nguồn độc lập khác nhau
+    mal_sources = {e.get("source") for e in mal_ev if e.get("source")}
+    multi_source_consensus = len(mal_sources) >= 2
 
     has_error = bool(result.get("error") or result.get("insufficient_input"))
 
     if has_error:
         tier, conf = "INSUFFICIENT", 0.1
-    elif high_mal or (mal_ev and strong_signal):
-        tier, conf = "CONFIRMED_RISK", 0.95
-    elif score >= 70:
-        tier, conf = "HIGH_RISK", 0.85
+    elif verified_mal:
+        # Có bằng chứng độc lập xác thực:
+        # Nếu có từ 2 nguồn xác thực trở lên hoặc đồng thuận đa nguồn độc lập: conf = 0.95
+        # Nếu chỉ 1 nguồn VT (>=3 engine): conf = 0.90
+        if len(verified_mal) >= 2 or multi_source_consensus or any(e.get("source") == "tinnhiemmang" for e in verified_mal):
+            conf = 0.95
+        else:
+            conf = 0.90
+        tier = "CONFIRMED_RISK"
+    elif mal_ev or score >= 70:
+        # Heuristic hoặc tín hiệu mạnh nhưng CHƯA có nguồn xác minh độc lập
+        tier = "HIGH_RISK"
+        conf = 0.80 if score >= 70 else 0.70
     elif score >= 40:
-        tier, conf = "SUSPICIOUS", 0.6
+        tier, conf = "SUSPICIOUS", 0.60
     elif score >= 10:
         # Vùng xám: có dấu hiệu nhưng chưa đủ kết luận
-        tier, conf = ("SUSPICIOUS" if mal_ev else "INSUFFICIENT"), (0.45 if mal_ev else 0.3)
+        tier, conf = ("SUSPICIOUS" if mal_ev else "INSUFFICIENT"), (0.45 if mal_ev else 0.30)
     else:
         # Điểm thấp: chỉ coi là "có khả năng an toàn" khi CÓ bằng chứng sạch độ tin cậy cao
         if high_benign:
-            tier, conf = "LIKELY_SAFE", 0.7
+            tier, conf = "LIKELY_SAFE", 0.70
         else:
-            tier, conf = "INSUFFICIENT", 0.3
+            tier, conf = "INSUFFICIENT", 0.30
 
     labels = {
         "CONFIRMED_RISK": "NGUY HIỂM: Có bằng chứng xác thực",
@@ -408,6 +446,9 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
         "tier": tier,
         "label": labels.get(tier, tier),
         "confidence": round(conf, 2),
+        "confidence_type": "rule_heuristic",
+        "rule_confidence": round(conf, 2),
+        "calibrated_probability": None,
         "is_conclusive": conclusive,
         "requires_verification": tier in ("INSUFFICIENT", "SUSPICIOUS", "LIKELY_SAFE"),
         "cautions": cautions,

@@ -233,6 +233,8 @@ staticfiles/
 #   python manage.py download_tts_voice
 backend/models/piper/*.onnx
 backend/models/piper/*.onnx.json
+# Model VietOCR (~145MB) — tự tải lần đầu nếu thiếu file local
+backend/models/vietocr/*.pth
 celerybeat-schedule.*
 scripts/puppeteer_host/node_modules/
 scripts/puppeteer_host/chrome/

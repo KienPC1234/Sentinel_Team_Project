@@ -42,6 +42,8 @@ function riskGlow(level: string): string {
 
 export default function Phone() {
   const [phone, setPhone] = useState('');
+  const [claimedVietnameseEntity, setClaimedVietnameseEntity] = useState(false);
+  const [externalLookupConsent, setExternalLookupConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [aiText, setAiText] = useState('');
@@ -52,8 +54,9 @@ export default function Phone() {
       return;
     }
     let phoneNormalized = rawPhone.trim().replace(/[\s().-]/g, '');
-    if (/^0\d{9}$/.test(phoneNormalized)) phoneNormalized = '+84' + phoneNormalized.substring(1);
-    if (!/^(\+\d{8,15}|0\d{9})$/.test(phoneNormalized)) {
+    if (phoneNormalized.startsWith('00')) phoneNormalized = '+' + phoneNormalized.substring(2);
+    if (/^0\d{9,10}$/.test(phoneNormalized)) phoneNormalized = '+84' + phoneNormalized.substring(1);
+    if (!/^(\+\d{8,15}|0\d{9,10})$/.test(phoneNormalized)) {
       showToast('Số điện thoại không hợp lệ. VD: 0978589220 hoặc +84978589220', 'warning');
       return;
     }
@@ -71,7 +74,12 @@ export default function Phone() {
     setResult(null);
     setAiText('');
     api
-      .post<ScanResult>('/scan/phone/', { phone: phoneNormalized, 'cf-turnstile-response': tsToken })
+      .post<ScanResult>('/scan/phone/', {
+        phone: phoneNormalized,
+        claimed_vietnamese_entity: claimedVietnameseEntity,
+        external_lookup_consent: externalLookupConsent,
+        'cf-turnstile-response': tsToken,
+      })
       .then((data) => {
         setResult(data);
         setAiText(asStr(data['analysis_result']) || 'Hệ thống đã hoàn tất phân tích số điện thoại này.');
@@ -82,7 +90,7 @@ export default function Phone() {
         showToast(msg, 'error');
         setLoading(false);
       });
-  }, []);
+  }, [claimedVietnameseEntity, externalLookupConsent]);
 
   // Tự động quét khi mở link ?phone=. Turnstile render BẤT ĐỒNG BỘ nên phải
   // CHỜ token sẵn sàng rồi mới submit (trước đây submit ngay -> thiếu token ->
@@ -106,6 +114,9 @@ export default function Phone() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const reputationProvenance = (result?.['reputation_provenance'] as Record<string, unknown> | undefined) || null;
+  const numberStructure = (result?.['phone_structure'] as Record<string, unknown> | undefined) || null;
+  const structureWarnings = asArr<string>(numberStructure?.['warnings']);
   const metrics = (result?.['metrics'] as Record<string, unknown> | undefined) || {};
   const componentScores = (result?.['component_scores'] as Record<string, unknown> | undefined) || {};
   const onlineLookup = (result?.['online_lookup'] as Record<string, unknown> | undefined) || null;
@@ -126,8 +137,8 @@ export default function Phone() {
             Kiểm tra <span className="glow-text">Số điện thoại</span>
           </h1>
           <p className="text-white/55 max-w-md mx-auto text-sm leading-relaxed">
-            Hệ thống sẽ tra cứu số điện thoại này trong cơ sở dữ liệu lừa đảo quốc gia và cộng đồng.
-            Hỗ trợ cả số Việt Nam (VD: 0978589220) và định dạng quốc tế (+84..., +1...).
+            Kiểm tra cấu trúc kho số Việt Nam, các báo cáo trong hệ thống và dấu hiệu rủi ro.
+            Kết quả không xác thực danh tính chủ thuê bao; hỗ trợ số cố định, di động và quốc tế.
           </p>
         </div>
 
@@ -159,12 +170,58 @@ export default function Phone() {
                 )}
               </button>
             </div>
+            <label className="flex items-center gap-3 text-sm text-white/75 mt-4">
+              <input
+                type="checkbox"
+                checked={claimedVietnameseEntity}
+                onChange={(e) => setClaimedVietnameseEntity(e.target.checked)}
+                className="h-4 w-4 accent-amber-400"
+              />
+              Người gọi tự xưng là cơ quan hoặc doanh nghiệp tại Việt Nam
+            </label>
+            <label className="flex items-center gap-3 text-sm text-white/75 mt-2">
+              <input
+                type="checkbox"
+                checked={externalLookupConsent}
+                onChange={(e) => setExternalLookupConsent(e.target.checked)}
+                className="h-4 w-4 accent-amber-400"
+              />
+              Tôi đồng ý gửi số điện thoại tới công cụ tìm kiếm bên ngoài để tra cứu bổ sung
+            </label>
             <TurnstileWidget />
           </form>
         </div>
 
         {result && (
           <div className="space-y-6">
+            {numberStructure && (
+              <section className="liquid-card p-6 space-y-3 border border-amber-400/30" aria-label="Kiểm tra cấu trúc số">
+                <h2 className="text-lg font-bold text-white">Đối chiếu cấu trúc số điện thoại</h2>
+                <p className="text-amber-200 font-semibold">{asStr(numberStructure['label'])}</p>
+                <p className="text-sm text-white/70">
+                  Mã quốc gia: {asStr(numberStructure['country_calling_code']) || 'Chưa xác định'} ·
+                  Loại số: {asStr(numberStructure['type'])} ·
+                  Đầu số: {asStr(numberStructure['national_prefix']) || 'Không áp dụng'}
+                </p>
+                {structureWarnings.map((warning, index) => (
+                  <p className="text-sm text-white/80" key={index}>{warning}</p>
+                ))}
+                {reputationProvenance && (
+                  <p className="text-sm text-white/75">
+                    Báo cáo cộng đồng nội bộ đã duyệt: {asNum(reputationProvenance['local_approved_reports'])}.
+                    Chưa có kết quả xác nhận từ blacklist chính thức.{' '}
+                    <a className="underline text-brand-400" href="https://www.trangtrang.com/" target="_blank" rel="noopener noreferrer">
+                      Tham khảo Trang Trắng (tra cứu thủ công)
+                    </a>
+                    . Dữ liệu Trang Trắng chưa được đồng bộ tự động.
+                  </p>
+                )}
+                <p className="text-xs text-white/55">
+                  Số đúng định dạng không đồng nghĩa người gọi đáng tin; Caller ID có thể bị giả mạo.
+                  {' '}<a className="underline text-brand-400" href="https://mst.gov.vn/bo-tttt-day-manh-dinh-danh-cuoc-goi-de-ngan-ngua-lua-dao-tren-khong-gian-mang-19724111208351436.htm" target="_blank" rel="noopener noreferrer">Nguồn tham khảo</a>
+                </p>
+              </section>
+            )}
             <div className="liquid-card overflow-hidden">
               <div className="p-10 text-center border-b border-white/5 bg-white/[0.02] relative overflow-hidden">
                 <div className={`absolute inset-0 opacity-10 -z-10 blur-[100px] ${riskGlow(level)}`}></div>

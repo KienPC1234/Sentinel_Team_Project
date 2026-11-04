@@ -175,7 +175,8 @@ class EditorFetchUrlView(APIView):
             return Response({"success": 0, "message": "URL không hợp lệ hoặc bị chặn vì lý do bảo mật"}, status=400)
 
         try:
-            resp = requests.get(url, timeout=5, headers={'User-Agent': 'ShieldCall-Bot/1.0'})
+            from api.utils.security import safe_get
+            resp = safe_get(url, timeout=5.0, headers={'User-Agent': 'ShieldCall-Bot/1.0'}, max_redirects=5)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, 'html.parser')
 

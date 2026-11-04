@@ -301,13 +301,13 @@ class ScanEvent(models.Model):
     """Every scan performed by users (history + analytics)"""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                              null=True, blank=True, related_name='scans')
-    scan_type = models.CharField(max_length=20, choices=ScanType.choices)
+    scan_type = models.CharField(max_length=20, choices=ScanType.choices, db_index=True)
     raw_input = models.TextField(help_text='Original user input')
     normalized_input = models.CharField(max_length=500, blank=True, db_index=True)
     result_json = models.JSONField(default=dict, blank=True)
     risk_score = models.IntegerField(default=0, db_index=True)
     risk_level = models.CharField(max_length=10, choices=RiskLevel.choices,
-                                  default=RiskLevel.SAFE)
+                                  default=RiskLevel.SAFE, db_index=True)
     status = models.CharField(max_length=20, choices=ScanStatus.choices,
                               default=ScanStatus.COMPLETED, db_index=True)
     job_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
@@ -329,6 +329,11 @@ class ScanEvent(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Scan Event'
         verbose_name_plural = 'Scan Events'
+        indexes = [
+            models.Index(fields=['user', '-created_at'], name='scan_user_created_idx'),
+            models.Index(fields=['risk_level', '-created_at'], name='scan_risk_created_idx'),
+            models.Index(fields=['scan_type', '-created_at'], name='scan_type_created_idx'),
+        ]
 
     def __str__(self):
         return f"Scan #{self.pk} [{self.scan_type}] {self.risk_level} at {self.created_at:%Y-%m-%d %H:%M}"
@@ -741,7 +746,7 @@ class ArticleCategory(models.TextChoices):
 class Article(models.Model):
     """Admin articles for educating users (CMS)"""
     title = models.CharField(max_length=300)
-    slug = models.SlugField(max_length=350, unique=True, blank=True)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
     summary = models.TextField(blank=True, default='')
     content = models.TextField()
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
@@ -776,13 +781,13 @@ class Article(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             from django.utils.text import slugify
-            self.slug = slugify(self.title)[:350]
+            self.slug = slugify(self.title)[:255]
         super().save(*args, **kwargs)
 
 class LearnLesson(models.Model):
     """Educational lessons for users"""
     title = models.CharField(max_length=300)
-    slug = models.SlugField(max_length=350, unique=True, blank=True)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
     summary = models.TextField(blank=True, default='')
     content = models.TextField()
     category = models.CharField(max_length=20, choices=ArticleCategory.choices, default=ArticleCategory.GUIDE)

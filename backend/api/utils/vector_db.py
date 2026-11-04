@@ -9,6 +9,7 @@ Tối ưu chính:
 - **Backup/Khôi phục S3**: lưu chỉ mục lên object storage sau rebuild; tự khôi phục nếu thiếu file cục bộ.
 """
 import hashlib
+import json
 import logging
 import os
 import pickle
@@ -37,10 +38,30 @@ USE_GPU = getattr(settings, 'VECTOR_DB_USE_GPU', True)
 SCORE_THRESHOLD = float(getattr(settings, 'VECTOR_DB_SCORE_THRESHOLD', 0.45))
 QUERY_CACHE_SIZE = int(getattr(settings, 'VECTOR_DB_QUERY_CACHE', 256))
 EMBED_BATCH_SIZE = int(getattr(settings, 'VECTOR_DB_EMBED_BATCH', 32))
+# Embedding chạy trong AI service dùng chung (backend/scripts/ai_service.py) để
+# tiến trình web không phải giữ model + CUDA context. Rỗng = fallback local CPU.
+AI_SERVICE_URL = str(
+    getattr(settings, 'AI_SERVICE_URL', os.getenv('AI_SERVICE_URL', '')) or ''
+).rstrip('/')
+_REMOTE_EMBED_CHUNK = 64
 
 
 def _hash(text: str) -> str:
     return hashlib.sha1(text.encode('utf-8', errors='ignore')).hexdigest()
+
+
+def _remote_embed(texts: List[str], timeout: int = 180) -> List[List[float]]:
+    """Gọi AI service để embed (model nằm trong process dùng chung)."""
+    import urllib.request
+    payload = json.dumps({'texts': texts}, ensure_ascii=False).encode('utf-8')
+    req = urllib.request.Request(
+        AI_SERVICE_URL + '/embed',
+        data=payload,
+        headers={'Content-Type': 'application/json'},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+    return data.get('vectors') or []
 
 
 class ScamVectorDB:
@@ -62,6 +83,8 @@ class ScamVectorDB:
     # ---------------------------------------------------------------- model
     def _dim(self) -> int:
         m = self._model
+        if m is None:
+            return int(getattr(self.index, 'd', 0) or 768)
         try:
             return int(m.get_embedding_dimension())
         except Exception:
@@ -98,6 +121,33 @@ class ScamVectorDB:
                     self._model = SentenceTransformer(MODEL_NAME, device="cpu", trust_remote_code=True)
                 else:
                     raise
+
+    def _encode(self, texts: List[str]) -> "np.ndarray":
+        """Embed qua AI service; nếu service lỗi mới fallback model local (CPU).
+
+        Model local không bao giờ dùng GPU: GPU đã được AI service quản lý, và
+        mục tiêu của refactor là giữ tiến trình web sạch VRAM.
+        """
+        if AI_SERVICE_URL:
+            try:
+                vectors: List[List[float]] = []
+                for i in range(0, len(texts), _REMOTE_EMBED_CHUNK):
+                    vectors.extend(_remote_embed(texts[i:i + _REMOTE_EMBED_CHUNK]))
+                if len(vectors) == len(texts) and vectors:
+                    return np.asarray(vectors, dtype='float32')
+                logger.warning(
+                    "[VectorDB] AI service trả %d/%d vector — fallback CPU",
+                    len(vectors), len(texts),
+                )
+            except Exception as exc:
+                logger.warning(f"[VectorDB] AI service embed lỗi ({exc}) — fallback CPU")
+        self._load_model(force_cpu=True)
+        with self._lock:
+            vecs = self._model.encode(
+                texts, convert_to_numpy=True, normalize_embeddings=True,
+                batch_size=EMBED_BATCH_SIZE, show_progress_bar=False,
+            )
+        return np.asarray(vecs, dtype='float32')
 
     # ---------------------------------------------------------------- index
     def _current_index_mtime(self) -> float:
@@ -263,7 +313,6 @@ class ScamVectorDB:
 
     # ---------------------------------------------------------------- rebuild
     def rebuild_index(self, force_cpu: bool = False):
-        self._load_model(force_cpu=force_cpu)
         documents, metadata = self._collect_documents()
         logger.info(f"Rebuilding vector index ({len(documents)} documents)...")
 
@@ -283,11 +332,7 @@ class ScamVectorDB:
             logger.info(f"Embedding {len(missing)}/{len(documents)} tài liệu mới/đổi (cache hit {len(documents)-len(missing)})...")
             idxs = [i for i, _ in missing]
             texts = [t for _, t in missing]
-            vecs = self._model.encode(
-                texts, convert_to_numpy=True, normalize_embeddings=True,
-                batch_size=EMBED_BATCH_SIZE, show_progress_bar=False,
-            )
-            vecs = np.asarray(vecs, dtype='float32')
+            vecs = self._encode(texts)
             for row, gi in enumerate(idxs):
                 cache[hashes[gi]] = vecs[row].tolist()
             self._save_emb_cache(cache)
@@ -309,13 +354,8 @@ class ScamVectorDB:
 
     # ---------------------------------------------------------------- search
     def search(self, query: str, k: int = 3) -> List[Dict[str, Any]]:
-        self._load_model()
         self._maybe_reload()
         if self.index is None or getattr(self.index, 'ntotal', 0) == 0:
-            return []
-
-        if self.index.d != self._dim():
-            logger.error(f"Dimension mismatch: Index({self.index.d}) != Model({self._dim()})")
             return []
 
         cache_key = f"{query.strip().lower()}::k={k}::th={SCORE_THRESHOLD}"
@@ -324,7 +364,10 @@ class ScamVectorDB:
             self._query_cache.move_to_end(cache_key)
             return list(cached)
 
-        query_vector = self._model.encode([query], convert_to_numpy=True, normalize_embeddings=True)
+        query_vector = self._encode([query])
+        if self.index.d != query_vector.shape[1]:
+            logger.error(f"Dimension mismatch: Index({self.index.d}) != Model({query_vector.shape[1]})")
+            return []
         try:
             distances, indices = self.index.search(np.asarray(query_vector, dtype='float32'), k)
         except Exception as e:
@@ -428,6 +471,7 @@ class ScamVectorDB:
             'index_mtime': self._index_mtime,
             'threshold': SCORE_THRESHOLD,
             'model': MODEL_NAME,
+            'embedding_backend': 'ai-service' if AI_SERVICE_URL else 'local',
         }
 
 
@@ -436,12 +480,23 @@ vector_db = ScamVectorDB()
 
 
 def preload_vector_db_async():
-    """Warm up embedding model + index trong thread nền để giảm cold-start."""
+    """Nạp index + kiểm tra AI service trong thread nền để giảm cold-start.
+
+    Không nạp model embedding vào tiến trình web nữa: model nằm trong AI service
+    (backend/scripts/ai_service.py). Nếu không cấu hình service thì mới fallback
+    nạp model local trên CPU.
+    """
     def _warmup():
         try:
-            logger.info("[VectorDB] Starting background embedding model warm-up...")
-            vector_db._load_model()
+            logger.info("[VectorDB] Starting background warm-up...")
             vector_db._maybe_reload()
+            if AI_SERVICE_URL:
+                import urllib.request
+                with urllib.request.urlopen(AI_SERVICE_URL + '/health', timeout=5) as resp:
+                    resp.read(1)
+                logger.info("[VectorDB] AI service reachable at %s", AI_SERVICE_URL)
+            else:
+                vector_db._load_model(force_cpu=True)
             logger.info("[VectorDB] Background warm-up finished successfully.")
         except Exception as e:
             logger.warning(f"[VectorDB] Background warm-up notice: {e}")

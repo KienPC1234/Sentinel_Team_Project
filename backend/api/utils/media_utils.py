@@ -194,13 +194,21 @@ def _run_bridge(engine: str, image_bytes: bytes, boxes: bool = False) -> dict:
                 pass
 
 
-def _ocr_service_url() -> str:
+def _ai_service_url() -> str:
+    """URL của AI service dùng chung (OCR + embedding + Whisper)."""
     try:
         from django.conf import settings
-        u = getattr(settings, 'OCR_SERVICE_URL', '') or os.getenv('OCR_SERVICE_URL', '')
+        u = (getattr(settings, 'AI_SERVICE_URL', '')
+             or os.getenv('AI_SERVICE_URL', '')
+             or getattr(settings, 'OCR_SERVICE_URL', '')
+             or os.getenv('OCR_SERVICE_URL', ''))
     except Exception:
-        u = os.getenv('OCR_SERVICE_URL', '')
+        u = os.getenv('AI_SERVICE_URL', '') or os.getenv('OCR_SERVICE_URL', '')
     return str(u or '').rstrip('/')
+
+
+def _ocr_service_url() -> str:
+    return _ai_service_url()
 
 
 def _run_ocr_service(url: str, image_bytes: bytes, boxes: bool = False) -> dict:
@@ -221,12 +229,15 @@ def _run_ocr_service(url: str, image_bytes: bytes, boxes: bool = False) -> dict:
 
 
 def _run_engine(engine: str, image_bytes: bytes, boxes: bool = False) -> dict:
-    """Ưu tiên OCR service (model thường trú); nếu không có → bridge subprocess."""
+    """Ưu tiên AI service (model thường trú); nếu không có → bridge subprocess."""
     url = _ocr_service_url()
     if url:
         data = _run_ocr_service(url, image_bytes, boxes)
-        if data:
+        if data and not data.get('error'):
             return data
+        if data and data.get('error'):
+            # Service trả lỗi (ví dụ thiếu model) → thử bridge để không mất chức năng OCR.
+            logger.warning(f"AI service OCR lỗi: {data.get('error')} — fallback bridge")
     return _run_bridge(engine, image_bytes, boxes)
 
 
@@ -514,62 +525,73 @@ _WHISPER_MODEL = None
 
 def get_whisper_model():
     """
-    Singleton Faster-Whisper model.  Loads once into memory.
+    Singleton Faster-Whisper model (CPU fallback).
+    GPU inference lives in the shared AI service; this local model is only used
+    when that service is unreachable, so it deliberately stays on CPU.
     Uses ``small`` by default (good accuracy / speed balance for Vietnamese).
-    Falls back to CPU in forked Celery workers just like the OCR reader.
     """
     global _WHISPER_MODEL
     if not FASTER_WHISPER_AVAILABLE:
         return None
 
     if _WHISPER_MODEL is None:
-        import multiprocessing
         from django.conf import settings
 
-        model_size = getattr(settings, 'WHISPER_MODEL_SIZE', 'small')
-        device = getattr(settings, 'WHISPER_DEVICE', 'auto')
-
-        is_forked = (
-            multiprocessing.current_process().daemon
-            or multiprocessing.parent_process() is not None
-        )
-        if is_forked and device != 'cpu':
-            logger.info("Forked subprocess detected — forcing Whisper to CPU mode.")
-            device = 'cpu'
-
-        compute_type = 'int8' if device == 'cpu' else 'float16'
-        if device != 'cpu':
-            try:
-                import ctypes
-                import nvidia.cublas.lib
-                _cublas_dir = nvidia.cublas.lib.__path__[0]
-                _lt = os.path.join(_cublas_dir, 'libcublasLt.so.12')
-                _cub = os.path.join(_cublas_dir, 'libcublas.so.12')
-                if os.path.exists(_lt):
-                    ctypes.CDLL(_lt, mode=ctypes.RTLD_GLOBAL)
-                if os.path.exists(_cub):
-                    ctypes.CDLL(_cub, mode=ctypes.RTLD_GLOBAL)
-            except Exception as _ce:
-                logger.debug(f"Preloading cublas12 skipped: {_ce}")
+        model_size = getattr(settings, 'WHISPER_FALLBACK_MODEL_SIZE', 'small')
+        # GPU do AI service dùng chung đảm nhiệm. Model ở đây chỉ là fallback khi
+        # service không sẵn sàng, nên luôn chạy CPU để không chiếm thêm VRAM.
+        device = 'cpu'
+        compute_type = 'int8'
 
         logger.info(
             f"Loading Faster-Whisper model '{model_size}' on device='{device}', "
-            f"compute_type='{compute_type}' …"
+            f"compute_type='{compute_type}' (fallback) …"
         )
         try:
             _WHISPER_MODEL = WhisperModel(
                 model_size, device=device, compute_type=compute_type
             )
-            logger.info("Faster-Whisper model loaded successfully.")
+            logger.info("Faster-Whisper model loaded successfully (CPU fallback).")
         except Exception as exc:
             logger.error(f"Failed to load Faster-Whisper on {device}: {exc}")
-            if device != 'cpu':
-                logger.info("Retrying Faster-Whisper on CPU …")
-                _WHISPER_MODEL = WhisperModel(
-                    model_size, device='cpu', compute_type='int8'
-                )
-                logger.info("Faster-Whisper model loaded on CPU fallback.")
     return _WHISPER_MODEL
+
+
+def _transcribe_via_service(path: str, language=None):
+    """Gọi AI service để phiên âm (Whisper nằm trong process dùng chung).
+
+    Trả ``dict`` giống ``transcribe_audio`` hoặc ``None`` nếu service không dùng được.
+    """
+    import urllib.request
+
+    url = _ai_service_url()
+    if not url:
+        return None
+    try:
+        with open(path, 'rb') as fh:
+            body = fh.read()
+        # Header HTTP phải ASCII: chỉ gửi phần mở rộng an toàn, không gửi tên
+        # file gốc (có thể chứa tiếng Việt / ký tự đặc biệt).
+        suffix = os.path.splitext(path)[1].lower()
+        if suffix not in ('.wav', '.mp3', '.m4a', '.flac', '.ogg', '.opus', '.webm', '.mp4', '.aac'):
+            suffix = '.wav'
+        headers = {
+            'Content-Type': 'application/octet-stream',
+            'X-Audio-Filename': 'audio' + suffix,
+            'X-Beam-Size': '5',
+        }
+        if language:
+            headers['X-Language'] = str(language)
+        req = urllib.request.Request(url + '/transcribe', data=body, headers=headers)
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        if not isinstance(data, dict) or data.get('error'):
+            logger.warning(f"AI service transcribe lỗi: {(data or {}).get('error')}")
+            return None
+        return data
+    except Exception as exc:
+        logger.warning(f"AI service transcribe không dùng được ({url}): {exc}")
+        return None
 
 
 def transcribe_audio(audio_file, language=None):
@@ -587,10 +609,14 @@ def transcribe_audio(audio_file, language=None):
     """
     empty_result = {'transcript': '', 'language': '', 'duration': 0.0, 'segments': []}
 
-    model = get_whisper_model()
-    if model is None:
-        logger.warning("Whisper model unavailable — returning empty transcript.")
-        return empty_result
+    # Sentinel là ứng dụng tiếng Việt: mặc định nhận diện 'vi' thay vì auto,
+    # để Whisper không nhầm sang ngôn ngữ khác trên audio ngắn/nhiễu.
+    if not language:
+        try:
+            from django.conf import settings
+            language = getattr(settings, 'WHISPER_LANGUAGE', 'auto') or 'auto'
+        except Exception:
+            language = 'auto'
 
     import tempfile, os, shutil
 
@@ -635,9 +661,27 @@ def transcribe_audio(audio_file, language=None):
                 logger.warning(f"ffmpeg not available or timed out ({conv_err}), using original file")
                 wav_converted_path = None
 
+        # Ưu tiên AI service dùng chung (Whisper ở đó, lazy-load + idle unload).
+        svc_result = _transcribe_via_service(file_for_model, language)
+        if svc_result is not None:
+            return svc_result
+
+        model = get_whisper_model()
+        if model is None:
+            logger.warning("Whisper model unavailable — returning empty transcript.")
+            return empty_result
+
         transcribe_kwargs = {'beam_size': 5, 'vad_filter': True}
-        if language:
-            transcribe_kwargs['language'] = language
+        local_language = None if str(language).lower() in ('auto', 'none') else language
+        if local_language:
+            transcribe_kwargs['language'] = local_language
+        try:
+            from django.conf import settings
+            _initial_prompt = getattr(settings, 'WHISPER_INITIAL_PROMPT', '') or ''
+        except Exception:
+            _initial_prompt = ''
+        if _initial_prompt:
+            transcribe_kwargs['initial_prompt'] = _initial_prompt
 
         segments = []
         full_text_parts = []

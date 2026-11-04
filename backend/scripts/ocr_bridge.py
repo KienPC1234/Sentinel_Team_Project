@@ -12,11 +12,17 @@ Engine: vietocr (chính). (EasyOCR/PaddleOCR đã gỡ.)
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 
 _PREDICTOR = None
 _DEVICE = None
+
+# Model cục bộ (ưu tiên) để service không phụ thuộc mạng và không đọc /tmp.
+_MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "vietocr")
+_LOCAL_CONFIG = os.path.join(_MODEL_DIR, "config.yml")
+_LOCAL_WEIGHTS = os.path.join(_MODEL_DIR, "vgg_transformer.pth")
 
 
 def _get_predictor():
@@ -30,8 +36,13 @@ def _get_predictor():
         dev = (os.getenv("VIETOCR_DEVICE") or "auto").strip().lower()
         if dev in ("", "auto"):
             dev = "cuda:0" if torch.cuda.is_available() else "cpu"
-        cfg = Cfg.load_config_from_name("vgg_transformer")
+        if os.path.exists(_LOCAL_CONFIG):
+            cfg = Cfg.load_config_from_file(_LOCAL_CONFIG)
+        else:
+            cfg = Cfg.load_config_from_name("vgg_transformer")
         cfg["device"] = dev
+        if os.path.exists(_LOCAL_WEIGHTS):
+            cfg["weights"] = _LOCAL_WEIGHTS
         try:
             cfg["cnn"]["pretrained"] = False  # không tải lại VGG pretrained
         except Exception:

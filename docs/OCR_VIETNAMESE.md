@@ -33,15 +33,18 @@ VietOCR tốt nhất cho tiếng Việt (đặc biệt dấu thanh). Lưu ý: t�
 ### 2.1 OCR service thường trú (tránh nghẽn)
 
 **Nút nghẽn trước đây:** gọi bridge qua **subprocess mỗi ảnh** → nạp lại torch + model ≈ **8–9s/ảnh**.
-**Giải pháp:** chạy **service thường trú** giữ model trong RAM (`backend/scripts/ocr_service.py`),
-Django gọi qua HTTP (`OCR_SERVICE_URL`). Endpoint: `GET /health`, `POST /ocr`.
+**Giải pháp:** chạy **service thường trú** giữ model trong RAM (`backend/scripts/ai_service.py` —
+gộp VietOCR + embedding + Whisper vào một process), Django gọi qua HTTP (`AI_SERVICE_URL`).
+Endpoint: `GET /health`, `POST /ocr`, `POST /embed`, `POST /transcribe`.
 
 ```bash
 # chạy tay
-.venv-ocr/bin/python backend/scripts/ocr_service.py
+.venv/bin/python backend/scripts/ai_service.py
 # hoặc qua PM2 (khuyến nghị)
-pm2 start ecosystem.config.js --only pkv-ocr
+pm2 start ecosystem.config.js --only pkv-ai
 ```
+
+`backend/scripts/ocr_service.py` (venv `.venv-ocr`) vẫn được giữ làm phương án dự phòng độc lập.
 
 Đặc điểm chống nghẽn:
 - **Model nạp 1 lần** (warmup khi khởi động) — không nạp lại mỗi ảnh.
@@ -112,7 +115,7 @@ Setting tương ứng trong `PKV/settings.py`.
   (`OCR_DETECTOR=craft|auto`) nhưng bản `craft-text-detector 0.4.3` **chưa tương thích torchvision mới**
   (`model_urls`) và cần tải VGG16_bn (~530MB). Muốn bật: cài `torchvision` cũ, hoặc patch
   `torchvision.models.vgg.model_urls`, hoặc thay bằng detector khác (DBNet) — chưa bật mặc định.
-- **Hiệu năng:** đã xử lý nút nghẽn bằng **OCR service thường trú** (`pkv-ocr`) + **batch recognition**:
+- **Hiệu năng:** đã xử lý nút nghẽn bằng **AI service thường trú** (`pkv-ai`) + **batch recognition**:
   ~0.7–1.4s/ảnh mới, ~0.002s/ảnh trùng (cache). GPU đã bật (`VIETOCR_DEVICE=auto`, `cuda:0`).
   Nếu tải cao: chạy thêm instance service hoặc batching lớn hơn.
 - Chưa có số liệu CER trên tập ảnh VN lớn — xem `docs/EVAL_GUIDE.md` để thu thập & gán nhãn.

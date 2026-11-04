@@ -182,6 +182,7 @@ def _document_scan_for_admin(scan_event: ScanEvent, *, force_report: bool = Fals
 # ═══════════════════════════════════════════════════════════════════════════
 
 from api.utils.normalization import normalize_phone, normalize_phone_e164, normalize_domain
+from api.utils.vn_phone_numbering import analyze_number_structure, NUMBERING_SOURCE
 from api.utils.vt_client import VTClient
 from api.utils.trust_guard import apply_guardrail, level_from_score as _level_from_score
 
@@ -192,11 +193,20 @@ from api.utils.trust_score import batch_reporter_trust
 from api.core.throttling import ScanHeavyThrottle, ScanSyncThrottle, ScanThrottle
 
 
-def _lookup_phone_online_free_services(phone_number: str) -> dict:
+def _lookup_phone_online_free_services(phone_number: str, *, authorized: bool = False) -> dict:
     """
-    Lightweight web lookup to detect if number appears on free/temporary SMS websites.
+    Optional external search, never performed without explicit user consent.
     Returns a safe best-effort payload; never raises.
     """
+    if not authorized:
+        return {
+            'checked': False,
+            'found': False,
+            'suspected_disposable': False,
+            'risk_boost': 0,
+            'matches': [],
+            'note': 'Không gửi số ra công cụ tìm kiếm bên ngoài (chưa có đồng ý).',
+        }
     cache_key = f"phone_lookup_free:{phone_number}"
     cached = cache.get(cache_key)
     if cached is not None:
@@ -262,12 +272,14 @@ def _lookup_phone_online_free_services(phone_number: str) -> dict:
             result['note'] = 'Có tín hiệu số này từng xuất hiện trên nguồn số online công khai.'
 
     except Exception as ex:
-        logger.warning(f"Phone web lookup skipped for {phone_number}: {ex}")
+        # External exception messages can contain the query/PII: log only type.
+        logger.warning("Phone external web lookup failed: %s", type(ex).__name__)
 
     cache.set(cache_key, result, 60 * 10)
     return result
 
-def _phone_risk_score(phone_number: str) -> dict:
+def _phone_risk_score(phone_number: str, *, claimed_vietnamese_entity: bool = False,
+                      external_lookup_consent: bool = False) -> dict:
     """
     Production-grade phone risk engine.
 
@@ -282,6 +294,9 @@ def _phone_risk_score(phone_number: str) -> dict:
         phone_number = normalize_phone_e164(phone_number, strict=False)
     except ValueError:
         phone_number = normalize_phone(phone_number)
+    phone_structure = analyze_number_structure(
+        phone_number, claimed_vietnamese_entity=claimed_vietnamese_entity
+    )
 
     # 1) Fetch reports (exclude rejected) and compute trust/recency-weighted reputation
     reports = Report.objects.filter(
@@ -444,8 +459,14 @@ def _phone_risk_score(phone_number: str) -> dict:
 
     if country_code and country_code.upper() != 'VN':
         metadata_score += 4
+    # A country-code mismatch is a warning only when the user explicitly
+    # reports that the caller claimed to represent a Vietnamese organization.
+    if phone_structure['foreign_claim_mismatch']:
+        metadata_score += 12
 
-    online_lookup = _lookup_phone_online_free_services(phone_number)
+    online_lookup = _lookup_phone_online_free_services(
+        phone_number, authorized=external_lookup_consent
+    )
     if online_lookup.get('suspected_disposable'):
         metadata_score += float(online_lookup.get('risk_boost', 0) or 0)
 
@@ -494,7 +515,11 @@ def _phone_risk_score(phone_number: str) -> dict:
     # Reasons (top explainers)
     reasons = []
     if approved_count > 0:
-        reasons.append(f'{approved_count} báo cáo đã duyệt (độ tin cậy cao)')
+        reasons.append(f'{approved_count} báo cáo cộng đồng đã duyệt (không phải xác minh danh tính thuê bao)')
+    if phone_structure['foreign_claim_mismatch']:
+        reasons.append('Mã quốc gia khác +84 trong khi người gọi tự nhận là cơ quan/doanh nghiệp Việt Nam; phải xác minh độc lập')
+    elif phone_structure['status'] in ('invalid_vn_number', 'unverified_vn_prefix', 'invalid_format'):
+        reasons.append('Cấu trúc số chưa khớp dữ liệu đánh số; không phải bằng chứng kết luận lừa đảo')
     if pending_count > 0:
         reasons.append(f'{pending_count} báo cáo đang chờ duyệt')
     if is_virtual:
@@ -516,13 +541,13 @@ def _phone_risk_score(phone_number: str) -> dict:
         reasons.append('Chưa thấy tín hiệu rủi ro mạnh từ dữ liệu hiện có')
 
     # Synthesize analysis result text for the frontend summary block
-    status_label = "AN TOÀN"
+    status_label = "CHƯA CÓ ĐỦ CƠ SỞ KẾT LUẬN AN TOÀN"
     if level == RiskLevel.RED: status_label = "NGUY HIỂM / LỪA ĐẢO"
     elif level == RiskLevel.YELLOW: status_label = "CẢNH GIÁC CAO"
     elif level == RiskLevel.GREEN: status_label = "CÓ RỦI RO THẤP"
 
     action_map = {
-        'ALLOW': 'Có thể nghe máy bình thường',
+        'ALLOW': 'Có thể tiếp nhận cuộc gọi nhưng phải xác minh độc lập danh tính người gọi',
         'WARN': 'Thận trọng khi nghe máy, tuyệt đối không cung cấp thông tin cá nhân',
         'VOICEMAIL_OR_WARN': 'Cảnh giác cao độ, không làm theo các hướng dẫn nạp tiền hay chuyển khoản',
         'BLOCK': 'Chặn số ngay lập tức, tuyệt đối không nghe máy hay gọi lại',
@@ -536,7 +561,7 @@ def _phone_risk_score(phone_number: str) -> dict:
         analysis_result += "Đây là đầu số ảo hoặc tổng đài VoIP qua Internet, thường bị kẻ gian lợi dụng để mạo danh cơ quan chức năng. "
     analysis_result += f"Khuyến nghị: {action_text}."
 
-    return {
+    result_dict = {
         'phone': phone_number,
         'risk_score': final_score_int,
         'risk_level': level,
@@ -550,6 +575,27 @@ def _phone_risk_score(phone_number: str) -> dict:
         'country_name': country_name,
         'is_virtual': is_virtual,
         'online_lookup': online_lookup,
+        'phone_structure': phone_structure,
+        'reputation_provenance': {
+            'local_approved_reports': approved_count,
+            'local_pending_reports': pending_count,
+            'government_verified_match': None,
+            'official_blacklist_connected': False,
+            'trangtrang_connected': False,
+            'trangtrang_reference': 'https://www.trangtrang.com/',
+            'external_search_performed': bool(external_lookup_consent),
+            'limitations': (
+                'Báo cáo cộng đồng không xác thực danh tính và có thể sai. '
+                'Chưa tích hợp nguồn blacklist xác minh chính thức hoặc dữ liệu tự động từ Trang Trắng.'
+            ),
+        },
+        # Technical evidence about number format is context, not proof of fraud.
+        'forensic_evidence': [{
+            'source': 'phone_numbering',
+            'description': phone_structure['label'],
+            'severity': 'INFO',
+            'url': NUMBERING_SOURCE,
+        }],
         'trust_score': round(reputation_score, 2),
         'analysis_result': analysis_result,
         'component_scores': {
@@ -558,6 +604,10 @@ def _phone_risk_score(phone_number: str) -> dict:
             'behavior': round(behavior_score, 2),
         },
         'check_descriptions': {
+            'numbering': (
+                f"Cấu trúc số: {phone_structure['label']}; dữ liệu đầu số không xác thực danh tính, "
+                f"không thay thế tra cứu báo cáo đã xác minh."
+            ),
             'reputation': (
                 f"Uy tín cộng đồng: {approved_count} báo cáo đã duyệt, {pending_count} báo cáo chờ duyệt; "
                 f"điểm thành phần {round(reputation_score, 2)}/45."
@@ -581,6 +631,7 @@ def _phone_risk_score(phone_number: str) -> dict:
         },
         'reasons': reasons[:5],
     }
+    return result_dict
 
 
 class ScanPhoneView(APIView):
@@ -600,7 +651,11 @@ class ScanPhoneView(APIView):
         # Already validated as E.164 by serializer (requires country flag).
         phone = serializer.validated_data['phone']
 
-        result = _phone_risk_score(phone)
+        result = _phone_risk_score(
+            phone,
+            claimed_vietnamese_entity=serializer.validated_data.get('claimed_vietnamese_entity', False),
+            external_lookup_consent=serializer.validated_data.get('external_lookup_consent', False),
+        )
         apply_guardrail(result, kind='phone')
 
         # Log scan event
@@ -898,6 +953,16 @@ def _analyze_message_text(text: str) -> dict:
     Prioritizes AI analysis and incorporates domain risk checks.
     Falls back gracefully to rule-based scoring when AI (Ollama) is unavailable.
     """
+    clean_text = (text or '').strip()
+    cache_key = None
+    if clean_text:
+        import hashlib
+        import copy
+        cache_key = f"msg_analysis:{hashlib.sha256(clean_text.encode('utf-8')).hexdigest()}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return copy.deepcopy(cached_result)
+
     # 1. AI Analysis (Ollama) — with graceful fallback
     ai_score = 0
     ai_explanation = ''
@@ -1004,6 +1069,8 @@ def _analyze_message_text(text: str) -> dict:
     apply_guardrail(result, kind='message')
     # Đồng bộ lời khuyên với kết luận guardrail — không để câu "an toàn" đi ngược nhãn INSUFFICIENT.
     result['actions'] = _actions_for_guardrail(result.get('guardrail', {}), actions)
+    if cache_key:
+        cache.set(cache_key, result, timeout=3600)
     return result
 
 
@@ -1264,7 +1331,9 @@ def _analyze_domain(url: str) -> dict:
     else:
         full_url = url
 
-    score = 0
+    # Tách bạch 2 tầng: Heuristic Score (dấu hiệu phỏng đoán) và Evidence Floor (bằng chứng xác thực)
+    heuristic_score = 0
+    evidence_floor = 0
     details = []
 
     # 0. Fetch page content using requests + BeautifulSoup
@@ -1281,15 +1350,15 @@ def _analyze_domain(url: str) -> dict:
     except Exception as e:
         logger.warning(f"[ScanDomain] content fetch failed for {url}: {e}")
 
-    # 1. Network Analysis (SSL, Redirects, Headers)
+    # 1. Network Analysis (SSL, Redirects, Headers) -> Tầng Heuristic
     network_info = _analyze_network(full_url, domain)
     
     cert_age_days = network_info.get('cert_age_days')
     if not network_info['ssl_valid']:
-        score += 15
+        heuristic_score += 15
         details.append('Chứng chỉ SSL không hợp lệ hoặc không có HTTPS')
     elif cert_age_days is not None and cert_age_days < 3:
-        score += 20
+        heuristic_score += 20
         details.append(f"Chứng chỉ SSL mới tạo ({cert_age_days} ngày) - Rủi ro cao")
         
     issuer = str(network_info.get('cert_issuer', '')).lower()
@@ -1297,24 +1366,23 @@ def _analyze_domain(url: str) -> dict:
         # Flag free certs ONLY if domain tries to look like a bank/big brand
         is_lookalike = any(_is_lookalike(domain, trusted) for trusted in _get_trusted_domains())
         if is_lookalike:
-            score += 10
+            heuristic_score += 10
             details.append('Sử dụng chứng chỉ miễn phí (Let\'s Encrypt/Cloudflare) cho tên miền giống ngân hàng')
 
     if network_info.get('redirects', 0) > 2:
-        score += 15
+        heuristic_score += 15
         details.append(f"Chuyển hướng quá nhiều lần ({network_info['redirects']} lần)")
         
     if network_info.get('error'):
-        score += 10
+        heuristic_score += 10
         details.append('Không thể kết nối đến trang web (có thể đã sập hoặc chặn bot)')
 
     # Check for missing security headers (only if we got a response)
     sec_headers = network_info.get('security_headers', {})
     if network_info['ssl_valid'] and not any(sec_headers.values()):
-         score += 5
-         # details.append('Thiếu các header bảo mật cơ bản') # Maybe too technical for user?
+         heuristic_score += 5
 
-    # 2. Sentinel Threat Intelligence Engine
+    # 2. Sentinel Threat Intelligence Engine -> Tầng Evidence
     vt_obj = None
     vt_sources = None
     with VTClient() as vt:
@@ -1324,60 +1392,58 @@ def _analyze_domain(url: str) -> dict:
             vt_sources = vt_results.get('sources')
             malicious = vt_results.get('malicious', 0)
             suspicious = vt_results.get('suspicious', 0)
-            if malicious > 0:
-                score += min(60, malicious * 20)
-                details.append(f"Sentinel Threat Intel: {malicious} chỉ số gắn cờ ĐỘC HẠI")
+            if malicious >= 3:
+                evidence_floor = max(evidence_floor, 85)
+                details.append(f"Sentinel Threat Intel: {malicious} engine gắn cờ ĐỘC HẠI (đồng thuận cao)")
+            elif malicious > 0:
+                evidence_floor = max(evidence_floor, 50)
+                details.append(f"Sentinel Threat Intel: {malicious} engine gắn cờ ĐỘC HẠI")
             elif suspicious > 0:
-                score += min(30, suspicious * 10)
-                details.append(f"Sentinel Threat Intel: {suspicious} chỉ số gắn cờ NGHI NGỜ")
+                evidence_floor = max(evidence_floor, 30)
+                details.append(f"Sentinel Threat Intel: {suspicious} engine gắn cờ NGHI NGỜ")
             else:
                 details.append("Sentinel Threat Intel: Sạch (không phát hiện mã độc)")
 
     # 3. Tranco Rank (Pro-active Popularity Check)
+    # Độ phổ biến chỉ giảm trừ điểm heuristic, TUYỆT ĐỐI KHÔNG xóa bỏ bằng chứng độc hại (evidence_floor).
     tranco_data = lookup_tranco(domain)
     if tranco_data and tranco_data.get('content') and "Popularity Rank" in tranco_data['content']:
         try:
             rank_part = tranco_data['content'].split('Popularity Rank: ')[1].split('\n')[0]
             if rank_part.isdigit():
                 rank = int(rank_part)
-                # If rank is high (number is low), it's a very popular site
                 if rank < 10000:
-                    score = max(0, score - 60) # Massive trust boost
-                    details.append(f"Quy mô lớn (Tranco Top {rank}) - Rất uy tín")
+                    heuristic_score = max(0, heuristic_score - 40)
+                    details.append(f"Quy mô lớn (Tranco Top {rank}) - Giảm trừ điểm phỏng đoán")
                 elif rank < 100000:
-                    score = max(0, score - 30)
+                    heuristic_score = max(0, heuristic_score - 20)
                     details.append(f"Website phổ biến (Tranco Top {rank})")
                 elif rank < 1000000:
-                    score = max(0, score - 10)
+                    heuristic_score = max(0, heuristic_score - 10)
                     details.append(f"Website đã index (Top {rank})")
-            else: 
-                # Rank is N/A or text
-                pass
         except Exception as e:
             logger.warning(f"Tranco parse error: {e}")
 
-    # Suspicious patterns
+    # Suspicious patterns -> Heuristic
     if len(domain) > 30:
-        score += 10
+        heuristic_score += 10
         details.append('Domain name dài bất thường')
     if domain.count('.') > 3:
-        score += 15
+        heuristic_score += 15
         details.append('Quá nhiều subdomain')
     if domain.count('-') > 2:
-        score += 10
+        heuristic_score += 10
         details.append('Nhiều dấu gạch ngang')
     if re.search(r'\d{3,}', domain):
-        score += 10
+        heuristic_score += 10
         details.append('Chứa nhiều số liên tiếp')
 
     # Lookalike detection (Vietnamese banks + common targets)
     trusted_domains = _get_trusted_domains()
-
     similarity_warning = None
     for trusted, name in trusted_domains.items():
-        # Simple Levenshtein-like check
         if trusted != domain and _is_lookalike(domain, trusted):
-            score += 30
+            heuristic_score += 30
             details.append(f'Giống domain chính thức: {name} ({trusted})')
             similarity_warning = f'Có thể bạn muốn vào {trusted}'
             break
@@ -1399,21 +1465,22 @@ def _analyze_domain(url: str) -> dict:
         cache.set(_db_cache_key, _cached_db, 3600)
 
     if _cached_db != _DB_MISS and isinstance(_cached_db, dict):
-        score = max(score, _cached_db['risk_score'])
         feed_source = _cached_db['whois_snapshot'].get('source')
         threat_tag = _cached_db['whois_snapshot'].get('threat')
         if feed_source:
+            evidence_floor = max(evidence_floor, 80)
             tag_suffix = f" ({threat_tag})" if threat_tag else ""
             details.append(f"Cảnh báo: Tên miền nằm trong danh sách đen toàn cầu {feed_source}{tag_suffix}")
         if _cached_db['report_count'] > 0:
+            heuristic_score += min(30, _cached_db['report_count'] * 10)
             details.append(f"{_cached_db['report_count']} báo cáo từ cộng đồng")
 
     # IP-based URL
     if re.match(r'^\d+\.\d+\.\d+\.\d+$', domain):
-        score += 20
+        heuristic_score += 20
         details.append('Sử dụng địa chỉ IP thay vì domain')
 
-    # Danh bạ Tín nhiệm mạng (tinnhiemmang.vn) — dữ liệu NCSC/VNCERT tra cứu cục bộ (nhanh)
+    # Danh bạ Tín nhiệm mạng (tinnhiemmang.vn) — dữ liệu NCSC/VNCERT
     tinnhiem_info = None
     try:
         from api.utils.vn_sources import tinnhiem_lookup_domain
@@ -1424,7 +1491,7 @@ def _analyze_domain(url: str) -> dict:
         rec = tinnhiem_info.get('record') or {}
         if tinnhiem_info.get('status') == 'scam':
             impersonated = rec.get('impersonated') or rec.get('owner')
-            score = max(score, 90)
+            evidence_floor = max(evidence_floor, 90)
             _tk_msg = 'Tín nhiệm mạng (NCSC): tên miền nằm trong DANH SÁCH LỪA ĐẢO'
             if impersonated:
                 _tk_msg += f' — mạo danh {impersonated}'
@@ -1435,9 +1502,10 @@ def _analyze_domain(url: str) -> dict:
             if owner:
                 _tk_msg += f' — {owner}'
             details.append(_tk_msg)
-            score = max(0, score - 20)
+            heuristic_score = max(0, heuristic_score - 20)
 
-    score = min(100, score)
+    # Tổng hợp: điểm bằng chứng luôn là sàn tối thiểu (không thể bị xóa bởi điểm phổ biến)
+    score = min(100, max(heuristic_score, evidence_floor))
 
     if score >= 70:
         level = RiskLevel.RED
@@ -1472,6 +1540,20 @@ def _analyze_domain(url: str) -> dict:
         }
     # Guardrail + bằng chứng (điểm #1/#4): không kết luận an toàn khi thiếu cơ sở.
     apply_guardrail(result, kind='url')
+
+    # Đồng bộ nhất quán giữa Guardrail và điểm số/nhãn rủi ro hiển thị:
+    # Nếu Guardrail báo nguy hiểm đã xác nhận hoặc nguy cơ cao, điểm số không được ở mức SAFE/nhỏ
+    guardrail_tier = (result.get('guardrail') or {}).get('tier')
+    if guardrail_tier == 'CONFIRMED_RISK':
+        score = max(score, 85)
+        level = RiskLevel.RED
+        result['risk_score'] = score
+        result['risk_level'] = level
+    elif guardrail_tier == 'HIGH_RISK':
+        score = max(score, 70)
+        level = RiskLevel.RED
+        result['risk_score'] = score
+        result['risk_level'] = level
 
     if similarity_warning:
         result['similarity_warning'] = similarity_warning

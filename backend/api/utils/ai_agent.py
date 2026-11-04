@@ -189,7 +189,7 @@ class AIAgent:
             context_str += f"Nguồn: {res['title']} ({res['url']})\nNội dung: {res['text']}\n\n"
         return context_str, results
 
-    def chat_stream(self, user_message: str, images_data: List[str] = None, debug: bool = False, safe_mode: bool = False) -> Generator[str, None, None]:
+    def chat_stream(self, user_message: str, images_data: List[str] = None, debug: bool = False, safe_mode: bool = False, allow_pii: bool = False) -> Generator[str, None, None]:
         """
         Main entry point for streaming chat with RAG and History.
         """
@@ -323,9 +323,8 @@ class AIAgent:
         try:
             # 3. stream_chat_ai đã phát sẵn event có `type` -> chuyển thẳng ra ngoài;
             #    chỉ gộp metadata và tích luỹ text thật để lưu lịch sử.
-            # Tro ly can hoi thoai goc (nguoi dung nho kiem tra SDT/tin nhan cu
-            # the) -> allow_pii + audit log trong stream_chat_ai.
-            for ev in stream_chat_ai(messages, debug=debug, allow_pii=True):
+            # Chỉ truyền PII khi caller có đồng thuận rõ ràng (allow_pii=True)
+            for ev in stream_chat_ai(messages, debug=debug, allow_pii=allow_pii):
                 if not isinstance(ev, dict):
                     continue
                 etype = ev.get('type')

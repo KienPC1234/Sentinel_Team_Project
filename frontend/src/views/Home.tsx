@@ -212,8 +212,9 @@ function MiniRow({
   );
 }
 
-function formatStatNumber(n?: number, fallback = ''): string {
-  if (n == null || isNaN(n) || n <= 0) return fallback;
+function formatStatNumber(n?: number | null): string {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  if (n < 0) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M+`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K+`;
   return String(n);
@@ -225,9 +226,10 @@ export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [lessons, setLessons] = useState<LessonItem[]>([]);
   const [loadingNews, setLoadingNews] = useState(true);
-  const [stats, setStats] = useState<{ totalScans: string; threats: string }>({
-    totalScans: '1.2M+',
-    threats: '45K+',
+  const [stats, setStats] = useState<{ totalScans: string; threats: string; reports: string }>({
+    totalScans: '—',
+    threats: '—',
+    reports: '—',
   });
 
   useEffect(() => {
@@ -235,17 +237,17 @@ export default function Home() {
     Promise.allSettled([
       learnApi.articles({ ordering: '-created_at' }),
       learnApi.lessons({ ordering: '-created_at' }),
-      api.get<{ total_scans?: number; scam_detected?: number }>('/stats/public/'),
+      api.get<{ total_scans?: number; scam_detected?: number; total_reports?: number }>('/stats/public/'),
     ]).then(([a, l, s]) => {
       if (!alive) return;
       if (a.status === 'fulfilled') setArticles(asList(a.value));
       if (l.status === 'fulfilled') setLessons(asList(l.value) as unknown as LessonItem[]);
       if (s.status === 'fulfilled' && s.value) {
-        setStats((prev) => ({
-          ...prev,
-          ...(s.value.total_scans ? { totalScans: formatStatNumber(s.value.total_scans, prev.totalScans) } : {}),
-          ...(s.value.scam_detected ? { threats: formatStatNumber(s.value.scam_detected, prev.threats) } : {}),
-        }));
+        setStats({
+          totalScans: formatStatNumber(s.value.total_scans),
+          threats: formatStatNumber(s.value.scam_detected),
+          reports: formatStatNumber(s.value.total_reports),
+        });
       }
       setLoadingNews(false);
     });
@@ -418,7 +420,7 @@ export default function Home() {
       >
         <StatCard value={stats.totalScans} label="Tổng Lượt Scan" valueClass="text-white" glow />
         <StatCard value={stats.threats} label="Mối Nguy Hiểm" valueClass="text-danger-500" />
-        <StatCard value="99.8%" label="Độ Chính Xác" valueClass="text-safe-400" />
+        <StatCard value={stats.reports} label="Báo Cáo Đã Duyệt" valueClass="text-safe-400" />
         <StatCard value="24/7" label="Thời Gian Thực" valueClass="text-brand-400" />
       </motion.section>
 

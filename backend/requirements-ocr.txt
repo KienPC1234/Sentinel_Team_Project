@@ -1,4 +1,10 @@
-# Requirements cho venv OCR riêng (VietOCR) — KHÔNG cài vào .venv chính.
+# Requirements cho venv OCR riêng (VietOCR) — dùng làm FALLBACK/bridge.
+#
+# Production hiện chạy AI service dùng chung trong venv chính:
+#   .venv/bin/pip install gdown
+#   .venv/bin/pip install --no-deps vietocr==0.3.13
+# (xem backend/requirements-ai.txt). Venv .venv-ocr + bridge vẫn được giữ để
+# OCR không mất chức năng nếu AI service/vietocr trong venv chính gặp sự cố.
 #
 #   cd /data/Sentinel_Team_Project
 #   .venv/bin/python -m venv .venv-ocr
