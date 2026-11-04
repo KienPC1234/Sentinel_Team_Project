@@ -176,8 +176,12 @@ export default function NotificationBell() {
           /* bỏ qua message lỗi */
         }
       };
-      ws.onclose = () => {
-        if (!closed) reconnect = setTimeout(connect, 5000);
+      ws.onclose = (event: CloseEvent) => {
+        // Dừng reconnect loop nếu server từ chối vì chưa xác thực (4401/4403/1008)
+        if (event.code === 4401 || event.code === 4403 || event.code === 1008) {
+          return;
+        }
+        if (!closed) reconnect = setTimeout(connect, 10000);
       };
       ws.onerror = () => {
         try {

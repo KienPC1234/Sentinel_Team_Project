@@ -20,7 +20,7 @@ class ScanProgressConsumer(AsyncWebsocketConsumer):
         # được đánh dấu công khai mới được xem tiến trình/kết quả. Trước đây
         # consumer nhận MỌI scan_id -> rò rỉ kết quả quét của người khác.
         if not await self._authorized():
-            await self.close()
+            await self.close(code=4403)
             return
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -129,7 +129,7 @@ class RagStatusConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         user = self.scope.get('user')
         if not user or not user.is_authenticated or not user.is_staff:
-            await self.close()
+            await self.close(code=4403)
             return
 
         self.group_name = 'rag_updates'
@@ -166,7 +166,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.user = self.scope['user']
         self._ping_task = None
         if not self.user.is_authenticated:
-            await self.close()
+            await self.close(code=4401)
             return
 
         self.user_group = f'user_{self.user.id}'
