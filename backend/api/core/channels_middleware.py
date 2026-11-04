@@ -6,11 +6,11 @@ or Authorization header, falling back to Django session cookies.
 from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from channels.auth import AuthMiddlewareStack
-from django.contrib.auth.models import AnonymousUser
 
 
 @database_sync_to_async
 def get_user_from_token(token_key):
+    from django.contrib.auth.models import AnonymousUser
     if not token_key or not isinstance(token_key, str):
         return AnonymousUser()
     try:
