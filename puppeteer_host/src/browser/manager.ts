@@ -20,7 +20,7 @@ let renderCount = 0;
 
 export async function launchBrowser(): Promise<Browser> {
   if (browserInstance) {
-    if (browserInstance.isConnected()) {
+    if (browserInstance.connected) {
       return browserInstance;
     }
     browserInstance = null;
@@ -108,7 +108,7 @@ export async function incrementRenderCount(): Promise<void> {
     );
     setTimeout(async () => {
       try {
-        if (browserInstance && browserInstance.isConnected()) {
+        if (browserInstance && browserInstance.connected) {
           const pages = await browserInstance.pages();
           if (pages.length <= 1) {
             await closeBrowser();
@@ -125,7 +125,7 @@ export async function incrementRenderCount(): Promise<void> {
 export async function closeBrowser(): Promise<void> {
   if (browserInstance) {
     try {
-      if (browserInstance.isConnected()) {
+      if (browserInstance.connected) {
         await browserInstance.close();
       }
     } catch (err) {

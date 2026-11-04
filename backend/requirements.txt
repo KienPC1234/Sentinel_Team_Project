@@ -7,7 +7,7 @@ cryptography
 django-redis
 celery
 redis
-pillow
+pillow>=13.0.0
 requests>=2.31.0
 django-tailwind
 python-dotenv
