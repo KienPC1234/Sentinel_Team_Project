@@ -709,3 +709,97 @@ def verdict_display(result: Dict[str, Any]) -> str:
     if level in ("GREEN", "SAFE", ""):
         return "CHƯA ĐỦ CƠ SỞ XÁC MINH"
     return level
+
+
+# ---------------------------------------------------------------------------
+# 5. Evidence-Aware Conditional Ensemble (Nguồn chân lý duy nhất cho tầng tổng hợp)
+# ---------------------------------------------------------------------------
+
+CRITICAL_THREAT_PATTERNS = [
+    r'(?:yêu\s*cầu|bắt\s*buộc|đề\s*nghị|phải|hãy|vui\s*lòng)\s*(?:đọc|gửi|cung\s*cấp|nhập)\s*(?:lại\s*)?(?:mã\s*)?otp',
+    r'nhập\s*mã\s*otp\s*để\s*(?:hủy|nhận)',
+    r'(?:chuyển|bắn|nộp|gửi)\s+[^:;!?\n]{0,60}?(?:vào|qua|tới)\s+(?:stk|số\s*tài\s*khoản|tài\s*khoản|tài\s*khoản\s*tạm\s*giữ)',
+    r'đến\s*ngân\s*hàng\s*chuyển\s*tiền\s*theo\s*hướng\s*dẫn',
+    r'(?:lệnh\s*bắt|bắt\s*tạm\s*giam|viện\s*kiểm\s*sát|khởi\s*tố|rửa\s*tiền|buôn\s*lậu|cấm\s*xuất\s*cảnh)',
+    r'(?:cài|tải)\s*(?:file\s*)?\.?apk',
+    r'(?:ultraviewer|anydesk|teamviewer|điều\s*khiển\s*từ\s*xa)',
+    r'(?:cấp\s*cứu|chấn\s*thương|tai\s*nạn|mổ\s*gấp|viện\s*phí)',
+]
+
+
+def _detect_severe_extortion(text: str) -> bool:
+    """Nhận diện hành vi tống tiền / lừa đảo cưỡng bức nghiêm trọng cần áp sàn điểm ĐỎ."""
+    t = (text or '').lower()
+    has_authority_threat = bool(re.search(r'lệnh\s*bắt|bắt\s*tạm\s*giam|viện\s*kiểm\s*sát|khởi\s*tố|rửa\s*tiền|buôn\s*lậu|tòa\s*án|án\s*tù|cấm\s*xuất\s*cảnh', t))
+    has_holding_account = bool(re.search(r'tài\s*khoản\s*tạm\s*giữ|tài\s*khoản\s*thanh\s*tra|bảo\s*lãnh|trắng\s*án|niêm\s*phong', t))
+    has_transfer_demand = bool(re.search(r'(?:chuyển|bắn|nộp|gửi)\s+[^:;!?\n]{0,60}?(?:vào|qua|tới)\s+(?:stk|số\s*tài\s*khoản|tài\s*khoản)', t))
+    has_medical_emergency = bool(re.search(r'cấp\s*cứu|chấn\s*thương|tai\s*nạn|mổ\s*gấp|viện\s*phí', t)) and bool(re.search(r'chuyển|nộp|viện\s*phí|stk|tài\s*khoản', t))
+    has_otp_coercion = bool(re.search(r'(?:yêu\s*cầu|bắt\s*buộc|đề\s*nghị|phải|hãy|vui\s*lòng)\s*(?:đọc|gửi|cung\s*cấp|nhập)\s*(?:lại\s*)?(?:mã\s*)?otp', t))
+
+    if has_authority_threat and (has_holding_account or has_transfer_demand):
+        return True
+    if has_medical_emergency and has_transfer_demand:
+        return True
+    if has_otp_coercion:
+        return True
+    return False
+
+
+def compute_evidence_aware_ensemble(
+    text: str,
+    ai_result: Optional[Dict[str, Any]],
+    rule_score: int,
+    domain_threat_evidence: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Evidence-Aware Conditional Ensemble (Nguồn chân lý duy nhất cho tầng tổng hợp).
+    Dùng thống nhất trong production (scan_views.py), benchmark (benchmark_messages.py),
+    và bộ kiểm thử đối kháng (adversarial_stress_test.py).
+    """
+    domain_threat = domain_threat_evidence or {}
+    max_domain_score = int(domain_threat.get('max_domain_score', 0) or 0)
+    has_verified_threat = bool(domain_threat.get('has_verified_threat', False))
+
+    t = (text or '').lower()
+    has_critical_threat = any(re.search(p, t) for p in CRITICAL_THREAT_PATTERNS)
+    has_severe_extortion = _detect_severe_extortion(text)
+
+    ai_available = bool(ai_result and not ai_result.get('ai_notice') and not ai_result.get('error'))
+    ai_score = int(ai_result.get('risk_score', ai_result.get('score', 0)) or 0) if (ai_available and ai_result) else 0
+    ai_is_scam = bool(ai_result.get('is_scam', False)) if (ai_available and ai_result) else False
+
+    if has_verified_threat and max_domain_score >= RISK_RED_MIN:
+        final_score = max(max_domain_score, ai_score, rule_score)
+        decision_reason = "verified_domain_threat"
+    elif has_severe_extortion:
+        final_score = max(rule_score, ai_score, RISK_RED_MIN)
+        decision_reason = "severe_extortion_floor"
+    elif has_critical_threat:
+        final_score = max(rule_score, ai_score, max_domain_score)
+        decision_reason = "critical_threat_preserved"
+    elif ai_available:
+        is_ai_safe = (ai_score <= 20) and not ai_is_scam
+        if is_ai_safe and max_domain_score < RISK_YELLOW_MIN:
+            final_score = max(ai_score, min(rule_score, 35))
+            decision_reason = "safe_context_discounted"
+        else:
+            final_score = max(ai_score, rule_score, max_domain_score)
+            decision_reason = "ai_rule_ensemble"
+    else:
+        final_score = max(rule_score, max_domain_score)
+        decision_reason = "ai_outage_fallback"
+
+    level = level_from_score(final_score)
+
+    return {
+        "final_score": final_score,
+        "risk_level": level,
+        "ai_score": ai_score,
+        "rule_score": rule_score,
+        "max_domain_score": max_domain_score,
+        "has_critical_threat": has_critical_threat,
+        "has_severe_extortion": has_severe_extortion,
+        "has_verified_threat": has_verified_threat,
+        "ai_available": ai_available,
+        "decision_reason": decision_reason,
+    }

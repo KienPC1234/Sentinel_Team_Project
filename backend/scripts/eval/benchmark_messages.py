@@ -143,6 +143,7 @@ def evaluate_llm(sample: Dict[str, Any]) -> Dict[str, Any]:
     latency_ms = (time.perf_counter() - t0) * 1000.0
     return {
         "score": score,
+        "risk_score": score,
         "latency_ms": latency_ms,
         "explanation": explanation,
         "indicators": indicators,
@@ -209,23 +210,25 @@ def run_benchmark_for_dataset(dataset_file: Path, report_file: Path, json_file: 
             if (idx + 1) % 10 == 0 or idx == len(items) - 1:
                 logger.info(f"LLM progress: {sum(1 for r in llm_results if r is not None)}/{len(items)}")
 
-    # 3. Calibrated Ensemble
-    logger.info("Evaluating Calibrated Ensemble...")
+    # 3. Evidence-Aware Conditional Ensemble (Dùng chung hàm chuẩn hoá từ trust_guard)
+    logger.info("Evaluating Evidence-Aware Ensemble...")
+    from api.utils.trust_guard import compute_evidence_aware_ensemble
     ensemble_results = []
-    for h_res, l_res in zip(heuristic_results, llm_results):
-        h_score = h_res["score"]
-        l_score = l_res["score"]
-        is_safe = (l_score <= 20) and not l_res.get("is_scam", False)
-        if is_safe:
-            score = max(l_score, min(h_score, 35))
-        else:
-            score = max(h_score, l_score)
+    for s, h_res, l_res in zip(items, heuristic_results, llm_results):
+        ens = compute_evidence_aware_ensemble(
+            text=s["text"],
+            ai_result=l_res,
+            rule_score=h_res["score"],
+            domain_threat_evidence=None,
+        )
         lat = h_res["latency_ms"] + l_res["latency_ms"]
         ensemble_results.append({
-            "score": score,
+            "score": ens["final_score"],
+            "risk_level": ens["risk_level"],
             "latency_ms": lat,
-            "heuristic_score": h_score,
-            "llm_score": l_score,
+            "heuristic_score": h_res["score"],
+            "llm_score": l_res["score"],
+            "decision_reason": ens["decision_reason"],
         })
 
     # 4. Full Production Pipeline
@@ -245,14 +248,14 @@ def run_benchmark_for_dataset(dataset_file: Path, report_file: Path, json_file: 
     configurations = {
         "Heuristic Only": [r["score"] for r in heuristic_results],
         "LLM Only": [r["score"] for r in llm_results],
-        "Calibrated Ensemble": [r["score"] for r in ensemble_results],
+        "Evidence-Aware Ensemble": [r["score"] for r in ensemble_results],
         "Full Pipeline": [r["score"] for r in full_pipeline_results],
     }
 
     latencies = {
         "Heuristic Only": [r["latency_ms"] for r in heuristic_results],
         "LLM Only": [r["latency_ms"] for r in llm_results],
-        "Calibrated Ensemble": [r["latency_ms"] for r in ensemble_results],
+        "Evidence-Aware Ensemble": [r["latency_ms"] for r in ensemble_results],
         "Full Pipeline": [r["latency_ms"] for r in full_pipeline_results],
     }
 

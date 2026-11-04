@@ -984,6 +984,7 @@ def _analyze_message_text(text: str) -> dict:
     found_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', text)
     domain_risks = []
     max_domain_score = 0
+    has_verified_threat = False
 
     vt = VTClient()
     try:
@@ -994,6 +995,8 @@ def _analyze_message_text(text: str) -> dict:
                 if vt_res:
                     score = vt_res.get('risk_score', 0)
                     max_domain_score = max(max_domain_score, score)
+                    if vt_res.get('malicious', 0) > 0 or vt_res.get('suspicious', 0) >= 2:
+                        has_verified_threat = True
                     if score > 0:
                         domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
     finally:
@@ -1007,44 +1010,21 @@ def _analyze_message_text(text: str) -> dict:
     # Rule-based score (heuristic + điểm domain nếu có)
     rule_score = min(100, heuristic_score(text) + max_domain_score)
 
-    # Danh mục dấu hiệu nguy hiểm nghiêm trọng cốt lõi (Critical Threat Indicators)
-    # Tuyệt đối KHÔNG được hạ điểm heuristic khi văn bản chứa các hành vi cưỡng bức này,
-    # ngay cả khi LLM đưa ra nhận định sai (ai_score thấp).
-    critical_threat_patterns = [
-        r'(?:yêu\s*cầu|bắt\s*buộc|đề\s*nghị|phải|hãy|vui\s*lòng)\s*(?:đọc|gửi|cung\s*cấp|nhập)\s*(?:lại\s*)?(?:mã\s*)?otp',
-        r'nhập\s*mã\s*otp\s*để\s*(?:hủy|nhận)',
-        r'(?:chuyển|bắn|nộp)\s*(?:tiền\s*)?(?:vào|qua|tới)\s*(?:stk|số\s*tài\s*khoản|tài\s*khoản|tài\s*khoản\s*tạm\s*giữ)',
-        r'đến\s*ngân\s*hàng\s*chuyển\s*tiền\s*theo\s*hướng\s*dẫn',
-        r'(?:lệnh\s*bắt|bắt\s*tạm\s*giam|viện\s*kiểm\s*sát|khởi\s*tố|rửa\s*tiền|buôn\s*lậu|cấm\s*xuất\s*cảnh)',
-        r'(?:cài|tải)\s*(?:file\s*)?\.?apk',
-        r'(?:ultraviewer|anydesk|teamviewer|điều\s*khiển\s*từ\s*xa)',
-        r'(?:cấp\s*cứu|chấn\s*thương|phẫu\s*thuật\s*gấp).*?(?:chuyển|nộp)\s*(?:viện\s*phí|tiền)',
-    ]
-    has_critical_threat = any(re.search(p, text.lower()) for p in critical_threat_patterns)
-
-    # 4. Evidence-Aware Conditional Ensemble (Kết hợp đa tầng có kiểm định bằng chứng)
-    #    - Bằng chứng độc hại xác minh (max_domain_score >= 70): Không bị triệt tiêu bởi nhận định AI.
-    #    - Khi có dấu hiệu nguy hiểm nghiêm trọng (has_critical_threat): Tuyệt đối không hạ điểm heuristic.
-    #    - Chỉ khi AI tự tin kết luận an toàn (ai_score <= 20, is_scam=False), KHÔNG có domain độc hại,
-    #      và KHÔNG có hành vi đe dọa cưỡng bức: cho phép hạ trần heuristic (<= 35) để tránh bẫy từ khóa.
-    #    - Trường hợp còn lại: bảo toàn độ nhạy cao nhất max(ai_score, rule_score, max_domain_score).
-    if max_domain_score >= 70:
-        final_score = max(max_domain_score, ai_score, rule_score)
-    elif has_critical_threat:
-        final_score = max(rule_score, ai_score, max_domain_score)
-    elif ai_available and ai_score > 0:
-        is_ai_safe = (ai_score <= 20) and not (ai_result and ai_result.get('is_scam', False))
-        if is_ai_safe and max_domain_score < 40:
-            final_score = max(ai_score, min(rule_score, 35))
-        else:
-            final_score = max(ai_score, rule_score, max_domain_score)
-    else:
-        final_score = max(rule_score, max_domain_score)
-
-    level = RiskLevel.SAFE
-    if final_score >= 70: level = RiskLevel.RED
-    elif final_score >= 40: level = RiskLevel.YELLOW
-    elif final_score >= 10: level = RiskLevel.GREEN
+    # 4. Evidence-Aware Conditional Ensemble (Dùng chung hàm chuẩn hoá từ trust_guard)
+    from api.utils.trust_guard import compute_evidence_aware_ensemble
+    domain_threat_evidence = {
+        'max_domain_score': max_domain_score,
+        'has_verified_threat': has_verified_threat,
+        'domain_risks': domain_risks,
+    }
+    ensemble_res = compute_evidence_aware_ensemble(
+        text=text,
+        ai_result=ai_result if ai_available else None,
+        rule_score=rule_score,
+        domain_threat_evidence=domain_threat_evidence,
+    )
+    final_score = ensemble_res['final_score']
+    level = ensemble_res['risk_level']
 
     # Determine scam type from detected patterns
     scam_type = 'other'

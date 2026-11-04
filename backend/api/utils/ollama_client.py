@@ -3812,7 +3812,7 @@ def _sanitize_web_context(raw_context: str) -> str:
     return "\n\n".join(blocks).strip()
 
 
-def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = False) -> Dict[str, Any]:
+def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = False, external_consent: bool = False) -> Dict[str, Any]:
     """
     Analyze text for scam indicators, optionally enriching with web search.
 
@@ -4038,10 +4038,15 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"Nội dung cần phân tích:\n{text_snippet}"
     )
 
-    # Phan tich can noi dung goc (SĐT/tin nhan/email) -> allow_pii + audit log.
+    # Bảo vệ dữ liệu cá nhân (Golden Rule #2 & Audit Item #5):
+    # Luôn ẩn PII trước khi gửi tới mô hình Cloud trừ khi có sự đồng ý rõ ràng.
+    target_model = model or DEFAULT_MODEL
+    is_cloud_target = bool(OLLAMA_API_KEY) or (':cloud' in str(target_model)) or ('api.ollama.com' in str(_effective_base_url))
+    safe_allow_pii = not is_cloud_target or external_consent
+
     response = generate_response(
-        prompt, model, num_ctx=16384, max_tokens=8192, tools=[], format_schema=SCAM_ANALYSIS_SCHEMA,
-        allow_pii=True, think="low",
+        prompt, target_model, num_ctx=16384, max_tokens=8192, tools=[], format_schema=SCAM_ANALYSIS_SCHEMA,
+        allow_pii=safe_allow_pii, think="low",
     )
 
     # Frontend should display only structured intelligence context,

@@ -447,6 +447,9 @@ class ReportDetailSerializer(serializers.ModelSerializer):
 
         if not is_privileged:
             from api.core.models import BankAccount
+            from api.utils.privacy import redact_pii, redact_obj
+
+            # 1. Mask direct scammer identifiers
             if data.get('scammer_bank_account'):
                 data['scammer_bank_account'] = BankAccount.mask_account(data['scammer_bank_account'])
             if data.get('scammer_phone'):
@@ -468,7 +471,23 @@ class ReportDetailSerializer(serializers.ModelSerializer):
                     p = str(info['phone'])
                     if len(p) > 6:
                         info['phone'] = p[:3] + '****' + p[-3:]
+                if info.get('custom_fields'):
+                    info['custom_fields'] = redact_obj(info['custom_fields'])
                 data['scammer_info'] = info
+
+            # 2. Redact free-text fields (description, ocr_text, custom_fields)
+            if data.get('description'):
+                data['description'] = redact_pii(data['description'])
+            if data.get('ocr_text'):
+                data['ocr_text'] = redact_pii(data['ocr_text'])
+            if data.get('custom_fields'):
+                data['custom_fields'] = redact_obj(data['custom_fields'])
+
+            # 3. Privacy protection for uploaded citizen evidence media
+            # Only staff and the original reporter can access direct raw evidence download URLs.
+            data['evidence_file'] = None
+            data['evidence_url'] = None
+            data['evidence_images_data'] = []
 
             # Add dispute and moderation provenance for community transparency
             data['dispute_url'] = f"/report/lookup/?dispute={instance.id}"
