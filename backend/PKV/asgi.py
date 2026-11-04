@@ -12,14 +12,14 @@ from django.core.asgi import get_asgi_application
 from django.conf import settings
 from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
+from api.core.channels_middleware import TokenAuthMiddlewareStack
 from api.core.routing import websocket_urlpatterns
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'PKV.settings')
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
-    "websocket": AuthMiddlewareStack(
+    "websocket": TokenAuthMiddlewareStack(
         URLRouter(
             websocket_urlpatterns
         )

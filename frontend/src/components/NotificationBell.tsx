@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { api } from '../lib/api';
+import { api, getToken } from '../lib/api';
 import { showToast } from '../lib/ui/feedback';
 import type { ToastType } from '../lib/ui/feedback';
 import { ensurePushSubscription } from '../lib/push';
@@ -105,7 +105,12 @@ export default function NotificationBell() {
     const connect = () => {
       let ws: WebSocket;
       try {
-        ws = new WebSocket(`${wsBase()}/ws/notifications/`);
+        const token = getToken();
+        const base = wsBase();
+        const url = token
+          ? `${base}/ws/notifications/?token=${encodeURIComponent(token)}`
+          : `${base}/ws/notifications/`;
+        ws = new WebSocket(url);
       } catch {
         return;
       }
