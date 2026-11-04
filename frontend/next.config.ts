@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   // Không tự redirect thêm/bớt slash (xem docs skipTrailingSlashRedirect):
   // giữ nguyên path client gửi, rewrite/proxy sang Django không bị loop 301.
   skipTrailingSlashRedirect: true,
+  experimental: {
+    agentUpgrade: 'security',
+  },
   async rewrites() {
     return {
       beforeFiles: [
