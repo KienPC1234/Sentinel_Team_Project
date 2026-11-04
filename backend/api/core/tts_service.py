@@ -106,8 +106,14 @@ def _model_path() -> Path:
 
 
 def cache_dir() -> Path:
-    default = str(Path(settings.MEDIA_ROOT) / 'tts')
+    media_root = getattr(settings, 'MEDIA_ROOT', '') or ''
+    default = str(Path(media_root) / 'tts') if media_root else 'tts'
     d = Path(_cfg('TTS_CACHE_DIR', default))
+    if not d.is_absolute():
+        # Path tương đối (VD khi MEDIA_ROOT rỗng trong môi trường test/CI)
+        # phải resolve dưới MEDIA_ROOT/BASE_DIR, không bao giờ theo cwd.
+        base = media_root or getattr(settings, 'BASE_DIR', '') or ''
+        d = (Path(base) / d) if base else d.resolve()
     d.mkdir(parents=True, exist_ok=True)
     return d
 

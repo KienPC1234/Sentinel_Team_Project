@@ -98,6 +98,8 @@ CELERY_TASK_EAGER_PROPAGATES = True
 
 SITE_ID = 1
 STATIC_URL = 'static/'
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
@@ -159,3 +161,10 @@ SANDBOX_DAEMON_TIMEOUT = 30
 # Turnstile (disabled in CI)
 TURNSTILE_SITEKEY = 'test'
 TURNSTILE_SECRET = 'test'
+
+# TTS: mirror production layout (PKV/settings.py) so cache_dir() never falls
+# back to a cwd-relative 'tts' directory during the test suite.
+# Giữ ENABLED=True như production để test_tts chạy thật khi có engine;
+# CACHE_DIR tuyệt đối nằm dưới BASE_DIR (đã gitignore qua media/).
+TTS_ENABLED = True
+TTS_CACHE_DIR = str(BASE_DIR / 'media' / 'tts')

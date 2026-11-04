@@ -144,3 +144,28 @@ class TtsAbuseGuardTest(TestCase):
                 _p2, _k2, gen2 = tts_service.ensure_audio('Câu kiểm thử single-flight.')
                 self.assertTrue(gen1)
                 self.assertFalse(gen2)
+
+
+class TtsCacheDirTest(TestCase):
+    """Hồi quy: cache_dir() không bao giờ là path tương đối theo cwd.
+
+    settings_ci từng thiếu MEDIA_ROOT nên default rơi về 'tts' và mkdir
+    ngay trong thư mục chạy test (tạo ra backend/tts/ lạ trong repo).
+    """
+
+    def test_cache_dir_absolute_under_media_root(self):
+        from django.conf import settings
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(TTS_CACHE_DIR=tmp):
+                d = tts_service.cache_dir()
+                self.assertTrue(d.is_absolute())
+                self.assertEqual(d, Path(tmp))
+
+    def test_relative_cache_dir_resolves_under_media_root(self):
+        from django.conf import settings
+        with override_settings(TTS_CACHE_DIR='tts-tuong-doi'):
+            d = tts_service.cache_dir()
+            self.assertTrue(d.is_absolute())
+            self.assertEqual(d, Path(str(settings.MEDIA_ROOT)) / 'tts-tuong-doi')
+            # Dọn thư mục do cache_dir() mkdir trong lúc kiểm thử.
+            d.rmdir()
