@@ -221,3 +221,79 @@ class ScanWsAuthorizationTest(TransactionTestCase):
         # Staff -> được phép.
         staff = await User.objects.acreate(username='ws_staff', is_staff=True)
         self.assertTrue(await mk({'user': staff, 'session': {}})._authorized())
+
+
+class ScanHardeningAuditTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='hardening_auditor', password='x')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_sse_scan_id_server_truth_binding(self):
+        from unittest.mock import patch
+        from api.core.models import ScanEvent
+
+        real_event = ScanEvent.objects.create(
+            user=self.user,
+            scan_type='phone',
+            raw_input='0987654321',
+            status='completed',
+            risk_score=95,
+            risk_level='RED',
+            result_json={'risk_score': 95, 'risk_level': 'RED', 'server_verified': True},
+        )
+
+        with patch('api.core.views.stream_views.stream_response') as mock_stream:
+            from django.http import StreamingHttpResponse
+            mock_stream.return_value = StreamingHttpResponse(iter(['data: test\n\n']))
+
+            # Client attempts to spoof benign scan_data
+            spoofed_payload = {
+                'scan_id': real_event.id,
+                'scan_type': 'message',
+                'raw_input': 'benign spoofed message',
+                'scan_data': {'risk_score': 0, 'risk_level': 'SAFE', 'spoofed': True},
+            }
+
+            resp = self.client.post('/api/v1/scan/analyze-sse/', spoofed_payload, format='json')
+            self.assertEqual(resp.status_code, 200)
+            _ = list(resp.streaming_content)
+
+            # Ensure stream_response was called with server's real_event data, NOT client's spoofed data
+            self.assertTrue(mock_stream.called)
+            called_prompt = mock_stream.call_args[0][0]
+            self.assertIn('0987654321', called_prompt)
+            self.assertNotIn('benign spoofed message', called_prompt)
+
+    def test_vt_file_scan_skips_upload_by_default(self):
+        from unittest.mock import patch, MagicMock
+        from api.utils.vt_client import VTClient
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(b"sample file content for vt audit test")
+            tf_path = tf.name
+
+        try:
+            with VTClient() as vt:
+                vt.vt_enabled = True
+                vt.analyzer = MagicMock()
+                vt.analyzer.scan_file.return_value = {'risk_score': 0, 'malicious': 0, 'suspicious': 0}
+                vt._vt_lookup_file_by_hash = MagicMock(return_value=None)
+                vt._vt_upload_file = MagicMock()
+
+                # Default: upload_if_unknown=False
+                res = vt.scan_file(tf_path, upload_if_unknown=False)
+                self.assertIsNotNone(res)
+                vt._vt_upload_file.assert_not_called()
+                self.assertEqual(res['virustotal']['reason'], 'hash_not_found_upload_disabled')
+
+                # Explicit: upload_if_unknown=True
+                vt._vt_upload_file.return_value = {'stats': {'malicious': 0, 'suspicious': 0}, 'pending': False}
+                res2 = vt.scan_file(tf_path, upload_if_unknown=True)
+                self.assertIsNotNone(res2)
+                vt._vt_upload_file.assert_called_once()
+        finally:
+            if os.path.exists(tf_path):
+                os.remove(tf_path)
+

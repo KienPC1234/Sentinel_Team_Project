@@ -103,3 +103,81 @@ class ReportDuplicateTest(TestCase):
         blob = str(resp.data)
         self.assertNotIn('supersecret123', blob)
         self.assertIn('******', blob)
+
+    def test_scan_lookup_masks_identifiers_and_evidence_for_public(self):
+        from api.core.models import BankAccount
+        rep = Report.objects.create(
+            reporter=self.user,
+            status='approved',
+            target_type='phone',
+            target_value='0987654321',
+            scammer_phone='0987654321',
+            scammer_bank_account='9999888877',
+            scammer_name='Nguyen Van A',
+            description='Kẻ lừa đảo yêu cầu chuyển tiền vào stk 9999888877 và gọi 0987654321',
+            custom_fields={'secret_meta': 'private_data'},
+            severity='high',
+            scam_type='otp_steal',
+        )
+        anon = APIClient()
+        resp = anon.get('/api/v1/scan/lookup/?type=phone')
+        self.assertEqual(resp.status_code, 200)
+        results = resp.data.get('results', [])
+        found = next((r for r in results if r.get('id') == rep.id), None)
+        self.assertIsNotNone(found)
+        self.assertEqual(found['target'], '098****321')
+        self.assertEqual(found['scammer_phone'], '098****321')
+        self.assertEqual(found['scammer_bank_account'], BankAccount.mask_account('9999888877'))
+        self.assertIsNone(found['evidence_url'])
+        self.assertNotIn('0987654321', found['description'])
+
+    def test_report_serializers_scrub_ai_analysis_and_moderation_note(self):
+        from api.core.serializers import ReportListSerializer, ReportDetailSerializer
+        from rest_framework.test import APIRequestFactory
+
+        rep = Report.objects.create(
+            reporter=self.user,
+            status='approved',
+            target_type='account',
+            target_value='123456789012',
+            scammer_bank_account='123456789012',
+            description='Mo ta bao cao co so dien thoai 0987654321 can che',
+            ai_analysis={'score': 90, 'summary': 'Nghi van lua dao tai chinh'},
+            moderation_note='Ghi chu noi bo cua kiem duyet vien',
+            severity='high',
+            scam_type='fake_brand',
+        )
+
+        factory = APIRequestFactory()
+
+        # 1. Unprivileged user / anonymous request
+        req_anon = factory.get('/')
+        req_anon.user = User.objects.create_user(username='unprivileged_viewer', password='x')
+
+        list_ser = ReportListSerializer(rep, context={'request': req_anon})
+        list_data = list_ser.data
+        self.assertIsNone(list_data['ai_analysis'])
+        self.assertIsNone(list_data['moderation_note'])
+        self.assertNotIn('0987654321', list_data['description'])
+        self.assertIn('***', list_data['target_value'])
+
+        detail_ser = ReportDetailSerializer(rep, context={'request': req_anon})
+        detail_data = detail_ser.data
+        self.assertIsNone(detail_data['ai_analysis'])
+        self.assertIsNone(detail_data['moderation_note'])
+        self.assertIsNone(detail_data['evidence_url'])
+        self.assertNotIn('0987654321', detail_data['description'])
+
+        # 2. Staff user request
+        staff = User.objects.create_user(username='staff_auditor', password='x', is_staff=True)
+        req_staff = factory.get('/')
+        req_staff.user = staff
+
+        staff_list_ser = ReportListSerializer(rep, context={'request': req_staff})
+        self.assertIsNotNone(staff_list_ser.data['ai_analysis'])
+        self.assertEqual(staff_list_ser.data['moderation_note'], 'Ghi chu noi bo cua kiem duyet vien')
+
+        staff_detail_ser = ReportDetailSerializer(rep, context={'request': req_staff})
+        self.assertIsNotNone(staff_detail_ser.data['ai_analysis'])
+        self.assertEqual(staff_detail_ser.data['moderation_note'], 'Ghi chu noi bo cua kiem duyet vien')
+

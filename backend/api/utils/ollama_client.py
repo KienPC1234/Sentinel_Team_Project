@@ -2987,7 +2987,8 @@ def web_fetch_url(url: str) -> Optional[Dict]:
         }
 
     try:
-        resp = _requests.get(target_url, headers=browser_headers, timeout=20, verify=True, allow_redirects=True)
+        from api.utils.security import safe_get
+        resp = safe_get(target_url, headers=browser_headers, timeout=20, verify=True)
         resp.raise_for_status()
         payload = _extract_payload(resp, target_url)
         if payload.get('content'):
@@ -2997,8 +2998,9 @@ def web_fetch_url(url: str) -> Optional[Dict]:
 
     if target_url.startswith('https://'):
         try:
+            from api.utils.security import safe_get
             http_url = target_url.replace('https://', 'http://', 1)
-            resp = _requests.get(http_url, headers=browser_headers, timeout=20, verify=False, allow_redirects=True)
+            resp = safe_get(http_url, headers=browser_headers, timeout=20, verify=False)
             resp.raise_for_status()
             payload = _extract_payload(resp, http_url)
             if payload.get('content'):

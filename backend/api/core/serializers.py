@@ -382,6 +382,37 @@ class ReportListSerializer(serializers.ModelSerializer):
                 return "User"
         return 'Ẩn danh'
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        is_privileged = False
+        if request and getattr(request, 'user', None) and request.user.is_authenticated:
+            if request.user.is_staff or request.user.id == instance.reporter_id:
+                is_privileged = True
+
+        if not is_privileged:
+            from api.core.models import BankAccount
+            from api.utils.privacy import redact_pii, redact_obj
+
+            if data.get('target_type') == 'phone' and data.get('target_value'):
+                tv = str(data['target_value'])
+                if len(tv) > 6:
+                    data['target_value'] = tv[:3] + '****' + tv[-3:]
+            elif data.get('target_type') == 'account' and data.get('target_value'):
+                data['target_value'] = BankAccount.mask_account(data['target_value'])
+
+            if data.get('description'):
+                data['description'] = redact_pii(data['description'])
+            if data.get('ocr_text'):
+                data['ocr_text'] = redact_pii(data['ocr_text'])
+            if data.get('custom_fields'):
+                data['custom_fields'] = redact_obj(data['custom_fields'])
+
+            data['ai_analysis'] = None
+            data['moderation_note'] = None
+
+        return data
+
 class ReportEvidenceSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
     class Meta:
@@ -488,6 +519,8 @@ class ReportDetailSerializer(serializers.ModelSerializer):
             data['evidence_file'] = None
             data['evidence_url'] = None
             data['evidence_images_data'] = []
+            data['ai_analysis'] = None
+            data['moderation_note'] = None
 
             # Add dispute and moderation provenance for community transparency
             data['dispute_url'] = f"/report/lookup/?dispute={instance.id}"

@@ -518,16 +518,50 @@ class ScanLookupView(APIView):
             'crypto': '/scan/lookup/',
         }
 
+        from api.core.models import BankAccount
+        from api.utils.privacy import redact_pii, redact_obj
+
+        is_staff_user = bool(request.user and request.user.is_authenticated and request.user.is_staff)
+
         for report in report_qs.select_related('reporter').order_by('-created_at')[:200]:
             risk_map = {'critical': 'RED', 'high': 'RED', 'medium': 'YELLOW', 'low': 'GREEN'}
             risk_level = risk_map.get(report.severity, 'YELLOW')
             risk_display = 'Nguy hiểm' if risk_level == 'RED' else ('Cảnh báo' if risk_level == 'YELLOW' else 'An toàn')
+
+            # Redact/mask identifiers and free-text fields for unprivileged public access
+            target_val = report.target_value
+            scammer_phone_val = report.scammer_phone
+            scammer_acc_val = report.scammer_bank_account
+            desc_val = report.description or ''
+            custom_val = getattr(report, 'custom_fields', {}) or {}
+            evidence_url_val = report.evidence_file.url if report.evidence_file else None
+
+            if not is_staff_user:
+                if report.target_type == 'phone' and target_val:
+                    tv = str(target_val)
+                    if len(tv) > 6:
+                        target_val = tv[:3] + '****' + tv[-3:]
+                elif report.target_type == 'account' and target_val:
+                    target_val = BankAccount.mask_account(target_val)
+
+                if scammer_phone_val:
+                    sp = str(scammer_phone_val)
+                    if len(sp) > 6:
+                        scammer_phone_val = sp[:3] + '****' + sp[-3:]
+
+                if scammer_acc_val:
+                    scammer_acc_val = BankAccount.mask_account(scammer_acc_val)
+
+                desc_val = redact_pii(desc_val)
+                custom_val = redact_obj(custom_val)
+                evidence_url_val = None
+
             results.append({
                 'id': report.id,
                 'kind': 'report',
                 'type': report.target_type,
                 'type_display': target_labels.get(report.target_type, report.target_type),
-                'target': report.target_value,
+                'target': target_val,
                 'risk_score': {'critical': 95, 'high': 80, 'medium': 50, 'low': 20}.get(report.severity, 50),
                 'risk_level': risk_level,
                 'risk_display': risk_display,
@@ -536,14 +570,14 @@ class ScanLookupView(APIView):
                 'scam_type_display': scam_labels.get(report.scam_type, report.scam_type),
                 # Khong lo username nguoi bao cao tren endpoint public (truoc day
                 # lo toan bo username; chi giu nhan an danh de dem so nguoi dong gop).
-                'description': report.description or '',
+                'description': desc_val,
                 'scammer_name': report.scammer_name,
-                'scammer_phone': report.scammer_phone,
-                'scammer_bank_account': report.scammer_bank_account,
+                'scammer_phone': scammer_phone_val,
+                'scammer_bank_account': scammer_acc_val,
                 'scammer_bank_name': report.scammer_bank_name,
                 'scammer_social': getattr(report, 'scammer_social', ''),
-                'custom_fields': getattr(report, 'custom_fields', {}) or {},
-                'evidence_url': report.evidence_file.url if report.evidence_file else None,
+                'custom_fields': custom_val,
+                'evidence_url': evidence_url_val,
                 'created_at': report.created_at.isoformat(),
                 'time_ago': f"{timesince(report.created_at, now).split(',')[0]} trước",
                 'url': type_to_page.get(report.target_type, '/scam-radar/'),

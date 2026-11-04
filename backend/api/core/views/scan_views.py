@@ -1998,21 +1998,24 @@ class ScanFileView(APIView):
             status=ScanStatus.PENDING
         )
 
-        # Save file to temp location
+        # Save file to secure temp location (mode 0700 dir, 0600 file)
         import tempfile
         import os
         from api.utils.security import sanitize_filename
         clean_name = sanitize_filename(uploaded_file.name)
-        temp_dir = tempfile.gettempdir()
-        file_path = os.path.join(temp_dir, f"{scan_event.id}_{clean_name}")
-        
-        with open(file_path, 'wb+') as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
+        upload_dir = os.path.join(tempfile.gettempdir(), 'sentinel_uploads')
+        os.makedirs(upload_dir, mode=0o700, exist_ok=True)
         try:
-            os.chmod(file_path, 0o644)
+            os.chmod(upload_dir, 0o700)
         except Exception:
             pass
+        file_path = os.path.join(upload_dir, f"{scan_event.id}_{clean_name}")
+        
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        fd = os.open(file_path, flags, 0o600)
+        with open(fd, 'wb') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
 
         # Offload to Celery
         from api.core.tasks import perform_file_scan_task
@@ -2082,13 +2085,20 @@ class ScanAudioView(APIView):
             status=ScanStatus.PENDING,
         )
 
-        # Save audio to temp path for Celery worker
+        # Save audio to secure temp path for Celery worker (mode 0700 dir, 0600 file)
         import tempfile, os
         from api.utils.security import sanitize_filename
         clean_name = sanitize_filename(audio_file.name)
-        temp_dir = tempfile.gettempdir()
-        file_path = os.path.join(temp_dir, f"audio_{scan_event.id}_{clean_name}")
-        with open(file_path, 'wb+') as dest:
+        upload_dir = os.path.join(tempfile.gettempdir(), 'sentinel_uploads')
+        os.makedirs(upload_dir, mode=0o700, exist_ok=True)
+        try:
+            os.chmod(upload_dir, 0o700)
+        except Exception:
+            pass
+        file_path = os.path.join(upload_dir, f"audio_{scan_event.id}_{clean_name}")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        fd = os.open(file_path, flags, 0o600)
+        with open(fd, 'wb') as dest:
             for chunk in audio_file.chunks():
                 dest.write(chunk)
 

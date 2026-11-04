@@ -392,7 +392,7 @@ class VTClient:
         merged["forensic_proofs"] = proofs
         return merged
 
-    def scan_file(self, file_path: str, timeout: int = 60) -> Optional[Dict[str, Any]]:
+    def scan_file(self, file_path: str, timeout: int = 60, upload_if_unknown: bool = False) -> Optional[Dict[str, Any]]:
         try:
             local = self.analyzer.scan_file(file_path, timeout=timeout)
         except Exception as e:
@@ -409,24 +409,29 @@ class VTClient:
         sha256 = _sha256_of_file(file_path)
         vt = self._vt_lookup_file_by_hash(sha256) if sha256 else None
         if vt is None and os.path.exists(file_path):
-            try:
-                size = os.path.getsize(file_path)
-                # Gioi han upload VT de tranh DoS quota: chi upload file <= 100MB (khop ScanFileView.MAX_SIZE)
-                if size <= 100 * 1024 * 1024:
-                    vt = self._vt_upload_file(file_path, size)
-                    if vt and sha256 and not vt.get("pending") and vt.get("stats", {}).get("malicious", 0) + vt.get("stats", {}).get("suspicious", 0) >= 0:
-                        _cache_set(f"vt:file:{sha256}", vt, max(self.vt_cache_ttl, 86400))
-                else:
-                    vt = {"stats": {"harmless": 0, "malicious": 0, "suspicious": 0, "undetected": 0, "timeout": 0},
-                          "pending": False, "reason": "file_too_large_for_vt"}
-            except Exception as e:
-                logger.warning(f"[VirusTotal] File upload flow loi: {e}")
-                vt = None
+            if upload_if_unknown:
+                try:
+                    size = os.path.getsize(file_path)
+                    # Gioi han upload VT de tranh DoS quota: chi upload file <= 100MB (khop ScanFileView.MAX_SIZE)
+                    if size <= 100 * 1024 * 1024:
+                        vt = self._vt_upload_file(file_path, size)
+                        if vt and sha256 and not vt.get("pending") and vt.get("stats", {}).get("malicious", 0) + vt.get("stats", {}).get("suspicious", 0) >= 0:
+                            _cache_set(f"vt:file:{sha256}", vt, max(self.vt_cache_ttl, 86400))
+                    else:
+                        vt = {"stats": {"harmless": 0, "malicious": 0, "suspicious": 0, "undetected": 0, "timeout": 0},
+                              "pending": False, "reason": "file_too_large_for_vt"}
+                except Exception as e:
+                    logger.warning(f"[VirusTotal] File upload flow loi: {e}")
+                    vt = None
+            else:
+                logger.info(f"[VirusTotal] File hash {sha256} not found on VT. Upload skipped (upload_if_unknown=False).")
+                vt = {"available": False, "reason": "hash_not_found_upload_disabled", "sha256": sha256}
 
         if not vt or not vt.get("stats") or vt.get("pending"):
             local["virustotal"] = {"available": False,
-                                   "reason": "pending" if (vt or {}).get("pending") else "no_report_or_rate_limited",
-                                   "analysis_id": (vt or {}).get("analysis_id", "")}
+                                   "reason": (vt or {}).get("reason") or ("pending" if (vt or {}).get("pending") else "no_report_or_rate_limited"),
+                                   "analysis_id": (vt or {}).get("analysis_id", ""),
+                                   "sha256": sha256 or ""}
             local.setdefault("sources", ["local"])
             return local
 

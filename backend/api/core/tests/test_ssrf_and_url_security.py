@@ -51,3 +51,16 @@ class SSRFAndUrlSecurityTests(TestCase):
     def test_analyze_network_blocks_private_ip(self):
         res = _analyze_network('http://127.0.0.1:8000', '127.0.0.1')
         self.assertEqual(res.get('error'), 'Blocked internal destination')
+
+    def test_web_fetch_url_blocks_redirect_ssrf(self):
+        from api.utils.ollama_client import web_fetch_url
+
+        # Direct loopback
+        self.assertIsNone(web_fetch_url('http://127.0.0.1:8001/secret'))
+        self.assertIsNone(web_fetch_url('http://169.254.169.254/latest/meta-data/'))
+
+        # Redirect to loopback: mock safe_get throwing ValueError for unsafe redirect
+        with patch('api.utils.security.safe_get', side_effect=ValueError('Unsafe URL blocked: http://127.0.0.1')):
+            res = web_fetch_url('https://malicious-redirector.com/hop')
+            self.assertIsNone(res)
+

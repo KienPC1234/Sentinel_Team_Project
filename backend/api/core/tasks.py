@@ -2473,7 +2473,7 @@ def perform_file_scan_task(self, scan_event_id, file_path):
         # Scan with Local Threat Engine & ClamAV Sandbox (100% on-premise)
         logger.info(f"[FileScan] Event {scan_event_id}: Scanning with Local Zero-Trust Sandbox...")
         with VTClient() as vt:
-            vt_result = vt.scan_file(file_path, timeout=60)
+            vt_result = vt.scan_file(file_path, timeout=60, upload_if_unknown=False)
         elapsed = time.time() - start_time
         logger.info(f"[FileScan] Event {scan_event_id}: Sandbox scan returned after {elapsed:.1f}s — result={'OK' if vt_result else 'None'}")
 

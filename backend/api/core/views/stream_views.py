@@ -90,9 +90,11 @@ class ScanAnalyzeSSEView(APIView):
             )
             if not can_view:
                 return Response({'error': 'Bạn không có quyền truy cập kết quả quét này.'}, status=403)
-            scan_type = scan_type or ev.scan_type
-            scan_data = scan_data or ev.result_json or {}
-            raw_input = raw_input or ev.raw_input or ''
+            # Ràng buộc sự thật phía server: khi scan_id hợp lệ, bản ghi cơ sở dữ liệu
+            # có quyền tối thượng, client không được ghi đè scan_data/scan_type/raw_input.
+            scan_type = ev.scan_type
+            scan_data = ev.result_json or {}
+            raw_input = ev.raw_input or ''
 
         try:
             from api.utils.privacy import redact_pii as _redact
@@ -194,7 +196,14 @@ class ScanAnalyzeSSEView(APIView):
                 # Giải thích kết quả quét: chỉ dùng target gốc khi caller đã xác
                 # thực; người dùng ẩn danh được redact PII trước khi gửi LLM cloud.
                 for chunk in stream_response(prompt, system_prompt=CHAT_SYSTEM_PROMPT, allow_pii=allow_pii):
-                    if not chunk or chunk.startswith('__'):
+                    if not chunk:
+                        continue
+                    if isinstance(chunk, bytes):
+                        try:
+                            chunk = chunk.decode('utf-8', errors='replace')
+                        except Exception:
+                            continue
+                    if chunk.startswith('__'):
                         continue
                     yield f"data: {json.dumps({'type': 'delta', 'text': chunk}, ensure_ascii=False)}\n\n"
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"

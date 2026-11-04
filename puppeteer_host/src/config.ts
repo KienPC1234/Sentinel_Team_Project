@@ -8,7 +8,7 @@ const envSchema = z.object({
   PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
   PUPPETEER_PROFILE_DIR: z.string().default('./puppeteer_profile'),
   PUPPETEER_DEBUG_PORT: z.coerce.number().int().positive().default(9222),
-  PUPPETEER_DEBUG_HOST: z.string().default('0.0.0.0'),
+  PUPPETEER_DEBUG_HOST: z.string().default('127.0.0.1'),
   PUPPETEER_IDLE_TAB_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   PUPPETEER_TAB_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 1000),
   MAX_RENDERS_BEFORE_RECYCLE: z.coerce.number().int().positive().default(50),
