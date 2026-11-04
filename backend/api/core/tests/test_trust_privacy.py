@@ -49,6 +49,21 @@ class PrivacyRedactionTest(TestCase):
         self.assertLessEqual(res['final_score'], 35)
         self.assertIn(res['risk_level'], ('SAFE', 'GREEN'))
 
+    def test_over_masking_prevention(self):
+        """Kiểm tra chống ngộ nhận: mã đơn hàng/vận đơn không được gán nhãn thành số tài khoản."""
+        order_text = 'Don hang cua ban co ma van don 2026110488 dang giao, ma khach hang KH12345678'
+        out = redact_pii(order_text)
+        self.assertNotIn('2026110488', out)
+        self.assertNotIn('KH12345678', out)
+        self.assertIn('[mã tra cứu đã ẩn]', out)
+        self.assertNotIn('[số tài khoản đã ẩn]', out)
+
+        # Ngược lại: khi có tiền tố STK rõ ràng thì mới gán nhãn số tài khoản
+        bank_text = 'Chuyen tien vao STK 1902847562 Techcombank'
+        out_bank = redact_pii(bank_text)
+        self.assertNotIn('1902847562', out_bank)
+        self.assertIn('[số tài khoản đã ẩn]', out_bank)
+
     def test_severe_extortion_floor_enforced_on_true_threat(self):
         from api.utils.trust_guard import _detect_severe_extortion, compute_evidence_aware_ensemble
         threat = 'Cơ quan cảnh sát điều tra: Bạn dính líu đến đường dây rửa tiền, lệnh bắt tạm giam đã ký. Yêu cầu chuyển ngay 100 triệu vào tài khoản tạm giữ của viện kiểm sát để bảo lãnh.'
@@ -58,6 +73,25 @@ class PrivacyRedactionTest(TestCase):
             ai_result={'is_scam': False, 'risk_score': 5},
             rule_score=60,
         )
+        self.assertGreaterEqual(res['final_score'], 70)
+        self.assertEqual(res['risk_level'], 'RED')
+
+    def test_mixed_context_attack_severe_extortion(self):
+        """Kiểm tra chống tấn công Mixed-context: kẻ lừa đảo mượn danh văn bản khuyến cáo để tống tiền."""
+        from api.utils.trust_guard import _detect_severe_extortion, compute_evidence_aware_ensemble
+        mixed_attack = (
+            'Khuyến cáo từ Bộ Công an: Hãy cảnh giác với các chiêu trò lừa đảo qua mạng xã hội. '
+            'Tuy nhiên hồ sơ của bạn đang có lệnh bắt tạm giam từ Viện kiểm sát nhân dân về tội rửa tiền. '
+            'Yêu cầu chuyển ngay 50 triệu vào số tài khoản tạm giữ 0912837461 để niêm phong.'
+        )
+        # Vì câu đòi tiền không có phủ định nên vẫn BẮT BUỘC nhận diện đe dọa nghiêm trọng
+        self.assertTrue(_detect_severe_extortion(mixed_attack))
+        res = compute_evidence_aware_ensemble(
+            text=mixed_attack,
+            ai_result={'is_scam': False, 'risk_score': 10},  # Giả lập LLM bị đánh lừa bởi đoạn mở đầu
+            rule_score=60,
+        )
+        # Bắt buộc khóa sàn ĐỎ (>= 70)
         self.assertGreaterEqual(res['final_score'], 70)
         self.assertEqual(res['risk_level'], 'RED')
 

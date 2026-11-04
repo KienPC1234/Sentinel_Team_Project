@@ -740,14 +740,14 @@ ADVISORY_NEGATION_PATTERNS = [
 ]
 
 
-def _detect_severe_extortion(text: str) -> bool:
-    """Nhận diện hành vi tống tiền / lừa đảo cưỡng bức nghiêm trọng cần áp sàn điểm ĐỎ."""
-    t = (text or '').lower()
+def is_advisory_clause(sentence: str) -> bool:
+    """Kiểm tra một mệnh đề hoặc câu đơn lẻ có chứa từ ngữ phủ định hoặc khuyến cáo an toàn."""
+    s = (sentence or '').lower()
+    return any(re.search(p, s) for p in ADVISORY_NEGATION_PATTERNS)
 
-    # Khử trường hợp ngữ cảnh phủ định / khuyến cáo phòng chống tội phạm
-    if any(re.search(p, t) for p in ADVISORY_NEGATION_PATTERNS):
-        return False
 
+def _check_extortion_in_text(t: str) -> bool:
+    """Hàm kiểm tra các dấu hiệu đồng xuất hiện cấu thành hành vi tống tiền / ép buộc."""
     has_authority_threat = bool(re.search(r'lệnh\s*bắt|bắt\s*tạm\s*giam|viện\s*kiểm\s*sát|khởi\s*tố|rửa\s*tiền|buôn\s*lậu|tòa\s*án|án\s*tù|cấm\s*xuất\s*cảnh', t))
     has_holding_account = bool(re.search(r'tài\s*khoản\s*tạm\s*giữ|tài\s*khoản\s*thanh\s*tra|bảo\s*lãnh|trắng\s*án|niêm\s*phong', t))
     has_transfer_demand = bool(re.search(r'(?:chuyển|bắn|nộp|gửi)\s+[^:;!?\n]{0,60}?(?:vào|qua|tới)\s+(?:stk|số\s*tài\s*khoản|tài\s*khoản)', t))
@@ -761,6 +761,34 @@ def _detect_severe_extortion(text: str) -> bool:
     if has_otp_coercion:
         return True
     return False
+
+
+def _detect_severe_extortion(text: str) -> bool:
+    """
+    Nhận diện hành vi tống tiền / lừa đảo cưỡng bức nghiêm trọng cần áp sàn điểm ĐỎ.
+    XỬ LÝ THEO MỆNH ĐỀ (Clause-level Scoping - Chống Mixed-Context Attack):
+    - Không để một câu khuyến cáo/phủ định ở đầu văn bản vô hiệu hoá hành vi tống tiền xuất hiện ở câu khác.
+    - Một hành vi tống tiền chỉ được coi là phủ định nếu từ ngữ phủ định gắn liền với chính mệnh đề/câu đó.
+    - Nếu trong các câu còn lại (không có phủ định) vẫn tồn tại yêu cầu chuyển tiền/tống tiền, sàn ĐỎ vẫn BẮT BUỘC áp dụng.
+    """
+    raw_text = text or ''
+    t = raw_text.lower()
+    if not _check_extortion_in_text(t):
+        return False
+
+    sentences = [s.strip() for s in re.split(r'[\r\n.!?]+', raw_text) if s.strip()]
+    if not sentences:
+        return False
+
+    # Lọc các câu KHÔNG chứa từ ngữ phủ định / khuyến cáo
+    active_threat_sentences = [s for s in sentences if not is_advisory_clause(s)]
+    if not active_threat_sentences:
+        # Toàn bộ các câu chứa từ khóa đều là khuyến cáo hoặc phủ định thuần túy
+        return False
+
+    # Kiểm tra xem trong các câu chưa được phủ định có tồn tại hành vi tống tiền thực tế không
+    active_blob = ' . '.join(active_threat_sentences).lower()
+    return _check_extortion_in_text(active_blob)
 
 
 def compute_evidence_aware_ensemble(
@@ -779,9 +807,17 @@ def compute_evidence_aware_ensemble(
     has_verified_threat = bool(domain_threat.get('has_verified_threat', False))
 
     t = (text or '').lower()
-    has_advisory_negation = any(re.search(p, t) for p in ADVISORY_NEGATION_PATTERNS)
-    has_critical_threat = any(re.search(p, t) for p in CRITICAL_THREAT_PATTERNS) and not has_advisory_negation
     has_severe_extortion = _detect_severe_extortion(text)
+
+    # Xác định xem văn bản có phải là Khuyến cáo an toàn thuần túy (Pure Advisory) hay không.
+    # Chỉ coi là Pure Advisory khi MỌI câu chứa từ khóa nguy hiểm đều gắn liền với mệnh đề khuyến cáo/phủ định.
+    # Nếu là văn bản pha trộn (Mixed Context: có cảnh báo nhưng vẫn có câu đòi chuyển tiền/OTP),
+    # tuyệt đối không coi là Pure Advisory nhằm triệt tiêu nguy cơ Mixed-context Bypass.
+    sentences = [s.strip() for s in re.split(r'[\r\n.!?]+', text or '') if s.strip()]
+    threat_sentences = [s for s in sentences if any(re.search(p, s.lower()) for p in CRITICAL_THREAT_PATTERNS)]
+    is_pure_advisory = bool(threat_sentences and all(is_advisory_clause(s) for s in threat_sentences))
+
+    has_critical_threat = any(re.search(p, t) for p in CRITICAL_THREAT_PATTERNS) and not is_pure_advisory
 
     ai_available = bool(ai_result and not ai_result.get('ai_notice') and not ai_result.get('error'))
     ai_score = int(ai_result.get('risk_score', ai_result.get('score', 0)) or 0) if (ai_available and ai_result) else 0

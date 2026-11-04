@@ -24,21 +24,15 @@ REDACTED = {
     "phone": "[SĐT đã ẩn]",
     "email": "[email đã ẩn]",
     "bank_account": "[số tài khoản đã ẩn]",
+    "order_code": "[mã tra cứu đã ẩn]",
+    "identifier": "[mã định danh đã ẩn]",
     "cccd": "[CCCD/CMND đã ẩn]",
     "card": "[số thẻ đã ẩn]",
     "secret": "[khoá/bí mật đã ẩn]",
     "address": "[địa chỉ đã ẩn]",
 }
 
-# Thứ tự áp dụng quan trọng: bí mật/ token trước, rồi tới dữ liệu dạng số dài.
-# SĐT VN hợp lệ luôn ≥10 chữ số (0 + 9, hoặc +84 + 9) → yêu cầu ≥9 số sau tiền tố
-# để số 9 chữ số (CMND cũ) rơi đúng nhãn CCCD/CMND thay vì bị nhận nhầm là SĐT.
-_PHONE = re.compile(r"(?<!\d)(?:\+?84|0)(?:[\s.\-]?\d){9,10}(?!\d)")
-_CARD = re.compile(r"(?<!\d)(?:\d[\s\-]?){13,19}(?!\d)")
-# CMND cũ 9 số (CCCD 12 số trùng dải số tài khoản nên được ẩn dưới nhãn tài khoản).
-_CCCD = re.compile(r"(?<!\d)\d{9}(?!\d)")
-_BANK = re.compile(r"(?<!\d)\d{8,19}(?!\d)")
-_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+# 1. Bí mật, API key và Token
 _SECRET = re.compile(
     r"(?i)\b(?:sk-[A-Za-z0-9_\-]{10,}"          # OpenAI
     r"|AIza[0-9A-Za-z_\-]{20,}"                  # Google API key
@@ -48,26 +42,64 @@ _SECRET = re.compile(
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"       # PEM
     r")\S*"
 )
-# Bearer / header token ngắn
 _BEARER = re.compile(r"(?i)\b(?:bearer\s+|x-apikey[\"']?\s*[:=]\s*)[A-Za-z0-9._\-]{16,}")
+_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+# 2. Ngữ cảnh mã đơn hàng / vận đơn / hóa đơn / khách hàng / hồ sơ / hợp đồng (tránh ngộ nhận thành STK)
+_ORDER_PREFIX_RE = re.compile(
+    r"(?i)\b((?:(?:mã|ma)\s+(?:đơn\s*hàng|don\s*hang|vận\s*đơn|van\s*don|giao\s*dịch|giao\s*dich|hóa\s*đơn|hoa\s*don|khách\s*hàng|khach\s*hang|hồ\s*sơ|ho\s*so|hợp\s*đồng|hop\s*dong|bưu\s*gửi|buu\s*gui|tra\s*cứu|tra\s*cuu|xác\s*nhận|xac\s*nhan|đặt\s*chỗ|dat\s*cho|vé|ve|chuyến\s*bay|chuyen\s*bay)|order\s*(?:id|code)|tracking\s*(?:no|number)|(?:mã|ma)\s*(?:đh|dh|kh|hd|vd))[\s:#]{1,6})([0-9A-Za-z\-_]{6,25})\b"
+)
+
+# 3. Ngữ cảnh CCCD / CMND có tiền tố nhận diện
+_CCCD_PREFIX_RE = re.compile(
+    r"(?i)\b((?:cccd|cmnd|(?:căn|can)\s*(?:cước|cuoc)(?:\s*(?:công\s*dân|cong\s*dan))?|(?:chứng|chung)\s*(?:minh|thư)(?:\s*(?:nhân\s*dân|nhan\s*dan))?|(?:số|so)\s*(?:định\s*danh|dinh\s*danh))[\s:#]{1,6})(\d{9,12})\b"
+)
+
+# 4. Ngữ cảnh tài khoản ngân hàng có tiền tố xác thực rõ ràng
+_BANK_PREFIX_RE = re.compile(
+    r"(?i)\b((?:stk|(?:số|so)\s*(?:tài\s*khoản|tai\s*khoan)|(?:tài\s*khoản|tai\s*khoan)(?:\s*(?:ngân\s*hàng|ngan\s*hang))?|tk\s*(?:nhận|nhan)|vào\s*tk|chuyển\s*(?:tiền\s*)?vào)[\s:#]{1,6})(\d{8,19})\b"
+)
+
+# 5. Số điện thoại Việt Nam (≥10 chữ số)
+_PHONE = re.compile(r"(?<!\d)(?:\+?84|0)(?:[\s.\-]?\d){9,10}(?!\d)")
+
+# 6. Số thẻ thanh toán quốc tế (13-19 số)
+_CARD = re.compile(r"(?<!\d)(?:\d[\s\-]?){15,19}(?!\d)")
+
+# 7. CMND cũ 9 chữ số độc lập
+_CCCD_STANDALONE = re.compile(r"(?<!\d)\d{9}(?!\d)")
+
+# 8. Dãy số định danh dài 8-19 số còn lại không có tiền tố ngân hàng -> dùng nhãn trung tính [mã định danh đã ẩn]
+#    Tuyệt đối không mặc định là tài khoản ngân hàng để tránh làm LLM hiểu lầm loại thực thể.
+_GENERIC_NUMERIC = re.compile(r"(?<!\d)\d{8,19}(?!\d)")
 
 
 def redact_pii(text: str, *, keep_labels: bool = True) -> str:
-    """Ẩn PII trong một chuỗi. Trả về chuỗi đã ẩn (an toàn để log)."""
+    """
+    Ẩn PII theo ngữ cảnh (Context-Aware Entity Redaction).
+    Bảo toàn loại thực thể ngữ nghĩa chính xác, tránh Over-masking mã đơn hàng/hóa đơn thành STK.
+    """
     if not text:
         return text
     if not isinstance(text, str):
         text = str(text)
     out = text
-    out = _SECRET.sub(REDACTED["secret"], out)
+    out = _SECRET.sub(REDACTED["secret"] if keep_labels else "[X]", out)
     out = _BEARER.sub(lambda m: m.group(0).split()[-1][:4] + "…", out)
     out = _EMAIL.sub(REDACTED["email"] if keep_labels else "[X]", out)
-    # Thứ tự: SĐT (định dạng VN) trước để không bị nhầm với số tài khoản; rồi thẻ,
-    # CCCD 9 số (CMND cũ), cuối cùng số tài khoản chung 8–19 số.
+
+    # 1. Bóc tách thực thể theo ngữ cảnh tiền tố trước
+    out = _ORDER_PREFIX_RE.sub(r"\g<1>" + (REDACTED["order_code"] if keep_labels else "[X]"), out)
+    out = _CCCD_PREFIX_RE.sub(r"\g<1>" + (REDACTED["cccd"] if keep_labels else "[X]"), out)
+    out = _BANK_PREFIX_RE.sub(r"\g<1>" + (REDACTED["bank_account"] if keep_labels else "[X]"), out)
+
+    # 2. Nhận diện các định dạng chuẩn đặc thù
     out = _PHONE.sub(REDACTED["phone"] if keep_labels else "[X]", out)
     out = _CARD.sub(REDACTED["card"] if keep_labels else "[X]", out)
-    out = _CCCD.sub(REDACTED["cccd"] if keep_labels else "[X]", out)
-    out = _BANK.sub(REDACTED["bank_account"] if keep_labels else "[X]", out)
+    out = _CCCD_STANDALONE.sub(REDACTED["cccd"] if keep_labels else "[X]", out)
+
+    # 3. Dãy số dài không xác định -> nhãn trung tính
+    out = _GENERIC_NUMERIC.sub(REDACTED["identifier"] if keep_labels else "[X]", out)
     return out
 
 

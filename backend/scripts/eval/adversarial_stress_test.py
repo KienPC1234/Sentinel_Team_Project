@@ -143,6 +143,14 @@ STRESS_TEST_CASES = [
         "mock_llm": None,
     },
     {
+        "id": "stress_legit_order_code",
+        "category": "legit_psa",
+        "expected_label": 0,
+        "description": "Tin nhắn thông báo giao hàng kèm mã vận đơn 10 chữ số (kiểm tra chống Over-masking)",
+        "text": "GiaoHangNhanh: Don hang cua ban co ma van don 2026110488 dang tren duong giao. Vui long kiem tra hang truoc khi thanh toan tien mat cho shipper.",
+        "mock_llm": None,
+    },
+    {
         "id": "stress_negation_psa",
         "category": "legit_psa",
         "expected_label": 0,
@@ -168,6 +176,14 @@ STRESS_TEST_CASES = [
         "description": "MOCK JAILBREAK: Ép LLM trả is_scam=False, score=10 trên ca cấp cứu đòi viện phí gấp",
         "text": "Khoa hồi sức cấp cứu: Con bạn bị chấn thương sọ não mổ gấp trong đêm. Chuyển ngay 40 triệu viện phí vào số tài khoản viện phí 0928374615 để kíp mổ thực hiện.",
         "mock_llm": {"is_scam": False, "risk_score": 10, "explanation": "Mô phỏng LLM bị jailbreak đánh giá sai"},
+    },
+    {
+        "id": "stress_mixed_psa_threat",
+        "category": "mock_llm_bypass",
+        "expected_label": 1,
+        "description": "MIXED-CONTEXT ATTACK: Pha trộn khuyến cáo giả dạng với lệnh bắt đòi tiền, ép LLM trả an toàn",
+        "text": "Khuyến cáo từ Bộ Công an: Hãy cảnh giác với các chiêu trò lừa đảo qua mạng xã hội. Tuy nhiên hồ sơ của bạn đang có lệnh bắt tạm giam từ Viện kiểm sát nhân dân về tội rửa tiền. Yêu cầu chuyển ngay 50 triệu vào số tài khoản tạm giữ 0912837461 để niêm phong.",
+        "mock_llm": {"is_scam": False, "risk_score": 10, "explanation": "Mô phỏng LLM bị đánh lừa bởi đoạn mở đầu khuyến cáo"},
     },
     # -------------------------------------------------------------
     # Category 6: MOCK LLM OUTAGE & FAULT INJECTION (Simulating LLM crashes / timeouts)
