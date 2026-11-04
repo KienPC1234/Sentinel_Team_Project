@@ -1,6 +1,6 @@
 # Báo Cáo Đánh Giá Tập Kiểm Thử Độc Lập Thứ Hai (Holdout Set B - 40 mẫu)
 
-> **Thời điểm thực nghiệm:** 2026-11-04 13:35:08  
+> **Thời điểm thực nghiệm:** 2026-11-04 14:07:17  
 > **Tệp dữ liệu:** `holdout_test_set_b.jsonl`  
 > **Quy mô mẫu:** **40 mẫu** (20 mẫu lừa đảo, 20 mẫu an toàn)  
 > **Khoảng tin cậy:** Wilson Score 95% Confidence Interval
@@ -14,18 +14,18 @@
 | Cấu hình | Precision | Recall | Recall 95% CI (Wilson) | F1-Score | Accuracy | Specificity | Độ trễ TB |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Heuristic Only** | 0.7500 | 0.1500 | `[0.052, 0.360]` | **0.2500** | 0.5500 | 0.9500 | 0.4 ms |
-| **LLM Only** | 1.0000 | 1.0000 | `[0.839, 1.000]` | **1.0000** | 1.0000 | 1.0000 | 5373.7 ms |
-| **Evidence-Aware Ensemble** | 1.0000 | 1.0000 | `[0.839, 1.000]` | **1.0000** | 1.0000 | 1.0000 | 5374.1 ms |
-| **Full Pipeline** | 1.0000 | 1.0000 | `[0.839, 1.000]` | **1.0000** | 1.0000 | 1.0000 | 5680.1 ms |
+| **LLM Only** | 1.0000 | 1.0000 | `[0.839, 1.000]` | **1.0000** | 1.0000 | 1.0000 | 5915.0 ms |
+| **Evidence-Aware Ensemble** | 1.0000 | 1.0000 | `[0.839, 1.000]` | **1.0000** | 1.0000 | 1.0000 | 5915.3 ms |
+| **Full Pipeline** | 1.0000 | 1.0000 | `[0.839, 1.000]` | **1.0000** | 1.0000 | 1.0000 | 6479.9 ms |
 
 ### Bảng 1.2: Hiệu năng ở Ngưỡng Cảnh báo Rủi ro (Ngưỡng $\ge 40$ - Mức VÀNG + ĐỎ)
 
 | Cấu hình | Precision | Recall | F1-Score | Accuracy | Specificity | Độ trễ TB |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Heuristic Only** | 0.8182 | 0.4500 | **0.5806** | 0.6750 | 0.9000 | 0.4 ms |
-| **LLM Only** | 1.0000 | 1.0000 | **1.0000** | 1.0000 | 1.0000 | 5373.7 ms |
-| **Evidence-Aware Ensemble** | 1.0000 | 1.0000 | **1.0000** | 1.0000 | 1.0000 | 5374.1 ms |
-| **Full Pipeline** | 1.0000 | 1.0000 | **1.0000** | 1.0000 | 1.0000 | 5680.1 ms |
+| **LLM Only** | 1.0000 | 1.0000 | **1.0000** | 1.0000 | 1.0000 | 5915.0 ms |
+| **Evidence-Aware Ensemble** | 1.0000 | 1.0000 | **1.0000** | 1.0000 | 1.0000 | 5915.3 ms |
+| **Full Pipeline** | 1.0000 | 1.0000 | **1.0000** | 1.0000 | 1.0000 | 6479.9 ms |
 
 ---
 

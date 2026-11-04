@@ -5,7 +5,11 @@
     "total_samples": 40,
     "positives_scam": 20,
     "negatives_legit": 20,
-    "timestamp": "2026-11-04 13:35:08"
+    "timestamp": "2026-11-04 14:07:17",
+    "model_id": "deepseek-v4.1-flash:cloud",
+    "temperature": 0.3,
+    "ablation_inference_mode": "Deterministic shared single-run LLM inference across Heuristic, LLM Only, and Evidence-Aware Ensemble",
+    "production_pipeline_mode": "End-to-End production evaluation via _analyze_message_text (with VirusTotal consensus & TrustGuard)"
   },
   "summary": {
     "Heuristic Only": {
@@ -86,7 +90,7 @@
       "latency": {
         "avg_ms": 0.38,
         "min_ms": 0.11,
-        "max_ms": 5.81,
+        "max_ms": 5.76,
         "p95_ms": 0.37
       }
     },
@@ -166,10 +170,10 @@
         }
       },
       "latency": {
-        "avg_ms": 5373.72,
-        "min_ms": 2759.8,
-        "max_ms": 10218.11,
-        "p95_ms": 8499.33
+        "avg_ms": 5914.96,
+        "min_ms": 3546.52,
+        "max_ms": 12346.91,
+        "p95_ms": 9471.92
       }
     },
     "Evidence-Aware Ensemble": {
@@ -248,10 +252,10 @@
         }
       },
       "latency": {
-        "avg_ms": 5374.1,
-        "min_ms": 2759.98,
-        "max_ms": 10218.28,
-        "p95_ms": 8499.51
+        "avg_ms": 5915.34,
+        "min_ms": 3546.7,
+        "max_ms": 12347.07,
+        "p95_ms": 9472.13
       }
     },
     "Full Pipeline": {
@@ -330,10 +334,10 @@
         }
       },
       "latency": {
-        "avg_ms": 5680.13,
-        "min_ms": 3569.64,
-        "max_ms": 11530.46,
-        "p95_ms": 7913.61
+        "avg_ms": 6479.92,
+        "min_ms": 3678.54,
+        "max_ms": 11695.32,
+        "p95_ms": 10121.28
       }
     }
   },
@@ -350,9 +354,9 @@
       "label": 1,
       "scores": {
         "heuristic": 0,
-        "llm": 96,
-        "ensemble": 96,
-        "full_pipeline": 95
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 97
       }
     },
     {
@@ -361,9 +365,9 @@
       "label": 1,
       "scores": {
         "heuristic": 20,
-        "llm": 95,
-        "ensemble": 95,
-        "full_pipeline": 97
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 96
       }
     },
     {
@@ -372,8 +376,8 @@
       "label": 1,
       "scores": {
         "heuristic": 0,
-        "llm": 95,
-        "ensemble": 95,
+        "llm": 94,
+        "ensemble": 94,
         "full_pipeline": 92
       }
     },
@@ -394,9 +398,9 @@
       "label": 1,
       "scores": {
         "heuristic": 60,
-        "llm": 97,
-        "ensemble": 97,
-        "full_pipeline": 97
+        "llm": 96,
+        "ensemble": 96,
+        "full_pipeline": 95
       }
     },
     {
@@ -405,9 +409,9 @@
       "label": 1,
       "scores": {
         "heuristic": 20,
-        "llm": 97,
-        "ensemble": 97,
-        "full_pipeline": 98
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
       }
     },
     {
@@ -418,7 +422,7 @@
         "heuristic": 20,
         "llm": 95,
         "ensemble": 95,
-        "full_pipeline": 92
+        "full_pipeline": 95
       }
     },
     {
@@ -427,9 +431,9 @@
       "label": 1,
       "scores": {
         "heuristic": 40,
-        "llm": 98,
-        "ensemble": 98,
-        "full_pipeline": 99
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
       }
     },
     {
@@ -449,9 +453,9 @@
       "label": 1,
       "scores": {
         "heuristic": 40,
-        "llm": 97,
-        "ensemble": 97,
-        "full_pipeline": 98
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 97
       }
     },
     {
@@ -460,9 +464,9 @@
       "label": 1,
       "scores": {
         "heuristic": 60,
-        "llm": 96,
-        "ensemble": 96,
-        "full_pipeline": 92
+        "llm": 92,
+        "ensemble": 92,
+        "full_pipeline": 95
       }
     },
     {
@@ -471,8 +475,8 @@
       "label": 1,
       "scores": {
         "heuristic": 20,
-        "llm": 99,
-        "ensemble": 99,
+        "llm": 98,
+        "ensemble": 98,
         "full_pipeline": 99
       }
     },
@@ -482,9 +486,9 @@
       "label": 1,
       "scores": {
         "heuristic": 20,
-        "llm": 99,
-        "ensemble": 99,
-        "full_pipeline": 100
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
       }
     },
     {
@@ -493,7 +497,7 @@
       "label": 1,
       "scores": {
         "heuristic": 100,
-        "llm": 99,
+        "llm": 98,
         "ensemble": 100,
         "full_pipeline": 100
       }
@@ -506,7 +510,7 @@
         "heuristic": 80,
         "llm": 98,
         "ensemble": 98,
-        "full_pipeline": 97
+        "full_pipeline": 95
       }
     },
     {
@@ -537,9 +541,9 @@
       "label": 1,
       "scores": {
         "heuristic": 80,
-        "llm": 99,
-        "ensemble": 99,
-        "full_pipeline": 95
+        "llm": 96,
+        "ensemble": 96,
+        "full_pipeline": 98
       }
     },
     {
@@ -550,7 +554,7 @@
         "heuristic": 20,
         "llm": 97,
         "ensemble": 97,
-        "full_pipeline": 96
+        "full_pipeline": 95
       }
     },
     {
@@ -561,7 +565,7 @@
         "heuristic": 0,
         "llm": 95,
         "ensemble": 95,
-        "full_pipeline": 97
+        "full_pipeline": 95
       }
     },
     {
@@ -570,9 +574,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 8,
-        "ensemble": 8,
-        "full_pipeline": 5
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 10
       }
     },
     {
@@ -583,7 +587,7 @@
         "heuristic": 0,
         "llm": 5,
         "ensemble": 5,
-        "full_pipeline": 8
+        "full_pipeline": 5
       }
     },
     {
@@ -594,7 +598,7 @@
         "heuristic": 20,
         "llm": 12,
         "ensemble": 20,
-        "full_pipeline": 20
+        "full_pipeline": 35
       }
     },
     {
@@ -603,9 +607,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 10,
-        "ensemble": 10,
-        "full_pipeline": 12
+        "llm": 8,
+        "ensemble": 8,
+        "full_pipeline": 10
       }
     },
     {
@@ -614,9 +618,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 5,
-        "ensemble": 5,
-        "full_pipeline": 5
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 8
       }
     },
     {
@@ -625,9 +629,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 12,
-        "ensemble": 12,
-        "full_pipeline": 10
+        "llm": 8,
+        "ensemble": 8,
+        "full_pipeline": 5
       }
     },
     {
@@ -658,8 +662,8 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 5,
-        "ensemble": 5,
+        "llm": 3,
+        "ensemble": 3,
         "full_pipeline": 5
       }
     },
@@ -669,8 +673,8 @@
       "label": 0,
       "scores": {
         "heuristic": 20,
-        "llm": 25,
-        "ensemble": 25,
+        "llm": 5,
+        "ensemble": 20,
         "full_pipeline": 20
       }
     },
@@ -680,9 +684,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 5,
-        "ensemble": 5,
-        "full_pipeline": 10
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 5
       }
     },
     {
@@ -693,7 +697,7 @@
         "heuristic": 0,
         "llm": 5,
         "ensemble": 5,
-        "full_pipeline": 10
+        "full_pipeline": 5
       }
     },
     {
@@ -702,8 +706,8 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 5,
-        "ensemble": 5,
+        "llm": 10,
+        "ensemble": 10,
         "full_pipeline": 5
       }
     },
@@ -724,9 +728,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 12,
-        "ensemble": 12,
-        "full_pipeline": 5
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 8
       }
     },
     {
@@ -735,8 +739,8 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 10,
-        "ensemble": 10,
+        "llm": 8,
+        "ensemble": 8,
         "full_pipeline": 5
       }
     },
@@ -757,9 +761,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 2,
-        "ensemble": 2,
-        "full_pipeline": 0
+        "llm": 0,
+        "ensemble": 0,
+        "full_pipeline": 2
       }
     },
     {
@@ -768,7 +772,7 @@
       "label": 0,
       "scores": {
         "heuristic": 20,
-        "llm": 8,
+        "llm": 10,
         "ensemble": 20,
         "full_pipeline": 20
       }
@@ -779,7 +783,7 @@
       "label": 0,
       "scores": {
         "heuristic": 40,
-        "llm": 7,
+        "llm": 12,
         "ensemble": 35,
         "full_pipeline": 35
       }

@@ -995,7 +995,10 @@ def _analyze_message_text(text: str) -> dict:
                 if vt_res:
                     score = vt_res.get('risk_score', 0)
                     max_domain_score = max(max_domain_score, score)
-                    if vt_res.get('malicious', 0) > 0 or vt_res.get('suspicious', 0) >= 2:
+                    vt_malicious = int(vt_res.get('malicious', 0) or 0)
+                    vt_suspicious = int(vt_res.get('suspicious', 0) or 0)
+                    # Audit P1: Đồng thuận xác minh đòi hỏi tối thiểu 2 engine độc lập (hoặc 1 malicious + 2 suspicious)
+                    if vt_malicious >= 2 or (vt_malicious >= 1 and vt_suspicious >= 2):
                         has_verified_threat = True
                     if score > 0:
                         domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")

@@ -727,9 +727,27 @@ CRITICAL_THREAT_PATTERNS = [
 ]
 
 
+# Mẫu nhận diện ngữ cảnh phủ định / khuyến cáo phòng chống tội phạm chính thống.
+# Dùng để ngăn chặn ngộ nhận (False Positive) khi văn bản là khuyến cáo an toàn
+# trích dẫn từ khóa của tội phạm để hướng dẫn người dân phòng ngừa.
+ADVISORY_NEGATION_PATTERNS = [
+    r'không\s*(?:bao\s*giờ\s*)?(?:yêu\s*cầu|đề\s*nghị|bắt\s*buộc)?\s*(?:người\s*dân\s*|khách\s*hàng\s*)?(?:chuyển|bắn|nộp|gửi)\s*(?:tiền|tiền\s*mặt|khoản\s*tiền|viện\s*phí|vào)',
+    r'không\s*(?:có\s*việc|có\s*chuyện)\s*(?:yêu\s*cầu\s*)?(?:chuyển|nộp)\s*tiền',
+    r'không\s*làm\s*việc\s*qua\s*(?:điện\s*thoại|mạng|mạng\s*xã\s*hội|zalo)',
+    r'(?:cảnh\s*giác|phòng\s*ngừa|phòng\s*chống|đề\s*phòng)\s*(?:với\s*)?(?:chiêu\s*trò|thủ\s*đoạn\s*)?lừa\s*đảo',
+    r'(?:khuyến\s*cáo|cảnh\s*báo)\s*(?:người\s*dân|khách\s*hàng)',
+    r'tuyệt\s*đối\s*không\s*(?:chuyển|cung\s*cấp|chia\s*sẻ|nhập)\s*(?:tiền|mã\s*otp|thông\s*tin)',
+]
+
+
 def _detect_severe_extortion(text: str) -> bool:
     """Nhận diện hành vi tống tiền / lừa đảo cưỡng bức nghiêm trọng cần áp sàn điểm ĐỎ."""
     t = (text or '').lower()
+
+    # Khử trường hợp ngữ cảnh phủ định / khuyến cáo phòng chống tội phạm
+    if any(re.search(p, t) for p in ADVISORY_NEGATION_PATTERNS):
+        return False
+
     has_authority_threat = bool(re.search(r'lệnh\s*bắt|bắt\s*tạm\s*giam|viện\s*kiểm\s*sát|khởi\s*tố|rửa\s*tiền|buôn\s*lậu|tòa\s*án|án\s*tù|cấm\s*xuất\s*cảnh', t))
     has_holding_account = bool(re.search(r'tài\s*khoản\s*tạm\s*giữ|tài\s*khoản\s*thanh\s*tra|bảo\s*lãnh|trắng\s*án|niêm\s*phong', t))
     has_transfer_demand = bool(re.search(r'(?:chuyển|bắn|nộp|gửi)\s+[^:;!?\n]{0,60}?(?:vào|qua|tới)\s+(?:stk|số\s*tài\s*khoản|tài\s*khoản)', t))
@@ -761,7 +779,8 @@ def compute_evidence_aware_ensemble(
     has_verified_threat = bool(domain_threat.get('has_verified_threat', False))
 
     t = (text or '').lower()
-    has_critical_threat = any(re.search(p, t) for p in CRITICAL_THREAT_PATTERNS)
+    has_advisory_negation = any(re.search(p, t) for p in ADVISORY_NEGATION_PATTERNS)
+    has_critical_threat = any(re.search(p, t) for p in CRITICAL_THREAT_PATTERNS) and not has_advisory_negation
     has_severe_extortion = _detect_severe_extortion(text)
 
     ai_available = bool(ai_result and not ai_result.get('ai_notice') and not ai_result.get('error'))

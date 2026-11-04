@@ -23,6 +23,44 @@ class PrivacyRedactionTest(TestCase):
         out = redact_for_external_llm('SĐT +84912345678 can kiem tra')
         self.assertNotIn('+84912345678', out)
 
+    def test_external_llm_redaction_cannot_be_disabled_by_env_var(self):
+        import os
+        old_val = os.environ.get("LLM_PII_REDACTION")
+        try:
+            os.environ["LLM_PII_REDACTION"] = "false"
+            out = redact_for_external_llm('SĐT 0912345678 và CCCD 001234567890')
+            self.assertNotIn('0912345678', out)
+            self.assertIn('[SĐT đã ẩn]', out)
+        finally:
+            if old_val is not None:
+                os.environ["LLM_PII_REDACTION"] = old_val
+            else:
+                os.environ.pop("LLM_PII_REDACTION", None)
+
+    def test_severe_extortion_negation_psa(self):
+        from api.utils.trust_guard import _detect_severe_extortion, compute_evidence_aware_ensemble
+        psa = 'Viện kiểm sát không yêu cầu người dân chuyển tiền vào tài khoản tạm giữ. Nếu nhận được yêu cầu như vậy, hãy cảnh giác với lừa đảo.'
+        self.assertFalse(_detect_severe_extortion(psa))
+        res = compute_evidence_aware_ensemble(
+            text=psa,
+            ai_result={'is_scam': False, 'risk_score': 5},
+            rule_score=60,
+        )
+        self.assertLessEqual(res['final_score'], 35)
+        self.assertIn(res['risk_level'], ('SAFE', 'GREEN'))
+
+    def test_severe_extortion_floor_enforced_on_true_threat(self):
+        from api.utils.trust_guard import _detect_severe_extortion, compute_evidence_aware_ensemble
+        threat = 'Cơ quan cảnh sát điều tra: Bạn dính líu đến đường dây rửa tiền, lệnh bắt tạm giam đã ký. Yêu cầu chuyển ngay 100 triệu vào tài khoản tạm giữ của viện kiểm sát để bảo lãnh.'
+        self.assertTrue(_detect_severe_extortion(threat))
+        res = compute_evidence_aware_ensemble(
+            text=threat,
+            ai_result={'is_scam': False, 'risk_score': 5},
+            rule_score=60,
+        )
+        self.assertGreaterEqual(res['final_score'], 70)
+        self.assertEqual(res['risk_level'], 'RED')
+
     def test_redact_endpoint(self):
         client = APIClient()
         resp = client.post('/api/v1/trust/redact/', {'text': 'goi 0901112223'}, format='json')

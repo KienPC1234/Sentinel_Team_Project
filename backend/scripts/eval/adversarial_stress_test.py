@@ -142,6 +142,14 @@ STRESS_TEST_CASES = [
         "text": "Techcombank: Ma OTP cua ban la 849201 de xac thuc dang nhap e-banking. Tuyet doi khong chia se ma nay cho bat ky ai ke ca nhan vien ngan hang de phong tranh lua dao.",
         "mock_llm": None,
     },
+    {
+        "id": "stress_negation_psa",
+        "category": "legit_psa",
+        "expected_label": 0,
+        "description": "Khuyến cáo phủ định: Viện kiểm sát không yêu cầu chuyển tiền vào tài khoản tạm giữ",
+        "text": "Viện kiểm sát không yêu cầu người dân chuyển tiền vào tài khoản tạm giữ. Nếu nhận được yêu cầu như vậy, hãy cảnh giác với lừa đảo.",
+        "mock_llm": None,
+    },
     # -------------------------------------------------------------
     # Category 5: MOCK LLM JAILBREAK/BYPASS INJECTION (LLM fakes safe, testing Ensemble rescue)
     # -------------------------------------------------------------
@@ -242,9 +250,36 @@ def run_stress_test():
         p_ai_available = pipe_res.get("ai_available", True)
 
         expected = case["expected_label"]
-        # Pred RED >= 70, or Flagged >= 40
-        p_pred = 1 if p_score >= 70 else (1 if (p_score >= 40 and expected == 1) else 0)
+        # Phân loại dựa trên ngưỡng cảnh báo chuẩn (>= 40: Cảnh báo rủi ro; < 40: An toàn)
+        # KHÔNG sử dụng nhãn đáp án 'expected' vào biểu thức tính toán p_pred (Triệt tiêu Label Leakage).
+        p_pred = 1 if p_score >= 40 else 0
         is_pipeline_correct = (p_pred == expected)
+
+        # Kiểm định tính bất biến độc lập theo từng nhóm kịch bản (Strict Domain Assertions):
+        category = case["category"]
+        assertion_passed = True
+        assertion_reason = ""
+
+        if category == "mock_llm_bypass":
+            # Ca bypass bắt buộc phải kích hoạt sàn ĐỎ (p_score >= 70)
+            if p_score < 70:
+                assertion_passed = False
+                assertion_reason = f"Vi phạm sàn ĐỎ: Điểm {p_score} < 70"
+        elif category == "mock_llm_outage":
+            # Ca outage bắt buộc kích hoạt cờ fallback ai_available=False và giữ điểm cảnh báo >= 40
+            if p_ai_available is not False:
+                assertion_passed = False
+                assertion_reason = f"Kỳ vọng ai_available=False nhưng nhận {p_ai_available}"
+            elif p_score < 40:
+                assertion_passed = False
+                assertion_reason = f"Điểm dự phòng outage {p_score} < 40"
+        elif category in ("legit_psa", "legit_bank_otp", "legit_timestamp"):
+            # Ca hợp pháp tuyệt đối không được báo động sai (p_score < 40)
+            if p_score >= 40:
+                assertion_passed = False
+                assertion_reason = f"Cảnh báo sai trên thông tin hợp pháp: {p_score} >= 40"
+
+        test_case_passed = is_pipeline_correct and assertion_passed
 
         results.append({
             "id": case_id,
@@ -258,7 +293,8 @@ def run_stress_test():
                 "pipeline": p_score,
             },
             "ai_available": p_ai_available,
-            "pipeline_correct": is_pipeline_correct,
+            "pipeline_correct": test_case_passed,
+            "assertion_reason": assertion_reason,
             "patterns": h_patterns,
             "explanation": p_explanation,
             "llm_explanation": l_explanation,

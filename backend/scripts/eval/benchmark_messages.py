@@ -305,6 +305,10 @@ def run_benchmark_for_dataset(dataset_file: Path, report_file: Path, json_file: 
             "positives_scam": sum(y_true),
             "negatives_legit": len(y_true) - sum(y_true),
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "model_id": getattr(django.conf.settings, "OLLAMA_MODEL", "deepseek-v4.1-flash:cloud"),
+            "temperature": 0.3,
+            "ablation_inference_mode": "Deterministic shared single-run LLM inference across Heuristic, LLM Only, and Evidence-Aware Ensemble",
+            "production_pipeline_mode": "End-to-End production evaluation via _analyze_message_text (with VirusTotal consensus & TrustGuard)",
         },
         "summary": summary_report,
         "error_analysis": {

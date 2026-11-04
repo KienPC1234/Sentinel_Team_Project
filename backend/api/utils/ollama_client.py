@@ -3839,7 +3839,12 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         # ------------------------------------------------------------------
         # Step 1: Direct scam-database lookups (ScamAdviser + ScamWave)
         # ------------------------------------------------------------------
-        subject = _extract_scam_subject(text)
+        # Bảo vệ PII bắt buộc: nếu chưa có sự đồng ý (external_consent=False),
+        # làm sạch PII trên văn bản trước khi gửi ra dịch vụ ngoài.
+        from api.utils.privacy import redact_for_external_llm
+        safe_lookup_text = text if external_consent else redact_for_external_llm(text)
+
+        subject = _extract_scam_subject(safe_lookup_text)
         logger.debug(f"analyze_text_for_scam: extracted subject for DB lookup: {subject!r}")
 
         for db_name, lookup_fn in [
@@ -3867,9 +3872,9 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
                 logger.warning(f"analyze_text_for_scam: {db_name} lookup failed ({exc})")
 
         # Tra cứu doanh nghiệp VN khi ngữ cảnh có dấu hiệu Việt Nam
-        vn_context = _is_likely_vietnam_context(text, subject)
+        vn_context = _is_likely_vietnam_context(safe_lookup_text, subject)
         if vn_context:
-            company_query = _extract_tratencongty_query(text, subject)
+            company_query = _extract_tratencongty_query(safe_lookup_text, subject)
             if company_query:
                 try:
                     company_res = lookup_tratencongty(company_query)
@@ -3895,7 +3900,7 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         # Step 2: Agentic web-search enrichment
         # ------------------------------------------------------------------
         try:
-            search_query = text[:300] + ('...' if len(text) > 300 else '')
+            search_query = safe_lookup_text[:300] + ('...' if len(safe_lookup_text) > 300 else '')
             logger.debug(f"analyze_text_for_scam: search_agent query: {search_query!r}")
 
             agent_answer = search_agent(

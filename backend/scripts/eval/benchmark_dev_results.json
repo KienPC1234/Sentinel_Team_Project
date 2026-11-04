@@ -5,7 +5,11 @@
     "total_samples": 80,
     "positives_scam": 40,
     "negatives_legit": 40,
-    "timestamp": "2026-11-04 13:40:33"
+    "timestamp": "2026-11-04 14:15:19",
+    "model_id": "deepseek-v4.1-flash:cloud",
+    "temperature": 0.3,
+    "ablation_inference_mode": "Deterministic shared single-run LLM inference across Heuristic, LLM Only, and Evidence-Aware Ensemble",
+    "production_pipeline_mode": "End-to-End production evaluation via _analyze_message_text (with VirusTotal consensus & TrustGuard)"
   },
   "summary": {
     "Heuristic Only": {
@@ -84,10 +88,10 @@
         }
       },
       "latency": {
-        "avg_ms": 0.3,
+        "avg_ms": 0.31,
         "min_ms": 0.11,
-        "max_ms": 6.76,
-        "p95_ms": 0.29
+        "max_ms": 6.97,
+        "p95_ms": 0.27
       }
     },
     "LLM Only": {
@@ -166,10 +170,10 @@
         }
       },
       "latency": {
-        "avg_ms": 5305.82,
-        "min_ms": 3110.67,
-        "max_ms": 10608.67,
-        "p95_ms": 8154.38
+        "avg_ms": 6003.98,
+        "min_ms": 2986.83,
+        "max_ms": 10272.62,
+        "p95_ms": 9576.59
       }
     },
     "Evidence-Aware Ensemble": {
@@ -248,52 +252,15 @@
         }
       },
       "latency": {
-        "avg_ms": 5306.12,
-        "min_ms": 3110.85,
-        "max_ms": 10608.91,
-        "p95_ms": 8154.59
+        "avg_ms": 6004.29,
+        "min_ms": 2986.96,
+        "max_ms": 10272.83,
+        "p95_ms": 9576.86
       }
     },
     "Full Pipeline": {
       "threshold_70": {
         "threshold": 70.0,
-        "tp": 40,
-        "fp": 0,
-        "tn": 40,
-        "fn": 0,
-        "precision": 1.0,
-        "precision_ci95": [
-          0.9124,
-          1.0
-        ],
-        "recall": 1.0,
-        "recall_ci95": [
-          0.9124,
-          1.0
-        ],
-        "f1": 1.0,
-        "accuracy": 1.0,
-        "specificity": 1.0,
-        "specificity_ci95": [
-          0.9124,
-          1.0
-        ],
-        "confusion_matrix": {
-          "matrix": [
-            [
-              40,
-              0
-            ],
-            [
-              0,
-              40
-            ]
-          ],
-          "legend": "[[TN, FP], [FN, TP]]"
-        }
-      },
-      "threshold_40": {
-        "threshold": 40.0,
         "tp": 40,
         "fp": 1,
         "tn": 39,
@@ -329,17 +296,65 @@
           "legend": "[[TN, FP], [FN, TP]]"
         }
       },
+      "threshold_40": {
+        "threshold": 40.0,
+        "tp": 40,
+        "fp": 2,
+        "tn": 38,
+        "fn": 0,
+        "precision": 0.9524,
+        "precision_ci95": [
+          0.8421,
+          0.9868
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9124,
+          1.0
+        ],
+        "f1": 0.9756,
+        "accuracy": 0.975,
+        "specificity": 0.95,
+        "specificity_ci95": [
+          0.835,
+          0.9862
+        ],
+        "confusion_matrix": {
+          "matrix": [
+            [
+              38,
+              2
+            ],
+            [
+              0,
+              40
+            ]
+          ],
+          "legend": "[[TN, FP], [FN, TP]]"
+        }
+      },
       "latency": {
-        "avg_ms": 6485.27,
-        "min_ms": 3083.25,
-        "max_ms": 14712.16,
-        "p95_ms": 9183.48
+        "avg_ms": 6042.34,
+        "min_ms": 3109.44,
+        "max_ms": 24772.27,
+        "p95_ms": 9757.8
       }
     }
   },
   "error_analysis": {
-    "false_positives_count": 0,
-    "false_positives": [],
+    "false_positives_count": 1,
+    "false_positives": [
+      {
+        "id": "legit_09",
+        "category": "real_utility_notice",
+        "text": "Tong cong ty Dien luc mien Bac (EVNNPC) thong bao: Hoa don tien dien thang 10/2026 cua ma khach hang PA01HN091823 la 678.000d. Quy khach vui long thanh toan truoc ngay 15/11. CSKH: 19006769.",
+        "true_label": 0,
+        "predicted_score": 85,
+        "heuristic_score": 0,
+        "llm_score": 78,
+        "explanation": "Đây là tin nhắn có dấu hiệu mạo danh ngành điện để đòi tiền điện, không phải thông báo chính thức đáng tin cậy. Kẻ gian đưa ra mã khách hàng, số tiền và hạn thanh toán để tạo cảm giác thật, rồi dụ người dùng chuyển tiền vào số tài khoản CSKH không rõ nguồn gốc. Tổ chức chính thống không yêu cầu khách hàng thanh toán qua tài khoản cá nhân hoặc số liên hệ lạ trong tin nhắn; mọi giao dịch cần thực hiện trên ứng dụng, website hoặc kênh thanh toán đã công bố. Bạn tuyệt đối không chuyển tiền theo nội dung này, hãy kiểm tra mã khách hàng trên ứng dụng điện lực chính thức hoặc gọi tổng đài đã biết, rồi chặn và cảnh báo người thân."
+      }
+    ],
     "false_negatives_count": 0,
     "false_negatives": []
   },
@@ -363,7 +378,7 @@
         "heuristic": 40,
         "llm": 98,
         "ensemble": 98,
-        "full_pipeline": 99
+        "full_pipeline": 98
       }
     },
     {
@@ -418,7 +433,7 @@
         "heuristic": 40,
         "llm": 98,
         "ensemble": 98,
-        "full_pipeline": 98
+        "full_pipeline": 97
       }
     },
     {
@@ -427,9 +442,9 @@
       "label": 1,
       "scores": {
         "heuristic": 40,
-        "llm": 100,
-        "ensemble": 100,
-        "full_pipeline": 100
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
       }
     },
     {
@@ -449,7 +464,7 @@
       "label": 1,
       "scores": {
         "heuristic": 100,
-        "llm": 95,
+        "llm": 98,
         "ensemble": 100,
         "full_pipeline": 100
       }
@@ -462,7 +477,7 @@
         "heuristic": 60,
         "llm": 97,
         "ensemble": 97,
-        "full_pipeline": 98
+        "full_pipeline": 95
       }
     },
     {
@@ -471,9 +486,9 @@
       "label": 1,
       "scores": {
         "heuristic": 0,
-        "llm": 97,
-        "ensemble": 97,
-        "full_pipeline": 97
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 95
       }
     },
     {
@@ -482,9 +497,9 @@
       "label": 1,
       "scores": {
         "heuristic": 60,
-        "llm": 97,
-        "ensemble": 97,
-        "full_pipeline": 95
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 97
       }
     },
     {
@@ -495,7 +510,7 @@
         "heuristic": 20,
         "llm": 99,
         "ensemble": 99,
-        "full_pipeline": 98
+        "full_pipeline": 100
       }
     },
     {
@@ -517,7 +532,7 @@
         "heuristic": 40,
         "llm": 97,
         "ensemble": 97,
-        "full_pipeline": 98
+        "full_pipeline": 99
       }
     },
     {
@@ -526,9 +541,9 @@
       "label": 1,
       "scores": {
         "heuristic": 60,
-        "llm": 95,
-        "ensemble": 95,
-        "full_pipeline": 98
+        "llm": 97,
+        "ensemble": 97,
+        "full_pipeline": 95
       }
     },
     {
@@ -539,7 +554,7 @@
         "heuristic": 20,
         "llm": 98,
         "ensemble": 98,
-        "full_pipeline": 97
+        "full_pipeline": 98
       }
     },
     {
@@ -550,7 +565,7 @@
         "heuristic": 40,
         "llm": 98,
         "ensemble": 98,
-        "full_pipeline": 98
+        "full_pipeline": 99
       }
     },
     {
@@ -570,8 +585,8 @@
       "label": 1,
       "scores": {
         "heuristic": 80,
-        "llm": 97,
-        "ensemble": 97,
+        "llm": 95,
+        "ensemble": 95,
         "full_pipeline": 95
       }
     },
@@ -583,7 +598,7 @@
         "heuristic": 60,
         "llm": 98,
         "ensemble": 98,
-        "full_pipeline": 98
+        "full_pipeline": 95
       }
     },
     {
@@ -592,9 +607,9 @@
       "label": 1,
       "scores": {
         "heuristic": 0,
-        "llm": 98,
-        "ensemble": 98,
-        "full_pipeline": 98
+        "llm": 95,
+        "ensemble": 95,
+        "full_pipeline": 99
       }
     },
     {
@@ -603,8 +618,8 @@
       "label": 1,
       "scores": {
         "heuristic": 80,
-        "llm": 98,
-        "ensemble": 98,
+        "llm": 99,
+        "ensemble": 99,
         "full_pipeline": 98
       }
     },
@@ -614,9 +629,9 @@
       "label": 1,
       "scores": {
         "heuristic": 40,
-        "llm": 95,
-        "ensemble": 95,
-        "full_pipeline": 100
+        "llm": 98,
+        "ensemble": 98,
+        "full_pipeline": 98
       }
     },
     {
@@ -680,8 +695,8 @@
       "label": 1,
       "scores": {
         "heuristic": 0,
-        "llm": 96,
-        "ensemble": 96,
+        "llm": 95,
+        "ensemble": 95,
         "full_pipeline": 95
       }
     },
@@ -693,7 +708,7 @@
         "heuristic": 20,
         "llm": 95,
         "ensemble": 95,
-        "full_pipeline": 95
+        "full_pipeline": 97
       }
     },
     {
@@ -702,9 +717,9 @@
       "label": 1,
       "scores": {
         "heuristic": 40,
-        "llm": 88,
-        "ensemble": 88,
-        "full_pipeline": 85
+        "llm": 92,
+        "ensemble": 92,
+        "full_pipeline": 88
       }
     },
     {
@@ -746,9 +761,9 @@
       "label": 1,
       "scores": {
         "heuristic": 0,
-        "llm": 82,
-        "ensemble": 82,
-        "full_pipeline": 82
+        "llm": 85,
+        "ensemble": 85,
+        "full_pipeline": 88
       }
     },
     {
@@ -757,9 +772,9 @@
       "label": 1,
       "scores": {
         "heuristic": 0,
-        "llm": 100,
-        "ensemble": 100,
-        "full_pipeline": 98
+        "llm": 99,
+        "ensemble": 99,
+        "full_pipeline": 99
       }
     },
     {
@@ -768,9 +783,9 @@
       "label": 1,
       "scores": {
         "heuristic": 40,
-        "llm": 98,
-        "ensemble": 98,
-        "full_pipeline": 97
+        "llm": 96,
+        "ensemble": 96,
+        "full_pipeline": 98
       }
     },
     {
@@ -779,8 +794,8 @@
       "label": 1,
       "scores": {
         "heuristic": 20,
-        "llm": 96,
-        "ensemble": 96,
+        "llm": 98,
+        "ensemble": 98,
         "full_pipeline": 95
       }
     },
@@ -790,7 +805,7 @@
       "label": 0,
       "scores": {
         "heuristic": 40,
-        "llm": 10,
+        "llm": 5,
         "ensemble": 35,
         "full_pipeline": 35
       }
@@ -801,8 +816,8 @@
       "label": 0,
       "scores": {
         "heuristic": 5,
-        "llm": 8,
-        "ensemble": 8,
+        "llm": 10,
+        "ensemble": 10,
         "full_pipeline": 5
       }
     },
@@ -825,7 +840,7 @@
         "heuristic": 0,
         "llm": 8,
         "ensemble": 8,
-        "full_pipeline": 8
+        "full_pipeline": 5
       }
     },
     {
@@ -847,7 +862,7 @@
         "heuristic": 0,
         "llm": 5,
         "ensemble": 5,
-        "full_pipeline": 8
+        "full_pipeline": 5
       }
     },
     {
@@ -878,9 +893,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 88,
-        "ensemble": 88,
-        "full_pipeline": 25
+        "llm": 78,
+        "ensemble": 78,
+        "full_pipeline": 85
       }
     },
     {
@@ -889,8 +904,8 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 8,
-        "ensemble": 8,
+        "llm": 10,
+        "ensemble": 10,
         "full_pipeline": 10
       }
     },
@@ -900,7 +915,7 @@
       "label": 0,
       "scores": {
         "heuristic": 20,
-        "llm": 8,
+        "llm": 5,
         "ensemble": 20,
         "full_pipeline": 20
       }
@@ -922,7 +937,7 @@
       "label": 0,
       "scores": {
         "heuristic": 20,
-        "llm": 12,
+        "llm": 10,
         "ensemble": 20,
         "full_pipeline": 20
       }
@@ -933,9 +948,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 8,
-        "ensemble": 8,
-        "full_pipeline": 8
+        "llm": 5,
+        "ensemble": 5,
+        "full_pipeline": 5
       }
     },
     {
@@ -955,9 +970,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 27,
-        "ensemble": 27,
-        "full_pipeline": 23
+        "llm": 20,
+        "ensemble": 20,
+        "full_pipeline": 20
       }
     },
     {
@@ -966,13 +981,24 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 0,
-        "ensemble": 0,
+        "llm": 3,
+        "ensemble": 3,
         "full_pipeline": 2
       }
     },
     {
       "id": "legit_18",
+      "category": "casual_family_chat",
+      "label": 0,
+      "scores": {
+        "heuristic": 0,
+        "llm": 3,
+        "ensemble": 3,
+        "full_pipeline": 5
+      }
+    },
+    {
+      "id": "legit_19",
       "category": "casual_family_chat",
       "label": 0,
       "scores": {
@@ -983,24 +1009,13 @@
       }
     },
     {
-      "id": "legit_19",
-      "category": "casual_family_chat",
-      "label": 0,
-      "scores": {
-        "heuristic": 0,
-        "llm": 3,
-        "ensemble": 3,
-        "full_pipeline": 0
-      }
-    },
-    {
       "id": "legit_20",
       "category": "real_carrier_telecom",
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 8,
-        "ensemble": 8,
+        "llm": 5,
+        "ensemble": 5,
         "full_pipeline": 5
       }
     },
@@ -1010,9 +1025,9 @@
       "label": 0,
       "scores": {
         "heuristic": 20,
-        "llm": 30,
-        "ensemble": 30,
-        "full_pipeline": 30
+        "llm": 25,
+        "ensemble": 25,
+        "full_pipeline": 25
       }
     },
     {
@@ -1021,7 +1036,7 @@
       "label": 0,
       "scores": {
         "heuristic": 40,
-        "llm": 10,
+        "llm": 12,
         "ensemble": 40,
         "full_pipeline": 40
       }
@@ -1032,8 +1047,8 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 3,
-        "ensemble": 3,
+        "llm": 5,
+        "ensemble": 5,
         "full_pipeline": 3
       }
     },
@@ -1045,7 +1060,7 @@
         "heuristic": 0,
         "llm": 10,
         "ensemble": 10,
-        "full_pipeline": 8
+        "full_pipeline": 10
       }
     },
     {
@@ -1067,7 +1082,7 @@
         "heuristic": 0,
         "llm": 20,
         "ensemble": 20,
-        "full_pipeline": 5
+        "full_pipeline": 20
       }
     },
     {
@@ -1078,7 +1093,7 @@
         "heuristic": 0,
         "llm": 5,
         "ensemble": 5,
-        "full_pipeline": 8
+        "full_pipeline": 5
       }
     },
     {
@@ -1087,8 +1102,8 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 5,
-        "ensemble": 5,
+        "llm": 15,
+        "ensemble": 15,
         "full_pipeline": 5
       }
     },
@@ -1131,8 +1146,8 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 5,
-        "ensemble": 5,
+        "llm": 10,
+        "ensemble": 10,
         "full_pipeline": 8
       }
     },
@@ -1153,9 +1168,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 5,
-        "ensemble": 5,
-        "full_pipeline": 8
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 10
       }
     },
     {
@@ -1164,9 +1179,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 12,
-        "ensemble": 12,
-        "full_pipeline": 15
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 12
       }
     },
     {
@@ -1175,9 +1190,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 5,
-        "ensemble": 5,
-        "full_pipeline": 8
+        "llm": 10,
+        "ensemble": 10,
+        "full_pipeline": 12
       }
     },
     {
@@ -1188,7 +1203,7 @@
         "heuristic": 0,
         "llm": 2,
         "ensemble": 2,
-        "full_pipeline": 3
+        "full_pipeline": 5
       }
     },
     {
@@ -1197,9 +1212,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 2,
-        "ensemble": 2,
-        "full_pipeline": 5
+        "llm": 0,
+        "ensemble": 0,
+        "full_pipeline": 0
       }
     },
     {
@@ -1208,9 +1223,9 @@
       "label": 0,
       "scores": {
         "heuristic": 0,
-        "llm": 27,
-        "ensemble": 27,
-        "full_pipeline": 23
+        "llm": 25,
+        "ensemble": 25,
+        "full_pipeline": 25
       }
     },
     {

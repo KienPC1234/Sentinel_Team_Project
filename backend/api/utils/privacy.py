@@ -89,8 +89,15 @@ def pii_redaction_enabled() -> bool:
 
 
 def redact_for_external_llm(text: str) -> str:
-    """Dùng trước khi gửi dữ liệu tới mô hình cloud (không phải Ollama local)."""
-    return redact_pii(text) if pii_redaction_enabled() else text
+    """
+    Bắt buộc ẩn PII trước khi gửi dữ liệu tới mô hình cloud hoặc dịch vụ bên ngoài.
+    BẤT BIẾN AN NINH (Security Invariant - Audit P0):
+    Không cho phép bất kỳ cấu hình hay biến môi trường nào (kể cả LLM_PII_REDACTION=false)
+    vô hiệu hoá việc che dữ liệu cá nhân khi đẩy dữ liệu ra bên ngoài quy trình nội bộ.
+    """
+    if not text:
+        return text
+    return redact_pii(text)
 
 
 class PIIRedactionFilter(logging.Filter):
