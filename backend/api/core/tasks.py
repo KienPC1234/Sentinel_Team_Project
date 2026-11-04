@@ -180,7 +180,8 @@ def process_report_ai_async(self, report_id: int):
         if ocr_text or report.ocr_text:
             full_context += f"OCR Evidence Text: {(ocr_text or report.ocr_text)}\n"
 
-        analysis = analyze_text_for_scam(full_context)
+        # Nội dung do người dùng gửi để kiểm tra lừa đảo = đồng ý phân tích (consent by action).
+        analysis = analyze_text_for_scam(full_context, external_consent=True)
         report.ai_analysis = analysis if isinstance(analysis, dict) else {'raw': str(analysis)}
         report.save(update_fields=['ai_analysis'])
 
@@ -662,7 +663,8 @@ def perform_scan_task(self, scan_event_id):
             email = raw_input.lower().strip()
             ai_res = None
             try:
-                ai_res = analyze_text_for_scam(email)
+                # Tin nhắn/đối tượng scan do người dùng gửi = consent by action.
+                ai_res = analyze_text_for_scam(email, external_consent=True)
             except Exception as _ai_exc:
                 logger.warning(f"perform_scan_task: AI analysis failed for email ({_ai_exc}), using fallback.")
             if not ai_res:
@@ -871,7 +873,8 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             ai_res = None
             for attempt in range(3):
                 try:
-                    ai_res = analyze_text_for_scam(analysis_text, use_web_search=True)
+                    # File/QR do người dùng gửi quét = consent by action.
+                    ai_res = analyze_text_for_scam(analysis_text, use_web_search=True, external_consent=True)
                     if ai_res and (ai_res.get('risk_score') is not None):
                         break
                 except:
@@ -1030,7 +1033,8 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             ai_res = None
             for attempt in range(3):
                 try:
-                    ai_res = analyze_text_for_scam(transcript, use_web_search=True)
+                    # Voice do người dùng gửi quét = consent by action.
+                    ai_res = analyze_text_for_scam(transcript, use_web_search=True, external_consent=True)
                     if ai_res and ai_res.get('risk_score') is not None:
                         break
                 except Exception:
@@ -1398,9 +1402,10 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                     logger.info(f"[WebScan] Event {scan_event_id}: Fetched content via requests+BS4 (FALLBACK) ({len(content)} chars)")
 
                 # Try HTTP fallback if HTTPS failed and no content
+                # (verify chỉ có ý nghĩa với HTTPS; URL này là http:// nên bỏ tham số cho rõ)
                 if not fetch_success and target_url.startswith('https://'):
                     http_url = target_url.replace('https://', 'http://', 1)
-                    resp = safe_get(http_url, headers=headers, timeout=15, verify=False)
+                    resp = safe_get(http_url, headers=headers, timeout=15)
                     resp.raise_for_status()
                     html_text = _decode_html_response(resp)
                     soup = BeautifulSoup(html_text, 'html.parser')
@@ -1830,7 +1835,8 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
         if urls:
             ai_input += f"\n\nContained URLs: {', '.join(urls)}"
             
-        ai_res = analyze_text_for_scam(ai_input, use_web_search=True)
+        # Đối tượng scan do người dùng gửi = consent by action.
+        ai_res = analyze_text_for_scam(ai_input, use_web_search=True, external_consent=True)
         
         current_risk_score = scan.risk_score
         current_details = scan.result_json or {}
@@ -2334,7 +2340,8 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             logger.info(f"[EmailScan] Event {scan_event_id}: Analyzing body text ({len(body_text)} chars)")
             if not is_basic_mode:
                 send_progress("Đang tra cứu cơ sở dữ liệu lừa đảo + tìm kiếm web...", step="web_search")
-            analysis = analyze_text_for_scam(analysis_input, use_web_search=(not is_basic_mode))
+            # Email do người dùng gửi quét = consent by action.
+            analysis = analyze_text_for_scam(analysis_input, use_web_search=(not is_basic_mode), external_consent=True)
             # Không log toàn bộ payload AI (có thể chứa subject/body) — chỉ log cờ tổng hợp.
             logger.info(
                 f"[EmailScan] Event {scan_event_id}: AI done "

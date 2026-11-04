@@ -33,6 +33,7 @@ interface ArticleDetail {
   cover_image?: string | null;
   author_name?: string;
   created_at: string;
+  published_date?: string | null;
   reaction_counts?: ReactionCounts;
   reactions_count?: number;
   my_reaction?: string | null;
@@ -291,7 +292,7 @@ export default function ArticleDetail() {
             </a>
           )}
           <span className="text-[10px] font-bold text-white/45 uppercase tracking-[0.2em] flex items-center gap-2">
-            <i className="bi bi-calendar3"></i> {fmtDate(article.created_at)}
+            <i className="bi bi-calendar3"></i> {fmtDate(article.published_date || article.created_at)}
           </span>
         </div>
 

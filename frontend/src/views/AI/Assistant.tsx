@@ -484,6 +484,8 @@ export default function Assistant() {
   const [safeMode, setSafeMode] = useState(false);
   const [brand, setBrand] = useState<'ShieldCall' | 'FairSpace'>('ShieldCall');
   const [previewOcr, setPreviewOcr] = useState(false);
+  // Đồng ý gửi SĐT/link cho AI kiểm tra (opt-in, mặc định ẩn PII trước khi gửi ra ngoài).
+  const [piiConsent, setPiiConsent] = useState(false);
   // Chế độ dễ đọc (người cao tuổi): 3 mức cỡ chữ, tương phản cao + đọc to.
   const [textSize, setTextSize] = useState<TextSize>('normal');
   const elder = textSize !== 'normal';
@@ -656,6 +658,7 @@ export default function Assistant() {
     try {
       if (localStorage.getItem('assistant_safe_mode') === '1') setSafeMode(true);
       if (localStorage.getItem('assistant_preview_ocr') === '1') setPreviewOcr(true);
+      if (localStorage.getItem('assistant_pii_consent') === '1') setPiiConsent(true);
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
@@ -664,6 +667,9 @@ export default function Assistant() {
   useEffect(() => {
     try { localStorage.setItem('assistant_preview_ocr', previewOcr ? '1' : '0'); } catch { /* ignore */ }
   }, [previewOcr]);
+  useEffect(() => {
+    try { localStorage.setItem('assistant_pii_consent', piiConsent ? '1' : '0'); } catch { /* ignore */ }
+  }, [piiConsent]);
 
   // Chế độ dễ đọc: đọc cấu hình đã lưu TRƯỚC khi vẽ (layout effect) để không nháy cỡ chữ.
   const textSizeRef = useRef<TextSize>('normal');
@@ -1016,7 +1022,7 @@ export default function Assistant() {
       await openSseStream({
         url: '/api/v1/chat/stream/',
         signal: ctrl.signal,
-        body: { user_message: text, session_id: sid, images: imgs, preview_ocr: previewOcr, safe_mode: safeMode },
+        body: { user_message: text, session_id: sid, images: imgs, preview_ocr: previewOcr, safe_mode: safeMode, consent_external_llm: piiConsent },
         onEvent: (ev) => {
           switch (ev.type) {
             case 'delta': {
@@ -1967,6 +1973,10 @@ export default function Assistant() {
                   <label className="flex cursor-pointer items-center gap-2">
                     <Switch checked={previewOcr} onCheckedChange={setPreviewOcr} size="sm" />
                     <span className="text-[11px] text-[var(--gpt-faint)]">Preview Image OCR</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2" title="Cho phép AI dùng SĐT/link bạn gửi để tra cứu (dữ liệu được gửi ra ngoài để phân tích)">
+                    <Switch checked={piiConsent} onCheckedChange={setPiiConsent} size="sm" />
+                    <span className="text-[11px] text-[var(--gpt-faint)]">Cho AI kiểm tra SĐT/link</span>
                   </label>
                   <span className="ml-auto hidden text-[10px] text-[var(--gpt-faint)] md:inline">Enter để gửi · Shift+Enter xuống dòng</span>
                 </div>

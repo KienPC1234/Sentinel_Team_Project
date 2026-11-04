@@ -1,4 +1,6 @@
 from django.urls import reverse
+from unittest.mock import patch, MagicMock
+from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
@@ -47,4 +49,48 @@ class ChatAPITests(APITestCase):
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(ChatSession.objects.filter(user=self.user).count(), 0)
+
+
+class ChatStreamConsentTests(TestCase):
+    """Hồi quy: opt-in PII (checkbox) cho khách vãng lai → agent nhận allow_pii=True.
+
+    Không đồng ý → allow_pii=False (PII vẫn bị ẩn trước khi gửi ra ngoài).
+    """
+
+    async def _post_stream(self, payload, mock_agent):
+        from django.test import AsyncClient
+        mock_agent.chat_stream.return_value = iter([{'type': 'done'}])
+        mock_agent.session = None
+        resp = await AsyncClient().post(
+            reverse('chat-stream'), data=payload, content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        body = b''
+        try:
+            async for chunk in resp.streaming_content:
+                body += chunk if isinstance(chunk, bytes) else str(chunk).encode()
+        except Exception:
+            pass
+        self.assertIn(b'done', body)
+        return mock_agent
+
+    @patch('api.ai_chat.views.get_agent')
+    @patch('api.ai_chat.views.classify_message', return_value={})
+    async def test_guest_consent_enables_pii(self, _mock_classify, mock_get_agent):
+        mock_agent = MagicMock()
+        mock_get_agent.return_value = mock_agent
+        await self._post_stream(
+            {'user_message': 'Kiểm tra SĐT 0912345678 giúp tôi', 'consent_external_llm': True},
+            mock_agent,
+        )
+        _, kwargs = mock_agent.chat_stream.call_args
+        self.assertTrue(kwargs.get('allow_pii'), 'khách đã đồng ý phải được allow_pii=True')
+
+    @patch('api.ai_chat.views.get_agent')
+    @patch('api.ai_chat.views.classify_message', return_value={})
+    async def test_guest_no_consent_stays_redacted(self, _mock_classify, mock_get_agent):
+        mock_agent = MagicMock()
+        mock_get_agent.return_value = mock_agent
+        await self._post_stream({'user_message': 'Kiểm tra SĐT 0912345678 giúp tôi'}, mock_agent)
+        _, kwargs = mock_agent.chat_stream.call_args
+        self.assertFalse(kwargs.get('allow_pii'), 'mặc định phải ẩn PII (allow_pii=False)')
 

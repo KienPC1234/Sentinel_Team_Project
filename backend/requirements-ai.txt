@@ -16,3 +16,8 @@
 # với venv riêng .venv-ocr; ai_service sẽ fallback sang bridge khi thiếu vietocr.
 gdown
 vietocr==0.3.13
+# Text detector cho OCR (phân đoạn dòng chữ trước khi VietOCR nhận dạng).
+# --no-deps vì đã có torch/torchvision/opencv/numpy trong venv chính; cài
+# thường sẽ kéo opencv-python build từ source và fail.
+#   .venv/bin/pip install --no-deps craft-text-detector
+craft-text-detector

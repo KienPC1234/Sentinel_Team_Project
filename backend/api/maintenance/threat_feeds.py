@@ -32,6 +32,12 @@ FEED_CONFIGS = {
         "url": "https://urlhaus.abuse.ch/downloads/csv_recent/",
         "type": "csv_urlhaus",
         "description": "Active malware and phishing distribution URLs curated by abuse.ch",
+        # abuse.ch đã gỡ endpoint CSV ẩn danh (410 Gone từ 2026). Muốn bật lại:
+        # xin Auth-Key tại abuse.ch rồi chuyển sang URLhaus API (POST
+        # https://urlhaus-api.abuse.ch/v1/url/ kèm header Auth-Key), sau đó
+        # đặt enabled=True.
+        "enabled": False,
+        "disabled_reason": "csv_recent trả 410 Gone; cần Auth-Key + URLhaus API mới dùng lại được",
     },
     "openphish": {
         "name": "OpenPhish",
@@ -379,6 +385,13 @@ def sync_threat_feeds(
     for src_key in selected_sources:
         if src_key not in FEED_FETCHERS:
             stats["errors"].append(f"Unknown source: {src_key}")
+            continue
+
+        if not FEED_CONFIGS.get(src_key, {}).get("enabled", True):
+            reason = FEED_CONFIGS[src_key].get("disabled_reason", "disabled")
+            logger.warning(f"[ThreatIntel] Bỏ qua nguồn {src_key}: {reason}")
+            stats["sources"][src_key] = {"fetched": 0, "valid_domains": 0,
+                                          "status": "SKIPPED", "error": reason}
             continue
 
         fetcher = FEED_FETCHERS[src_key]

@@ -447,7 +447,8 @@ def analyze_image_risk(ocr_text, image_file=None):
 
     # Use Ollama to analyze the text
     try:
-        analysis = analyze_text_for_scam(ocr_text)
+        # Ảnh/tài liệu do người dùng gửi quét = consent by action.
+        analysis = analyze_text_for_scam(ocr_text, external_consent=True)
 
         is_scam = analysis.get('is_scam', False)
         risk_score = analysis.get('risk_score', 0)
@@ -768,7 +769,8 @@ def analyze_audio_risk(transcript, phone_number=''):
 
     try:
         # Use Ollama to analyze transcript
-        analysis = analyze_text_for_scam(transcript)
+        # Voice do người dùng gửi quét = consent by action.
+        analysis = analyze_text_for_scam(transcript, external_consent=True)
 
         risk_score = analysis.get('risk_score', 0)
         is_scam = analysis.get('is_scam', False)

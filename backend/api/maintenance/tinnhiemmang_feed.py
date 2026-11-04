@@ -36,6 +36,18 @@ from api.maintenance.news_dedup import find_duplicate_article
 logger = logging.getLogger(__name__)
 
 
+def _parse_published_date(value: Optional[str]):
+    """'YYYY-MM-DD' → date (None nếu rỗng/sai) — ngày đăng gốc trên nguồn."""
+    if not value:
+        return None
+    try:
+        from datetime import date
+        y, m, d = (int(x) for x in str(value).split("-"))
+        return date(y, m, d)
+    except (ValueError, TypeError):
+        return None
+
+
 def _generate_unique_article_slug(base_slug: str, existing_id: Optional[int] = None) -> str:
     """Đảm bảo slug là duy nhất trên toàn bảng Article."""
     clean_slug = slugify(base_slug, allow_unicode=False)[:240]
@@ -153,6 +165,12 @@ def sync_tinnhiemmang_articles(
                     stats["errors"] += 1
                     feed_stat["errors"] += 1
                     continue
+                if not (detail.content or "").strip() and not (detail.summary or "").strip():
+                    # Parser không lấy được nội dung (đổi layout?) → bỏ, tránh bài rỗng lên web
+                    logger.warning(f"[TINNHIEMMANG-FEED] Bỏ bài rỗng nội dung: {item_url}")
+                    stats["skipped"] += 1
+                    feed_stat["skipped"] += 1
+                    continue
 
                 if existing:
                     # Cập nhật bài viết có sẵn
@@ -162,6 +180,7 @@ def sync_tinnhiemmang_articles(
                     existing.category = feed_cat
                     existing.source_type = ArticleSourceType.TINNHIEMMANG
                     existing.source_url = detail.url
+                    existing.published_date = _parse_published_date(detail.published_date) or existing.published_date
                     existing.is_published = True
 
                     if download_images and detail.cover_image_url and not existing.cover_image:
@@ -196,6 +215,7 @@ def sync_tinnhiemmang_articles(
                         category=feed_cat,
                         source_type=ArticleSourceType.TINNHIEMMANG,
                         source_url=detail.url,
+                        published_date=_parse_published_date(detail.published_date),
                         is_published=True,
                     )
 
@@ -276,6 +296,7 @@ def refresh_existing_tinnhiemmang_articles(
             if detail.content:
                 article.content = html_to_markdown(detail.content)
             article.source_type = ArticleSourceType.TINNHIEMMANG
+            article.published_date = _parse_published_date(detail.published_date) or article.published_date
             article.is_published = True
 
             if download_images and detail.cover_image_url and not article.cover_image:

@@ -171,7 +171,7 @@ def sync_tinnhiem_directory(self, category="all", workers=None, stop_after_known
         call_command(
             "sync_tinnhiem_directory",
             category=category, workers=workers, stop_after_known=stop_after_known,
-            ingest=ingest, respect_robots=respect_robots, stdout=buf,
+            no_ingest=(not ingest), respect_robots=respect_robots, stdout=buf,
         )
         tail = buf.getvalue()[-2000:]
         logger.info("[TINNHIEM-DIR-TASK] Hoàn tất đồng bộ danh bạ")

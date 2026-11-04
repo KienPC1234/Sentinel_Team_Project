@@ -30,6 +30,7 @@ from api.utils.tinnhiemmang import (
 from api.maintenance.tinnhiemmang_feed import (
     _download_and_attach_cover,
     _generate_unique_article_slug,
+    _parse_published_date,
 )
 from api.maintenance.news_dedup import find_duplicate_article
 
@@ -121,6 +122,12 @@ def sync_vnexpress_articles(
                     stats["errors"] += 1
                     feed_stat["errors"] += 1
                     continue
+                if not (detail.content or "").strip() and not (detail.summary or "").strip():
+                    # Parser không lấy được nội dung (đổi layout?) → bỏ, tránh bài rỗng lên web
+                    logger.warning(f"[VNEXPRESS-FEED] Bỏ bài rỗng nội dung: {item_url}")
+                    stats["skipped"] += 1
+                    feed_stat["skipped"] += 1
+                    continue
 
                 if existing:
                     existing.title = detail.title
@@ -129,6 +136,7 @@ def sync_vnexpress_articles(
                     existing.category = feed_cat
                     existing.source_type = ArticleSourceType.PRESS
                     existing.source_url = detail.url
+                    existing.published_date = _parse_published_date(detail.published_date) or existing.published_date
                     existing.is_published = True
                     if download_images and detail.cover_image_url and not existing.cover_image:
                         _download_and_attach_cover(existing, detail.cover_image_url, client)
@@ -158,6 +166,7 @@ def sync_vnexpress_articles(
                         category=feed_cat,
                         source_type=ArticleSourceType.PRESS,
                         source_url=detail.url,
+                        published_date=_parse_published_date(detail.published_date),
                         is_published=True,
                     )
                     if download_images and detail.cover_image_url:
@@ -219,6 +228,7 @@ def refresh_existing_vnexpress_articles(
                 article.summary = detail.summary
             if detail.content:
                 article.content = html_to_markdown(detail.content)
+            article.published_date = _parse_published_date(detail.published_date) or article.published_date
             if download_images and detail.cover_image_url and not article.cover_image:
                 _download_and_attach_cover(article, detail.cover_image_url, client)
             article.save()

@@ -65,6 +65,11 @@ VIETOCR_DEVICE=auto # auto (GPU if available) | cpu | cuda:0
 AI_SERVICE_URL=http://127.0.0.1:5010 # shared AI service: OCR + embedding + Whisper
 OCR_SERVICE_PORT=5010
 
+# Native vision fallback (model nhìn trực tiếp ảnh khi OCR kém). Cần model vision local.
+LLM_VISION_ENABLED=true
+LLM_VISION_MODEL=gemma4:latest
+LLM_VISION_MAX_IMAGE_MB=8
+
 # Whisper / embeddings
 WHISPER_DEVICE=cuda
 WHISPER_MODEL_SIZE=large-v3-turbo # tốt cho tiếng Việt; small yếu hơn rõ rệt

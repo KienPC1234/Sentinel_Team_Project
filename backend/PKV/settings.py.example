@@ -209,6 +209,12 @@ SMALL_MODEL = os.getenv('SMALL_MODEL', 'gemma4:31b-cloud')
 LLM_TEMPERATURE = 0.3
 LLM_MAX_TOKENS = 16384
 
+# Native vision (model nhìn trực tiếp ảnh). Dùng trong scan + AI chat khi OCR kém.
+# Model phải hỗ trợ vision (VD gemma3/gemma4 local qua Ollama).
+LLM_VISION_ENABLED = os.getenv('LLM_VISION_ENABLED', 'False')
+LLM_VISION_MODEL = os.getenv('LLM_VISION_MODEL', 'gemma4:latest')
+LLM_VISION_MAX_IMAGE_MB = int(os.getenv('LLM_VISION_MAX_IMAGE_MB', '8'))
+
 # OpenAI-compatible API Fallback
 OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://api.deepseek.com')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')

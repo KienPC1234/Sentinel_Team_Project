@@ -56,6 +56,58 @@ _CRAFT = None
 _CRAFT_FAILED = False
 
 
+def _patch_craft_numpy2():
+    """craft-text-detector 0.4.3 không tương thích numpy>=1.24 ở 2 chỗ:
+    1. ``craft_utils.adjustResultCoordinates`` gọi ``np.array()`` trên list
+       chứa None → ValueError.
+    2. ``predict.get_prediction`` (poly=True mặc định) gọi ``np.array()``
+       trên polys dài ngắn khác nhau → ValueError.
+    Ta chỉ cần bounding boxes (crop_type='box') nên ép ``poly=False``:
+    vừa tránh crash, vừa bỏ qua bước getPoly (nhanh hơn). Vá tại runtime
+    để không phải sửa package bên thứ ba."""
+    try:
+        import numpy as np
+        from craft_text_detector import craft_utils as _cu
+        from craft_text_detector import predict as _pred
+        if getattr(_cu.adjustResultCoordinates, "_np2_patched", False):
+            return
+        _orig_adjust = _cu.adjustResultCoordinates
+
+        def _safe_adjust(polys, ratio_w, ratio_h, ratio_net=2):
+            try:
+                return _orig_adjust(polys, ratio_w, ratio_h, ratio_net)
+            except (ValueError, TypeError):
+                pass
+            out = []
+            for p in (polys or []):
+                if p is None:
+                    out.append(None)
+                    continue
+                a = np.asarray(p, dtype=np.float64).reshape(-1, 2)
+                out.append(a * (ratio_w * ratio_net, ratio_h * ratio_net))
+            return out
+
+        _safe_adjust._np2_patched = True
+        _cu.adjustResultCoordinates = _safe_adjust
+
+        _orig_predict = _pred.get_prediction
+
+        def _predict_no_poly(*args, **kwargs):
+            kwargs["poly"] = False  # chỉ cần boxes; polys dài ngắn khác nhau gây crash
+            return _orig_predict(*args, **kwargs)
+
+        _predict_no_poly._np2_patched = True
+        _pred.get_prediction = _predict_no_poly
+        # __init__.py bind trực tiếp (from .predict import get_prediction) → vá cả alias
+        try:
+            import craft_text_detector as _pkg
+            _pkg.get_prediction = _predict_no_poly
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _get_craft():
     """Craft detector (nếu đã cài craft-text-detector) — cache toàn cục."""
     global _CRAFT
@@ -66,6 +118,7 @@ def _get_craft():
         if not hasattr(vgg, "model_urls"):
             vgg.model_urls = {"vgg16_bn": "https://download.pytorch.org/models/vgg16_bn-6c64b313.pth"}
         from craft_text_detector import Craft
+        _patch_craft_numpy2()
         dev = (os.getenv("VIETOCR_DEVICE") or "auto").strip().lower()
         use_cuda = torch.cuda.is_available() and dev != "cpu"
         _CRAFT = Craft(
@@ -83,11 +136,15 @@ def _detect_boxes(path: str, img):
         try:
             craft = _get_craft()
             pred = craft.detect_text(path)
+            # detect_text trả "boxes" là ndarray (N,4,2) khi có phát hiện —
+            # không dùng `or []` vì truth-test trên ndarray nhiều phần tử sẽ raise.
+            raw_boxes = pred.get("boxes")
             out = []
-            for b in (pred.get("boxes") or []):
-                xs = [float(p[0]) for p in b]
-                ys = [float(p[1]) for p in b]
-                out.append((int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))))
+            if raw_boxes is not None:
+                for b in raw_boxes:
+                    xs = [float(p[0]) for p in b]
+                    ys = [float(p[1]) for p in b]
+                    out.append((int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))))
             if out:
                 return out
         except Exception as exc:  # không cài/không tương thích → dùng projection (chỉ cảnh báo 1 lần)

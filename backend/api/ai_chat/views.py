@@ -313,7 +313,11 @@ class ChatAIStreamView(APIView):
             return False
 
         user_consent = _parse_strict_bool(request.data.get('consent_external_llm')) or _parse_strict_bool(request.data.get('allow_pii'))
-        allow_pii = bool(user_consent and (request.user.is_authenticated or getattr(request, 'is_api_key_auth', False)))
+        # Khách vãng lai cũng được đồng ý rõ ràng (checkbox trên UI): PII chỉ gửi
+        # ra ngoài khi có opt-in tường minh + ghi audit (llm_access.log). Mặc định
+        # không đồng ý → vẫn ẩn PII như cũ.
+        has_session = getattr(request, 'session', None) is not None
+        allow_pii = bool(user_consent and (request.user.is_authenticated or getattr(request, 'is_api_key_auth', False) or has_session))
 
         user = request.user if request.user.is_authenticated else None
         
@@ -400,9 +404,48 @@ class ChatAIStreamView(APIView):
                         except Exception as e:
                             logging.getLogger(__name__).error(f"OCR Error: {e}")
 
+                # Vision primary + OCR bổ trợ (giống luồng scan): OCR trên ảnh chụp
+                # màn hình/ảnh mờ thường cho text rác hoặc quá ít, model vision
+                # nhìn trực tiếp thì phân tích đúng. Chỉ khi vision tắt/lỗi mới
+                # dùng thuần OCR (không đổi hành vi cũ).
+                vision_text = ""
+                try:
+                    from api.utils.ollama_client import (
+                        analyze_image_with_vision as _vision_fn,
+                        LLM_VISION_ENABLED as _vision_on,
+                    )
+                except Exception:
+                    _vision_fn, _vision_on = None, False
+                if images_data and _vision_fn and _vision_on:
+                    yield f"data: {json.dumps({'type': 'status', 'value': 'analyzing_image'})}\n\n"
+                    for i, img_b64 in enumerate(images_data):
+                        try:
+                            vis = _vision_fn(img_b64, hint=user_message or "")
+                        except Exception as ve:
+                            logging.getLogger(__name__).warning(f"Vision error: {ve}")
+                            vis = None
+                        if vis:
+                            expl = (vis.get('explanation') or '').strip()
+                            if expl:
+                                vision_text += (
+                                    f"\n[Ảnh {i+1} qua AI vision "
+                                    f"(risk {vis.get('risk_score', '?')}/100, "
+                                    f"{vis.get('risk_level', '?')}"
+                                    f"{', ' + vis.get('scam_type', '') if vis.get('scam_type') else ''})]:\n{expl}"
+                                )
+                        if vision_text:
+                            break  # đủ 1 ảnh phân tích được thì dừng (đỡ tốn VRAM/time)
+
                 final_query = user_message
-                if ocr_text:
-                    final_query = f"[Nội dung từ ảnh]:{ocr_text}\n\n[Câu hỏi]: {user_message or 'Hãy phân tích ảnh này'}"
+                parts = []
+                if vision_text:
+                    parts.append(f"[Phân tích ảnh]:{vision_text}")
+                if ocr_text and len(ocr_text.strip()) >= 40:
+                    parts.append(f"[Nội dung từ ảnh (OCR)]:{ocr_text}")
+                elif ocr_text and not vision_text:
+                    parts.append(f"[Nội dung từ ảnh]:{ocr_text}")
+                if parts:
+                    final_query = "\n\n".join(parts) + f"\n\n[Câu hỏi]: {user_message or 'Hãy phân tích ảnh này'}"
 
                 if not final_query:
                     yield f"data: {json.dumps({'type': 'error', 'message': 'No message provided'})}\n\n"

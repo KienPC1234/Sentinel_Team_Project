@@ -623,7 +623,8 @@ def analyze_report_ai(request, report_id):
         if report.ocr_text:
             full_context += f"OCR Evidence Text: {report.ocr_text}\n"
         
-        analysis = analyze_text_for_scam(full_context)
+        # Admin mở kiểm duyệt = hành động phân tích rõ ràng.
+        analysis = analyze_text_for_scam(full_context, external_consent=True)
         report.ai_analysis = analysis
         report.save()
         

@@ -251,3 +251,9 @@ docs(agents): document sandbox invariants
 ```
 
 Do not mix refactors with behavior changes or unrelated formatting in one commit.
+
+**Batch small changes — no micro-commits:** do not commit a tiny diff on its own.
+Accumulate related changes and commit once the batch is substantial (roughly
+>2000 changed characters) or at a logical checkpoint (end of a workstream, end
+of session). Never end a session with uncommitted work: batch whatever remains
+into one final commit instead of leaving the tree dirty.

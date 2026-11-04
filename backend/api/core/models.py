@@ -765,6 +765,10 @@ class Article(models.Model):
         db_index=True,
         help_text='Liên kết gốc của bài viết'
     )
+    published_date = models.DateField(
+        null=True, blank=True, db_index=True,
+        help_text='Ngày đăng gốc trên nguồn (feed tự động điền; bài nội bộ để trống)',
+    )
     cover_image = models.ImageField(upload_to='articles/covers/', null=True, blank=True)
     is_published = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

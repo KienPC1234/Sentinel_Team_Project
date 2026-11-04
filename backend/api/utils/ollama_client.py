@@ -49,6 +49,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 LLM_VISION_ENABLED = _env_bool('LLM_VISION_ENABLED', False)
 LLM_VISION_MAX_IMAGE_MB = int(getattr(settings, 'LLM_VISION_MAX_IMAGE_MB', os.getenv('LLM_VISION_MAX_IMAGE_MB', '8')) or 8)
+LLM_VISION_MODEL = getattr(settings, 'LLM_VISION_MODEL', os.getenv('LLM_VISION_MODEL', 'gemma4:latest')) or 'gemma4:latest'
 
 # ---------------------------------------------------------------------------
 # HTTP dùng chung cho các tool gọi API ngoài (VietQR, web_fetch, …): tái sử dụng
@@ -2622,10 +2623,22 @@ def stream_chat_ai(messages: list, model: str = None, tool_dispatch: dict = None
                     # Báo UI đang chạy công cụ nào
                     yield {"type": "status", "value": f"executing_tool:{tool_name}"}
 
-                    # Execute
+                    # Execute (lọc args theo signature: model đôi khi bịa thêm key
+                    # như tên tool → TypeError; lọc để tool vẫn chạy với args hợp lệ)
                     tool_func = all_dispatch.get(tool_name)
                     if tool_func:
                         try:
+                            try:
+                                import inspect as _inspect
+                                _sig = _inspect.signature(tool_func)
+                                if not any(
+                                    p.kind == _inspect.Parameter.VAR_KEYWORD
+                                    for p in _sig.parameters.values()
+                                ):
+                                    args = {k: v for k, v in (args or {}).items()
+                                            if k in _sig.parameters}
+                            except (ValueError, TypeError):
+                                pass
                             result = tool_func(**args)
 
                             # Kết quả tìm kiếm web -> đưa vào metadata để UI hiển thị nguồn
@@ -4303,7 +4316,7 @@ def analyze_image_with_vision(image_b64: str, hint: str = '', model: str = None)
         return None
 
     prompt = SCAN_IMAGE_VISION_PROMPT.replace('{hint}', (hint or '')[:500])
-    use_model = model or DEFAULT_MODEL
+    use_model = model or LLM_VISION_MODEL or DEFAULT_MODEL
     try:
         if LLM_PROVIDER == 'openai' and OPENAI_API_KEY:
             resp = _get_http().post(

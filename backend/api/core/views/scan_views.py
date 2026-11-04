@@ -969,7 +969,8 @@ def _analyze_message_text(text: str) -> dict:
     ai_available = True
     ai_result = None
     try:
-        ai_result = analyze_text_for_scam(text)
+        # Nội dung scan do người dùng gửi = consent by action.
+        ai_result = analyze_text_for_scam(text, external_consent=True)
         if ai_result and not ai_result.get('ai_notice'):
             ai_score = ai_result.get('risk_score', 0) or 0
             ai_explanation = ai_result.get('explanation') or ai_result.get('reason') or ''
