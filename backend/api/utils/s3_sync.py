@@ -86,7 +86,15 @@ def sync_media_to_s3(
             key = f"{prefix}{rel}" if prefix else rel
             local_keys.add(key)
             size = os.path.getsize(path)
+            is_private = is_private_media(key)
             if existing.get(key) == size:
+                # Nếu là media riêng tư đã tồn tại trên S3 (kích thước trùng khớp),
+                # vẫn chủ động cập nhật ACL sang private để khắc phục các object cũ từng bị gán public-read.
+                if is_private and not dry_run:
+                    try:
+                        s3.put_object_acl(Bucket=bucket, Key=key, ACL='private')
+                    except Exception as acl_exc:
+                        say(f"[warn] enforce private ACL on existing {key} failed: {acl_exc}")
                 skipped += 1
                 continue
             if dry_run:
@@ -95,7 +103,7 @@ def sync_media_to_s3(
                 continue
             try:
                 ctype = mimetypes.guess_type(name)[0] or 'application/octet-stream'
-                file_acl = 'private' if is_private_media(key) else acl
+                file_acl = 'private' if is_private else acl
                 s3.upload_file(path, bucket, key, ExtraArgs={'ContentType': ctype, 'ACL': file_acl})
                 uploaded += 1
             except Exception as exc:

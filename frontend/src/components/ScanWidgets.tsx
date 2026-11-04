@@ -863,6 +863,9 @@ export interface GuardrailData {
   tier?: string;
   label?: string;
   confidence?: number;
+  confidence_type?: string;
+  rule_confidence?: number | null;
+  calibrated_probability?: number | null;
   is_conclusive?: boolean;
   requires_verification?: boolean;
   cautions?: string[];
@@ -941,8 +944,19 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
           <i className={`bi ${meta.icon} text-xl ${meta.cls}`}></i>
           <span className={`text-sm font-black uppercase tracking-wide ${meta.cls}`}>{g.label || tier}</span>
           {conf !== null && (
-            <span className="px-2.5 py-0.5 rounded-full bg-white/5 text-white/60 text-[10px] font-black border border-white/10">
-              độ tin cậy {conf}%
+            <span
+              className="px-2.5 py-0.5 rounded-full bg-white/5 text-white/60 text-[10px] font-black border border-white/10"
+              title={
+                g.confidence_type === 'rule_heuristic'
+                  ? 'Mức tin cậy theo quy tắc heuristic, không phải xác suất thống kê chuẩn hóa'
+                  : 'Độ tin cậy được tính toán từ các nguồn bằng chứng'
+              }
+            >
+              {g.confidence_type === 'rule_heuristic'
+                ? `độ tin cậy quy tắc ${conf}%`
+                : g.calibrated_probability != null
+                ? `xác suất chuẩn hóa ${(g.calibrated_probability * 100).toFixed(0)}%`
+                : `điểm bằng chứng ${conf}%`}
             </span>
           )}
           <span

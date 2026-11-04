@@ -353,7 +353,9 @@ class ScamVectorDB:
         logger.info(f"Rebuilt index with {len(documents)} items (dim={dim}).")
 
     # ---------------------------------------------------------------- search
-    def search(self, query: str, k: int = 3) -> List[Dict[str, Any]]:
+    def search(self, query: str, k: int = 3, top_k: Optional[int] = None) -> List[Dict[str, Any]]:
+        if top_k is not None:
+            k = top_k
         self._maybe_reload()
         if self.index is None or getattr(self.index, 'ntotal', 0) == 0:
             return []

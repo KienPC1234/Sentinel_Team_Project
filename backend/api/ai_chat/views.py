@@ -303,7 +303,16 @@ class ChatAIStreamView(APIView):
         scan_context = request.data.get('scan_context', '')
         safe_mode = request.data.get('safe_mode', False)
         debug = request.data.get('debug', False)
-        user_consent = bool(request.data.get('consent_external_llm') or request.data.get('allow_pii'))
+        def _parse_strict_bool(val) -> bool:
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, (int, float)):
+                return val == 1
+            if isinstance(val, str):
+                return val.strip().lower() in ('true', '1', 'yes')
+            return False
+
+        user_consent = _parse_strict_bool(request.data.get('consent_external_llm')) or _parse_strict_bool(request.data.get('allow_pii'))
         allow_pii = bool(user_consent and (request.user.is_authenticated or getattr(request, 'is_api_key_auth', False)))
 
         user = request.user if request.user.is_authenticated else None

@@ -419,7 +419,7 @@ export default function Home() {
         className="max-w-6xl mx-auto px-4 mb-24 mt-8 md:mt-10 grid grid-cols-2 md:grid-cols-4 gap-4"
       >
         <StatCard value={stats.totalScans} label="Tổng Lượt Scan" valueClass="text-white" glow />
-        <StatCard value={stats.threats} label="Mối Nguy Hiểm" valueClass="text-danger-500" />
+        <StatCard value={stats.threats} label="Lượt Quét Có Cảnh Báo" valueClass="text-danger-500" />
         <StatCard value={stats.reports} label="Báo Cáo Đã Duyệt" valueClass="text-safe-400" />
         <StatCard value="24/7" label="Thời Gian Thực" valueClass="text-brand-400" />
       </motion.section>

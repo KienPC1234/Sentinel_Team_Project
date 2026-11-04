@@ -437,6 +437,47 @@ class ReportDetailSerializer(serializers.ModelSerializer):
             return obj.evidence_file.url
         return None
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        is_privileged = False
+        if request and getattr(request, 'user', None) and request.user.is_authenticated:
+            if request.user.is_staff or request.user.id == instance.reporter_id:
+                is_privileged = True
+
+        if not is_privileged:
+            from api.core.models import BankAccount
+            if data.get('scammer_bank_account'):
+                data['scammer_bank_account'] = BankAccount.mask_account(data['scammer_bank_account'])
+            if data.get('scammer_phone'):
+                phone = str(data['scammer_phone'])
+                if len(phone) > 6:
+                    data['scammer_phone'] = phone[:3] + '****' + phone[-3:]
+            if data.get('target_type') == 'phone' and data.get('target_value'):
+                tv = str(data['target_value'])
+                if len(tv) > 6:
+                    data['target_value'] = tv[:3] + '****' + tv[-3:]
+            elif data.get('target_type') == 'account' and data.get('target_value'):
+                data['target_value'] = BankAccount.mask_account(data['target_value'])
+
+            if isinstance(data.get('scammer_info'), dict):
+                info = dict(data['scammer_info'])
+                if info.get('bank_account'):
+                    info['bank_account'] = BankAccount.mask_account(info['bank_account'])
+                if info.get('phone'):
+                    p = str(info['phone'])
+                    if len(p) > 6:
+                        info['phone'] = p[:3] + '****' + p[-3:]
+                data['scammer_info'] = info
+
+            # Add dispute and moderation provenance for community transparency
+            data['dispute_url'] = f"/report/lookup/?dispute={instance.id}"
+            data['verification_notice'] = (
+                "Báo cáo do cộng đồng đóng góp và đã qua kiểm duyệt sơ bộ. "
+                "Thông tin nhạy cảm đã được che mờ theo quy định bảo vệ dữ liệu cá nhân."
+            )
+        return data
+
 
 class ReportModerateSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=['approve', 'reject'])

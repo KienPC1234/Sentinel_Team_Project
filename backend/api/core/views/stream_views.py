@@ -49,7 +49,16 @@ class ScanAnalyzeSSEView(APIView):
         # Đăng nhập không đồng nghĩa với đồng ý gửi PII ra mô hình LLM ngoài.
         # Yêu cầu đồng thuận tường minh (consent_external_llm / allow_pii)
         # kết hợp quyền xác thực của người dùng.
-        user_consent = bool(request.data.get('consent_external_llm') or request.data.get('allow_pii'))
+        def _parse_strict_bool(val) -> bool:
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, (int, float)):
+                return val == 1
+            if isinstance(val, str):
+                return val.strip().lower() in ('true', '1', 'yes')
+            return False
+
+        user_consent = _parse_strict_bool(request.data.get('consent_external_llm')) or _parse_strict_bool(request.data.get('allow_pii'))
         allow_pii = bool(
             user_consent and (
                 getattr(request.user, 'is_authenticated', False)
@@ -61,25 +70,29 @@ class ScanAnalyzeSSEView(APIView):
             from api.core.models import ScanEvent
             try:
                 ev = ScanEvent.objects.get(id=scan_id)
-                active_scans = request.session.get('active_scan_ids', []) if hasattr(request, 'session') else []
-                try:
-                    sid = int(scan_id)
-                except (TypeError, ValueError):
-                    sid = scan_id
-                is_in_session = sid in (active_scans or []) or str(sid) in [str(x) for x in (active_scans or [])]
-                can_view = bool(
-                    getattr(request.user, 'is_staff', False)
-                    or (getattr(request.user, 'is_authenticated', False) and ev.user_id == request.user.id)
-                    or ev.is_public_referable
-                    or is_in_session
-                )
-                if not can_view:
-                    return Response({'error': 'Bạn không có quyền truy cập kết quả quét này.'}, status=403)
-                scan_type = scan_type or ev.scan_type
-                scan_data = scan_data or ev.result_json or {}
-                raw_input = raw_input or ev.raw_input or ''
-            except Exception:
-                pass
+            except ScanEvent.DoesNotExist:
+                return Response({'error': f'Không tìm thấy bản ghi quét #{scan_id}.'}, status=404)
+            except Exception as e:
+                logger.error(f"Error fetching ScanEvent #{scan_id}: {e}")
+                return Response({'error': 'Lỗi truy xuất bản ghi quét.'}, status=500)
+
+            active_scans = request.session.get('active_scan_ids', []) if hasattr(request, 'session') else []
+            try:
+                sid = int(scan_id)
+            except (TypeError, ValueError):
+                sid = scan_id
+            is_in_session = sid in (active_scans or []) or str(sid) in [str(x) for x in (active_scans or [])]
+            can_view = bool(
+                getattr(request.user, 'is_staff', False)
+                or (getattr(request.user, 'is_authenticated', False) and ev.user_id == request.user.id)
+                or ev.is_public_referable
+                or is_in_session
+            )
+            if not can_view:
+                return Response({'error': 'Bạn không có quyền truy cập kết quả quét này.'}, status=403)
+            scan_type = scan_type or ev.scan_type
+            scan_data = scan_data or ev.result_json or {}
+            raw_input = raw_input or ev.raw_input or ''
 
         try:
             from api.utils.privacy import redact_pii as _redact

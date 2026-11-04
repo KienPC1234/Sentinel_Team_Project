@@ -155,7 +155,11 @@ def process_report_ai_async(self, report_id: int):
         from api.utils.media_utils import extract_ocr_text
         from api.utils.ollama_client import analyze_text_for_scam
 
-        report = Report.objects.get(id=report_id)
+        try:
+            report = Report.objects.get(id=report_id)
+        except Report.DoesNotExist:
+            logger.info(f"[ReportAI] Report #{report_id} does not exist (likely deleted). Skipping.")
+            return {'status': 'skipped', 'report_id': report_id, 'reason': 'not_found'}
 
         ocr_text = ''
         if report.evidence_file:
