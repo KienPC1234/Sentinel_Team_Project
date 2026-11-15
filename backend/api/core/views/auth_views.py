@@ -1,11 +1,8 @@
 """ShieldCall VN – Auth Views"""
-import re
 import hashlib
 import logging
-import json
 import secrets
 import hmac
-from urllib.parse import urlparse
 
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, get_user_model
 from django.contrib.auth.validators import UnicodeUsernameValidator
@@ -13,29 +10,27 @@ from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.conf import settings
 from django.core.validators import validate_email
-from django.db.models import Count, Sum, F, Q
 from django.utils import timezone
-from datetime import timedelta
 
-from django.http import StreamingHttpResponse
 from django.middleware.csrf import get_token as csrf_get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
-from rest_framework import status, permissions, generics, serializers
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework import status, serializers
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from drf_spectacular.utils import extend_schema
 
-from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 from api.utils.security import verify_turnstile_token
 
 from api.core.models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, UserProfile, MFARecoveryCode,
+    Report,
+    ScanEvent,
+    UserAlert,
+    UserProfile,
+    MFARecoveryCode,
 )
 from api.core.throttling import AuthThrottle
 from api.core.otp_guard import (
@@ -44,12 +39,9 @@ from api.core.otp_guard import (
     record_otp_verify_fail,
 )
 from api.core.serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer,
-    DomainSerializer, BankAccountSerializer,
-    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer,
-    ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
-    ScanAccountSerializer, ScanImageSerializer, ScanEventListSerializer,
-    TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
+    RegisterSerializer,
+    LoginSerializer,
+    UserSerializer,
     UserProfileSerializer,
 )
 

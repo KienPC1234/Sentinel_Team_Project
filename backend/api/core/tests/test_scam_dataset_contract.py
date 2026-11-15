@@ -1,5 +1,4 @@
 """Regression tests for the first privacy-safe ShieldCall dataset contract."""
-from copy import deepcopy
 from uuid import uuid4
 
 from django.test import SimpleTestCase

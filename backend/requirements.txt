@@ -11,7 +11,6 @@ pillow>=13.0.0
 requests>=2.31.0
 urllib3>=2.8.0
 PyJWT>=2.15
-django-tailwind
 python-dotenv
 # OCR engine: VietOCR chạy trong venv riêng (.venv-ocr) — xem backend/requirements-ocr.txt
 # (đã gỡ easyocr khỏi venv chính để tránh xung đột deps)

@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { api } from '../../lib/api';
+import { scConfirm } from '../../lib/ui/feedback';
 import { AdminShell, useAdminGet } from './_shared';
 
 interface ScenarioItem {
@@ -70,7 +71,7 @@ export function ScenarioMgmt() {
   }, [rawList, search, filterType]);
 
   const handleDelete = async (id: number, title: string) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa kịch bản "${title}"?`)) return;
+    if (!(await scConfirm(`Bạn có chắc chắn muốn xóa kịch bản "${title}"?`, { icon: 'warning', confirmButtonText: 'Xóa' }))) return;
     setDeletingId(id);
     setMsg(null);
     try {

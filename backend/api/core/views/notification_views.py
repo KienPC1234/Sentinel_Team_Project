@@ -3,13 +3,14 @@ import json
 from urllib.parse import urlparse
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, serializers
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from drf_spectacular.utils import extend_schema
 from api.utils.push_service import push_service
 import os
 from django.conf import settings
 from django.core.cache import cache
+from django.utils import timezone
 from api.maintenance.tasks import rebuild_vector_index
 
 logger = logging.getLogger(__name__)
@@ -195,7 +196,7 @@ class TestPushView(APIView):
         webpush_sent = 0
         webpush_errors = []
         for sub in subs:
-            ok, err, status = push_service.send_webpush(
+            ok, err, http_status = push_service.send_webpush(
                 sub,
                 {
                     'title': title,
@@ -219,7 +220,7 @@ class TestPushView(APIView):
             else:
                 webpush_errors.append(err)
                 sub.last_error = err
-                if status in (404, 410):
+                if http_status in (404, 410):
                     sub.is_active = False
                 sub.save(update_fields=['is_active', 'last_error', 'updated_at'])
 

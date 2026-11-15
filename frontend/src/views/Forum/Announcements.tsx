@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {api, mediaUrl} from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { Spinner } from '../../components/ui';
+import { timeAgo } from '../../lib/date';
 import { sanitizeHtml } from '../../lib/chat/markdown';
 import RichEditor, { getEditorData } from '../../components/RichEditor';
 
@@ -20,17 +21,6 @@ interface Announcement {
   views_count?: number;
   is_pinned?: boolean;
   created_at?: string;
-}
-
-function timeAgo(dt?: string): string {
-  if (!dt) return '';
-  const diff = (Date.now() - new Date(dt).getTime()) / 1000;
-  if (Number.isNaN(diff)) return '';
-  if (diff < 60) return 'Vừa xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
-  return new Date(dt).toLocaleDateString('vi-VN');
 }
 
 export default function Announcements() {

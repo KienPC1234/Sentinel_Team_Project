@@ -352,6 +352,16 @@ def _load_piper():
     raise TtsUnavailable(f"Không nạp được Piper: {last_exc}")
 
 
+def _torch_inference_ctx():
+    """Trả về torch.inference_mode() nếu có PyTorch để tránh giữ graph/VRAM khi synth."""
+    try:
+        import torch
+        return torch.inference_mode()
+    except Exception:
+        from contextlib import nullcontext
+        return nullcontext()
+
+
 def _load_vieneu():
     """Nạp VieNeu-TTS (48kHz) + xác thực giọng cấu hình.
 
@@ -386,7 +396,8 @@ def _load_vieneu():
 
     voice = vieneu_voice()
     try:
-        model.infer("Kiểm tra.", voice=voice)
+        with _torch_inference_ctx():
+            model.infer("Kiểm tra.", voice=voice)
         _vieneu_voice_resolved = voice
     except Exception as exc:  # noqa: BLE001
         logger.warning("Giọng VieNeu '%s' lỗi (%s) — dùng giọng mặc định.", voice, exc)
@@ -460,7 +471,8 @@ def _synthesize_pcm(text: str):
 
     if eng == 'vieneu':
         kwargs = {'voice': _vieneu_voice_resolved} if _vieneu_voice_resolved else {}
-        audio = _voice.infer(text, **kwargs)
+        with _torch_inference_ctx():
+            audio = _voice.infer(text, **kwargs)
         wav = np.asarray(audio, dtype=np.float32)
         sr = int(getattr(_voice, 'sample_rate', 48000) or 48000)
         return (np.clip(wav, -1.0, 1.0) * 32767.0).astype(np.int16), sr
@@ -580,7 +592,7 @@ def ensure_audio(raw_text: str) -> tuple[Path, str, bool]:
             logger.exception("TTS tổng hợp lỗi")
             raise TtsUnavailable(f"TTS lỗi tổng hợp: {exc}") from exc
         _enforce_cache_limit(len(data))
-        tmp = path.with_name(path.name + '.tmp')
+        tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
         tmp.write_bytes(data)
         os.replace(tmp, path)  # ghi nguyên tử
 

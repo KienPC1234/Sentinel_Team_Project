@@ -1,7 +1,6 @@
 """Tests cho audit report: chong trung, validate mo ta, stats cache, privacy lookup."""
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from django.test import TestCase

@@ -19,7 +19,15 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-from api.utils.vn_sources import VN_OFFICIAL_CHANNELS, lookup_vn_bank_hotline, bank_official_site
+from api.utils.vn_sources import (
+    SOURCE_VERIFIED_DATE,
+    VN_OFFICIAL_CHANNELS,
+    bank_official_site,
+    lookup_vn_bank_hotline,
+    tinnhiem_dataset_stats,
+)
+
+SOURCE_CATALOG_UPDATED_AT = SOURCE_VERIFIED_DATE
 
 DISCLAIMER = (
     "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định, "
@@ -61,6 +69,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Đối chiếu mã +84, đầu số di động/cố định và độ dài với metadata libphonenumber.",
         "limits": "Đầu số có thể được cập nhật; tính hợp lệ không xác thực chủ thuê bao, vị trí thực hoặc Caller ID.",
         "url": "https://mst.gov.vn/bo-tttt-day-manh-dinh-danh-cuoc-goi-de-ngan-ngua-lua-dao-tren-khong-gian-mang-19724111208351436.htm",
+        "citation": "Quy hoạch kho số viễn thông Bộ TT&TT (nay là Bộ KH&CN) & chuẩn E.164 libphonenumber",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "virustotal": {
         "name": "VirusTotal (70+ engine AV)",
@@ -69,6 +79,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Đối chiếu hash/URL với hàng chục engine antivirus & sandbox thương mại.",
         "limits": "Phụ thuộc dữ liệu cộng đồng; tệp/URL mới có thể chưa có báo cáo; bản miễn phí giới hạn số lượt/phút.",
         "url": "https://www.virustotal.com",
+        "citation": "VirusTotal API v3 multi-engine reputation",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "clamav": {
         "name": "ClamAV (mã độc cục bộ)",
@@ -77,6 +89,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Antivirus mã nguồn mở quét chữ ký mã độc ngay trên máy chủ.",
         "limits": "Chỉ nhận diện chữ ký đã biết; có thể bỏ sót mã độc mới (zero-day).",
         "url": "https://www.clamav.net",
+        "citation": "ClamAV signature database (local engine)",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "yara": {
         "name": "YARA (luật phát hiện)",
@@ -85,6 +99,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Khớp mẫu hành vi/nội dung đặc trưng của mã độc.",
         "limits": "Phụ thuộc bộ luật; luật chưa bao phủ hết biến thể.",
         "url": "https://virustotal.github.io/yara/",
+        "citation": "YARA ruleset (local pattern matching)",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "sandbox": {
         "name": "Zero-Trust Sandbox (cô lập, tắt mạng)",
@@ -93,6 +109,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Chạy mẫu trong môi trường cô lập, tắt mạng, giới hạn tài nguyên để quan sát hành vi.",
         "limits": "Phân tích tĩnh/hành vi hạn chế; mẫu cần mạng hoặc kích hoạt trễ có thể không bộc lộ.",
         "url": None,
+        "citation": "ShieldCall Isolated Sandbox Container",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "pefile": {
         "name": "PEFile (giải phẫu PE)",
@@ -101,6 +119,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Trích xuất cấu trúc tệp thực thi Windows (import, section, packing).",
         "limits": "Chỉ áp dụng tệp PE; không kết luận độc hại, chỉ cung cấp dấu hiệu.",
         "url": None,
+        "citation": "pefile static binary inspection",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "oletools": {
         "name": "OLEtools (macro Office)",
@@ -109,6 +129,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Phát hiện macro độc hại trong tài liệu Office.",
         "limits": "Chỉ phát hiện macro rõ ràng; macro hợp lệ cũng có thể bị đánh dấu.",
         "url": "https://github.com/decalage2/oletools",
+        "citation": "decalage/oletools olevba",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "network_analysis": {
         "name": "Phân tích kết nối/SSL (network)",
@@ -117,6 +139,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Kiểm tra chứng chỉ SSL, chuyển hướng, header bảo mật, thời điểm tạo cert.",
         "limits": "Phụ thuộc khả năng kết nối; trang chặn bot có thể không lấy được dữ liệu.",
         "url": None,
+        "citation": "Local HTTP/TLS/WHOIS analyzer",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "tranco": {
         "name": "Tranco (thứ hạng phổ biến)",
@@ -125,6 +149,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Xếp hạng độ phổ biến tên miền toàn cầu (danh sách nghiên cứu).",
         "limits": "Chỉ là chỉ báo phổ biến, KHÔNG đồng nghĩa an toàn.",
         "url": "https://tranco-list.eu",
+        "citation": "Tranco Top Sites Research List",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "heuristic": {
         "name": "Heuristic tiếng Việt (luật nội bộ)",
@@ -133,6 +159,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Từ điển dấu hiệu lừa đảo tiếng Việt + kiểm tra tên miền giả mạo.",
         "limits": "Có thể dương tính giả nếu nội dung hợp pháp trùng từ khoá; không thay thế phân tích chuyên sâu.",
         "url": None,
+        "citation": "ShieldCall VN scam_rules heuristic ruleset",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "rag": {
         "name": "Kho tri thức ShieldCall (RAG)",
@@ -141,14 +169,18 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Tài liệu & kịch bản phòng chống lừa đảo do hệ thống biên soạn.",
         "limits": "Có thể chưa cập nhật hết; cần đối chiếu nguồn chính thức khi quan trọng.",
         "url": None,
+        "citation": "ShieldCall VN curated RAG corpus",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "community": {
         "name": "Báo cáo cộng đồng",
         "reliability": _MEDIUM,
         "kind": "user_generated",
         "description": "Báo cáo do người dùng gửi (đã kiểm duyệt một phần).",
-        "limits": "Chưa được xác minh đầy đủ; có thể sai hoặc bị lợi dụng; dùng để tham khảo.",
+        "limits": "Chưa được xác minh đầy đủ; có thể sai hoặc bị lợi dụng; chỉ dùng tham khảo, không kết luận danh tính.",
         "url": None,
+        "citation": "ShieldCall community reports (moderation-filtered)",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "web_search": {
         "name": "Tìm kiếm/OSINT web",
@@ -157,6 +189,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Đối chiếu thông tin công khai trên web.",
         "limits": "Nguồn mở đa dạng, độ tin cậy khác nhau; cần kiểm chứng lại.",
         "url": None,
+        "citation": "Public web / OSINT search",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "ai_model": {
         "name": "Mô hình ngôn ngữ (LLM)",
@@ -168,6 +202,8 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
             "KHÔNG phải bằng chứng gốc; mọi kết luận phải dựa trên evidence dữ liệu."
         ),
         "url": None,
+        "citation": "Ollama Cloud / Local LLM advisory synthesis",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "vn_official": {
         "name": "Kênh chính thức Việt Nam (NCSC, Bộ Công an, ngân hàng)",
@@ -176,22 +212,26 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "description": "Đầu mối xác minh & trình báo chính thức.",
         "limits": "Kênh để xác minh thủ công, không tự động trả kết quả.",
         "url": "https://khonggianmang.vn",
+        "citation": "Cổng NCSC Việt Nam & danh bạ cơ quan chức năng",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "tinnhiemmang": {
-        "name": "Tín nhiệm mạng (tinnhiemmang.vn — NCSC/VNCERT)",
+        "name": "Tín nhiệm mạng (tinnhiemmang.vn - NCSC/VNCERT)",
         "reliability": _HIGH,
         "kind": "government",
         "description": (
             "Danh bạ chính thống: website/tổ chức/hệ thống/ứng dụng tín nhiệm đã được "
             "chứng nhận và danh sách website lừa đảo (mạo danh tổ chức/thương hiệu). "
-            "Dùng để đối chiếu tên miền tin cậy ↔ lừa đảo."
+            "Dùng để đối chiếu tên miền tin cậy <-> lừa đảo."
         ),
         "limits": (
-            "Chỉ gồm thực thể đã đăng ký/chứng nhận hoặc đã bị ghi nhận — KHÔNG có nghĩa "
+            "Chỉ gồm thực thể đã đăng ký/chứng nhận hoặc đã bị ghi nhận - KHÔNG có nghĩa "
             "mọi tên miền vắng mặt đều an toàn. Dữ liệu cập nhật theo từng đợt; luôn đối "
             "chiếu trang gốc khi trích dẫn."
         ),
         "url": "https://tinnhiemmang.vn",
+        "citation": "NCSC/VNCERT tinnhiemmang.vn snapshot",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
 }
 
@@ -204,14 +244,23 @@ def source_meta(key: str) -> Dict[str, Any]:
         "description": "Nguồn chưa được phân loại.",
         "limits": "Chưa xác định rõ độ tin cậy.",
         "url": None,
+        "citation": key,
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
     })
 
 
 def source_catalog() -> List[Dict[str, Any]]:
     """Danh mục công khai cho UI/API."""
+    try:
+        ds_updated = tinnhiem_dataset_stats().get("updated_at")
+    except Exception:
+        ds_updated = None
     out = []
     for key, meta in SOURCE_CATALOG.items():
-        out.append({"key": key, **meta})
+        item = {"key": key, **meta}
+        if key == "tinnhiemmang" and ds_updated:
+            item["updated_at"] = ds_updated
+        out.append(item)
     return out
 
 
@@ -221,8 +270,16 @@ def source_catalog() -> List[Dict[str, Any]]:
 _SEV_WEIGHT = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0, "INFO": 0}
 
 
-def _mk_evidence(source: str, detail: str, severity: str = "INFO",
-                 *, url: Optional[str] = None, supports: str = "context") -> Dict[str, Any]:
+def _mk_evidence(
+    source: str,
+    detail: str,
+    severity: str = "INFO",
+    *,
+    url: Optional[str] = None,
+    supports: str = "context",
+    updated_at: Optional[str] = None,
+    citation: Optional[str] = None,
+) -> Dict[str, Any]:
     meta = source_meta(source)
     return {
         "source": source,
@@ -233,6 +290,8 @@ def _mk_evidence(source: str, detail: str, severity: str = "INFO",
         "supports": supports,          # 'malicious' | 'benign' | 'context'
         "url": url or meta.get("url"),
         "limits": meta.get("limits"),
+        "citation": citation or meta.get("citation") or meta["name"],
+        "updated_at": updated_at or meta.get("updated_at") or SOURCE_CATALOG_UPDATED_AT,
     }
 
 
@@ -302,15 +361,45 @@ def build_evidence(result: Dict[str, Any]) -> List[Dict[str, Any]]:
             raw = list(raw.values())  # check_descriptions có thể là dict
         for line in (raw or []):
             if isinstance(line, str) and line.strip():
-                low = line.lower()
-                sev = "MEDIUM" if any(k in low for k in ("độc hại", "malicious", "lừa đảo", "giả", "rủi ro cao")) else "INFO"
-                supports = "malicious" if sev != "INFO" else "context"
-                ev.append(_mk_evidence(src, line.strip(), sev, supports=supports))
+                clean_line = line.strip()
+                low = clean_line.lower()
+                src_item = src
+                if any(k in low for k in ("báo cáo cộng đồng", "báo cáo liên quan", "phản ánh từ cộng đồng", "chờ kiểm duyệt")):
+                    src_item = "community"
+                if any(
+                    k in low
+                    for k in (
+                        "chờ duyệt",
+                        "chờ kiểm duyệt",
+                        "chưa xác thực",
+                        "không tìm thấy",
+                        "không có dấu hiệu",
+                        "chưa phát hiện",
+                        "chưa có dữ liệu",
+                        "chưa thấy",
+                        "chưa đủ căn cứ",
+                        "chỉ mang tính tham khảo",
+                    )
+                ):
+                    sev = "INFO"
+                    supports = "context"
+                else:
+                    sev = "MEDIUM" if any(k in low for k in ("độc hại", "malicious", "lừa đảo", "giả", "rủi ro cao")) else "INFO"
+                    supports = "malicious" if sev != "INFO" else "context"
+                ev.append(_mk_evidence(src_item, clean_line, sev, supports=supports))
 
     # (d) patterns_found / domain_risks (message scan)
+    try:
+        _rscore = int(result.get("risk_score", 0) or 0)
+    except (TypeError, ValueError):
+        _rscore = 0
     for line in (result.get("patterns_found") or []):
         if isinstance(line, str) and line.strip():
-            ev.append(_mk_evidence("heuristic", line.strip(), "MEDIUM", supports="malicious"))
+            # Nếu ensemble/ngữ cảnh khuyến cáo đã hạ điểm <= 15 thì từ khóa chỉ là ngữ cảnh, không nâng lên malicious
+            if _rscore <= 15:
+                ev.append(_mk_evidence("heuristic", f"{line.strip()} (đã giảm trừ theo ngữ cảnh)", "INFO", supports="context"))
+            else:
+                ev.append(_mk_evidence("heuristic", line.strip(), "MEDIUM", supports="malicious"))
 
     # (e) sources list → ghi nhận nguồn đã dùng
     for s in (result.get("sources") or []):
@@ -386,21 +475,44 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
 
     # Đếm số nguồn độc lập khác nhau
     mal_sources = {e.get("source") for e in mal_ev if e.get("source")}
+    benign_sources = {e.get("source") for e in benign_ev if e.get("source")}
     multi_source_consensus = len(mal_sources) >= 2
+
+    has_contradiction = bool(mal_ev and benign_ev)
+    contradiction_details: List[str] = []
+    if has_contradiction:
+        contradiction_details.append(
+            f"Tín hiệu cảnh báo ({', '.join(sorted(mal_sources))}) mâu thuẫn với tín hiệu sạch/tin cậy ({', '.join(sorted(benign_sources))})."
+        )
+
+    tinnhiem_benign = any(e.get("source") == "tinnhiemmang" for e in high_benign)
+    tinnhiem_mal = any(e.get("source") == "tinnhiemmang" for e in verified_mal)
 
     has_error = bool(result.get("error") or result.get("insufficient_input"))
 
     if has_error:
         tier, conf = "INSUFFICIENT", 0.1
+    elif tinnhiem_benign and verified_mal and not tinnhiem_mal:
+        # Mâu thuẫn trực tiếp giữa danh bạ NCSC Tín nhiệm mạng và nguồn xác thực khác -> từ chối kết luận quá mức
+        tier, conf = "INSUFFICIENT", 0.35
+        contradiction_details.append(
+            "Danh bạ Tín nhiệm mạng ghi nhận chứng nhận tin cậy nhưng có nguồn kỹ thuật cảnh báo; hệ thống từ chối kết luận tự động."
+        )
+    elif high_benign and mal_ev and not verified_mal:
+        # Nguồn tin cậy cao báo sạch nhưng heuristic/AI/cộng đồng chưa xác thực lại cảnh báo -> mâu thuẫn chưa giải quyết
+        tier, conf = "INSUFFICIENT", 0.25
+        contradiction_details.append(
+            "Nguồn đối chiếu tin cậy cao chưa ghi nhận vi phạm nhưng có dấu hiệu nghi ngờ chưa xác thực; chuyển sang mức CHƯA ĐỦ CĂN CỨ."
+        )
     elif verified_mal:
         # Có bằng chứng độc lập xác thực:
         # Nếu có từ 2 nguồn xác thực trở lên hoặc đồng thuận đa nguồn độc lập: conf = 0.95
         # Nếu chỉ 1 nguồn VT (>=3 engine): conf = 0.90
-        if len(verified_mal) >= 2 or multi_source_consensus or any(e.get("source") == "tinnhiemmang" for e in verified_mal):
+        if len(verified_mal) >= 2 or multi_source_consensus or tinnhiem_mal:
             conf = 0.95
         else:
             conf = 0.90
-        tier = "CONFIRMED_RISK"
+        tier = "HIGH_RISK" if kind in ("account", "phone") else "CONFIRMED_RISK"
     elif mal_ev or score >= 70:
         # Heuristic hoặc tín hiệu mạnh nhưng CHƯA có nguồn xác minh độc lập
         tier = "HIGH_RISK"
@@ -418,7 +530,7 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
             tier, conf = "INSUFFICIENT", 0.30
 
     labels = {
-        "CONFIRMED_RISK": "NGUY HIỂM: Có bằng chứng xác thực",
+        "CONFIRMED_RISK": "CẢNH BÁO RỦI RO CAO (Có nguồn đối chiếu)",
         "HIGH_RISK": "NGUY CƠ CAO",
         "SUSPICIOUS": "ĐÁNG NGỜ: Cần thận trọng",
         "INSUFFICIENT": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
@@ -426,10 +538,17 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
     }
 
     cautions: List[str] = []
+    if has_contradiction and contradiction_details:
+        cautions.append(contradiction_details[0])
     if tier == "INSUFFICIENT":
         cautions.append(
-            "Hệ thống chưa thu thập đủ bằng chứng để kết luận. KHÔNG xem đây là 'an toàn', "
+            "Hệ thống chưa thu thập đủ bằng chứng nhất quán để kết luận. KHÔNG xem đây là 'an toàn' hay 'chắc chắn lừa đảo', "
             "hãy xác minh qua kênh chính thức trước khi giao dịch hoặc chia sẻ thông tin."
+        )
+    if kind in ("account", "phone"):
+        cautions.append(
+            "Hệ thống không khẳng định một cá nhân hay chủ tài khoản/số điện thoại chắc chắn lừa đảo; "
+            "chỉ cảnh báo dấu hiệu rủi ro để bạn đối chiếu qua ngân hàng hoặc cơ quan chức năng."
         )
     if tier in ("HIGH_RISK", "SUSPICIOUS"):
         cautions.append("Không chuyển tiền, không cung cấp OTP/mật khẩu, không cài ứng dụng lạ.")
@@ -440,7 +559,7 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
     if not evidence:
         cautions.append("Không có bằng chứng nào được ghi nhận cho nội dung này.")
 
-    conclusive = tier in ("CONFIRMED_RISK", "HIGH_RISK")
+    conclusive = False if kind in ("account", "phone") else (tier in ("CONFIRMED_RISK", "HIGH_RISK"))
 
     return {
         "tier": tier,
@@ -450,7 +569,9 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
         "rule_confidence": round(conf, 2),
         "calibrated_probability": None,
         "is_conclusive": conclusive,
-        "requires_verification": tier in ("INSUFFICIENT", "SUSPICIOUS", "LIKELY_SAFE"),
+        "requires_verification": (kind in ("account", "phone")) or (tier in ("INSUFFICIENT", "SUSPICIOUS", "LIKELY_SAFE")),
+        "has_contradiction": has_contradiction,
+        "contradiction_details": contradiction_details,
         "cautions": cautions,
         "disclaimer": DISCLAIMER,
         "official_channels": _official_channels_for(result),

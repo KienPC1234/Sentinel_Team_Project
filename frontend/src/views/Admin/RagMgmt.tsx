@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
+import { fmtDateTime } from '../../lib/date';
 import { useAuth } from '../../components/AuthContext';
 import { wsBase, WsBadge } from '../../components/ScanWidgets';
 import type { WsState } from '../../components/ScanWidgets';
@@ -62,11 +63,7 @@ function asList(data: RagResponse | null): RagResponse {
 }
 
 function formatDate(dateStr?: string | null): string {
-  if (!dateStr) return 'Chưa có';
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return fmtDateTime(dateStr) || 'Chưa có';
 }
 
 function truncate(text: string | undefined, len: number): string {

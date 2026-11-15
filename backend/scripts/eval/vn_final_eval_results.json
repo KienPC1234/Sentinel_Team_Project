@@ -1,0 +1,364 @@
+{
+  "independent_vn_messages": {
+    "dataset": "independent_test_set_vn.jsonl",
+    "mode": "offline_heuristic_plus_evidence_ensemble",
+    "threshold": 40,
+    "total": 80,
+    "tp": 25,
+    "fp": 1,
+    "tn": 39,
+    "fn": 15,
+    "precision": 0.9615,
+    "recall": 0.625,
+    "f1": 0.7576,
+    "false_positive_rate": 0.025,
+    "false_negative_rate": 0.375,
+    "fp_cases": [
+      {
+        "id": "legit_22",
+        "category": "personal_money_transfer_chat",
+        "score": 40,
+        "patterns": [
+          "Yêu cầu chuyển tiền/nộp phí",
+          "Giao dịch tài chính"
+        ]
+      }
+    ],
+    "fn_cases": [
+      {
+        "id": "scam_06",
+        "category": "banking_otp_phishing",
+        "score": 0,
+        "patterns": []
+      },
+      {
+        "id": "scam_12",
+        "category": "recruitment_ctv_task",
+        "score": 0,
+        "patterns": []
+      },
+      {
+        "id": "scam_14",
+        "category": "investment_crypto_forex",
+        "score": 20,
+        "patterns": [
+          "Đầu tư / tiền ảo rủi ro"
+        ]
+      },
+      {
+        "id": "scam_18",
+        "category": "fake_loan_black_credit",
+        "score": 20,
+        "patterns": [
+          "Vay tiền lừa đảo / tín dụng đen"
+        ]
+      },
+      {
+        "id": "scam_20",
+        "category": "delivery_customs_fee",
+        "score": 20,
+        "patterns": [
+          "Giả mạo hoàn thuế/hải quan"
+        ]
+      },
+      {
+        "id": "scam_23",
+        "category": "prize_lottery_telecom",
+        "score": 0,
+        "patterns": []
+      },
+      {
+        "id": "scam_27",
+        "category": "sim_block_telecom",
+        "score": 20,
+        "patterns": [
+          "Mạo danh định danh SIM/số điện thoại"
+        ]
+      },
+      {
+        "id": "scam_28",
+        "category": "tax_refund_fraud",
+        "score": 20,
+        "patterns": [
+          "Giả mạo hoàn thuế/hải quan"
+        ]
+      },
+      {
+        "id": "scam_29",
+        "category": "tax_refund_fraud",
+        "score": 20,
+        "patterns": [
+          "Giả mạo hoàn thuế/hải quan"
+        ]
+      },
+      {
+        "id": "scam_31",
+        "category": "utility_impersonation",
+        "score": 0,
+        "patterns": []
+      },
+      {
+        "id": "scam_32",
+        "category": "fake_friend_urgent_loan",
+        "score": 20,
+        "patterns": [
+          "Tạo áp lực thời gian"
+        ]
+      },
+      {
+        "id": "scam_36",
+        "category": "hacked_account_loan",
+        "score": 0,
+        "patterns": []
+      },
+      {
+        "id": "scam_37",
+        "category": "fake_qr_code_payment",
+        "score": 0,
+        "patterns": []
+      },
+      {
+        "id": "scam_38",
+        "category": "teen_code_obfuscated_scam",
+        "score": 0,
+        "patterns": []
+      },
+      {
+        "id": "scam_40",
+        "category": "fake_travel_ticket_booking",
+        "score": 20,
+        "patterns": [
+          "Yêu cầu chuyển tiền/nộp phí"
+        ]
+      }
+    ]
+  },
+  "final_guardrail_suite": {
+    "dataset": "vn_final_suite.jsonl",
+    "total": 20,
+    "passed": 20,
+    "failed": 0,
+    "insufficient_refusal_rate": 1.0,
+    "contradiction_refusal_rate": 1.0,
+    "failed_cases": [],
+    "results": [
+      {
+        "id": "vn_scam_tinnhiem_domain",
+        "group": "verified_scam",
+        "passed": true,
+        "actual": {
+          "tier": "CONFIRMED_RISK",
+          "is_conclusive": true,
+          "has_contradiction": false,
+          "evidence_count": 1
+        }
+      },
+      {
+        "id": "vn_scam_vt_consensus_url",
+        "group": "verified_scam",
+        "passed": true,
+        "actual": {
+          "tier": "CONFIRMED_RISK",
+          "is_conclusive": true,
+          "has_contradiction": false,
+          "evidence_count": 1
+        }
+      },
+      {
+        "id": "vn_scam_police_extortion_msg",
+        "group": "heuristic_scam",
+        "passed": true,
+        "actual": {
+          "tier": "HIGH_RISK",
+          "is_conclusive": true,
+          "has_contradiction": false,
+          "evidence_count": 2
+        }
+      },
+      {
+        "id": "vn_scam_apk_vneid_msg",
+        "group": "heuristic_scam",
+        "passed": true,
+        "actual": {
+          "tier": "HIGH_RISK",
+          "is_conclusive": true,
+          "has_contradiction": false,
+          "evidence_count": 2
+        }
+      },
+      {
+        "id": "vn_account_approved_reports",
+        "group": "account_high_risk",
+        "passed": true,
+        "actual": {
+          "tier": "HIGH_RISK",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 1
+        }
+      },
+      {
+        "id": "vn_phone_approved_reports",
+        "group": "phone_high_risk",
+        "passed": true,
+        "actual": {
+          "tier": "HIGH_RISK",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 2
+        }
+      },
+      {
+        "id": "vn_missing_empty_msg",
+        "group": "insufficient_missing",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 0
+        }
+      },
+      {
+        "id": "vn_missing_ocr_unreadable",
+        "group": "insufficient_missing",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 0
+        }
+      },
+      {
+        "id": "vn_missing_no_evidence_phone",
+        "group": "insufficient_missing",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 1
+        }
+      },
+      {
+        "id": "vn_missing_pending_account_only",
+        "group": "insufficient_missing",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 2
+        }
+      },
+      {
+        "id": "vn_missing_gray_zone_domain",
+        "group": "insufficient_missing",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 1
+        }
+      },
+      {
+        "id": "vn_contradiction_vt_clean_vs_heuristic",
+        "group": "contradiction",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": true,
+          "evidence_count": 2
+        }
+      },
+      {
+        "id": "vn_contradiction_tinnhiem_vs_vt_multi",
+        "group": "contradiction",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": true,
+          "evidence_count": 2
+        }
+      },
+      {
+        "id": "vn_contradiction_tinnhiem_vs_community",
+        "group": "contradiction",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": true,
+          "evidence_count": 2
+        }
+      },
+      {
+        "id": "vn_contradiction_vt_clean_vs_single_vt_note",
+        "group": "contradiction",
+        "passed": true,
+        "actual": {
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false,
+          "has_contradiction": true,
+          "evidence_count": 2
+        }
+      },
+      {
+        "id": "vn_legit_tinnhiem_trusted_bank",
+        "group": "legit_vn",
+        "passed": true,
+        "actual": {
+          "tier": "LIKELY_SAFE",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 1
+        }
+      },
+      {
+        "id": "vn_legit_vt_clean_url",
+        "group": "legit_vn",
+        "passed": true,
+        "actual": {
+          "tier": "LIKELY_SAFE",
+          "is_conclusive": false,
+          "has_contradiction": false,
+          "evidence_count": 1
+        }
+      },
+      {
+        "id": "vn_legit_police_psa_message",
+        "group": "legit_vn_fp_prone",
+        "passed": true,
+        "actual": {
+          "score": 0,
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false
+        }
+      },
+      {
+        "id": "vn_legit_bank_otp_warning",
+        "group": "legit_vn_fp_prone",
+        "passed": true,
+        "actual": {
+          "score": 5,
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false
+        }
+      },
+      {
+        "id": "vn_legit_evn_bill_notice",
+        "group": "legit_vn_fp_prone",
+        "passed": true,
+        "actual": {
+          "score": 0,
+          "tier": "INSUFFICIENT",
+          "is_conclusive": false
+        }
+      }
+    ]
+  }
+}

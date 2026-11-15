@@ -5,7 +5,6 @@ rich content (forum posts/comments). Client-side templates must still
 escape/sanitize before innerHTML/x-html (see base.html sanitizeHtml).
 """
 import logging
-import re
 
 import bleach
 

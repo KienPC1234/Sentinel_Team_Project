@@ -8,8 +8,7 @@ watermark khiên + footer thương hiệu. Dùng cho các mục chưa có ảnh 
 from __future__ import annotations
 
 import io
-import os
-from typing import Optional, Tuple
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 

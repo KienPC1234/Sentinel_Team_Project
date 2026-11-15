@@ -6,9 +6,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
-interface SourceItem { key: string; name: string; reliability: string; kind: string; description: string; limits?: string; url?: string | null; }
-interface Channel { name: string; phone?: string | null; url?: string | null; description?: string; reliability?: string; }
-interface Ref { title: string; url: string; type: string; }
+interface SourceItem { key: string; name: string; reliability: string; kind: string; description: string; limits?: string; url?: string | null; updated_at?: string; citation?: string; }
+interface Channel { name: string; phone?: string | null; url?: string | null; description?: string; reliability?: string; verified_on?: string; }
+interface Ref { title: string; url: string; type: string; verified_on?: string; }
 interface Policy { principle?: string; gray_zone?: string; ai_role?: string; disclaimer?: string; }
 interface Privacy { enabled?: boolean; summary?: string; protected_fields?: string[]; local_first?: string; retention?: string; }
 interface Storage { media_backend?: string; static_backend?: string; media_url?: string; static_url?: string; using_s3?: boolean; bucket?: string; endpoint?: string; public_domain?: string; s3_reachable?: boolean; }
@@ -82,8 +82,10 @@ export default function Trust() {
                   <span className="text-[12px] font-black text-white/85">{s.name}</span>
                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${rel.cls}`}>{rel.label}</span>
                   <span className="text-[9px] uppercase tracking-widest text-white/45">{s.kind}</span>
+                  {s.updated_at && <span className="text-[9px] font-bold text-brand-300/75 ml-auto">Cập nhật: {s.updated_at}</span>}
                 </div>
                 <p className="text-xs text-white/60 leading-relaxed">{s.description}</p>
+                {s.citation && <p className="text-[10px] text-white/45">Trích dẫn: {s.citation}</p>}
                 {s.limits && <p className="text-[11px] text-white/35 italic">Giới hạn: {s.limits}</p>}
                 {s.url && <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black text-brand-400 hover:text-brand-300"><i className="bi bi-box-arrow-up-right me-1"></i>Nguồn</a>}
               </div>
@@ -103,6 +105,7 @@ export default function Trust() {
                 <span className="text-white/75 font-bold">{c.name}</span>
                 {c.phone && <a href={`tel:${String(c.phone).replace(/[^0-9+]/g, '')}`} className="text-brand-400 font-black">{c.phone}</a>}
                 {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-brand-400"><i className="bi bi-box-arrow-up-right"></i></a>}
+                {c.verified_on && <span className="text-[9px] text-white/40">({c.verified_on})</span>}
               </div>
             ))}
           </div>
@@ -110,7 +113,11 @@ export default function Trust() {
             <div className="pt-3 border-t border-white/10">
               <p className="text-[10px] font-black text-white/45 uppercase tracking-widest mb-2">Cổng chính phủ</p>
               <div className="flex flex-wrap gap-2">
-                {refs.map((r, i) => <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-brand-400">{r.title}</a>)}
+                {refs.map((r, i) => (
+                  <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-brand-400">
+                    {r.title}{r.verified_on ? ` (${r.verified_on})` : ''}
+                  </a>
+                ))}
               </div>
             </div>
           )}
@@ -118,7 +125,11 @@ export default function Trust() {
         <div className="liquid-card p-6 space-y-4">
           <h2 className="text-sm font-black text-white uppercase tracking-wider"><i className="bi bi-newspaper me-2 text-warn-400"></i>Báo chí chính thống ({press.length})</h2>
           <div className="flex flex-wrap gap-2">
-            {press.map((r, i) => <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2.5 py-1 rounded-lg bg-warn-500/10 border border-warn-500/20 text-warn-300/80 hover:text-warn-200">{r.title}</a>)}
+            {press.map((r, i) => (
+              <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2.5 py-1 rounded-lg bg-warn-500/10 border border-warn-500/20 text-warn-300/80 hover:text-warn-200">
+                {r.title}{r.verified_on ? ` (${r.verified_on})` : ''}
+              </a>
+            ))}
           </div>
           <p className="text-[11px] text-white/55 leading-relaxed">Nội dung kho tri thức được biên soạn kèm nguồn tham khảo; AI trả lời dựa trên các nguồn này.</p>
         </div>

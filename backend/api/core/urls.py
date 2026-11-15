@@ -60,9 +60,11 @@ urlpatterns = [
 
     # User
     path('user/scans/', views.UserScansView.as_view(), name='user-scans'),
+    path('user/scans/<int:scan_id>/', views.UserScanDetailView.as_view(), name='user-scan-detail'),
     path('user/scan-picker/', views.UserScanPickerView.as_view(), name='user-scan-picker'),
     path('user/reports/', views.UserReportsView.as_view(), name='user-reports'),
     path('user/alerts/', views.UserAlertsView.as_view(), name='user-alerts'),
+    path('user/privacy/delete-data/', views.UserPrivacyDataDeleteView.as_view(), name='user-privacy-delete-data'),
     path('user/profile/<str:username>/', views.PublicProfileView.as_view(), name='public-profile'),
     path('user/api-keys/', views.UserAPIKeyListCreateView.as_view(), name='user-api-keys'),
     path('user/api-keys/<int:pk>/', views.UserAPIKeyDetailView.as_view(), name='user-api-key-detail'),

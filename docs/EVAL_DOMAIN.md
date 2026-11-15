@@ -1,5 +1,7 @@
 # Eval — scorer `field`
 
+> **Trạng thái:** số liệu chụp · **Cập nhật:** 2026-10-16 · **Đối tượng:** người làm đánh giá
+
 - Dataset: `domain_labels_scored.jsonl` · n=36 (pos=18, neg=18)
 - **AUC = 1.000**
 

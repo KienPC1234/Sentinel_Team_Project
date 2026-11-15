@@ -1,5 +1,7 @@
 # ShieldCall VN — Setup & Deployment
 
+> **Status:** current · **Updated:** 2026-11-15 · **Audience:** operators, backend engineers
+
 Complete installation and deployment guide for the ShieldCall VN stack.
 
 > Backend commands run from within `backend/` (e.g., `cd backend && python manage.py check`).
@@ -226,7 +228,7 @@ pm2 logs --lines 50
 Managed cluster processes (configurable via `.env` or system environment variables):
 
 - `pkv-web`: ASGI server handling HTTP requests and WebSocket/SSE streams (binds to `${WEB_HOST}:${WEB_PORT}`, defaults to `0.0.0.0:8001`).
-- `pkv-frontend`: Next.js 16.4.0 App Router cluster serving production web application (binds to `0.0.0.0:3000`).
+- `pkv-frontend`: Next.js 16.4.x App Router cluster serving production web application (binds to `0.0.0.0:3000`).
 - `pkv-celery`: Multi-threaded Celery worker for async scan jobs, RAG rebuilds, and malware sandbox tasks; OCR/speech inference is delegated to `pkv-ai`.
 - `pkv-celery-beat`: Periodic task scheduler (RAG sync, S3 backups, daily threat analytics).
 - `pkv-puppeteer`: Headless Chromium render cluster with multi-layer SSRF protection (binds to `PUPPETEER_HOST_PORT`, defaults to port `3010`).

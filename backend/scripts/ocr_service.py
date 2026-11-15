@@ -37,22 +37,25 @@ import ocr_bridge as bridge  # noqa: E402
 
 PORT = int(os.getenv("OCR_SERVICE_PORT", "5010"))
 _LOCK = threading.Lock()          # serialize suy luận (VietOCR không thread-safe)
+_CACHE_LOCK = threading.Lock()    # bảo vệ OrderedDict khi phục vụ đa luồng
 _CACHE: "OrderedDict[str, dict]" = OrderedDict()
 _CACHE_MAX = int(os.getenv("OCR_CACHE_SIZE", "128"))
 
 
 def _cache_get(key: str):
-    v = _CACHE.get(key)
-    if v is not None:
-        _CACHE.move_to_end(key)
-    return v
+    with _CACHE_LOCK:
+        v = _CACHE.get(key)
+        if v is not None:
+            _CACHE.move_to_end(key)
+        return v
 
 
 def _cache_put(key: str, val: dict):
-    _CACHE[key] = val
-    _CACHE.move_to_end(key)
-    while len(_CACHE) > _CACHE_MAX:
-        _CACHE.popitem(last=False)
+    with _CACHE_LOCK:
+        _CACHE[key] = val
+        _CACHE.move_to_end(key)
+        while len(_CACHE) > _CACHE_MAX:
+            _CACHE.popitem(last=False)
 
 
 def _ocr_bytes(image_bytes: bytes, want_boxes: bool) -> dict:

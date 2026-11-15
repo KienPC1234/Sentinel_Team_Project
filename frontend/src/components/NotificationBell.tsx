@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, getToken } from '../lib/api';
+import { timeAgo } from '../lib/date';
 import { showToast } from '../lib/ui/feedback';
 import type { ToastType } from '../lib/ui/feedback';
 import { ensurePushSubscription } from '../lib/push';
@@ -30,20 +31,6 @@ const TYPE_STYLE: Record<string, { bg: string; icon: string; toast: ToastType }>
   warning: { bg: 'bg-warn-400/10 text-warn-400', icon: 'bi-exclamation-triangle-fill', toast: 'warning' },
   error: { bg: 'bg-danger-400/10 text-danger-400', icon: 'bi-x-circle-fill', toast: 'error' },
 };
-
-function timeAgo(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '';
-  const secs = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (secs < 60) return 'vừa xong';
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins} phút trước`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} giờ trước`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} ngày trước`;
-  return new Date(iso).toLocaleDateString('vi-VN');
-}
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);

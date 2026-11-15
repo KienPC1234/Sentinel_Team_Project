@@ -11,11 +11,13 @@ import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import {
+  PrivacyReceiptBadge,
   ScanGuide,
+  ScanPrivacyToggle,
   TurnstileWidget,
-  getTsToken,
-  resetTurnstile,
+  consumeTurnstileToken,
   showToast,
+  useScanPrivacy,
   useScanTracker,
 } from '../../components/ScanWidgets';
 import type { ScanResult, TrackerDone } from '../../components/ScanWidgets';
@@ -191,6 +193,7 @@ async function compressAudioForUpload(fileOrBlob: File | Blob): Promise<File | B
 export default function Audio() {
   const [mode, setMode] = useState<'upload' | 'record'>('upload');
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [maskPii, setMaskPii] = useScanPrivacy();
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -699,16 +702,8 @@ export default function Audio() {
       showToast('Ghi âm quá ngắn. Vui lòng ghi âm ít nhất 2 giây.', 'warning');
       return;
     }
-    const tsToken = getTsToken();
-    if (!tsToken) {
-      showToast('Vui lòng hoàn thành xác minh anti-spam.', 'warning');
-      return;
-    }
-    try {
-      resetTurnstile();
-    } catch {
-      /* bỏ qua */
-    }
+    const tsToken = consumeTurnstileToken();
+    if (!tsToken) return;
     setLoading(true);
     setScanning(false);
     setLiveTranscript('');
@@ -752,6 +747,7 @@ export default function Audio() {
 
     const formData = new FormData();
     formData.append('audio', payloadFile, fileName);
+    formData.append('mask_pii', maskPii ? 'true' : 'false');
     formData.append('cf-turnstile-response', tsToken);
 
     api
@@ -1164,6 +1160,9 @@ export default function Audio() {
 
               {hasAudio && !loading && !scanning && (
                 <div className="mt-8 flex flex-col items-center gap-6">
+                  <div className="w-full max-w-xl">
+                    <ScanPrivacyToggle scanType="audio" checked={maskPii} onChange={setMaskPii} compact />
+                  </div>
                   <TurnstileWidget />
                   <button type="button" onClick={() => void startScan()} className="relative group/scan overflow-hidden rounded-2xl w-full sm:w-auto">
                     <div className="absolute inset-0 bg-gradient-to-r from-brand2-600 to-brand-600 opacity-0 group-hover/scan:opacity-100 transition-opacity"></div>
@@ -1325,6 +1324,7 @@ export default function Audio() {
                       <span className="flex items-center gap-1.5"><i className="bi bi-list-ol"></i><span>{segments.length} đoạn</span></span>
                     )}
                   </div>
+                  <PrivacyReceiptBadge result={result} />
                 </div>
               </div>
 

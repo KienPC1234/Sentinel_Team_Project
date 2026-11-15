@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Swal from 'sweetalert2';
 import type { Chart as ChartType } from 'chart.js';
 import { api, mediaUrl } from '../../lib/api';
+import { timeAgo } from '../../lib/date';
 import { escapeHtml } from '../../lib/chat/markdown';
 import { showToast } from '../../lib/ui/feedback';
 import { AdminShell, useAdminGet } from './_shared';
@@ -212,18 +213,6 @@ const CAT_LABELS: Record<string, string> = {
   guide: 'Hướng dẫn',
   alert: 'Khẩn cấp',
 };
-
-function timeAgo(iso?: string): string {
-  if (!iso) return '';
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '';
-  const mins = Math.floor(Math.max(0, Date.now() - t) / 60000);
-  if (mins < 1) return 'vừa xong';
-  if (mins < 60) return `${mins} phút trước`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} giờ trước`;
-  return `${Math.floor(hours / 24)} ngày trước`;
-}
 
 export default function ForumMgmt() {
   const { data: postsData, refetch: refetchPosts } = useAdminGet<ForumApiPost[] | { results?: ForumApiPost[] }>('/forum/posts/?page_size=100');

@@ -1,4 +1,3 @@
-import json
 import re
 import logging
 import base64
@@ -6,9 +5,8 @@ import uuid
 import io
 from typing import List, Dict, Generator
 from PIL import Image
-from django.conf import settings
 from django.core.files.base import ContentFile
-from .ollama_client import stream_chat_ai, generate_response, filter_thinking
+from .ollama_client import stream_chat_ai, generate_response
 from .vector_db import vector_db
 from api.ai_chat.models import ChatSession, ChatMessage, ChatMessageImage
 
@@ -393,7 +391,7 @@ class AIAgent:
 
     def generate_title(self, first_message: str) -> str:
         """Generates a concise and engaging title for the chat session using a faster model."""
-        from .ollama_client import SMALL_MODEL, generate_response
+        from .ollama_client import SMALL_MODEL
         
         # Clean up the input message for the prompt
         clean_input = first_message[:100].replace('\n', ' ').strip()
@@ -405,7 +403,7 @@ class AIAgent:
         
         try:
             # Use SMALL_MODEL for fast title generation
-            title = generate_response(prompt, model=SMALL_MODEL, max_tokens=30)
+            title = generate_response(prompt, model=SMALL_MODEL, max_tokens=256, tools=[], think=False)
             if title:
                 # 1. Basic cleaning
                 title = title.strip().replace('"', '').replace("'", "").replace("[", "").replace("]", "")

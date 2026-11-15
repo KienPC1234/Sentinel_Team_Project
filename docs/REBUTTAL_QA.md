@@ -1,5 +1,7 @@
 # Tài liệu Phản biện — Câu hỏi BGK & Câu trả lời chuẩn bị sẵn
 
+> **Trạng thái:** đang dùng · **Cập nhật:** 2026-10-16 · **Đối tượng:** người trình bày, hội đồng
+
 > Mục đích: mọi câu hỏi khó đều có **câu trả lời trung thực + file đối chứng + trạng thái
 > khắc phục**. Không claim tuyệt đối ở những chỗ chưa đo được.
 

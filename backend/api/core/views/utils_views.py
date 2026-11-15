@@ -1,6 +1,8 @@
+import logging
 import os
-import requests
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.conf import settings

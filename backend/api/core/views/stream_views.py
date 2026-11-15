@@ -7,7 +7,6 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 
 from api.utils.ollama_client import stream_response
-from api.utils.normalization import normalize_phone, normalize_domain
 from api.utils.prompts import (
     CHAT_SYSTEM_PROMPT, 
     SCAN_PHONE_PROMPT, 
@@ -17,9 +16,6 @@ from api.utils.prompts import (
     SCAN_EMAIL_PROMPT,
     SCAN_FILE_PROMPT,
 )
-import base64
-import io
-from api.utils.media_utils import extract_ocr_text
 from api.core.throttling import AIChatThrottle
 
 logger = logging.getLogger(__name__)
@@ -49,18 +45,20 @@ class ScanAnalyzeSSEView(APIView):
         # Đăng nhập không đồng nghĩa với đồng ý gửi PII ra mô hình LLM ngoài.
         # Yêu cầu đồng thuận tường minh (consent_external_llm / allow_pii)
         # kết hợp quyền xác thực của người dùng.
-        def _parse_strict_bool(val) -> bool:
-            if isinstance(val, bool):
-                return val
-            if isinstance(val, (int, float)):
-                return val == 1
-            if isinstance(val, str):
-                return val.strip().lower() in ('true', '1', 'yes')
-            return False
+        from api.utils.privacy import (
+            apply_scan_privacy,
+            is_scan_privacy_masked,
+            parse_mask_pii_flag,
+            parse_strict_bool,
+            redact_pii as _redact,
+        )
 
-        user_consent = _parse_strict_bool(request.data.get('consent_external_llm')) or _parse_strict_bool(request.data.get('allow_pii'))
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
+        user_consent = parse_strict_bool(request.data.get('consent_external_llm')) or parse_strict_bool(request.data.get('allow_pii'))
         allow_pii = bool(
-            user_consent and (
+            (not mask_pii)
+            and user_consent
+            and (
                 getattr(request.user, 'is_authenticated', False)
                 or getattr(request, 'is_api_key_auth', False)
             )
@@ -95,22 +93,38 @@ class ScanAnalyzeSSEView(APIView):
             scan_type = ev.scan_type
             scan_data = ev.result_json or {}
             raw_input = ev.raw_input or ''
+            ev_has_privacy_flag = isinstance(scan_data, dict) and 'privacy_masked' in scan_data
+            if ev_has_privacy_flag:
+                mask_pii = is_scan_privacy_masked(ev, default=True)
+            else:
+                # Legacy records or fixtures without privacy_masked metadata only mask locally when caller requests mask_pii;
+                # external LLM PII forwarding still remains disabled unless explicitly consented with mask_pii=False.
+                has_explicit_mask = hasattr(request.data, '__contains__') and ('mask_pii' in request.data)
+                mask_pii = parse_mask_pii_flag(request.data, default=False) if has_explicit_mask else False
+            if mask_pii:
+                allow_pii = False
 
         try:
-            from api.utils.privacy import redact_pii as _redact
             _safe_preview = _redact(raw_input[:50])
         except Exception:
             _safe_preview = ''
-        logger.info(f"SSE Request: type={scan_type}, raw_input={_safe_preview}...")
+        logger.info(f"SSE Request: type={scan_type}, mask_pii={mask_pii}, raw_input={_safe_preview}...")
 
         if not scan_type:
             logger.error("SSE Error: Missing scan_type")
             return Response({'error': 'Missing scan_type'}, status=400)
-        
-        # We allow empty scan_data but log it
+
         if scan_data is None:
             logger.warning("SSE Warning: scan_data is None")
             scan_data = {}
+
+        if mask_pii and isinstance(scan_data, dict):
+            raw_input, _, scan_data = apply_scan_privacy(
+                scan_type,
+                scan_data,
+                mask_pii=True,
+                raw_input=raw_input,
+            )
 
         def event_stream():
             try:

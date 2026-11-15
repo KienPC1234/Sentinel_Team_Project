@@ -2,42 +2,48 @@
 import re
 import hashlib
 import logging
-import json
+import base64
 import socket
 import ssl
 import requests
-from urllib.parse import urlparse
 from django.core.cache import cache
 from api.utils.security import verify_turnstile_token
+from api.utils.privacy import (
+    apply_scan_privacy,
+    mask_scan_raw_input,
+    parse_mask_pii_flag,
+)
 from django.conf import settings
-from django.contrib.auth import authenticate, get_user_model
-from django.db.models import Count, Sum, F, Q
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
 
-from django.http import StreamingHttpResponse
-from rest_framework import status, permissions, generics, serializers
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework import status, serializers
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
 from drf_spectacular.utils import extend_schema
 
-from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response, lookup_tranco
+from api.utils.ollama_client import analyze_text_for_scam, lookup_tranco
 
 from api.core.models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, APIKey,
+    Domain,
+    BankAccount,
+    Report,
+    ScanEvent,
+    ScamType,
+    RiskLevel,
+    ReportStatus,
+    APIKey,
 )
 from api.core.serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer,
-    DomainSerializer, BankAccountSerializer,
-    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer,
-    ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
-    ScanAccountSerializer, ScanImageSerializer,
-    ScanEventListSerializer, TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
+    ScanPhoneSerializer,
+    ScanMessageSerializer,
+    ScanDomainSerializer,
+    ScanAccountSerializer,
+    ScanImageSerializer,
 )
 
 User = get_user_model()
@@ -542,7 +548,7 @@ def _phone_risk_score(phone_number: str, *, claimed_vietnamese_entity: bool = Fa
 
     # Synthesize analysis result text for the frontend summary block
     status_label = "CHƯA CÓ ĐỦ CƠ SỞ KẾT LUẬN AN TOÀN"
-    if level == RiskLevel.RED: status_label = "NGUY HIỂM / LỪA ĐẢO"
+    if level == RiskLevel.RED: status_label = "NGUY CƠ CAO (CẦN XÁC MINH ĐỘC LẬP)"
     elif level == RiskLevel.YELLOW: status_label = "CẢNH GIÁC CAO"
     elif level == RiskLevel.GREEN: status_label = "CÓ RỦI RO THẤP"
 
@@ -650,6 +656,7 @@ class ScanPhoneView(APIView):
 
         # Already validated as E.164 by serializer (requires country flag).
         phone = serializer.validated_data['phone']
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
 
         result = _phone_risk_score(
             phone,
@@ -657,14 +664,21 @@ class ScanPhoneView(APIView):
             external_lookup_consent=serializer.validated_data.get('external_lookup_consent', False),
         )
         apply_guardrail(result, kind='phone')
+        safe_raw, safe_norm, result = apply_scan_privacy(
+            'phone',
+            result,
+            mask_pii=mask_pii,
+            raw_input=phone,
+            normalized_input=phone,
+        )
 
         # Log scan event
         from api.core.models import ScanStatus
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='phone',
-            raw_input=serializer.validated_data['phone'],
-            normalized_input=phone,
+            raw_input=safe_raw,
+            normalized_input=safe_norm,
             result_json=result,
             risk_score=result['risk_score'],
             risk_level=result['risk_level'],
@@ -780,14 +794,12 @@ class ScanEmailView(APIView):
             base_risk_score += 50
             security_details.append(f"Đã có {report_count} báo cáo lừa đảo xác thực")
 
-        # 5. Create Scan Event
-        scan_event = ScanEvent.objects.create(
-            scan_type='email',
-            raw_input=clean_email,
-            normalized_input=clean_email,
-            status='pending',
-            risk_score=base_risk_score,
-            result_json={
+        # 5. Create Scan Event (respecting per-scan mask_pii toggle)
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
+        initial_raw = mask_scan_raw_input('email', clean_email, mask_pii=mask_pii)
+        _, _, initial_result = apply_scan_privacy(
+            'email',
+            {
                 'security_checks': security_details,
                 'content_snippet': email_data['body'][:5000],
                 'extracted_info': {
@@ -798,10 +810,21 @@ class ScanEmailView(APIView):
                     'attachment_count': len(email_data['attachments']),
                 },
             },
-            user=request.user if request.user.is_authenticated else None,
-            detected_urls=email_data['urls']
+            mask_pii=mask_pii,
+            raw_input=clean_email,
+            normalized_input=clean_email,
         )
-        
+        scan_event = ScanEvent.objects.create(
+            scan_type='email',
+            raw_input=initial_raw,
+            normalized_input=initial_raw,
+            status='pending',
+            risk_score=base_risk_score,
+            result_json=initial_result,
+            user=request.user if request.user.is_authenticated else None,
+            detected_urls=email_data['urls'] if not mask_pii else [mask_scan_raw_input('domain', u, mask_pii=True) for u in email_data['urls']],
+        )
+
         # 6. Check if caller wants synchronous response (API Key or sync=true)
         is_api_key = getattr(request, 'is_api_key_auth', False) or isinstance(getattr(request, 'auth', None), APIKey)
         sync_requested = request.query_params.get('sync') == 'true' or request.data.get('sync') is True
@@ -810,7 +833,10 @@ class ScanEmailView(APIView):
             from api.core.models import ScanStatus, RiskLevel
             content_risk = 0
             if content_text and len(content_text.strip()) > 10:
-                msg_analysis = _analyze_message_text(content_text.strip())
+                msg_analysis = _analyze_message_text(
+                    content_text.strip(),
+                    external_consent=(not mask_pii),
+                )
                 content_risk = int(msg_analysis.get('risk_score', 0))
                 if msg_analysis.get('patterns_found'):
                     security_details.extend([f"Dấu hiệu nội dung: {p}" for p in msg_analysis['patterns_found']])
@@ -841,10 +867,17 @@ class ScanEmailView(APIView):
                     'attachment_count': len(email_data['attachments'])
                 }
             }
+            apply_guardrail(res_data, kind='email')
+            _, _, res_data = apply_scan_privacy(
+                'email',
+                res_data,
+                mask_pii=mask_pii,
+                raw_input=clean_email,
+                normalized_input=clean_email,
+            )
             scan_event.status = ScanStatus.COMPLETED
             scan_event.risk_score = final_score
             scan_event.risk_level = level
-            apply_guardrail(res_data, kind='email')
             scan_event.result_json = res_data
             scan_event.save(update_fields=['status', 'risk_score', 'risk_level', 'result_json'])
             _document_scan_for_admin(scan_event)
@@ -862,13 +895,9 @@ class ScanEmailView(APIView):
             'status': 'processing',
             'message': 'Đang phân tích chuyên sâu...',
             'preliminary_score': base_risk_score,
-            'security_checks': security_details,
-            'extracted_info': {
-                'subject': email_data['subject'],
-                'from': email_data['from'],
-                'url_count': len(email_data['urls']),
-                'attachment_count': len(email_data['attachments'])
-            }
+            'security_checks': initial_result.get('security_checks', security_details),
+            'extracted_info': initial_result.get('extracted_info', {}),
+            'privacy_masked': mask_pii,
         })
 
 
@@ -947,7 +976,7 @@ def _actions_for_guardrail(guardrail: dict, fallback_actions: list) -> list:
             'Báo cáo nếu phát hiện nghi vấn']
 
 
-def _analyze_message_text(text: str) -> dict:
+def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
     """
     Enhanced AI Text Analyzer.
     Prioritizes AI analysis and incorporates domain risk checks.
@@ -956,9 +985,9 @@ def _analyze_message_text(text: str) -> dict:
     clean_text = (text or '').strip()
     cache_key = None
     if clean_text:
-        import hashlib
         import copy
-        cache_key = f"msg_analysis:{hashlib.sha256(clean_text.encode('utf-8')).hexdigest()}"
+        consent_flag = 1 if external_consent else 0
+        cache_key = f"msg_analysis:{consent_flag}:{hashlib.sha256(clean_text.encode('utf-8')).hexdigest()}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return copy.deepcopy(cached_result)
@@ -969,8 +998,8 @@ def _analyze_message_text(text: str) -> dict:
     ai_available = True
     ai_result = None
     try:
-        # Nội dung scan do người dùng gửi = consent by action.
-        ai_result = analyze_text_for_scam(text, external_consent=True)
+        # Tôn trọng lựa chọn che PII của người dùng: chỉ gửi nguyên văn khi user chủ động tắt mask_pii.
+        ai_result = analyze_text_for_scam(text, external_consent=external_consent)
         if ai_result and not ai_result.get('ai_notice'):
             ai_score = ai_result.get('risk_score', 0) or 0
             ai_explanation = ai_result.get('explanation') or ai_result.get('reason') or ''
@@ -1112,18 +1141,26 @@ class ScanMessageView(APIView):
         # Check if caller wants synchronous response (API Key auth or sync=true)
         is_api_key = getattr(request, 'is_api_key_auth', False) or isinstance(getattr(request, 'auth', None), APIKey)
         sync_requested = request.query_params.get('sync') == 'true' or request.data.get('sync') is True
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
 
-        # Create PENDING scan event
+        # Create PENDING scan event (che PII ngay lúc ghi nếu mask_pii=True)
         from api.core.models import ScanStatus, RiskLevel
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='message',
-            raw_input=(text or '')[:2000],
+            raw_input=mask_scan_raw_input('message', (text or '')[:2000], mask_pii=mask_pii),
+            result_json={'privacy_masked': mask_pii},
             status=ScanStatus.PENDING
         )
 
         if not images and (is_api_key or sync_requested):
-            analysis = _analyze_message_text(text.strip())
+            analysis = _analyze_message_text(text.strip(), external_consent=(not mask_pii))
+            _, _, analysis = apply_scan_privacy(
+                'message',
+                analysis,
+                mask_pii=mask_pii,
+                raw_input=(text or '')[:2000],
+            )
             final_score = int(analysis.get('risk_score', 0))
             level = str(analysis.get('risk_level', RiskLevel.SAFE))
 
@@ -1143,7 +1180,6 @@ class ScanMessageView(APIView):
             })
 
         # Convert images to base64 for Celery task
-        import base64
         images_b64 = []
         for img in images:
             try:
@@ -1152,7 +1188,7 @@ class ScanMessageView(APIView):
             except Exception as e:
                 logger.error(f"Image encode error: {e}")
 
-        # Dispatch to Celery
+        # Dispatch to Celery (task sẽ dùng text gốc trong RAM rồi áp dụng privacy_masked khi lưu)
         from api.core.tasks import perform_message_scan_task
         try:
             perform_message_scan_task.delay(scan_event.id, text.strip(), images_b64)
@@ -1212,7 +1248,6 @@ def _analyze_network(url: str, domain: str) -> dict:
                 network_info['ssl_valid'] = True
                 
                 # Extract cert details
-                subject = dict(x[0] for x in cert['subject'])
                 issuer = dict(x[0] for x in cert['issuer'])
                 network_info['cert_issuer'] = issuer.get('organizationName') or issuer.get('commonName')
                 
@@ -1339,7 +1374,6 @@ def _analyze_domain(url: str) -> dict:
 
     # Tách bạch cache: Cache theo URL đầy đủ (path + query) thay vì cấp domain,
     # tránh việc các path khác nhau trên cùng một tên miền dùng chung kết quả đánh giá.
-    import hashlib
     url_canonical = full_url.strip()
     url_hash = hashlib.sha256(url_canonical.encode('utf-8')).hexdigest()[:24]
     _full_cache_key = f'url_scan_result:{domain}:{url_hash}'
@@ -1660,17 +1694,21 @@ class ScanDomainView(APIView):
         if not _host or '.' not in _host or len(_host) < 4:
             return Response({'error': 'Ten mien/URL khong hop le (VD: ngan-hang-lua-dao.top).'}, status=400)
 
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
+
         if deep_scan:
             from api.core.models import ScanStatus
             from api.core.tasks import perform_web_scrapping_task
-            
+
             scan_event = ScanEvent.objects.create(
                 user=request.user if request.user.is_authenticated else None,
                 scan_type='domain',
-                raw_input=url,
+                raw_input=mask_scan_raw_input('domain', url, mask_pii=mask_pii),
+                normalized_input=_host,
+                result_json={'privacy_masked': mask_pii},
                 status=ScanStatus.PENDING
             )
-            
+
             task = perform_web_scrapping_task.delay(scan_event.id, url)
             scan_event.job_id = task.id
             scan_event.save(update_fields=['job_id'])
@@ -1679,19 +1717,27 @@ class ScanDomainView(APIView):
                 'scan_id': scan_event.id,
                 'status': 'pending',
                 'message': 'Đang cào dữ liệu và phân tích chuyên sâu...',
-                'task_id': task.id
+                'task_id': task.id,
+                'privacy_masked': mask_pii,
             }, status=status.HTTP_202_ACCEPTED)
 
         # Standard synchronous scan
         result = _analyze_domain(url)
+        safe_raw, safe_norm, result = apply_scan_privacy(
+            'domain',
+            result,
+            mask_pii=mask_pii,
+            raw_input=url,
+            normalized_input=result.get('domain', _host),
+        )
 
         # Log scan event
         from api.core.models import ScanStatus
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='domain',
-            raw_input=url,
-            normalized_input=result.get('domain', url),
+            raw_input=safe_raw,
+            normalized_input=safe_norm,
             result_json=result,
             risk_score=result['risk_score'],
             risk_level=result['risk_level'],
@@ -1801,23 +1847,32 @@ class ScanAccountView(APIView):
             scam_type = ba.scam_type
             report_count = ba.report_count
             if report_count > 0:
-                details.append(f'{report_count} báo cáo từ cộng đồng')
+                details.append(f'{report_count} báo cáo cộng đồng đã ghi nhận trong hồ sơ tài khoản')
 
-        # Check reports specifically targeting this bank account
-        reports_for_account = Report.objects.filter(
+        # Check reports specifically targeting this bank account (separate approved vs pending)
+        account_reports_qs = Report.objects.filter(
             target_type='account',
-        ).exclude(status='rejected').filter(
+        ).filter(
             Q(target_value__iexact=account) |
             Q(target_value__iexact=f"{bank}:{account}") |
             Q(target_value__iexact=f"{canonical_bank}:{account}") |
             Q(scammer_bank_account__iexact=account, scammer_bank_name__iexact=bank) |
             Q(scammer_bank_account__iexact=account, scammer_bank_name__iexact=canonical_bank) |
             Q(scammer_bank_account__iexact=account, scammer_bank_name__icontains=bank)
-        ).count()
-        if reports_for_account > 0:
-            score = max(score, min(100, reports_for_account * 25))
-            details.append(f'{reports_for_account} báo cáo liên quan trực tiếp')
+        )
+        approved_account_reports = account_reports_qs.filter(status='approved').count()
+        pending_account_reports = account_reports_qs.filter(status='pending').count()
+        total_account_reports = approved_account_reports + pending_account_reports
 
+        if approved_account_reports > 0:
+            score = max(score, min(85, approved_account_reports * 25))
+            details.append(f'{approved_account_reports} báo cáo liên quan trực tiếp đã kiểm duyệt')
+        if pending_account_reports > 0:
+            # Pending reports only raise low-grade uncertainty signal (capped <= 35 -> INSUFFICIENT/gray zone)
+            score = max(score, min(35, pending_account_reports * 15))
+            details.append(f'{pending_account_reports} báo cáo đang chờ kiểm duyệt (chưa xác thực)')
+
+        report_count = max(report_count, total_account_reports)
         score = min(100, score)
         if score >= 70:
             level = RiskLevel.RED
@@ -1829,7 +1884,8 @@ class ScanAccountView(APIView):
             level = RiskLevel.SAFE
 
         if not details:
-            details.append('Không tìm thấy cảnh báo nào cho tài khoản này')
+            details.append('Không tìm thấy cảnh báo nào cho tài khoản này (chưa đủ căn cứ kết luận an toàn)')
+        details.append('Lưu ý: Báo cáo cộng đồng chỉ mang tính tham khảo, không kết luận chủ tài khoản chắc chắn lừa đảo.')
 
         result = {
             'bank': canonical_bank if canonical_bank in dict(BankAccount.BANK_CHOICES) else bank,
@@ -1838,6 +1894,8 @@ class ScanAccountView(APIView):
             'risk_level': level,
             'scam_type': scam_type,
             'report_count': report_count,
+            'reports_verified': approved_account_reports,
+            'reports_pending': pending_account_reports,
             'details': details,
         }
 
@@ -1860,12 +1918,22 @@ class ScanAccountView(APIView):
             )
 
         apply_guardrail(result, kind='account')
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
+        if not mask_pii:
+            result['account_display'] = account
+        safe_raw, safe_norm, result = apply_scan_privacy(
+            'account',
+            result,
+            mask_pii=mask_pii,
+            raw_input=f'{bank}:{account if not mask_pii else account_masked}',
+            normalized_input=f'{bank_to_store}:{account_hash[:16]}',
+        )
         from api.core.models import ScanStatus
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='account',
-            raw_input=f'{bank}:{account_masked}',
-            normalized_input=f'{bank_to_store}:{account_hash[:16]}',
+            raw_input=safe_raw,
+            normalized_input=safe_norm,
             result_json=result,
             risk_score=score,
             risk_level=level,
@@ -1881,14 +1949,6 @@ class ScanAccountView(APIView):
 
         return Response(result)
 
-
-import logging
-import base64
-from rest_framework import status
-
-logger = logging.getLogger(__name__)
-from api.core.tasks import perform_image_scan_task
-from api.core.models import ScanStatus
 
 class ScanImageView(APIView):
     """
@@ -1931,11 +1991,15 @@ class ScanImageView(APIView):
         if ts_err:
             return ts_err
 
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
+        from api.core.models import ScanStatus
+
         # Create PENDING event
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='qr', # We use 'qr' type for general image/OCR scans
             raw_input=f"Scan {len(images)} images",
+            result_json={'privacy_masked': mask_pii},
             status=ScanStatus.PENDING
         )
 
@@ -1957,7 +2021,8 @@ class ScanImageView(APIView):
             return Response({
                 'scan_id': scan_event.id,
                 'status': scan_event.status,
-                'message': 'Đang tải lên và phân tích hình ảnh...'
+                'message': 'Đang tải lên và phân tích hình ảnh...',
+                'privacy_masked': mask_pii,
             })
         except Exception as e:
             logger.error(f"Failed to dispatch image scan task: {e}")
@@ -1991,11 +2056,15 @@ class ScanFileView(APIView):
         if ts_err:
             return ts_err
 
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
+        from api.core.models import ScanStatus
+
         # Create PENDING event
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='file',
-            raw_input=f"File: {uploaded_file.name}",
+            raw_input=mask_scan_raw_input('file', f"File: {uploaded_file.name}", mask_pii=mask_pii),
+            result_json={'privacy_masked': mask_pii},
             status=ScanStatus.PENDING
         )
 
@@ -2077,12 +2146,15 @@ class ScanAudioView(APIView):
         if ts_err:
             return ts_err
 
+        mask_pii = parse_mask_pii_flag(request.data, default=True)
+
         # Create PENDING scan event
         from api.core.models import ScanEvent, ScanStatus
         scan_event = ScanEvent.objects.create(
             user=request.user if request.user.is_authenticated else None,
             scan_type='audio',
-            raw_input=f"Audio: {audio_file.name} ({audio_file.size} bytes)",
+            raw_input=mask_scan_raw_input('audio', f"Audio: {audio_file.name} ({audio_file.size} bytes)", mask_pii=mask_pii),
+            result_json={'privacy_masked': mask_pii},
             status=ScanStatus.PENDING,
         )
 

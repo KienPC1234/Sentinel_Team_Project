@@ -1,7 +1,11 @@
 'use client';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { api, mediaUrl } from '../../lib/api';
+import { api, asList, mediaUrl, postSameOrigin } from '../../lib/api';
+import { asStr, asNum } from '../../lib/utils';
+import { scoreCssVarColor } from '../../lib/risk';
+import { LiquidSelect } from '../../components/ui';
+import type { SelectOption } from '../../components/ui';
 import { useAdminGet, AdminNavbar } from './_shared';
 import { showToast } from '../../lib/ui/feedback';
 
@@ -35,17 +39,7 @@ interface Report {
   scammer_bank_account?: string;
 }
 
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
 /* ---------- helpers ---------- */
-
-function asList(data: Report[] | { results?: Report[] } | null): Report[] {
-  if (!data) return [];
-  return Array.isArray(data) ? data : data.results || [];
-}
 
 function reporterName(r: Report): string {
   if (typeof r.reporter === 'string') return r.reporter;
@@ -120,91 +114,6 @@ function aiObject(r: Report): Record<string, unknown> | null {
     }
   }
   return null;
-}
-
-function asStr(v: unknown): string {
-  return v === undefined || v === null ? '' : String(v);
-}
-
-function asNum(v: unknown): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-async function postDjango(path: string, body: unknown): Promise<Record<string, unknown>> {
-  const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/);
-  const csrf = match ? decodeURIComponent(match[1]) : '';
-  const res = await fetch(path, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
-    body: JSON.stringify(body ?? {}),
-  });
-  return (await res.json()) as Record<string, unknown>;
-}
-
-/* ---------- LiquidSelect (port Alpine liquidSelect — reports.html) ---------- */
-
-const SELECT_CSS = `
-.dropdown-container { overflow: visible !important; }
-.liquid-custom-select { position: relative; width: 100%; user-select: none; }
-.liquid-select-trigger { background: rgba(0,0,0,0.2); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 1.25rem; color: var(--sc-white); display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
-.liquid-select-trigger:hover { background: rgba(255,255,255,0.1); border-color: rgba(0,229,255,0.3); box-shadow: 0 0 20px rgba(0,229,255,0.1); }
-.liquid-select-trigger.active { border-color: var(--accent-cyan); box-shadow: 0 0 25px rgba(24,255,255,0.15); }
-.liquid-select-dropdown { position: absolute; top: calc(100% + 8px); left: 0; min-width: 100%; width: max-content; max-width: min(90vw, 560px); background: linear-gradient(145deg, rgba(16, 22, 46, 0.88) 0%, rgba(10, 14, 30, 0.95) 100%) !important; backdrop-filter: blur(36px) saturate(190%) !important; -webkit-backdrop-filter: blur(36px) saturate(190%) !important; border: 1px solid rgba(255,255,255,0.18) !important; border-radius: 1.25rem; box-shadow: 0 25px 70px -10px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.25) !important; z-index: 999999; overflow: hidden; max-height: min(320px, 60vh); overflow-y: auto; transform-origin: top; }
-.liquid-select-dropdown.entered { opacity: 1; transform: translateY(0) scale(1); }
-.liquid-select-option { padding: 0.5rem 1rem; color: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 0.75rem; font-size: 0.8rem; font-weight: 500; }
-.liquid-select-option:hover { background: rgba(24,255,255,0.08); color: var(--accent-cyan); padding-left: 1.25rem; }
-.liquid-select-option.selected { background: rgba(24,255,255,0.12); color: var(--accent-cyan); font-weight: 700; }
-.liquid-select-arrow { transition: transform 0.4s cubic-bezier(0.175,0.885,0.32,1.275); opacity: 0.4; }
-.active .liquid-select-arrow, .rotate-180 { transform: rotate(180deg); color: var(--accent-cyan); opacity: 1; }
-`;
-
-function LiquidSelect({
-  name,
-  value,
-  placeholder,
-  options,
-  className = '',
-  onChange,
-}: {
-  name: string;
-  value: string;
-  placeholder: string;
-  options: SelectOption[];
-  className?: string;
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const current = options.find((o) => o.value === value);
-  return (
-    <div className={`dropdown-container liquid-custom-select ${className}`}>
-      <input type="hidden" name={name} value={value} readOnly />
-      <div
-        className={`liquid-select-trigger py-2.5 px-4 text-[11px]${open ? ' active' : ''}`}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="truncate">{current ? current.label : placeholder}</span>
-        <i className={`bi bi-chevron-down liquid-select-arrow${open ? ' rotate-180' : ''}`}></i>
-      </div>
-      {open && (
-        <div className="liquid-select-dropdown entered">
-          {options.map((option) => (
-            <div
-              key={option.value || '__empty'}
-              className={`liquid-select-option${value === option.value ? ' selected' : ''}`}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-            >
-              <span>{option.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 /* ---------- Image viewer (port openImageViewer) ---------- */
@@ -285,13 +194,13 @@ function ReportDetailModal({
   const sevColor = severityColor(report.severity);
   const hasScammer = Boolean(report.scammer_name || report.scammer_phone || report.scammer_bank_account);
   const riskScore = ai ? asNum(ai.risk_score) : 0;
-  const scoreColor = riskScore > 75 ? 'var(--sc-danger-500)' : riskScore > 40 ? 'var(--sc-warn-500)' : 'var(--sc-safe-500)';
+  const scoreColor = scoreCssVarColor(riskScore);
   const indicators = ai && Array.isArray(ai.indicators) ? (ai.indicators as unknown[]) : [];
 
   const saveNote = async () => {
     setSaving(true);
     try {
-      await postDjango(`/admin-cp/reports/${report.id}/note/`, { note });
+      await postSameOrigin(`/admin-cp/reports/${report.id}/note/`, { note });
       setSaved(true);
       showToast('Đã lưu ghi chú', 'success');
       setTimeout(() => setSaved(false), 2000);
@@ -654,7 +563,7 @@ export default function Reports() {
   const runAi = async (r: Report) => {
     setActingId(r.id);
     try {
-      const res = await postDjango(`/admin-cp/reports/${r.id}/analyze/`, {});
+      const res = await postSameOrigin<Record<string, unknown>>(`/admin-cp/reports/${r.id}/analyze/`, {});
       if (res.status === 'success') {
         showToast('AI Phân tích hoàn tất', 'success');
         refetch();
@@ -691,8 +600,6 @@ export default function Reports() {
 
   return (
     <div className="container mx-auto px-4 py-10 mt-16 max-w-7xl space-y-8">
-      <style>{SELECT_CSS}</style>
-
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/10">
         <div className="flex items-center gap-4">
@@ -805,33 +712,33 @@ export default function Reports() {
         <input type="hidden" name="sort" value={sort} readOnly />
         <div className="flex flex-wrap items-center gap-3">
           <LiquidSelect
-            name="status"
             value={statusFilter}
             placeholder="-- Trạng thái --"
             options={STATUS_OPTIONS}
             className="min-w-[150px]"
+            triggerClass="py-2.5 px-4 text-[11px]"
             onChange={(v) => {
               setStatusFilter(v);
               setPage(1);
             }}
           />
           <LiquidSelect
-            name="type"
             value={typeFilter}
             placeholder="-- Loại --"
             options={TYPE_OPTIONS}
             className="min-w-[130px]"
+            triggerClass="py-2.5 px-4 text-[11px]"
             onChange={(v) => {
               setTypeFilter(v);
               setPage(1);
             }}
           />
           <LiquidSelect
-            name="severity"
             value={severityFilter}
             placeholder="-- Mức độ --"
             options={SEVERITY_OPTIONS}
             className="min-w-[150px]"
+            triggerClass="py-2.5 px-4 text-[11px]"
             onChange={(v) => {
               setSeverityFilter(v);
               setPage(1);

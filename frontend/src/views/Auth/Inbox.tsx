@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '../../lib/api';
+import { timeAgo, fmtDateTime as formatDate } from '../../lib/date';
 import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
 
@@ -41,27 +42,6 @@ function stripMd(text: string): string {
     .replace(/^>\s?/gm, '')
     .replace(/---+/g, '')
     .trim();
-}
-
-function timeAgo(dt: string): string {
-  if (!dt) return '';
-  const diff = (Date.now() - new Date(dt).getTime()) / 1000;
-  if (diff < 60) return 'Vừa xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
-  return new Date(dt).toLocaleDateString('vi-VN');
-}
-
-function formatDate(dt: string): string {
-  if (!dt) return '';
-  return new Date(dt).toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function typeIcon(type: string): string {

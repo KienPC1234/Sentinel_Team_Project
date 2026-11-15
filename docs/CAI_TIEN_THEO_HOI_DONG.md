@@ -1,5 +1,10 @@
 # Cải tiến theo góp ý Hội đồng giám khảo — ShieldCall VN
 
+> **Trạng thái:** báo cáo vòng trước · **Cập nhật:** 2026-10-15 · **Đối tượng:** hội đồng, nhóm kỹ thuật
+>
+> Bản tổng hợp mới nhất cho Vòng Chung kết: [`BAO_CAO_CAI_TIEN_CHUNG_KET.md`](BAO_CAO_CAI_TIEN_CHUNG_KET.md).
+> Số liệu dưới đây phản ánh thời điểm 2026-10-15; danh mục nguồn hiện tại đã mở rộng lên 16 nguồn.
+
 > Tài liệu này ghi lại **kết quả cải tiến** đáp ứng 5 góp ý của hội đồng đánh giá.
 > Mọi mục đều ghi rõ **trạng thái thực tế** (đã triển khai & kiểm thử / đang triển khai),
 > kèm **file đối chứng** và **lệnh kiểm chứng**. Không claim vượt quá những gì đã đo được.

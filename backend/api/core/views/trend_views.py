@@ -9,7 +9,15 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.core.models import Domain, Report, ReportStatus, RiskLevel, ScamType, ScanEvent, ScanStatus, TrendDaily
+from api.core.models import (
+    Report,
+    ReportStatus,
+    RiskLevel,
+    ScamType,
+    ScanEvent,
+    ScanStatus,
+    TrendDaily,
+)
 from api.core.serializers import TrendDailySerializer
 from api.utils.trust_guard import verdict_tone, verdict_display
 
@@ -190,6 +198,8 @@ class ScamRadarStatsView(APIView):
                 if (target_type or '').strip() and (target_value or '').strip()
             }
 
+            from api.utils.privacy import mask_target_identifier
+
             def mask_target(target_type, value):
                 if target_type in sensitive_scan_types:
                     return sensitive_placeholder
@@ -198,11 +208,7 @@ class ScamRadarStatsView(APIView):
                     (target_type, value) in reported_risky_targets):
                     return value
 
-                if target_type == 'phone':
-                    return value[:4] + '****' + value[-2:] if len(value) > 6 else value
-                if target_type == 'account':
-                    return value[:3] + '*****' + value[-3:] if len(value) > 6 else value
-                return value
+                return mask_target_identifier(target_type, value)
 
             def map_scan_target_type(scan_type):
                 if scan_type == 'phone':
@@ -519,7 +525,12 @@ class ScanLookupView(APIView):
         }
 
         from api.core.models import BankAccount
-        from api.utils.privacy import redact_pii, redact_obj
+        from api.utils.privacy import (
+            mask_person_name,
+            mask_phone_display,
+            redact_obj,
+            redact_pii,
+        )
 
         is_staff_user = bool(request.user and request.user.is_authenticated and request.user.is_staff)
 
@@ -540,23 +551,18 @@ class ScanLookupView(APIView):
 
             if not is_staff_user:
                 if report.target_type == 'phone' and target_val:
-                    tv = str(target_val)
-                    if len(tv) > 6:
-                        target_val = tv[:3] + '****' + tv[-3:]
+                    target_val = mask_phone_display(target_val)
                 elif report.target_type == 'account' and target_val:
                     target_val = BankAccount.mask_account(target_val)
 
                 if scammer_phone_val:
-                    sp = str(scammer_phone_val)
-                    if len(sp) > 6:
-                        scammer_phone_val = sp[:3] + '****' + sp[-3:]
+                    scammer_phone_val = mask_phone_display(scammer_phone_val)
 
                 if scammer_acc_val:
                     scammer_acc_val = BankAccount.mask_account(scammer_acc_val)
 
                 if scammer_name_val:
-                    parts = scammer_name_val.strip().split()
-                    scammer_name_val = parts[0] + ' ***' if len(parts) > 1 else (scammer_name_val[:2] + '***' if len(scammer_name_val) > 2 else '***')
+                    scammer_name_val = mask_person_name(scammer_name_val)
 
                 if scammer_social_val:
                     scammer_social_val = redact_pii(scammer_social_val)

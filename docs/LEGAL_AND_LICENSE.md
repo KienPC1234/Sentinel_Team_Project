@@ -1,5 +1,7 @@
 # Ma trận Giấy phép & Tính tương thích — ShieldCall VN
 
+> **Trạng thái:** đang dùng · **Cập nhật:** 2026-10-15 · **Đối tượng:** người nộp hồ sơ, kỹ sư phụ trách dependency
+
 Dự án dùng giấy phép **`AGPL-3.0-or-later`** (xem `LICENSE`). Tài liệu này là câu trả lời
 cho câu hỏi phản biện: "MIT + Proprietary + martor AGPL có tương thích không?".
 

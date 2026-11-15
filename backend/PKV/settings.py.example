@@ -31,8 +31,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'channels',
-    'theme',
-    'tailwind',
     'PKV',
     
     # Third party apps

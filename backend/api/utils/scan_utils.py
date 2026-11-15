@@ -2,14 +2,12 @@
 import re
 import math
 import logging
-import json
 import socket
 import ssl
 import requests
 from datetime import datetime, timedelta
 from django.utils import timezone
 from django.core.cache import cache
-from django.conf import settings
 
 from api.core.models import Report, Domain, BankAccount, RiskLevel
 from api.utils.normalization import normalize_phone, normalize_domain

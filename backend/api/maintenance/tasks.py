@@ -117,6 +117,50 @@ def backup_vector_store_task():
         return {'error': str(exc)}
 
 
+def _run_news_sync(
+    task_label: str,
+    sync_fn,
+    *,
+    rebuild_rag: bool,
+    limit_per_feed: int,
+    **sync_kwargs,
+):
+    """Chạy đồng bộ tin, chuẩn hoá Markdown trước khi cập nhật RAG để tránh rebuild hai lần."""
+    use_llm_format = bool(getattr(settings, "NEWS_LLM_FORMAT", False))
+    if rebuild_rag:
+        # Đánh dấu sẵn để signal post_save trên Article không xếp thêm job AUTO song song
+        try:
+            from django.core.cache import cache
+            cache.set("vector_rebuild_queued", 1, timeout=300)
+        except Exception:
+            pass
+
+    stats = sync_fn(
+        limit_per_feed=limit_per_feed,
+        rebuild_rag=rebuild_rag and not use_llm_format,
+        **sync_kwargs,
+    )
+    if use_llm_format:
+        new_ids = [item["id"] for item in stats.get("new_articles", []) if item.get("id")]
+        if new_ids:
+            try:
+                from .article_format import reformat_news_markdown
+                reformat_news_markdown(
+                    use_llm=True,
+                    limit=max(30, limit_per_feed * 2),
+                    article_ids=new_ids,
+                )
+            except Exception as fmt_exc:  # noqa: BLE001
+                logger.warning(f"[{task_label}] Chuẩn hoá Markdown lỗi: {fmt_exc}")
+        if rebuild_rag and stats.get("created", 0) > 0:
+            try:
+                from api.utils.vector_db import vector_db
+                vector_db.rebuild_index(force_cpu=True)
+            except Exception as rag_err:  # noqa: BLE001
+                logger.warning(f"[{task_label}] Không thể cập nhật RAG: {rag_err}")
+    return stats
+
+
 @shared_task(name="api.maintenance.tasks.sync_tinnhiemmang_news", bind=True)
 def sync_tinnhiemmang_news(self, feed_keys=None, limit_per_feed=15, download_images=True, force_update=False, rebuild_rag=True):
     """
@@ -126,7 +170,9 @@ def sync_tinnhiemmang_news(self, feed_keys=None, limit_per_feed=15, download_ima
     logger.info(f"[TINNHIEMMANG-TASK] Bắt đầu tổng hợp tin tức (task_id={getattr(self.request, 'id', 'sync')})")
     try:
         from .tinnhiemmang_feed import sync_tinnhiemmang_articles
-        stats = sync_tinnhiemmang_articles(
+        stats = _run_news_sync(
+            "TINNHIEMMANG-TASK",
+            sync_tinnhiemmang_articles,
             feed_keys=feed_keys,
             limit_per_feed=limit_per_feed,
             download_images=download_images,
@@ -135,12 +181,6 @@ def sync_tinnhiemmang_news(self, feed_keys=None, limit_per_feed=15, download_ima
             dedup=True,
             dedup_llm=getattr(settings, "NEWS_DEDUP_LLM", False),
         )
-        if getattr(settings, "NEWS_LLM_FORMAT", False):
-            try:
-                from .article_format import reformat_news_markdown
-                reformat_news_markdown(use_llm=True, limit=max(30, limit_per_feed * 2))
-            except Exception as fmt_exc:  # noqa: BLE001
-                logger.warning(f"[TINNHIEMMANG-TASK] Chuẩn hoá Markdown lỗi: {fmt_exc}")
         logger.info(
             f"[TINNHIEMMANG-TASK] Hoàn tất: {stats.get('created', 0)} bài mới, "
             f"{stats.get('updated', 0)} cập nhật trong {stats.get('duration_seconds', 0)}s"
@@ -191,7 +231,9 @@ def sync_vnexpress_news(self, feed_keys=None, limit_per_feed=15, download_images
     logger.info(f"[VNEXPRESS-TASK] Bắt đầu tổng hợp (task_id={getattr(self.request, 'id', 'sync')})")
     try:
         from .vnexpress_feed import sync_vnexpress_articles
-        stats = sync_vnexpress_articles(
+        stats = _run_news_sync(
+            "VNEXPRESS-TASK",
+            sync_vnexpress_articles,
             feed_keys=feed_keys,
             limit_per_feed=limit_per_feed,
             download_images=download_images,
@@ -201,12 +243,6 @@ def sync_vnexpress_news(self, feed_keys=None, limit_per_feed=15, download_images
             dedup=True,
             dedup_llm=getattr(settings, "NEWS_DEDUP_LLM", False),
         )
-        if getattr(settings, "NEWS_LLM_FORMAT", False):
-            try:
-                from .article_format import reformat_news_markdown
-                reformat_news_markdown(use_llm=True, limit=max(30, limit_per_feed * 2))
-            except Exception as fmt_exc:  # noqa: BLE001
-                logger.warning(f"[VNEXPRESS-TASK] Chuẩn hoá Markdown lỗi: {fmt_exc}")
         logger.info(
             f"[VNEXPRESS-TASK] Hoàn tất: {stats.get('created', 0)} mới, "
             f"{stats.get('updated', 0)} cập nhật trong {stats.get('duration_seconds', 0)}s"

@@ -3,14 +3,12 @@ ShieldCall VN – Core Models
 Implements MVP spec Section 4: Database Schema
 """
 import hashlib
-import uuid
 import logging
 from django.db import models
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 from django.utils import timezone
-from django.contrib.auth.models import User
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 

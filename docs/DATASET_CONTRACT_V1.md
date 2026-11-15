@@ -1,6 +1,8 @@
 # ShieldCall Dataset Contract v1.0.0 — First implementation slice
 
-Status: **development only**. No ingestion endpoint, database migration, external feed, user-data import, production restart, or model retraining is included.
+> **Status:** draft (development only) · **Updated:** 2026-11-04 · **Audience:** backend engineers, data reviewers
+
+**Status:** development only. No ingestion endpoint, database migration, external feed, user-data import, production restart, or model retraining is included.
 
 ## Purpose
 

@@ -1,5 +1,7 @@
 # ShieldCall VN — Architecture
 
+> **Status:** current · **Updated:** 2026-11-15 · **Audience:** backend engineers, architects, operators
+
 **ShieldCall VN** is an enterprise-grade digital safety and cyber-fraud mitigation platform designed to detect, analyze, and neutralize multifaceted threats across telecommunication, financial, digital communication, and executable file vectors.
 
 The platform employs a hybrid asynchronous architecture combining real-time ASGI WebSocket/SSE streams, background distributed task workers, GPU-accelerated neural computing, and an isolated Zero-Trust Docker Sandbox backed by industry-standard forensic toolsets.
@@ -160,6 +162,17 @@ flowchart LR
   - **Visual Media**: Image OCR via `VietOCR` (Vietnamese Transformer served by the shared `pkv-ai` process; `ocr_bridge.py` is the fallback) combined with QR code matrix decoding and phishing banner classification.
 - **Malware & APK Sandbox**: Dissects Windows binaries and Android APK packages in isolated Docker environments using YARA rules, PEFile, and ClamAV.
 - **Social Engineering & Crypto Forensics**: Tracks Telegram channels, Zalo groups, fake VNeID portals, and suspicious crypto wallet addresses.
+
+#### Phone-number handling
+
+- Domestic mobile numbers are 10 digits starting `03`, `05`, `07`, `08`, or `09`; international format is
+  `+84` plus 9 national digits. The `0084` dialing prefix is normalized to `+84` (`+1 849` is not `+84`).
+- Fixed-line validation uses `libphonenumber` allocation metadata instead of a hardcoded area-code list.
+- Number format is **contextual evidence, not proof of identity**. Caller ID can be spoofed even when the
+  numbering is valid, and an international number claiming a Vietnamese organizational identity triggers
+  a caution — never an automatic fraud accusation.
+- Responses expose `phone_structure` and `reputation_provenance`; community reports are reported separately
+  from official verified sources.
 
 ### 2.2 Zero-Trust Local Malware Sandbox Engine
 

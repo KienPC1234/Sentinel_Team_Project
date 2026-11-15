@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { normalizeRiskLevel } from '../lib/risk';
 import { Button } from './ui/button';
 
 /* ============ GlassCard — Modern Glass ============ */
@@ -25,14 +26,14 @@ export function GlassCard({
   );
 }
 
-/* ============ RiskBadge — SAFE / WARNING / CRITICAL ============ */
-export type RiskLevel = 'SAFE' | 'WARNING' | 'CRITICAL' | string;
+/* ============ RiskBadge — SAFE / WARNING / CRITICAL / UNVERIFIED ============ */
+export type RiskLevel = 'SAFE' | 'WARNING' | 'CRITICAL' | 'UNVERIFIED' | string;
 
 export function riskClass(level: RiskLevel): string {
-  const l = String(level || '').toUpperCase();
-  if (l.includes('SAFE') || l.includes('GREEN') || l === 'LOW') return 'risk-badge-safe';
-  if (l.includes('CRITICAL') || l.includes('RED') || l.includes('HIGH') || l.includes('DANGER'))
-    return 'risk-badge-critical';
+  const c = normalizeRiskLevel(level);
+  if (c === 'SAFE') return 'risk-badge-safe';
+  if (c === 'RED') return 'risk-badge-critical';
+  if (c === 'UNVERIFIED') return 'bg-slate-500/20 text-slate-300 border border-slate-400/30';
   return 'risk-badge-warning';
 }
 

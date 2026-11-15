@@ -93,3 +93,23 @@ export async function scPrompt(
   if (!result.isConfirmed) return null;
   return (result.value ?? '') as string;
 }
+
+export async function copyToClipboard(
+  text: string,
+  successMessage = 'Đã sao chép!',
+  errorMessage = 'Không thể sao chép vào clipboard.',
+): Promise<boolean> {
+  if (!text) return false;
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+    if (errorMessage) showToast(errorMessage, 'warning');
+    return false;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    if (successMessage) showToast(successMessage, 'success');
+    return true;
+  } catch {
+    if (errorMessage) showToast(errorMessage, 'error');
+    return false;
+  }
+}

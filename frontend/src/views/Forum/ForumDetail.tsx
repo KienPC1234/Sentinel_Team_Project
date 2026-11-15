@@ -12,10 +12,12 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import { api, ApiError, mediaUrl } from '../../lib/api';
+import { fmtDateTime as formatDate, timeAgo } from '../../lib/date';
+import { riskRingBoxClass as levelClass } from '../../lib/risk';
 import { EmptyState, Spinner } from '../../components/ui';
 import RichEditor, { getEditorData, setEditorData } from '../../components/RichEditor';
-import { TurnstileWidget, getTsToken, resetTurnstile, wsBase } from '../../components/ScanWidgets';
-import { guardrailTone, guardrailLabel } from '../../components/ScanWidgets';
+import { TURNSTILE_SITEKEY } from '../../components/TurnstileWidget';
+import { TurnstileWidget, getTsToken, resetTurnstile, wsBase, guardrailTone, guardrailLabel } from '../../components/ScanWidgets';
 import { showToast } from '../../lib/ui/feedback';
 import { useAuth } from '../../components/AuthContext';
 import { sanitizeHtml } from '../../lib/chat/markdown';
@@ -120,23 +122,6 @@ interface ReactionResp {
   user_helpful?: boolean;
 }
 
-function timeAgo(dt?: string | null): string {
-  if (!dt) return '';
-  const diff = (Date.now() - new Date(dt).getTime()) / 1000;
-  if (Number.isNaN(diff)) return '';
-  if (diff < 60) return 'Vừa xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ`;
-  return `${Math.floor(diff / 86400)} ngày`;
-}
-
-function formatDate(dt?: string | null): string {
-  if (!dt) return '';
-  const d = new Date(dt);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
 function categoryLabel(cat?: string): string {
   const map: Record<string, string> = { warning: 'Cảnh báo', discussion: 'Thảo luận', experience: 'Kinh nghiệm', question: 'Hỏi đáp' };
   return map[cat || ''] || cat || '';
@@ -155,15 +140,6 @@ function categoryBadgeClass(cat?: string): string {
     default:
       return '';
   }
-}
-
-function levelClass(level?: string | null): string {
-  const v = String(level || '').toUpperCase();
-  if (v === 'RED') return 'text-danger-300 border-danger-400/30 bg-danger-500/10';
-  if (v === 'YELLOW') return 'text-warn-300 border-warn-400/30 bg-warn-500/10';
-  if (v === 'GREEN' || v === 'SAFE') return 'text-safe-300 border-safe-400/30 bg-safe-500/10';
-  if (v === 'UNVERIFIED') return 'text-slate-300 border-slate-400/30 bg-slate-500/10';
-  return 'text-brand-300 border-brand-400/30 bg-brand-500/10';
 }
 
 function scanTypeLabel(scan: { scan_type?: string } | null | undefined): string {
@@ -630,8 +606,7 @@ export default function ForumDetail() {
     }
 
     const tsToken = getTsToken();
-    const siteKey = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
-    if (!siteKey) {
+    if (!TURNSTILE_SITEKEY) {
       showToast('Chưa cấu hình xác minh anti-spam (NEXT_PUBLIC_TURNSTILE_SITEKEY). Liên hệ quản trị viên.', 'error');
       return;
     }
@@ -1056,7 +1031,7 @@ export default function ForumDetail() {
           <div className="relative">
             <div className="flex items-center gap-3 mb-3">
               <span className={`px-3 py-1 text-[9px] font-black rounded-full border uppercase ${categoryBadgeClass(post.category)}`}>{categoryLabel(post.category)}</span>
-              <span className="text-[9px] text-white/35 font-bold">{timeAgo(post.created_at)} trước</span>
+              <span className="text-[9px] text-white/35 font-bold">{timeAgo(post.created_at)}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-white leading-tight tracking-tight">{post.title}</h1>
           </div>
@@ -1404,7 +1379,7 @@ export default function ForumDetail() {
                     </div>
                     <div className="min-w-0">
                       <Link href={`/profile/@${post.last_comment_author.username || ''}/`} className="text-[10px] font-bold text-white/60 hover:text-brand-400 transition-colors block truncate">{post.last_comment_author.name}</Link>
-                      <span className="text-[9px] text-white/35">{`${timeAgo(post.last_comment_at)} trước`}</span>
+                      <span className="text-[9px] text-white/35">{timeAgo(post.last_comment_at)}</span>
                     </div>
                   </div>
                 </div>

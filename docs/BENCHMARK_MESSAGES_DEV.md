@@ -1,5 +1,7 @@
 # Báo Cáo Đánh Giá Tập Phát Triển (Dev Set - 80 mẫu)
 
+> **Trạng thái:** số liệu chụp · **Cập nhật:** 2026-11-04 · **Đối tượng:** người làm đánh giá, hội đồng
+
 > **Thời điểm thực nghiệm:** 2026-11-04 14:15:19  
 > **Tệp dữ liệu:** `dev_set_80.jsonl`  
 > **Quy mô mẫu:** **80 mẫu** (40 mẫu lừa đảo, 40 mẫu an toàn)  

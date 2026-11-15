@@ -1,14 +1,14 @@
+import os
 import logging
 import re
 import json
 import uuid
-import random
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 from django.utils.html import strip_tags
 from datetime import datetime, time, timedelta
-from django.db.models import Count, F
+from django.db.models import Count
 from django.core.cache import cache
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -180,8 +180,9 @@ def process_report_ai_async(self, report_id: int):
         if ocr_text or report.ocr_text:
             full_context += f"OCR Evidence Text: {(ocr_text or report.ocr_text)}\n"
 
-        # Nội dung do người dùng gửi để kiểm tra lừa đảo = đồng ý phân tích (consent by action).
-        analysis = analyze_text_for_scam(full_context, external_consent=True)
+        # Báo cáo cộng đồng giữ ẩn PII (SĐT/CCCD/STK) khi đẩy ra AI ngoài;
+        # prompt đã hướng dẫn LLM phân tích bình thường trên nhãn đã che.
+        analysis = analyze_text_for_scam(full_context, external_consent=False)
         report.ai_analysis = analysis if isinstance(analysis, dict) else {'raw': str(analysis)}
         report.save(update_fields=['ai_analysis'])
 
@@ -591,6 +592,37 @@ def _attach_guardrail(result_json, kind):
     return result_json
 
 
+def _apply_task_privacy_and_guardrail(scan_event, result_json, kind):
+    """Gan guardrail roi ap dung che PII theo tuy chon `privacy_masked` cua ban ghi quet."""
+    guarded = _attach_guardrail(result_json, kind)
+    try:
+        from api.utils.privacy import apply_scan_privacy, is_scan_privacy_masked
+        mask_pii = is_scan_privacy_masked(scan_event, default=True)
+        safe_raw, safe_norm, safe_result = apply_scan_privacy(
+            kind,
+            guarded if isinstance(guarded, dict) else {},
+            mask_pii=mask_pii,
+            raw_input=getattr(scan_event, 'raw_input', '') or '',
+            normalized_input=getattr(scan_event, 'normalized_input', '') or '',
+        )
+        scan_event.raw_input = safe_raw
+        if safe_norm:
+            scan_event.normalized_input = safe_norm
+        return safe_result
+    except Exception as exc:
+        logger.warning(f"[Privacy] apply_scan_privacy failed ({kind}): {exc}")
+        return guarded
+
+
+def _has_external_pii_consent(scan_event) -> bool:
+    """Chỉ gửi nguyên văn PII lên AI ngoài khi người dùng chủ động tắt che PII (`mask_pii=False`)."""
+    try:
+        from api.utils.privacy import is_scan_privacy_masked
+        return not is_scan_privacy_masked(scan_event, default=True)
+    except Exception:
+        return False
+
+
 def _notify_scan_complete(scan_event, title_suffix=''):
     """
     Send push notification (WebSocket + WebPush) when a scan completes.
@@ -646,6 +678,7 @@ def perform_scan_task(self, scan_event_id):
 
         scan_type = scan_event.scan_type
         raw_input = scan_event.raw_input
+        consent_pii = _has_external_pii_consent(scan_event)
         result = {}
 
         if scan_type == 'phone':
@@ -653,22 +686,29 @@ def perform_scan_task(self, scan_event_id):
             result = _phone_risk_score(raw_input)
         elif scan_type == 'message':
             _send_scan_progress(scan_event_id, 'processing', 'AI đang phân tích nội dung tin nhắn...', step='analyzing')
-            result = _analyze_message_text(raw_input)
+            result = _analyze_message_text(raw_input, external_consent=consent_pii)
         elif scan_type == 'domain':
             _send_scan_progress(scan_event_id, 'processing', 'Đang kiểm tra độ an toàn của website...', step='lookup')
             result = _analyze_domain(raw_input)
         elif scan_type == 'email':
             _send_scan_progress(scan_event_id, 'processing', 'Đang kiểm tra bảo mật email...', step='lookup')
-            from api.utils.normalization import normalize_domain
             email = raw_input.lower().strip()
             ai_res = None
+            ai_email_input = email
+            if not consent_pii and '@' in email:
+                # Giữ lại domain để AI kiểm tra uy tín tên miền nhưng ẩn hoàn toàn tên hộp thư cá nhân.
+                ai_email_input = f"Địa chỉ email cần kiểm tra uy tín tên miền (tên người dùng đã ẩn): ***@{email.split('@', 1)[1]}"
             try:
-                # Tin nhắn/đối tượng scan do người dùng gửi = consent by action.
-                ai_res = analyze_text_for_scam(email, external_consent=True)
+                ai_res = analyze_text_for_scam(ai_email_input, external_consent=consent_pii)
             except Exception as _ai_exc:
                 logger.warning(f"perform_scan_task: AI analysis failed for email ({_ai_exc}), using fallback.")
             if not ai_res:
-                ai_res = {'risk_score': 0, 'risk_level': 'SAFE', 'explanation': 'AI không khả dụng.'}
+                ai_res = {
+                    'risk_score': 0,
+                    'risk_level': 'YELLOW',
+                    'insufficient_input': True,
+                    'explanation': 'AI không khả dụng nên chưa đủ căn cứ kết luận email này.',
+                }
             ai_notice = ai_res.get('ai_notice')
             details = [ai_res.get('explanation', 'Phân tích hoàn tất.')]
             if ai_notice and ai_notice not in details:
@@ -676,17 +716,22 @@ def perform_scan_task(self, scan_event_id):
             result = {
                 'email': email,
                 'risk_score': ai_res.get('risk_score', 0),
-                'risk_level': ai_res.get('risk_level', 'SAFE'),
+                'risk_level': ai_res.get('risk_level', 'YELLOW' if ai_res.get('insufficient_input') else 'SAFE'),
+                'insufficient_input': bool(ai_res.get('insufficient_input')),
                 'details': details,
-                'ai_available': ai_res.get('explanation') != 'AI không khả dụng.',
+                'ai_available': not bool(ai_res.get('insufficient_input')) and ai_res.get('explanation') != 'AI không khả dụng.',
                 'ai_retry_used': ai_res.get('ai_retry_used', False),
                 'ai_retry_count': ai_res.get('ai_retry_count', 0),
                 'ai_notice': ai_notice,
             }
 
-        scan_event.result_json = _attach_guardrail(result, 'email')
+        result = _apply_task_privacy_and_guardrail(scan_event, result, scan_type or 'generic')
+        scan_event.result_json = result
         scan_event.risk_score = result.get('risk_score', 0)
-        scan_event.risk_level = result.get('risk_level', RiskLevel.SAFE)
+        db_level = result.get('risk_level', RiskLevel.SAFE)
+        if result.get('insufficient_input') and int(scan_event.risk_score or 0) < 10:
+            db_level = RiskLevel.YELLOW
+        scan_event.risk_level = db_level
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
 
@@ -712,7 +757,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
     Provides real-time progress updates via Channels.
     Uses extract_ocr_with_boxes for annotated bounding-box images.
     """
-    from api.core.models import ScanEvent, ScanStatus, RiskLevel
+    from api.core.models import RiskLevel, ScanEvent, ScanStatus
     from api.utils.media_utils import extract_ocr_with_boxes
     from api.utils.ollama_client import analyze_text_for_scam
     import base64
@@ -871,17 +916,26 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             
             # Retry mechanism for AI analysis
             ai_res = None
+            consent_pii = _has_external_pii_consent(scan_event)
             for attempt in range(3):
                 try:
-                    # File/QR do người dùng gửi quét = consent by action.
-                    ai_res = analyze_text_for_scam(analysis_text, use_web_search=True, external_consent=True)
+                    ai_res = analyze_text_for_scam(
+                        analysis_text,
+                        use_web_search=True,
+                        external_consent=consent_pii,
+                    )
                     if ai_res and (ai_res.get('risk_score') is not None):
                         break
-                except:
+                except Exception:
                     logger.warning(f"AI analysis attempt {attempt+1} failed for event {scan_event_id}")
             
             if not ai_res:
-                 ai_res = {'risk_score': 0, 'risk_level': 'SAFE', 'explanation': 'Lỗi phân tích AI sau 3 lần thử.'}
+                ai_res = {
+                    'risk_score': 0,
+                    'risk_level': 'YELLOW',
+                    'insufficient_input': True,
+                    'explanation': 'Lỗi phân tích AI sau 3 lần thử nên chưa đủ căn cứ kết luận ảnh này.',
+                }
 
             ai_notice = ai_res.get('ai_notice')
             if ai_notice:
@@ -890,11 +944,17 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             send_progress("AI đã hoàn tất phân tích logic.", step="analyzing")
         else:
             send_progress("Không tìm thấy ký tự khả dụng trong ảnh.", step="analyzing")
-            ai_res = {'risk_score': 0, 'risk_level': 'SAFE', 'explanation': 'Không tìm thấy chữ hoặc mã QR trong ảnh để phân tích.'}
+            ai_res = {
+                'risk_score': 0,
+                'risk_level': 'YELLOW',
+                'insufficient_input': True,
+                'explanation': 'Không tìm thấy chữ hoặc mã QR trong ảnh nên chưa đủ dữ liệu phân tích.',
+            }
 
         # Determine level correctly (vision trực tiếp và OCR-AI lấy verdict nặng hơn)
         score = max(int(ai_res.get('risk_score') or 0), vision_score)
-        level = _level_from_score(score)
+        insufficient_img = bool(ai_res.get('insufficient_input')) and vision_score == 0
+        level = RiskLevel.YELLOW if (insufficient_img and score < 10) else _level_from_score(score)
 
         # Map reason to explanation if needed
         explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
@@ -919,6 +979,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             'ocr_text': full_ocr,
             'risk_score': score,
             'risk_level': level,
+            'insufficient_input': insufficient_img,
             'explanation': explanation,
             'ai_notice': ai_res.get('ai_notice', ''),
             'ai_retry_used': ai_res.get('ai_retry_used', False),
@@ -933,9 +994,9 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             'annotated_image': annotated_images[0] if annotated_images else '',
         }
 
-        # Gắn guardrail NGAY trên `result` (để payload WS cũng có), rồi lưu DB
+        # Gắn guardrail + che PII NGAY trên `result` (để payload WS cũng đồng nhất), rồi lưu DB
         # bỏ ảnh annotate cho nhẹ JSON field.
-        _attach_guardrail(result, 'qr')
+        result = _apply_task_privacy_and_guardrail(scan_event, result, 'qr')
         scan_event.result_json = {
             k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')
         }
@@ -965,8 +1026,8 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
     Uses Faster-Whisper for speech-to-text, then Ollama for risk assessment.
     Provides real-time progress updates via Channels.
     """
-    from api.core.models import ScanEvent, ScanStatus, RiskLevel
-    from api.utils.media_utils import transcribe_audio, analyze_audio_risk
+    from api.core.models import RiskLevel, ScanEvent, ScanStatus
+    from api.utils.media_utils import transcribe_audio
     from api.utils.ollama_client import analyze_text_for_scam
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
@@ -1005,7 +1066,6 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
 
         # Open the saved temp file for transcription
         with open(audio_file_path, 'rb') as audio_fp:
-            from django.core.files.uploadedfile import InMemoryUploadedFile
             import io
             audio_bytes = audio_fp.read()
             audio_file_obj = io.BytesIO(audio_bytes)
@@ -1031,10 +1091,14 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             send_progress("Đang phân tích dấu hiệu lừa đảo trong đoạn hội thoại bằng AI...", step="analyzing")
 
             ai_res = None
+            consent_pii = _has_external_pii_consent(scan_event)
             for attempt in range(3):
                 try:
-                    # Voice do người dùng gửi quét = consent by action.
-                    ai_res = analyze_text_for_scam(transcript, use_web_search=True, external_consent=True)
+                    ai_res = analyze_text_for_scam(
+                        transcript,
+                        use_web_search=True,
+                        external_consent=consent_pii,
+                    )
                     if ai_res and ai_res.get('risk_score') is not None:
                         break
                 except Exception:
@@ -1043,8 +1107,9 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             if not ai_res:
                 ai_res = {
                     'risk_score': 0,
-                    'risk_level': 'SAFE',
-                    'explanation': 'Lỗi phân tích AI sau 3 lần thử.',
+                    'risk_level': 'YELLOW',
+                    'insufficient_input': True,
+                    'explanation': 'Lỗi phân tích AI sau 3 lần thử nên chưa đủ căn cứ kết luận âm thanh này.',
                 }
 
             ai_notice = ai_res.get('ai_notice')
@@ -1055,13 +1120,15 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
         else:
             ai_res = {
                 'risk_score': 0,
-                'risk_level': 'SAFE',
-                'explanation': 'Không tìm thấy giọng nói để phân tích.',
+                'risk_level': 'YELLOW',
+                'insufficient_input': True,
+                'explanation': 'Không tìm thấy giọng nói để phân tích nên chưa đủ dữ liệu kết luận.',
             }
 
         # ── Step 3: Determine risk level and save ──
         score = ai_res.get('risk_score', 0)
-        level = _level_from_score(score)
+        insufficient_audio = bool(ai_res.get('insufficient_input'))
+        level = RiskLevel.YELLOW if (insufficient_audio and int(score or 0) < 10) else _level_from_score(score)
 
         explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
 
@@ -1072,6 +1139,7 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             'segments': segments,
             'risk_score': score,
             'risk_level': level,
+            'insufficient_input': insufficient_audio,
             'explanation': explanation,
             'ai_notice': ai_res.get('ai_notice', ''),
             'ai_retry_used': ai_res.get('ai_retry_used', False),
@@ -1080,7 +1148,8 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             'web_context': ai_res.get('web_context', ''),
         }
 
-        scan_event.result_json = _attach_guardrail(result, 'audio')
+        result = _apply_task_privacy_and_guardrail(scan_event, result, 'audio')
+        scan_event.result_json = result
         scan_event.risk_score = score
         scan_event.risk_level = level
         scan_event.status = ScanStatus.COMPLETED
@@ -1114,7 +1183,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
     Task to scrape web content and analyze with AI for scam/phishing signs.
     Provides real-time progress updates via Channels.
     """
-    from api.core.models import ScanEvent, ScanStatus, RiskLevel
+    from api.core.models import ScanEvent, ScanStatus
     from api.utils.ollama_client import analyze_text_for_scam
     # Import phụ thuộc ngoài theo cách "mềm": thiếu thư viện (vd python-whois)
     # KHÔNG được làm task ném lỗi trước khối try/except khiến scan kẹt PROCESSING.
@@ -1448,8 +1517,9 @@ def perform_web_scrapping_task(self, scan_event_id, url):
 
             ai_timeout_seconds = 600
             keepalive_every_seconds = 10
+            consent_pii = _has_external_pii_consent(scan_event)
             executor = ThreadPoolExecutor(max_workers=1)
-            future = executor.submit(analyze_text_for_scam, ai_input, None, True)
+            future = executor.submit(analyze_text_for_scam, ai_input, None, True, consent_pii)
             start_time = time.time()
             last_keepalive = 0
             ai_res = None
@@ -1515,14 +1585,15 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         # Adjust risk level based on network score (ngưỡng canonical 70/40/10)
         result['risk_level'] = _level_from_score(final_risk_score)
 
-        scan_event.result_json = _attach_guardrail(result, 'domain')
+        result = _apply_task_privacy_and_guardrail(scan_event, result, 'domain')
+        scan_event.result_json = result
         scan_event.risk_score = result['risk_score']
         scan_event.risk_level = result['risk_level']
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
-        
+
         send_progress("Hoàn tất quét website!", step="completed", data=result)
-        _notify_scan_complete(scan_event, f"Quét website '{url}' hoàn tất")
+        _notify_scan_complete(scan_event, f"Quét website '{scan_event.raw_input or url}' hoàn tất")
         return result
 
     except Exception as e:
@@ -1594,10 +1665,10 @@ def process_forum_report(report_id):
             analysis_res = {'violation': False, 'confidence': 0, 'reason': 'Không thể phân tích (lỗi format)'}
         
         report.ai_analysis = analysis_res
-        
+
         from api.utils.email_utils import send_report_outcome_email
         from api.utils.push_service import PushNotificationService
-        
+
         violation = analysis_res.get('violation')
         confidence = analysis_res.get('confidence', 0)
         try:
@@ -1714,10 +1785,9 @@ def process_forum_comment_report(report_id):
             analysis_res = {'violation': False, 'confidence': 0, 'reason': 'Không thể phân tích (lỗi format)'}
         
         report.ai_analysis = analysis_res
-        
-        from api.utils.email_utils import send_report_outcome_email
+
         from api.utils.push_service import PushNotificationService
-        
+
         violation = analysis_res.get('violation')
         confidence = analysis_res.get('confidence', 0)
         try:
@@ -1835,8 +1905,8 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
         if urls:
             ai_input += f"\n\nContained URLs: {', '.join(urls)}"
             
-        # Đối tượng scan do người dùng gửi = consent by action.
-        ai_res = analyze_text_for_scam(ai_input, use_web_search=True, external_consent=True)
+        consent_pii = _has_external_pii_consent(scan)
+        ai_res = analyze_text_for_scam(ai_input, use_web_search=True, external_consent=consent_pii)
         
         current_risk_score = scan.risk_score
         current_details = scan.result_json or {}
@@ -1879,6 +1949,13 @@ def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
         if final_score >= 80: level = RiskLevel.RED
         elif final_score >= 40: level = RiskLevel.YELLOW
         elif final_score >= 15: level = RiskLevel.GREEN
+        if ai_res.get('insufficient_input') and final_score < 10:
+            current_details['insufficient_input'] = True
+            level = RiskLevel.YELLOW
+
+        current_details['risk_score'] = final_score
+        current_details['risk_level'] = level
+        current_details = _apply_task_privacy_and_guardrail(scan, current_details, scan.scan_type or 'email')
 
         # Update ScanEvent
         scan.risk_score = final_score
@@ -1903,7 +1980,7 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
     Background task for message scan with real-time WS progress.
     Processes OCR per image, pattern analysis, then AI analysis.
     """
-    from api.core.models import ScanEvent, ScanStatus, RiskLevel
+    from api.core.models import ScanEvent, ScanStatus
     from api.utils.ollama_client import analyze_text_for_scam
     from api.utils.normalization import normalize_domain
     from api.utils.vt_client import VTClient
@@ -1962,7 +2039,6 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         if images_b64:
             send_progress(f"Đang xử lý {len(images_b64)} ảnh bằng OCR...", step="ocr")
             from api.utils.media_utils import extract_ocr_with_boxes
-            from django.core.files.uploadedfile import InMemoryUploadedFile
 
             for idx, item in enumerate(images_b64):
                 send_progress(f"Đang nhận dạng text từ ảnh {idx+1}/{len(images_b64)}...", step="ocr")
@@ -2079,8 +2155,9 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                 + "\n".join(osint_summary_lines)
             )
 
+            consent_pii = _has_external_pii_consent(scan_event)
             send_progress("Đang đối chiếu thực thể với nguồn web/OSINT...", step="osint_enrichment")
-            future = executor.submit(analyze_text_for_scam, ai_input, None, True)
+            future = executor.submit(analyze_text_for_scam, ai_input, None, True, consent_pii)
             start_time = time.time()
             last_keepalive = 0
             ai_result_data = None
@@ -2170,9 +2247,9 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             'web_context': (ai_result_data or {}).get('web_context', ''),
         }
 
-        # Gắn guardrail NGAY trên `result` (để payload WS cũng có), rồi lưu DB
+        # Gắn guardrail + che PII NGAY trên `result` (để payload WS cũng đồng nhất), rồi lưu DB
         # bỏ ảnh annotate cho nhẹ JSON field.
-        _attach_guardrail(result, 'message')
+        result = _apply_task_privacy_and_guardrail(scan_event, result, 'message')
         scan_event.result_json = {
             k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')
         }
@@ -2203,7 +2280,7 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
     """
     Async deep analysis for emails using weighted EML signals + AI enrichment.
     """
-    from api.core.models import ScanEvent, RiskLevel, ScanStatus
+    from api.core.models import ScanEvent, ScanStatus
     from api.utils.ollama_client import analyze_text_for_scam
     from api.utils.email_utils import compute_eml_weighted_risk
     from asgiref.sync import async_to_sync
@@ -2340,8 +2417,12 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             logger.info(f"[EmailScan] Event {scan_event_id}: Analyzing body text ({len(body_text)} chars)")
             if not is_basic_mode:
                 send_progress("Đang tra cứu cơ sở dữ liệu lừa đảo + tìm kiếm web...", step="web_search")
-            # Email do người dùng gửi quét = consent by action.
-            analysis = analyze_text_for_scam(analysis_input, use_web_search=(not is_basic_mode), external_consent=True)
+            consent_pii = _has_external_pii_consent(scan_event)
+            analysis = analyze_text_for_scam(
+                analysis_input,
+                use_web_search=(not is_basic_mode),
+                external_consent=consent_pii,
+            )
             # Không log toàn bộ payload AI (có thể chứa subject/body) — chỉ log cờ tổng hợp.
             logger.info(
                 f"[EmailScan] Event {scan_event_id}: AI done "
@@ -2428,8 +2509,9 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             result_json['web_sources'] = analysis.get('web_sources', [])
             result_json['web_context'] = analysis.get('web_context', '')
             result_json['searched_urls'] = analysis.get('searched_urls', [])
-        # Gắn guardrail/evidence ngay khi lưu (đồng nhất với các loại quét khác).
-        scan_event.result_json = _attach_guardrail(result_json, 'email')
+        # Gắn guardrail + áp dụng che PII đồng nhất trước khi lưu DB & push WS.
+        result_json = _apply_task_privacy_and_guardrail(scan_event, result_json, 'email')
+        scan_event.result_json = result_json
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
         
@@ -2543,11 +2625,8 @@ def perform_file_scan_task(self, scan_event_id, file_path):
                 scan_event.result_json['virustotal'] = vt_result.get('virustotal')
             if vt_result.get('sources'):
                 scan_event.result_json['sources'] = vt_result.get('sources')
-            try:
-                from api.utils.trust_guard import apply_guardrail as _apply_guardrail
-                _apply_guardrail(scan_event.result_json, kind='file')
-            except Exception as _gr_err:  # guardrail không được làm hỏng luồng quét
-                logger.warning(f"[FileScan] Guardrail error: {_gr_err}")
+            scan_event.result_json = _apply_task_privacy_and_guardrail(scan_event, scan_event.result_json, 'file')
+            display_name = scan_event.result_json.get('file_name', display_name)
             scan_event.risk_score = risk_score
             scan_event.risk_level = risk_level
         else:
@@ -2660,9 +2739,8 @@ def magic_create_lesson_task(
     Sends PARTIAL progress updates via WebSocket at each stage.
     """
     import re as _re
-    import time as _time_mod
     import markdown as md
-    from api.utils.ollama_client import generate_response, stream_response
+    from api.utils.ollama_client import generate_response
 
     def _md_to_html(text):
         """Convert markdown to clean HTML for CKEditor."""
@@ -2840,7 +2918,8 @@ Trả về JSON: {{"title": "Tiêu đề hấp dẫn, giáo dục", "category": 
             prompt=title_prompt,
             system_prompt="Trả về JSON thuần, không markdown code block.",
             format_schema=TITLE_SCHEMA,
-            max_tokens=8000,  # Extra room for thinking tokens
+            max_tokens=4096,
+            think=False,
         )
         title_data = _parse_json_safe(title_resp)
         if not title_data or not title_data.get('title'):
@@ -2892,7 +2971,8 @@ YÊU CẦU:
             _accumulated_md = generate_response(
                 prompt=content_prompt,
                 system_prompt="Bạn là chuyên gia an ninh mạng Việt Nam. Viết bài học Markdown chi tiết, dễ hiểu. Chỉ viết nội dung Markdown, không JSON, không code block.",
-                max_tokens=12000,   # High limit: ~3k thinking + ~9k content tokens for 500+ word lesson
+                num_ctx=32768,
+                max_tokens=16384,   # Đủ token cho bài dài tiếng Việt, không bị cắt ngang
                 tools=[],           # Disable tools — model should write content, not search
                 skip_filter=True,   # Don't strip CJK from content
             ) or ''
@@ -2938,11 +3018,12 @@ YÊU CẦU:
                 },
                 "required": ["summary"]
             }
+            summary_source_text = re.sub(r'\s+', ' ', strip_tags(_content_html or '')).strip()[:20000]
             summary_prompt = f"""Tạo tóm tắt ngắn cho bài học sau:
 
 TIÊU ĐỀ: {content_data['title']}
 NỘI DUNG:
-{_content_html}
+{summary_source_text}
 
 YÊU CẦU:
 - Tiếng Việt tự nhiên, dễ hiểu
@@ -2957,8 +3038,10 @@ YÊU CẦU:
                 format_schema=summary_schema,
                 model=getattr(settings, 'SMALL_MODEL', None),
                 tools=[],
-                max_tokens=4000,
+                num_ctx=32768,
+                max_tokens=2048,
                 skip_filter=True,
+                think=False,
             )
             content_data['summary'] = _extract_summary_text(summary_resp).strip()[:420]
             content_data['summary'] = re.sub(r'\s+', ' ', content_data['summary']).strip().strip('"')
@@ -3026,6 +3109,7 @@ YÊU CẦU:
                 prompt=quiz_prompt,
                 system_prompt="Trả về JSON thuần theo schema, không markdown.",
                 format_schema=quiz_schema,
+                num_ctx=32768,
                 max_tokens=8000,
             )
             parsed_quiz = _parse_json_safe(quiz_resp)
@@ -3130,6 +3214,7 @@ YÊU CẦU:
                 prompt=scenario_prompt,
                 system_prompt="Trả về JSON thuần theo schema, không markdown.",
                 format_schema=scenario_schema,
+                num_ctx=32768,
                 max_tokens=10000,
             )
 
@@ -3159,6 +3244,7 @@ YÊU CẦU:
                     prompt=safe_scenario_prompt,
                     system_prompt="Bạn tạo nội dung đào tạo an toàn thông tin. Trả về JSON thuần theo schema, không markdown.",
                     format_schema=scenario_schema,
+                    num_ctx=32768,
                     max_tokens=10000,
                 )
                 scenario_data = _build_scenario_data(scenario_resp_retry)

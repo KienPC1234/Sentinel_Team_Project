@@ -11,14 +11,19 @@ import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
 import {
   OsintSection,
+  PrivacyReceiptBadge,
   TrustGuardrailPanel,
   ProgressConsole,
   ScanGuide,
+  ScanPrivacyToggle,
   TurnstileWidget,
+  consumeTurnstileToken,
   dispatchChat,
-  getTsToken,
-  resetTurnstile,
+  patternLabel,
+  riskBadge,
+  riskGlow,
   showToast,
+  useScanPrivacy,
   useScanTracker,
 } from '../../components/ScanWidgets';
 import type { ScanResult, TrackerDone } from '../../components/ScanWidgets';
@@ -31,32 +36,9 @@ interface QrEntities {
   emails?: string[];
 }
 
-function riskBadge(level: string): string {
-  if (level === 'RED') return 'bg-danger-500/20 text-danger-500 border border-danger-500/30';
-  if (level === 'YELLOW') return 'bg-warn-500/20 text-warn-500 border border-warn-500/30';
-  if (level === 'UNVERIFIED') return 'bg-slate-500/20 text-slate-300 border border-slate-400/30';
-  return 'bg-safe-500/20 text-safe-500 border border-safe-500/30';
-}
-
-function riskGlow(level: string): string {
-  if (level === 'RED') return 'bg-danger-500';
-  if (level === 'YELLOW') return 'bg-warn-500';
-  if (level === 'UNVERIFIED') return 'bg-slate-500';
-  return 'bg-safe-500';
-}
-
-function patternLabel(p: unknown): string {
-  if (typeof p === 'string') return p;
-  if (p && typeof p === 'object') {
-    const o = p as Record<string, unknown>;
-    const l = o['label'] ?? o['pattern'];
-    return typeof l === 'string' ? l : JSON.stringify(p);
-  }
-  return String(p);
-}
-
 export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
   const [files, setFiles] = useState<File[]>([]);
+  const [maskPii, setMaskPii] = useScanPrivacy();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [scanId, setScanId] = useState<number | null>(null);
@@ -103,16 +85,10 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
       showToast('Vui lòng chọn ảnh', 'warning');
       return;
     }
-    const tsToken = getTsToken();
+    const tsToken = consumeTurnstileToken();
     if (!tsToken) {
-      showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');
       setLoading(false);
       return;
-    }
-    try {
-      resetTurnstile();
-    } catch {
-      /* bỏ qua */
     }
     setLoading(true);
     setResult(null);
@@ -122,6 +98,7 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
     tracker.push('Đang kết nối hệ thống phân tích...', 'init');
 
     const fd = new FormData();
+    fd.append('mask_pii', maskPii ? 'true' : 'false');
     fd.append('cf-turnstile-response', tsToken);
     files.forEach((f) => fd.append('image', f));
 
@@ -255,6 +232,9 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
                 )}
               </button>
             </div>
+            <div className="mt-4">
+              <ScanPrivacyToggle scanType="qr" checked={maskPii} onChange={setMaskPii} compact />
+            </div>
             <TurnstileWidget />
           </form>
 
@@ -301,7 +281,8 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
                 </div>
 
                 <div className="text-5xl font-black text-white mb-2">{score}/100</div>
-                <div className="text-[10px] text-white/45 font-black tracking-widest uppercase mb-8">Tổng quan rủi ro hình ảnh</div>
+                <div className="text-[10px] text-white/45 font-black tracking-widest uppercase mb-4">Tổng quan rủi ro hình ảnh</div>
+                <PrivacyReceiptBadge result={result} />
               </div>
 
               <div className="p-8 space-y-10">

@@ -1,41 +1,33 @@
 """ShieldCall VN – Report Views"""
-import re
-import hashlib
 import logging
-import json
-from urllib.parse import urlparse
 from api.utils.security import verify_turnstile_token
 from django.core.cache import cache
 
-from django.contrib.auth import authenticate, get_user_model
-from django.db.models import Count, Sum, F, Q
+from django.contrib.auth import get_user_model
+from django.db.models import F, Q
 from django.utils import timezone
 from datetime import timedelta
 
-from django.http import StreamingHttpResponse
-from rest_framework import status, permissions, generics, serializers
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework import status, generics, serializers
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
 from drf_spectacular.utils import extend_schema
 
-from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 
 from api.core.models import (
-    Domain, BankAccount, Report, ReportEvidence, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, APIKey,
+    Domain,
+    BankAccount,
+    Report,
+    ReportEvidence,
+    ScanEvent,
+    ReportStatus,
+    APIKey,
 )
 from api.core.throttling import ReportThrottle
-from api.utils.media_utils import extract_ocr_text
 from api.core.serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer,
-    DomainSerializer, BankAccountSerializer,
-    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer, ReportDetailSerializer,
-    ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
-    ScanAccountSerializer, ScanImageSerializer, ScanEventListSerializer,
-    TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
+    ReportCreateSerializer,
+    ReportDetailSerializer,
 )
 
 User = get_user_model()

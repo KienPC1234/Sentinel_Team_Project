@@ -97,21 +97,36 @@ def _get_embedder():
         device = _embed_device()
         print(f"[sentinel-ai] loading embedding '{EMBED_MODEL}' on {device} ...", flush=True)
         t0 = time.time()
-        _EMBED = SentenceTransformer(EMBED_MODEL, device=device, trust_remote_code=True)
+        try:
+            # Ưu tiên cache cục bộ để tránh kẹt mạng/DNS thử kết nối HF Hub khi khởi động
+            _EMBED = SentenceTransformer(
+                EMBED_MODEL, device=device, trust_remote_code=True, local_files_only=True
+            )
+        except Exception:
+            _EMBED = SentenceTransformer(EMBED_MODEL, device=device, trust_remote_code=True)
         print(f"[sentinel-ai] embedding ready on {device} in {time.time() - t0:.1f}s", flush=True)
         return _EMBED
 
 
 def _embed(texts):
+    if not texts:
+        return []
     model = _get_embedder()
     with _EMBED_LOCK:
-        vecs = model.encode(
-            texts,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-            batch_size=EMBED_BATCH,
-            show_progress_bar=False,
-        )
+        try:
+            import torch
+            ctx = torch.inference_mode()
+        except Exception:
+            from contextlib import nullcontext
+            ctx = nullcontext()
+        with ctx:
+            vecs = model.encode(
+                texts,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                batch_size=EMBED_BATCH,
+                show_progress_bar=False,
+            )
     return vecs.astype("float32").tolist()
 
 
@@ -147,11 +162,14 @@ def _get_whisper():
 
 
 def _unload_whisper() -> bool:
-    global _WHISPER
+    global _WHISPER, _WHISPER_DEVICE_USED, _WHISPER_COMPUTE_USED, _WHISPER_MODEL_USED
     with _WHISPER_LOCK:
         if _WHISPER is None:
             return False
         _WHISPER = None
+        _WHISPER_DEVICE_USED = ""
+        _WHISPER_COMPUTE_USED = ""
+        _WHISPER_MODEL_USED = ""
         gc.collect()
         try:
             import torch
@@ -247,6 +265,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _read_body(self) -> bytes:
         length = int(self.headers.get("Content-Length", 0) or 0)
+        if length < 0:
+            raise ValueError(f"Content-Length không hợp lệ ({length})")
         if length > MAX_BODY:
             raise ValueError(f"body quá lớn ({length} > {MAX_BODY})")
         return self.rfile.read(length) if length else b""
@@ -270,6 +290,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_unload()
             else:
                 self._send(404, {"error": "not found"})
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send(400, {"error": f"{type(exc).__name__}: {exc}"})
         except Exception as exc:
             self._send(500, {"error": f"{type(exc).__name__}: {exc}"})
 

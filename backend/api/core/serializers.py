@@ -14,11 +14,23 @@ from api.utils.normalization import (
     is_valid_email, normalize_bank_account
 )
 from .models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, Severity, TargetType, ScanType,
-    ForumPost, ForumComment, ForumLike, ForumPostReaction, ForumPostReport, 
-    ForumCommentReport, ForumReactionType, UserProfile,
-    LearnLesson, LearnQuiz, LearnScenario,
+    Domain,
+    BankAccount,
+    Report,
+    ScanEvent,
+    TrendDaily,
+    UserAlert,
+    ForumPost,
+    ForumComment,
+    ForumLike,
+    ForumPostReaction,
+    ForumPostReport,
+    ForumCommentReport,
+    ForumReactionType,
+    UserProfile,
+    LearnLesson,
+    LearnQuiz,
+    LearnScenario,
 )
 
 User = get_user_model()
@@ -540,11 +552,13 @@ class ReportModerateSerializer(serializers.Serializer):
 
 class ScanFileSerializer(serializers.Serializer):
     file = serializers.FileField()
+    mask_pii = serializers.BooleanField(required=False, default=True)
 
 
 class ScanAudioSerializer(serializers.Serializer):
     """Serializer for audio scan upload."""
     audio = serializers.FileField()
+    mask_pii = serializers.BooleanField(required=False, default=True)
 
 
 class ScanPhoneSerializer(serializers.Serializer):
@@ -553,6 +567,7 @@ class ScanPhoneSerializer(serializers.Serializer):
     claimed_vietnamese_entity = serializers.BooleanField(required=False, default=False)
     # Default is LOCAL: a phone number is not sent to an external search service.
     external_lookup_consent = serializers.BooleanField(required=False, default=False)
+    mask_pii = serializers.BooleanField(required=False, default=True)
 
     def validate_phone(self, value):
         try:
@@ -568,6 +583,7 @@ class ScanPhoneSerializer(serializers.Serializer):
 class ScanMessageSerializer(serializers.Serializer):
     # Giới hạn độ dài để tránh DoS (regex + LLM + VirusTotal trên văn bản khổng lồ).
     message = serializers.CharField(required=False, allow_blank=True, max_length=20000)
+    mask_pii = serializers.BooleanField(required=False, default=True)
 
     def validate(self, attrs):
         # We check request.FILES in the view for multi-image
@@ -579,16 +595,19 @@ class ScanMessageSerializer(serializers.Serializer):
 class ScanDomainSerializer(serializers.Serializer):
     url = serializers.CharField(max_length=2000)
     deep_scan = serializers.BooleanField(default=False, required=False)
+    mask_pii = serializers.BooleanField(required=False, default=True)
 
 
 class ScanEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
     content = serializers.CharField(required=False, allow_blank=True)
+    mask_pii = serializers.BooleanField(required=False, default=True)
 
 
 class ScanAccountSerializer(serializers.Serializer):
     bank = serializers.CharField(max_length=50)
     account = serializers.CharField(max_length=50)
+    mask_pii = serializers.BooleanField(required=False, default=True)
 
 
 class ScanImageSerializer(serializers.Serializer):

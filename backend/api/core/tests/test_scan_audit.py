@@ -266,7 +266,7 @@ class ScanHardeningAuditTest(TestCase):
             self.assertNotIn('benign spoofed message', called_prompt)
 
     def test_vt_file_scan_skips_upload_by_default(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
         from api.utils.vt_client import VTClient
         import tempfile, os
 

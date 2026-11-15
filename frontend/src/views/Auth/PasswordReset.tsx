@@ -3,21 +3,9 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { api, ApiError } from '../../lib/api';
-import { TurnstileWidget, getTsToken, resetTurnstile } from '../../components/ScanWidgets';
+import { api, getErrorMessage as errMsg } from '../../lib/api';
+import { TURNSTILE_SITEKEY, TurnstileWidget, getTsToken, resetTurnstile } from '../../components/TurnstileWidget';
 import PasswordResetConfirm from './PasswordResetConfirm';
-
-const TURNSTILE_SITEKEY = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
-
-function errMsg(e: unknown, fallback: string): string {
-  if (e instanceof ApiError) {
-    const d = e.data as { error?: string } | null;
-    if (d && typeof d.error === 'string' && d.error) return d.error;
-    return e.message || fallback;
-  }
-  if (e instanceof Error) return e.message || fallback;
-  return fallback;
-}
 
 /* Port từ PKV/templates/account/password_reset.html (+ password_reset_done.html)
  * sang React/liquid-glass. Gọi API native thay cho server-rendered form Django Allauth:

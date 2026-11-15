@@ -11,14 +11,19 @@ import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
 import {
   OsintSection,
+  PrivacyReceiptBadge,
   TrustGuardrailPanel,
   ScanGuide,
+  ScanPrivacyToggle,
   TurnstileWidget,
   ProgressConsole,
+  consumeTurnstileToken,
   dispatchChat,
   getTsToken,
-  resetTurnstile,
+  riskBadge,
+  riskGlow,
   showToast,
+  useScanPrivacy,
   useScanTracker,
 } from '../../components/ScanWidgets';
 import type { ScanResult, TrackerDone } from '../../components/ScanWidgets';
@@ -30,20 +35,6 @@ interface ExtractedInfo {
   to?: string;
   url_count?: number;
   attachment_count?: number;
-}
-
-function riskBadge(level: string): string {
-  if (level === 'RED') return 'bg-danger-500/20 text-danger-400 border border-danger-500/30';
-  if (level === 'YELLOW') return 'bg-warn-500/20 text-warn-400 border border-warn-500/30';
-  if (level === 'UNVERIFIED') return 'bg-slate-500/20 text-slate-300 border border-slate-400/30';
-  return 'bg-safe-500/20 text-safe-400 border border-safe-500/30';
-}
-
-function riskGlow(level: string): string {
-  if (level === 'RED') return 'bg-danger-500';
-  if (level === 'YELLOW') return 'bg-warn-500';
-  if (level === 'UNVERIFIED') return 'bg-slate-500';
-  return 'bg-safe-500';
 }
 
 function cleanHesitationText(text: string): string {
@@ -97,6 +88,7 @@ export default function Email() {
   const [email, setEmail] = useState(() => '');
   const [content, setContent] = useState('');
   const [emlFile, setEmlFile] = useState<File | null>(null);
+  const [maskPii, setMaskPii] = useScanPrivacy();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [quickReportText, setQuickReportText] = useState('');
@@ -177,16 +169,8 @@ export default function Email() {
   };
 
   const submit = (override?: string): void => {
-    const tsToken = getTsToken();
-    if (!tsToken) {
-      showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');
-      return;
-    }
-    try {
-      resetTurnstile();
-    } catch {
-      /* bỏ qua */
-    }
+    const tsToken = consumeTurnstileToken();
+    if (!tsToken) return;
 
     if (mode === 'text') {
       const value = (override ?? email).trim();
@@ -201,6 +185,7 @@ export default function Email() {
         .post<ScanResult>('/scan/email/', {
           email: value,
           content: content.trim(),
+          mask_pii: maskPii,
           'cf-turnstile-response': tsToken,
         })
         .then((data) => handleResult(data))
@@ -217,6 +202,7 @@ export default function Email() {
       resetState();
       const fd = new FormData();
       fd.append('file', emlFile);
+      fd.append('mask_pii', maskPii ? 'true' : 'false');
       fd.append('cf-turnstile-response', tsToken);
       api
         .upload<ScanResult>('/scan/email/', fd)
@@ -432,6 +418,7 @@ export default function Email() {
           )}
 
           <div className="space-y-4">
+            <ScanPrivacyToggle scanType="email" checked={maskPii} onChange={setMaskPii} compact />
             <TurnstileWidget />
             <button
               type="button"
@@ -489,6 +476,9 @@ export default function Email() {
                     <span>Đã hoàn tất phân tích toàn diện</span>
                   </div>
                 )}
+                <div className="flex justify-center">
+                  <PrivacyReceiptBadge result={result} />
+                </div>
               </div>
 
               <div className="p-6 sm:p-8 space-y-8">

@@ -7,8 +7,6 @@ Dùng để backfill media cũ lên S3 và/hoặc chạy định kỳ (Celery Be
 Chạy:  python manage.py sync_media_to_s3 [--delete] [--prefix media]
 Khi bật S3, có thể dùng luôn --delete để S3 phản chiếu đúng thư mục media.
 """
-import mimetypes
-import os
 
 from django.conf import settings
 from django.core.management.base import BaseCommand

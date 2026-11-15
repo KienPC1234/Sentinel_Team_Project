@@ -1,44 +1,27 @@
 """ShieldCall VN – Forum Views"""
 import re
-import hashlib
 import logging
-import json
 import html
-from urllib.parse import urlparse
 from api.utils.security import verify_turnstile_token
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
-from django.contrib.auth import authenticate, get_user_model
-from django.db.models import Count, Sum, F, Q
+from django.contrib.auth import get_user_model
+from django.db.models import Count, F, Q
 from django.utils import timezone
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 
-from django.http import StreamingHttpResponse
 from django.utils.html import strip_tags
-from rest_framework import status, permissions, generics
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
 from drf_spectacular.utils import extend_schema
 
-from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 
 from api.core.models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, ForumCategory,
-)
-from api.core.serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer,
-    DomainSerializer, BankAccountSerializer,
-    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer,
-    ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
-    ScanAccountSerializer, ScanImageSerializer, ScanEventListSerializer,
-    TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
+    ForumCategory,
 )
 
 User = get_user_model()
@@ -50,8 +33,9 @@ logger = logging.getLogger(__name__)
 
 from api.core.models import ForumPost, ForumComment, ForumLike, ForumCommentLike, ForumPostReaction, ForumPostReport, ForumCommentReport, ForumReactionType, ForumCommentReaction, ForumPostView
 from api.core.serializers import (
-    ForumPostSerializer, ForumPostListSerializer, ForumCommentSerializer,
-    ForumPostReportSerializer, ForumCommentReportSerializer,
+    ForumPostSerializer,
+    ForumPostListSerializer,
+    ForumCommentSerializer,
 )
 from django.db.models import Exists, OuterRef, Subquery
 
@@ -308,7 +292,6 @@ class ForumPostListCreateView(APIView):
 
         query = (request.query_params.get('q') or '').strip()[:100]
         if query:
-            from django.db.models import Q
             posts = posts.filter(
                 Q(title__icontains=query) | Q(content__icontains=query) | Q(author__username__icontains=query)
             )
@@ -1071,7 +1054,6 @@ class ForumStatsView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        from django.contrib.auth import get_user_model
         from api.core.models import ForumBan, ForumPostReport, ForumCommentReport
 
         cached = cache.get('forum_stats_v1')

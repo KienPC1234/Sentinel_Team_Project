@@ -169,7 +169,6 @@ def backup_vector_store(bucket: Optional[str] = None, prefix: str = 'vector_stor
     bucket = bucket or getattr(settings, 'AWS_S3_INTERNAL_BUCKET', f"{settings.AWS_STORAGE_BUCKET_NAME}-internal")
     d = _vector_dir()
     s3 = _client()
-    acl = getattr(settings, 'AWS_DEFAULT_ACL', 'public-read') or 'public-read'
     uploaded = skipped = errors = 0
     if not os.path.isdir(d):
         return {'uploaded': 0, 'skipped': 0, 'errors': 0, 'configured': 1}

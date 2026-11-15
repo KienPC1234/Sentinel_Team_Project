@@ -12,12 +12,10 @@ import json
 import asyncio
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
 
 from api.core.models import APIKey
-from api.core.authentication import APIKeyAuthentication
 from mcp_server.server import create_server
 
 User = get_user_model()

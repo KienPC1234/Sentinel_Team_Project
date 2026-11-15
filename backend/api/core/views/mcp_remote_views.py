@@ -383,7 +383,7 @@ class MCPMessagesView(View):
                     if quota_err:
                         auth_err = quota_err
                     else:
-                        api_key, raw_token, auth_err = bound, sess.get('token'), None
+                        _, raw_token, auth_err = bound, sess.get('token'), None
 
         if auth_err:
             status_code = auth_err.pop('status', 401) if isinstance(auth_err, dict) else 401
@@ -497,9 +497,6 @@ def mcp_download_script_view(request):
     from django.http import Http404
 
     script_path = os.path.join(settings.BASE_DIR, 'scripts', 'shieldcall_mcp.py')
-    if not os.path.isfile(script_path):
-        script_path = os.path.join(settings.BASE_DIR, 'static', 'downloads', 'shieldcall_mcp.py')
-
     if not os.path.isfile(script_path):
         raise Http404("MCP script not found.")
 

@@ -10,7 +10,6 @@ Populates realistic Vietnamese cyber threat demo data across:
 - 30-Day Daily Scam Trend Statistics
 - System Announcements & Support Tickets
 """
-import hashlib
 from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
@@ -19,13 +18,35 @@ from django.utils.text import slugify
 from django.db import transaction
 
 from api.core.models import (
-    UserProfile, Domain, BankAccount, Report, ScanEvent,
-    TrendDaily, EntityLink, ForumCategory, ForumPost, ForumComment,
-    ForumLike, ForumCommentLike, ForumPostReaction, ForumReactionType,
-    ArticleCategory, Article, ArticleComment, ArticleReaction,
-    LearnLesson, LearnQuiz, LearnScenario, LearnReactionType,
-    QuizQuestionType, Announcement, AnnouncementReaction, SupportTicket,
-    ScamType, Severity, RiskLevel, ReportStatus, TargetType
+    UserProfile,
+    Domain,
+    BankAccount,
+    Report,
+    TrendDaily,
+    EntityLink,
+    ForumCategory,
+    ForumPost,
+    ForumComment,
+    ForumLike,
+    ForumCommentLike,
+    ForumPostReaction,
+    ForumReactionType,
+    ArticleCategory,
+    Article,
+    ArticleComment,
+    ArticleReaction,
+    LearnLesson,
+    LearnQuiz,
+    LearnScenario,
+    LearnReactionType,
+    QuizQuestionType,
+    Announcement,
+    AnnouncementReaction,
+    SupportTicket,
+    ScamType,
+    Severity,
+    ReportStatus,
+    TargetType,
 )
 from api.phone_security.models import PhoneNumber, PhoneReport, PhoneRiskLevel
 

@@ -1,6 +1,8 @@
 # Đánh giá & tinh chỉnh ngưỡng — Tầng heuristic phát hiện lừa đảo (VN)
 
-> Sinh tự động bởi `backend/scripts/eval/evaluate_thresholds.py`.
+> **Trạng thái:** số liệu chụp · **Cập nhật:** 2026-10-15 · **Đối tượng:** người làm đánh giá
+
+> Sinh tự động bởi `backend/scripts/eval/evaluate_thresholds.py`. Không sửa tay.
 
 > **Phạm vi:** chỉ tầng LUẬT heuristic (`api/utils/scam_rules.py`), tách khỏi AI/network để tái lập.
 > Đây là **tập chuẩn nhỏ, nội bộ** (không phải benchmark công khai).

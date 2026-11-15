@@ -171,8 +171,57 @@ export const authApi = {
   logout: () => api.post('/auth/logout/'),
 };
 
-export function asList<T>(paged: Paged<T> | T[]): T[] {
+export function asList<T>(paged: { results?: T[] } | T[] | null | undefined): T[] {
+  if (!paged) return [];
   return Array.isArray(paged) ? paged : paged.results || [];
+}
+
+/** Rút gọn trích xuất thông báo lỗi tiếng Việt từ ApiError / Error bất kỳ. */
+export function getErrorMessage(err: unknown, fallback = 'Đã xảy ra lỗi. Vui lòng thử lại.'): string {
+  if (err instanceof ApiError) {
+    const data = err.data as { error?: unknown; detail?: unknown; message?: unknown; details?: unknown } | null;
+    if (data && typeof data === 'object') {
+      if (typeof data.error === 'string' && data.error.trim()) return data.error;
+      if (typeof data.detail === 'string' && data.detail.trim()) return data.detail;
+      if (typeof data.message === 'string' && data.message.trim()) return data.message;
+      if (data.details && typeof data.details === 'object') {
+        const first = Object.values(data.details as Record<string, unknown>)[0];
+        if (Array.isArray(first) && typeof first[0] === 'string') return first[0];
+        if (typeof first === 'string') return first;
+      }
+    }
+    return err.message || fallback;
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  if (typeof err === 'string' && err.trim()) return err;
+  return fallback;
+}
+
+/** POST tới endpoint Django cùng origin ngoài /api/v1 (kèm CSRF token). */
+export async function postSameOrigin<T = Record<string, unknown>>(path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) headers['Authorization'] = `Token ${token}`;
+  const csrf = getCsrf();
+  if (csrf) headers['X-CSRFToken'] = csrf;
+  const res = await fetch(djangoUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify(body ?? {}),
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch {
+    parsed = { detail: text };
+  }
+  if (!res.ok) {
+    const d = parsed as { error?: string; detail?: string; message?: string } | null;
+    throw new ApiError(res.status, d?.error || d?.detail || d?.message || `HTTP ${res.status}`, parsed);
+  }
+  return parsed as T;
 }
 
 /** Đảm bảo URL relative qua cổng proxy Next.js / tunnel duy nhất. */

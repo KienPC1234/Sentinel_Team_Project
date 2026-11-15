@@ -9,14 +9,12 @@ from rest_framework.test import APIClient
 from api.core.models import Article, ArticleCategory, ArticleSourceType
 from api.maintenance.tinnhiemmang_feed import sync_tinnhiemmang_articles
 from api.utils.tinnhiemmang import (
-    NEWS_FEED_CONFIGS,
     TinnhiemArticle,
     parse_news_detail,
     parse_news_listing,
 )
 from api.utils.vn_sources import (
     VN_OFFICIAL_CHANNELS,
-    VN_REFERENCE_SOURCES,
     VN_TINNHIEMMANG_FEEDS,
     VN_TRUSTED_DOMAINS,
     vn_tinnhiemmang_sources,
