@@ -13,7 +13,7 @@ import { api, ApiError } from '../../lib/api';
 
 import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
-import { showToast, wsBase, TrustGuardrailPanel, guardrailTone, guardrailLabel } from '../../components/ScanWidgets';
+import { PrivacyReceiptBadge, riskBadge, riskGlow, showToast, wsBase, TrustGuardrailPanel, guardrailTone, guardrailLabel } from '../../components/ScanWidgets';
 import type { ScanResult } from '../../components/ScanWidgets';
 import { asStr, asNum, asArr } from '../../components/ScanWidgets';
 
@@ -47,20 +47,6 @@ interface StatusPayload {
   risk_score?: number;
   risk_level?: string;
   result?: ScanResult | null;
-}
-
-function riskBadge(level: string): string {
-  if (level === 'RED') return 'bg-danger-500/20 text-danger-500 border border-danger-500/30';
-  if (level === 'YELLOW') return 'bg-warn-500/20 text-warn-500 border border-warn-500/30';
-  if (level === 'UNVERIFIED') return 'bg-slate-500/20 text-slate-300 border border-slate-400/30';
-  return 'bg-safe-500/20 text-safe-500 border border-safe-500/30';
-}
-
-function riskGlow(level: string): string {
-  if (level === 'RED') return 'bg-danger-500';
-  if (level === 'YELLOW') return 'bg-warn-500';
-  if (level === 'UNVERIFIED') return 'bg-slate-500';
-  return 'bg-safe-500';
 }
 
 export default function Status() {
@@ -348,6 +334,7 @@ export default function Status() {
                   style={{ width: `${score}%`, background: score >= 70 ? 'var(--sc-danger-500)' : score >= 40 ? 'var(--sc-warn-500)' : 'var(--sc-safe-500)' }}
                 ></div>
               </div>
+              <PrivacyReceiptBadge result={result} />
             </div>
 
             <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-white/5">

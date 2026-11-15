@@ -9,39 +9,30 @@ import { api } from '../../lib/api';
 
 import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
-import { openSseStream } from '../../lib/chat/stream';
 import {
   OsintSection,
+  PrivacyReceiptBadge,
   TrustGuardrailPanel,
   ProgressConsole,
   ScanGuide,
+  ScanPrivacyToggle,
   TurnstileWidget,
-  apiBase,
+  consumeTurnstileToken,
   dispatchChat,
-  getTsToken,
   resetTurnstile,
+  riskBadge,
+  riskGlow,
   showToast,
+  streamScanAiExplanation,
+  useScanPrivacy,
   useScanTracker,
 } from '../../components/ScanWidgets';
 import type { ScanResult, TrackerDone } from '../../components/ScanWidgets';
 import { asStr, asNum, asArr, guardrailTone, guardrailLabel } from '../../components/ScanWidgets';
 
-function riskBadge(level: string): string {
-  if (level === 'RED') return 'bg-danger-500/20 text-danger-500 border border-danger-500/30';
-  if (level === 'YELLOW') return 'bg-warn-500/20 text-warn-500 border border-warn-500/30';
-  if (level === 'UNVERIFIED') return 'bg-slate-500/20 text-slate-300 border border-slate-400/30';
-  return 'bg-safe-500/20 text-safe-500 border border-safe-500/30';
-}
-
-function riskGlow(level: string): string {
-  if (level === 'RED') return 'bg-danger-500';
-  if (level === 'YELLOW') return 'bg-warn-500';
-  if (level === 'UNVERIFIED') return 'bg-slate-500';
-  return 'bg-safe-500';
-}
-
 export default function Website() {
   const [url, setUrl] = useState('');
+  const [maskPii, setMaskPii] = useScanPrivacy();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [aiText, setAiText] = useState('');
@@ -66,21 +57,21 @@ export default function Website() {
     },
   });
 
-  const streamAi = (data: ScanResult, originalUrl: string): void => {
+  const streamAi = (data: ScanResult, originalUrl: string, maskedFlag: boolean): void => {
     setAiLoading(true);
-    void openSseStream({
-      url: `${apiBase()}/scan/analyze-sse/`,
-      body: { scan_type: 'domain', scan_data: data, raw_input: originalUrl },
-      onEvent: (ev) => {
-        if (ev.type === 'delta') setAiText((t) => t + ev.text);
-        else if (ev.type === 'done') setAiLoading(false);
-      },
-    })
-      .catch(() => {
+    void streamScanAiExplanation({
+      scanId: typeof data['scan_id'] === 'number' ? data['scan_id'] : null,
+      scanType: 'domain',
+      scanData: data,
+      rawInput: asStr(data['url']) || originalUrl,
+      maskPii: maskedFlag,
+      onDelta: (t) => setAiText((prev) => prev + t),
+      onDone: () => setAiLoading(false),
+      onError: () => {
         setAiLoading(false);
         showToast('Không thể kết nối AI.', 'warning');
-      })
-      .finally(() => setAiLoading(false));
+      },
+    });
   };
 
   const handleScan = (override?: string): void => {
@@ -92,16 +83,8 @@ export default function Website() {
     let normalizedUrl = input;
     if (!normalizedUrl.includes('://')) normalizedUrl = 'https://' + normalizedUrl;
 
-    const tsToken = getTsToken();
-    if (!tsToken) {
-      showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');
-      return;
-    }
-    try {
-      resetTurnstile();
-    } catch {
-      /* bỏ qua */
-    }
+    const tsToken = consumeTurnstileToken();
+    if (!tsToken) return;
 
     setLoading(true);
     setResult(null);
@@ -115,6 +98,7 @@ export default function Website() {
       .post<ScanResult>('/scan/domain/', {
         url: normalizedUrl,
         deep_scan: deepScan,
+        mask_pii: maskPii,
         'cf-turnstile-response': tsToken,
       })
       .then((data) => {
@@ -125,7 +109,7 @@ export default function Website() {
         } else {
           setResult(data);
           setLoading(false);
-          streamAi(data, normalizedUrl);
+          streamAi(data, normalizedUrl, maskPii);
         }
       })
       .catch((e: unknown) => {
@@ -196,6 +180,9 @@ export default function Website() {
                 )}
               </button>
             </div>
+            <div className="mt-4">
+              <ScanPrivacyToggle scanType="domain" checked={maskPii} onChange={setMaskPii} compact />
+            </div>
             <TurnstileWidget />
             <div className="mt-4 flex items-center gap-3">
               <label className="relative inline-flex items-center cursor-pointer">
@@ -242,6 +229,7 @@ export default function Website() {
                     style={{ width: `${score}%`, background: score >= 70 ? 'var(--sc-danger-500)' : score >= 40 ? 'var(--sc-warn-500)' : 'var(--sc-safe-500)' }}
                   ></div>
                 </div>
+                <PrivacyReceiptBadge result={result} />
               </div>
 
               <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-white/5">

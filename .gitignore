@@ -265,6 +265,7 @@ frontend/.env.*.local
 # Thư mục minh chứng cải tiến (tổng hợp log session + kiểm chứng) — KHÔNG commit;
 # nội dung được nộp qua Google Drive theo yêu cầu cuộc thi.
 _minhchung/
+_chungket/
 backend/PKV/settings.py
 backend/vector_store
 # OCR engine venv (PaddleOCR/VietOCR tách riêng khỏi .venv chính)

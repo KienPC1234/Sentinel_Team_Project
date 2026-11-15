@@ -1,12 +1,22 @@
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..models import Article, ArticleCategory, ArticleComment, ArticleReaction, LearnReactionType
+from ..models import Article, ArticleComment, ArticleReaction, LearnReactionType
+
+
+def _article_author_name(article: Article) -> str:
+    """Trả về tên nguồn/tác giả hiển thị phù hợp theo source_type."""
+    if article.author:
+        return article.author.username
+    if article.source_type == 'tinnhiemmang':
+        return 'Tín nhiệm mạng (NCSC)'
+    if article.source_type == 'press':
+        return 'VnExpress'
+    return 'ShieldCall Admin'
 
 
 class ArticleListView(APIView):
@@ -56,7 +66,7 @@ class ArticleListView(APIView):
             'source_url': getattr(a, 'source_url', None),
             'published_date': a.published_date.isoformat() if getattr(a, 'published_date', None) else None,
             'cover_image': a.cover_image.url if a.cover_image else None,
-            'author_name': a.author.username if a.author else ('Tín nhiệm mạng (NCSC)' if a.source_type == 'tinnhiemmang' else 'ShieldCall Admin'),
+            'author_name': _article_author_name(a),
             'created_at': a.created_at.isoformat(),
             'summary': a.summary or a.content[:200],
             'reactions_count': getattr(a, 'reactions_total', 0) or 0,
@@ -75,10 +85,13 @@ class ArticleDetailView(APIView):
     def get(self, request, slug):
         article = get_object_or_404(Article, slug=slug, is_published=True)
 
-        counts = {
-            k: ArticleReaction.objects.filter(article=article, reaction_type=k).count()
-            for k in LearnReactionType.values
-        }
+        reaction_rows = (
+            ArticleReaction.objects.filter(article=article)
+            .values('reaction_type')
+            .annotate(total=Count('id'))
+        )
+        counts_map = {row['reaction_type']: row['total'] for row in reaction_rows}
+        counts = {k: counts_map.get(k, 0) for k in LearnReactionType.values}
         reactions_count = sum(counts.values())
 
         my_reaction = None
@@ -119,7 +132,7 @@ class ArticleDetailView(APIView):
             'source_url': getattr(article, 'source_url', None),
             'published_date': article.published_date.isoformat() if getattr(article, 'published_date', None) else None,
             'cover_image': article.cover_image.url if article.cover_image else None,
-            'author_name': article.author.username if article.author else ('Tín nhiệm mạng (NCSC)' if article.source_type == 'tinnhiemmang' else 'ShieldCall Admin'),
+            'author_name': _article_author_name(article),
             'created_at': article.created_at.isoformat(),
             'reaction_counts': counts,
             'reactions_count': reactions_count,

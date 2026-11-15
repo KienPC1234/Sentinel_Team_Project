@@ -1,9 +1,6 @@
 import os
 import markdown
-from django.shortcuts import render
-from django.http import Http404, HttpResponse
 from django.conf import settings
-from django.utils.safestring import mark_safe
 
 
 

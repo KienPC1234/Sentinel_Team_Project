@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ChatFolder, ChatSession, ChatMessage, ChatbotConfig, SavedMessage
+from .models import ChatFolder, ChatSession, ChatbotConfig, SavedMessage
 
 class ChatFolderSerializer(serializers.ModelSerializer):
     class Meta:

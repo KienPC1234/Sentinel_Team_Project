@@ -3,11 +3,21 @@ ShieldCall VN – Core Admin Registration
 """
 from django.contrib import admin
 from .models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily, EntityLink, UserAlert,
-    Article, LearnLesson, LearnQuiz, LearnScenario, ForumPost, ForumComment,
-    ForumPostReport, UserProfile, WebPushSubscription
+    Domain,
+    BankAccount,
+    Report,
+    ScanEvent,
+    TrendDaily,
+    EntityLink,
+    UserAlert,
+    Article,
+    LearnLesson,
+    ForumPost,
+    ForumComment,
+    ForumPostReport,
+    UserProfile,
+    WebPushSubscription,
 )
-from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 admin.site.site_header = mark_safe('<img src="/static/logo.png" style="height: 32px; vertical-align: middle; margin-right: 10px; border-radius: 6px;"> ShieldCall VN Administration')

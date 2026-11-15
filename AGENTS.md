@@ -8,8 +8,9 @@ style preferences: this project analyzes malware and personal data.
 - **Stack:** Django 5.2 + DRF + Channels/Daphne, Celery, MariaDB/MySQL, Redis, Ollama, FAISS,
   Faster-Whisper, VietOCR, Docker sandbox, Next.js 16, Puppeteer (TypeScript)
 - **Branch:** `master` · **License:** AGPL-3.0-or-later
-- **Start here:** `README.md`, `docs/ARCHITECTURE.md`, `docs/SETUP.md`, `docs/API_REFERENCE.md`,
-  `docs/TESTING.md`, `PROJECT_OVERVIEW.md` (Vietnamese feature overview)
+- **Start here:** `docs/README.md` (documentation index), `README.md`, `docs/ARCHITECTURE.md`,
+  `docs/SETUP.md`, `docs/API_REFERENCE.md`, `docs/TESTING.md`, `PROJECT_OVERVIEW.md`
+  (Vietnamese feature overview)
 
 ---
 
@@ -190,6 +191,18 @@ pm2 status
   instance recycling (`MAX_RENDERS_BEFORE_RECYCLE`).
 - Extend `scripts/deep_test.js` when behavior changes; the suite must stay green.
 
+### Documentation
+
+- `docs/README.md` is the index. Add or remove a row there in the same change as the document.
+- Start every document with one H1 and a metadata line: status, `Updated:` date, audience. Use the
+  template in `docs/README.md` §3.2.
+- Language: English for runnable technical references (`ARCHITECTURE`, `SETUP`, `API_REFERENCE`,
+  `TESTING`); Vietnamese for evaluation, legal, and submission documents. Match the file you edit.
+- Benchmark documents are immutable snapshots: record dataset, date, and reproducing command. Do not
+  rewrite numbers in place; generate a new report and update the index.
+- Use relative links inside the repo. Never link to `_chungket/` or `_minhchung/` (gitignored), and
+  never put secrets, real PII, or machine-specific paths in documentation.
+
 ---
 
 ## 6. Tests and CI
@@ -253,7 +266,7 @@ docs(agents): document sandbox invariants
 Do not mix refactors with behavior changes or unrelated formatting in one commit.
 
 **Batch small changes — no micro-commits:** do not commit a tiny diff on its own.
-Accumulate related changes and commit once the batch is substantial (roughly
->2000 changed characters) or at a logical checkpoint (end of a workstream, end
-of session). Never end a session with uncommitted work: batch whatever remains
-into one final commit instead of leaving the tree dirty.
+Accumulate related changes and commit once the batch reaches roughly
+>500 changed lines (`git diff --stat`) or at a logical checkpoint (end of a
+workstream, end of session). Never end a session with uncommitted work: batch
+whatever remains into one final commit instead of leaving the tree dirty.

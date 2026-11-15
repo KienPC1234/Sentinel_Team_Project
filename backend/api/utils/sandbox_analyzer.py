@@ -438,7 +438,6 @@ class LocalSandboxAnalyzer:
         # 1. High-speed Daemon Microservice Mode (<20ms) via base64 or path
         scan_url = f"{self.daemon_url}/scan"
         try:
-            import base64
             if os.path.getsize(abs_path) > 32 * 1024 * 1024:
                 # Big files skip the base64 microservice path (avoids a ~133MB
                 # transient copy for a 100MB file); the ephemeral CLI fallback

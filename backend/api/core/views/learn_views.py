@@ -274,7 +274,6 @@ class LearnLessonListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        from api.core.models import LearnQuiz, LearnScenario
 
         category = request.query_params.get('category')
         qs = LearnLesson.objects.filter(is_published=True)

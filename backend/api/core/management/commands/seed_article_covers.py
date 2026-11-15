@@ -8,7 +8,6 @@ Sinh ảnh bìa (cover) thương hiệu cho Article/LearnLesson thiếu cover_im
 Chạy:  python manage.py seed_article_covers
 """
 import io
-import os
 import textwrap
 
 from django.core.files.base import ContentFile

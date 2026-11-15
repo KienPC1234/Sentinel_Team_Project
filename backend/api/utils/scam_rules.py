@@ -57,8 +57,15 @@ CALL_TO_ACTION_PATTERNS: List[str] = [
 ]
 
 # Định dạng tin nhắn OTP chuẩn kèm cảnh báo an toàn
-OTP_AUTH_PATTERN: str = r'(?:ma|mã)\s*otp\s*(?:cua\s*ban|xac\s*nhan|xác\s*nhận|smart\s*otp|của\s*quy\s*khach|của\s*quý\s*khách)?\s*(?:la|là)?\s*[:\s]?\s*\d{4,8}'
-OTP_SECURITY_WARNING: str = r'(?:khong|không|tuyet\s*doi\s*khong|tuyệt\s*đối\s*không)\s*(?:chia\s*se|chia\s*sẻ|cung\s*cap|cung\s*cấp)\s*(?:ma|mã)?\s*(?:nay|này|otp)?'
+OTP_AUTH_PATTERN: str = (
+    r'(?:ma|mã)\s*(?:otp|smart\s*otp|xac\s*thuc(?:\s*smart)?\s*otp)'
+    r'[^.\n]{0,70}?(?:la|là|:)?\s*\d{4,8}\b'
+)
+OTP_SECURITY_WARNING: str = (
+    r'(?:khong|không|tuyet\s*doi\s*khong|tuyệt\s*đối\s*không)\s*'
+    r'(?:chia\s*se|chia\s*sẻ|cung\s*cap|cung\s*cấp)\s*'
+    r'(?:ma|mã)?\s*(?:nay|này|otp)?'
+)
 
 
 def match_patterns(text: str) -> List[str]:

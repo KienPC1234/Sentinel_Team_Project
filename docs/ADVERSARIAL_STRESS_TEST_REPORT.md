@@ -1,5 +1,7 @@
 # Báo Cáo Kiểm Thử Đối Kháng & Ứng Phó Tình Huống Giới Hạn (Adversarial Stress Test)
 
+> **Trạng thái:** số liệu chụp · **Cập nhật:** 2026-11-04 · **Đối tượng:** người làm đánh giá, hội đồng
+
 > **Thời điểm thực nghiệm:** 2026-11-04 17:39:16  
 > **Mục tiêu:** Kiểm tra độ bền vững của **Evidence-Aware Conditional Ensemble** trước các kỹ thuật tấn công bẫy LLM, giả lập LLM bị jailbreak (ép LLM trả an toàn), kiểm thử dự phòng khi LLM sập (Outage Fallback), và kiểm chứng lý do cần kiến trúc đa tầng thay vì chỉ dùng LLM đơn thuần.
 

@@ -113,7 +113,12 @@ class ScamVectorDB:
             device = "cuda" if use_cuda else "cpu"
             logger.info(f"Loading embedding model: {MODEL_NAME} on {device}")
             try:
-                self._model = SentenceTransformer(MODEL_NAME, device=device, trust_remote_code=True)
+                try:
+                    self._model = SentenceTransformer(
+                        MODEL_NAME, device=device, trust_remote_code=True, local_files_only=True
+                    )
+                except Exception:
+                    self._model = SentenceTransformer(MODEL_NAME, device=device, trust_remote_code=True)
             except Exception as e:
                 logger.error(f"Failed to load model on {device}: {e}")
                 if device == "cuda":
@@ -143,10 +148,17 @@ class ScamVectorDB:
                 logger.warning(f"[VectorDB] AI service embed lỗi ({exc}) — fallback CPU")
         self._load_model(force_cpu=True)
         with self._lock:
-            vecs = self._model.encode(
-                texts, convert_to_numpy=True, normalize_embeddings=True,
-                batch_size=EMBED_BATCH_SIZE, show_progress_bar=False,
-            )
+            try:
+                import torch
+                ctx = torch.inference_mode()
+            except Exception:
+                from contextlib import nullcontext
+                ctx = nullcontext()
+            with ctx:
+                vecs = self._model.encode(
+                    texts, convert_to_numpy=True, normalize_embeddings=True,
+                    batch_size=EMBED_BATCH_SIZE, show_progress_bar=False,
+                )
         return np.asarray(vecs, dtype='float32')
 
     # ---------------------------------------------------------------- index
@@ -191,11 +203,21 @@ class ScamVectorDB:
         with self._lock:
             os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
             if self.index is not None:
-                faiss.write_index(self.index, INDEX_PATH)
-                with open(METADATA_PATH, 'wb') as f:
+                tmp_index = f"{INDEX_PATH}.tmp.{os.getpid()}"
+                tmp_meta = f"{METADATA_PATH}.tmp.{os.getpid()}"
+                faiss.write_index(self.index, tmp_index)
+                with open(tmp_meta, 'wb') as f:
                     pickle.dump(self.metadata, f)
+                os.replace(tmp_index, INDEX_PATH)
+                os.replace(tmp_meta, METADATA_PATH)
                 self._index_mtime = self._current_index_mtime()
                 self._query_cache.clear()
+                # Ngăn signal post_save xếp hàng rebuild_vector_index dư thừa ngay sau khi vừa lưu xong
+                try:
+                    from django.core.cache import cache
+                    cache.set('vector_rebuild_queued', 1, timeout=300)
+                except Exception:
+                    pass
                 logger.info(f"Saved vector index to {INDEX_PATH} ({len(self.metadata)} items)")
                 # Backup lên S3 (best-effort) để an toàn
                 try:
@@ -219,8 +241,10 @@ class ScamVectorDB:
     def _save_emb_cache(self, cache: Dict[str, List[float]]):
         try:
             os.makedirs(os.path.dirname(EMB_CACHE_PATH), exist_ok=True)
-            with open(EMB_CACHE_PATH, 'wb') as f:
+            tmp_cache = f"{EMB_CACHE_PATH}.tmp.{os.getpid()}"
+            with open(tmp_cache, 'wb') as f:
                 pickle.dump(cache, f)
+            os.replace(tmp_cache, EMB_CACHE_PATH)
         except Exception as exc:
             logger.warning(f"[VectorDB] save embedding cache failed: {exc}")
 

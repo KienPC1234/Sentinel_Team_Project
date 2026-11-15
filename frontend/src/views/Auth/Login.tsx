@@ -7,12 +7,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { useAuth } from '../../components/AuthContext';
-import { api, setToken, ApiError } from '../../lib/api';
-
-
-
-
-const TURNSTILE_SITEKEY = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
+import { api, setToken, getErrorMessage as errMsg } from '../../lib/api';
+import { TURNSTILE_SITEKEY, TurnstileWidget, getTsToken, resetTurnstile } from '../../components/TurnstileWidget';
 
 interface MfaMethods {
   totp?: boolean;
@@ -33,29 +29,6 @@ interface MfaVerifyResp {
   token?: string;
   key?: string;
   error?: string;
-}
-
-function errMsg(e: unknown, fallback: string): string {
-  if (e instanceof ApiError) {
-    const d = e.data as { error?: string } | null;
-    if (d && typeof d.error === 'string' && d.error) return d.error;
-    return e.message || fallback;
-  }
-  if (e instanceof Error) return e.message || fallback;
-  return fallback;
-}
-
-function resetTurnstile(): void {
-  const w = window as unknown as { turnstile?: { reset: () => void } };
-  try {
-    w.turnstile?.reset();
-  } catch {
-    /* ignore */
-  }
-}
-
-function readTurnstileToken(): string {
-  return document.querySelector<HTMLInputElement>('[name=cf-turnstile-response]')?.value || '';
 }
 
 /* Port từ PKV/templates/Auth/login.html — giữ nguyên text + class Tailwind. */
@@ -113,18 +86,6 @@ export default function Login() {
     }
   }, [user, next, isLoggedOut]);
 
-  /* Nạp Cloudflare Turnstile (bản gốc dùng {{ TURNSTILE_SITEKEY }}). */
-  useEffect(() => {
-    if (!TURNSTILE_SITEKEY) return;
-    if (document.querySelector('script[data-turnstile]')) return;
-    const s = document.createElement('script');
-    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-    s.async = true;
-    s.defer = true;
-    s.setAttribute('data-turnstile', '1');
-    document.body.appendChild(s);
-  }, []);
-
   function gotoNext(): void {
     const target = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard/';
     window.location.href = target;
@@ -165,7 +126,7 @@ export default function Login() {
       setError('Vui lòng điền đầy đủ thông tin');
       return;
     }
-    const tsToken = readTurnstileToken();
+    const tsToken = getTsToken();
     if (TURNSTILE_SITEKEY && !tsToken) {
       setError('Vui lòng hoàn thành captcha bảo mật');
       return;
@@ -324,13 +285,7 @@ export default function Login() {
             </div>
 
             <div className="flex justify-center py-2">
-              {TURNSTILE_SITEKEY ? (
-                <div className="cf-turnstile" data-sitekey={TURNSTILE_SITEKEY}></div>
-              ) : (
-                <p className="text-[10px] text-warn-300/70 font-bold uppercase tracking-widest">
-                  Chưa cấu hình NEXT_PUBLIC_TURNSTILE_SITEKEY
-                </p>
-              )}
+              <TurnstileWidget />
             </div>
 
             <button

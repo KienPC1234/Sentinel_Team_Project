@@ -1,5 +1,7 @@
 # Checklist Kiểm tra Tính năng — ShieldCall VN
 
+> **Trạng thái:** ảnh chụp rà soát · **Cập nhật:** 2026-10-16 · **Đối tượng:** nhóm kỹ thuật, hội đồng
+
 > **Mục đích:** checklist kiểm kĩ tính năng theo *Điểm mạnh* và *Yêu cầu cải tiến* mà hội đồng nêu.
 > Mỗi mục đều có **cách kiểm** và **trạng thái thực tế** (đã tự chạy lệnh/đọc mã, không chỉ tin tài liệu).
 >

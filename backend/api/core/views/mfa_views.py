@@ -1,5 +1,4 @@
 """ShieldCall VN – MFA Views"""
-import pyotp
 import qrcode
 import io
 import base64
@@ -10,7 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, serializers
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from drf_spectacular.utils import extend_schema
 from django_otp.plugins.otp_totp.models import TOTPDevice

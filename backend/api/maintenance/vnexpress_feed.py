@@ -12,9 +12,12 @@ Hàm chính:
 
 from __future__ import annotations
 
+import itertools
 import logging
 import time
 from typing import Any, Dict, Optional, Sequence
+
+from django.utils.text import slugify
 
 from api.core.models import Article, ArticleCategory, ArticleSourceType
 from api.utils.tinnhiemmang import (
@@ -86,10 +89,15 @@ def sync_vnexpress_articles(
         feed_cat = ArticleCategory.ALERT if cfg.get("category") == "alert" else ArticleCategory.NEWS
         feed_stat = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
         try:
-            # Duyệt hết các trang của tag (p1, p2, …) để lấy đủ bài
-            items = list(client.iter_vnexpress_listing(feed_key=feed_key, max_pages=max_pages,
-                                                       use_cache=False))
-            logger.info(f"[VNEXPRESS-FEED] {feed_key}: {len(items)} bài trong tag")
+            # Dùng islice để dừng fetch ngay khi đủ limit_per_feed thay vì duyệt hết tất cả trang
+            limit = max(0, int(limit_per_feed or 0))
+            items = list(
+                itertools.islice(
+                    client.iter_vnexpress_listing(feed_key=feed_key, max_pages=max_pages, use_cache=False),
+                    limit,
+                )
+            )
+            logger.info(f"[VNEXPRESS-FEED] {feed_key}: lấy {len(items)} bài (tối đa {limit})")
         except Exception as exc:  # noqa: BLE001
             logger.error(f"[VNEXPRESS-FEED] Lỗi lấy danh sách {feed_key}: {exc}")
             stats["errors"] += 1
@@ -97,15 +105,16 @@ def sync_vnexpress_articles(
             stats["feed_stats"][feed_key] = feed_stat
             continue
 
-        for item in items[:limit_per_feed]:
+        for item in items:
             item_url = (item.get("url") or "").strip()
             if not item_url:
                 continue
             try:
                 existing = Article.objects.filter(source_url=item_url).first()
                 if not existing:
-                    cand = item.get("slug") or item.get("title", "")
-                    existing = Article.objects.filter(slug=cand).first()
+                    cand = item.get("slug") or slugify(item.get("title", ""), allow_unicode=False)
+                    if cand:
+                        existing = Article.objects.filter(slug=cand).first()
 
                 if existing and not force_update:
                     stats["skipped"] += 1

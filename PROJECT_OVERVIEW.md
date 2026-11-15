@@ -1,5 +1,7 @@
 # ShieldCall VN -- Project Overview
 
+> **Trạng thái:** đang dùng · **Cập nhật:** 2026-11-15 · **Đối tượng:** hội đồng, người mới tìm hiểu sản phẩm
+
 **ShieldCall VN** là nền tảng an toàn số toàn diện, được xây dựng để bảo vệ người dùng Việt Nam khỏi lừa đảo (scam, phishing, malware). Kiến trúc **hybrid local-first**: OCR, Whisper, FAISS, sandbox phân tích mã độc và scoring chạy hoàn toàn nội bộ (on-premise); LLM cloud chỉ là **fallback tùy chọn** theo cấu hình `LLM_PROVIDER`, không phải đường xử lý mặc định của dữ liệu nhạy cảm.
 
 ---
@@ -9,7 +11,7 @@
 | Thành phần | Công nghệ | Ghi chú |
 | :--- | :--- | :--- |
 | **Backend Core** | Django 5.x + Django REST Framework | ASGI, Monolith-first, API RESTful chuẩn |
-| **Frontend UI** | Tailwind CSS v4 + Alpine.js | Liquid Glass Aesthetic, SSE streaming |
+| **Frontend UI** | Next.js 16 App Router + React + Tailwind CSS v4 | Server-rendered routes mirror Django URL paths, SSE streaming |
 | **AI Engine** | Ollama (local LLM) + Cloud LLM fallback tùy chọn | Local-first; cloud chỉ khi cấu hình, có consent/log |
 | **AI Vision** | VietOCR | Trích xuất văn bản tiếng Việt từ ảnh/screenshot (AI service dùng chung) |
 | **AI Audio** | Faster-Whisper | Phiên âm tiếng Việt/Anh bằng `large-v3-turbo` (tự nhận diện ngôn ngữ) |
@@ -19,7 +21,7 @@
 | **Real-time Streaming** | Server-Sent Events (SSE) | Phản hồi AI stream trực tiếp |
 | **Vector DB (RAG)** | FAISS + Sentence-Transformers | Tra cứu kiến thức bảo mật nội bộ |
 | **Anti-spam** | Cloudflare Turnstile | Chặn bot, bảo vệ endpoint scan |
-| **Infrastructure** | Nginx + MySQL 8.0 + Daphne + PM2 | Production-ready |
+| **Infrastructure** | Nginx + MariaDB 11 / MySQL 8 + Redis + Daphne + PM2 | Production-ready, 6 tiến trình PM2 |
 
 ---
 
@@ -120,7 +122,7 @@ FAISS Vector DB lưu toàn bộ nội dung Learn Hub. Khi user hỏi, AI tìm ki
 
 ## Kiến trúc Dữ liệu
 
-Xem chi tiết trong [mvp.md](./mvp.md).
+Xem chi tiết trong [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
 ### Danh bạ Tín nhiệm mạng (tinnhiemmang.vn)
 
@@ -133,4 +135,4 @@ mặc định. Chi tiết & giới hạn: [docs/TINNHIEM.md](./docs/TINNHIEM.md)
 
 ---
 
-*Cập nhật: 2026-09-02*
+*Cập nhật: 2026-11-15*

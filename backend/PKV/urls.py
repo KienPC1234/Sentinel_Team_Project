@@ -7,7 +7,6 @@ import os
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
-from django.conf.urls.static import static
 from django.views.static import serve
 from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
@@ -15,7 +14,7 @@ from django.http import HttpResponse
 
 from .views.auth_overrides import TurnstilePasswordResetView
 from .views.proxy_views import frontend_proxy_view
-from api.core.views import MCPConnectSSEView, MCPMessagesView, MCPDiscoveryView
+from api.core.views import MCPConnectSSEView, MCPMessagesView
 from api.core import views as core_api_views
 from .views.admin_views import (
     approve_report,

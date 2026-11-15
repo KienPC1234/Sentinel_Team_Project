@@ -14,7 +14,9 @@ import { api, asList, learnApi, mediaUrl } from '../lib/api';
 import type { Article, Paged } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { Spinner } from '../components/ui';
-import { guardrailTone, guardrailLabel } from '../components/ScanWidgets';
+import { guardrailTone, guardrailLabel, riskBadge } from '../components/ScanWidgets';
+import { timeAgo } from '../lib/date';
+import { scConfirm, copyToClipboard } from '../lib/ui/feedback';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -60,16 +62,6 @@ interface ApiKey {
 }
 
 type Tab = 'overview' | 'history' | 'reports' | 'alerts' | 'api_keys';
-
-function timeAgo(dt?: string | null): string {
-  if (!dt) return '';
-  const diff = (Date.now() - new Date(dt).getTime()) / 1000;
-  if (Number.isNaN(diff)) return '';
-  if (diff < 60) return 'Vừa xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  return `${Math.floor(diff / 86400)} ngày trước`;
-}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -173,17 +165,47 @@ export default function Dashboard() {
     }).catch(() => {});
   };
 
-  const deleteKey = (k: ApiKey) => {
-    if (!window.confirm(`Bạn có chắc muốn xóa vĩnh viễn khóa "${k.name}"?`)) return;
+  const deleteKey = async (k: ApiKey) => {
+    if (!(await scConfirm(`Bạn có chắc muốn xóa vĩnh viễn khóa "${k.name}"?`, { icon: 'warning', confirmButtonText: 'Xóa khóa' }))) return;
     api.del(`/user/api-keys/${k.id}/`).then(loadApiKeys).catch(() => {});
   };
 
-  const regenerateKey = (k: ApiKey) => {
-    if (!window.confirm(`Tạo lại mã bí mật cho "${k.name}"? Khóa cũ sẽ bị vô hiệu hóa ngay lập tức!`)) return;
+  const regenerateKey = async (k: ApiKey) => {
+    if (!(await scConfirm(`Tạo lại mã bí mật cho "${k.name}"? Khóa cũ sẽ bị vô hiệu hóa ngay lập tức!`, { icon: 'warning', confirmButtonText: 'Tạo lại' }))) return;
     api.post<{ raw_key?: string; key?: string }>(`/user/api-keys/${k.id}/regenerate/`).then((d) => {
       setCreatedRawKey(d.raw_key || d.key || null);
       loadApiKeys();
     }).catch(() => {});
+  };
+
+  const [deletingScanId, setDeletingScanId] = useState<number | null>(null);
+  const [clearingScans, setClearingScans] = useState(false);
+
+  const deleteScan = async (id: number) => {
+    if (!(await scConfirm('Xóa bản ghi quét này khỏi lịch sử cá nhân?', { icon: 'warning', confirmButtonText: 'Xóa' }))) return;
+    setDeletingScanId(id);
+    const nextPage = scans.length <= 1 && scanPage > 1 ? scanPage - 1 : scanPage;
+    api
+      .del(`/user/scans/${id}/`)
+      .then(() => {
+        if (nextPage !== scanPage) setScanPage(nextPage);
+        else fetchScans(nextPage);
+      })
+      .catch(() => {})
+      .finally(() => setDeletingScanId(null));
+  };
+
+  const clearAllScans = async () => {
+    if (!(await scConfirm('Xóa toàn bộ lịch sử quét cá nhân? Hành động này không thể hoàn tác.', { icon: 'warning', confirmButtonText: 'Xóa tất cả' }))) return;
+    setClearingScans(true);
+    api
+      .del('/user/scans/')
+      .then(() => {
+        setScanPage(1);
+        fetchScans(1);
+      })
+      .catch(() => {})
+      .finally(() => setClearingScans(false));
   };
 
   /* Tổng quan dùng số liệu server (đúng cả khi nhiều trang lịch sử). */
@@ -373,6 +395,22 @@ export default function Dashboard() {
 
           {activeTab === 'history' && (
             <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-[11px] font-bold text-white/55 uppercase tracking-wider">
+                  Lịch sử quét ({scanTotal} bản ghi)
+                </div>
+                {scanTotal > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllScans}
+                    disabled={clearingScans}
+                    className="liquid-btn py-2 px-4 text-[10px] font-black uppercase tracking-widest bg-danger-500/15 text-danger-300 border border-danger-500/30 hover:bg-danger-500/25 disabled:opacity-50"
+                  >
+                    <i className="bi bi-trash3 mr-1"></i>
+                    {clearingScans ? 'Đang xóa...' : 'Xóa toàn bộ lịch sử quét'}
+                  </button>
+                )}
+              </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
@@ -382,6 +420,7 @@ export default function Dashboard() {
                         <th className="px-8 py-5 text-[10px] font-black text-white/45 uppercase tracking-[0.2em]">Hạng Mục</th>
                         <th className="px-8 py-5 text-[10px] font-black text-white/45 uppercase tracking-[0.2em]">Đối Tượng</th>
                         <th className="px-8 py-5 text-[10px] font-black text-white/45 uppercase tracking-[0.2em] text-center">Kết Quả</th>
+                        <th className="px-6 py-5 text-[10px] font-black text-white/45 uppercase tracking-[0.2em] text-right">Thao Tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -392,17 +431,35 @@ export default function Dashboard() {
                         <tr key={scan.id} className="hover:bg-white/[0.01] transition-colors">
                           <td className="px-8 py-5 text-xs font-bold text-white/55">{scan.created_at ? new Date(scan.created_at).toLocaleDateString('vi-VN') : ''}</td>
                           <td className="px-8 py-5"><span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-black text-white/60 uppercase tracking-widest">{scan.scan_type}</span></td>
-                          <td className="px-8 py-5"><div className="text-xs font-black text-white/80 tracking-wide uppercase truncate max-w-xs">{scan.raw_input || scan.normalized_input}</div></td>
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-2 max-w-xs">
+                              <span className="text-xs font-black text-white/80 tracking-wide truncate">{scan.raw_input || scan.normalized_input}</span>
+                              {scan.result_json?.['privacy_masked'] === true && (
+                                <span className="shrink-0 px-2 py-0.5 rounded-full bg-safe-500/10 border border-safe-500/25 text-[9px] font-black text-safe-300 uppercase">Che PII</span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-8 py-5 text-center">
-                            <span className={`inline-block px-4 py-1.5 rounded-full text-[9px] font-black tracking-widest uppercase border ${lvl === 'RED' ? 'bg-danger-500/20 text-danger-500 border-danger-500/30' : lvl === 'YELLOW' ? 'bg-warn-500/20 text-warn-500 border-warn-500/30' : lvl === 'UNVERIFIED' ? 'bg-slate-500/20 text-slate-300 border-slate-400/30' : 'bg-safe-500/20 text-safe-500 border-safe-500/30'}`}>
+                            <span className={`inline-block px-4 py-1.5 rounded-full text-[9px] font-black tracking-widest uppercase ${riskBadge(lvl)}`}>
                               {lbl}
                             </span>
+                          </td>
+                          <td className="px-6 py-5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => { void deleteScan(scan.id); }}
+                              disabled={deletingScanId === scan.id}
+                              aria-label={`Xóa bản ghi ${scan.id}`}
+                              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-danger-300 hover:bg-danger-500/20 hover:border-danger-500/30 disabled:opacity-40"
+                            >
+                              <i className="bi bi-trash3"></i>
+                            </button>
                           </td>
                         </tr>
                         );
                       })}
-                      {scansLoading && scans.length === 0 && <tr><td colSpan={4} className="px-8 py-20 text-center text-white/20 font-black uppercase tracking-widest text-[10px]">Đang tải lịch sử...</td></tr>}
-                      {!scansLoading && scans.length === 0 && <tr><td colSpan={4} className="px-8 py-20 text-center text-white/20 font-black uppercase tracking-widest text-[10px]">Lịch sử sạch bóng lừa đảo</td></tr>}
+                      {scansLoading && scans.length === 0 && <tr><td colSpan={5} className="px-8 py-20 text-center text-white/20 font-black uppercase tracking-widest text-[10px]">Đang tải lịch sử...</td></tr>}
+                      {!scansLoading && scans.length === 0 && <tr><td colSpan={5} className="px-8 py-20 text-center text-white/20 font-black uppercase tracking-widest text-[10px]">Lịch sử sạch bóng lừa đảo</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -577,7 +634,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-2">
               <input type="text" readOnly value={createdRawKey} className="w-full bg-black/80 border border-brand-400/40 rounded-xl px-3.5 py-2.5 text-xs font-mono text-brand-300 focus:outline-none" />
-              <button onClick={() => { navigator.clipboard?.writeText(createdRawKey); setCopiedKey(true); setTimeout(() => setCopiedKey(false), 2000); }}
+              <button onClick={() => { void copyToClipboard(createdRawKey, 'Đã sao chép API key!').then((ok) => { if (ok) { setCopiedKey(true); setTimeout(() => setCopiedKey(false), 2000); } }); }}
                 className="shrink-0 py-2.5 px-4 text-xs font-black bg-brand-400 text-black hover:bg-brand-300 rounded-xl">
                 {copiedKey ? 'Đã chép!' : 'Sao chép'}
               </button>

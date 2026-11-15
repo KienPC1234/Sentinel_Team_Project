@@ -57,11 +57,30 @@ export function fmtDateLong(raw?: string | null): string {
   return `${day} ${month} ${d.getFullYear()}`.trim();
 }
 
+export function fmtDateTime(raw?: string | null): string {
+  const d = parseSafeDate(raw);
+  if (!d) return '';
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export function isoDate(raw?: string | null): string {
   const d = parseSafeDate(raw);
   if (!d) return '';
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   return `${d.getFullYear()}-${month}-${day}`;
+}
+
+export function timeAgo(raw?: string | null): string {
+  const d = parseSafeDate(raw);
+  if (!d) return '';
+  const diffSec = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+  if (diffSec < 60) return 'vừa xong';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} phút trước`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} giờ trước`;
+  const diffDays = Math.floor(diffSec / 86400);
+  if (diffDays < 30) return `${diffDays} ngày trước`;
+  return fmtDate(raw);
 }
 

@@ -18,6 +18,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+SOURCE_VERIFIED_DATE = "2026-11-15"
+
 # ---------------------------------------------------------------------------
 # Kênh chính thức (để guardrail khuyến nghị khi chưa đủ cơ sở / khi rủi ro cao)
 # ---------------------------------------------------------------------------
@@ -28,7 +30,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://mic.gov.vn/bo-tttt-trien-khai-tong-dai-156-tiep-nhan-phan-anh-tin-nhan-rac-cuoc-goi-rac-cuoc-goi-co-dau-hieu-lua-dao-197155742.htm",
         "description": "Tiếp nhận phản ánh tin nhắn hoặc cuộc gọi có dấu hiệu lừa đảo. Không phải kênh xác nhận an toàn cho mọi giao dịch, URL hay tài khoản.",
         "reliability": "official",
-        "verified_on": "2026-10-15",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "Cổng cảnh báo an toàn thông tin (NCSC)",
@@ -36,6 +38,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://canhbao.ncsc.gov.vn",
         "description": "Tham khảo cảnh báo an toàn thông tin; đối chiếu thời điểm công bố và từng đối tượng được nêu trong cảnh báo.",
         "reliability": "official",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "Tín nhiệm mạng (NCSC) — Hệ sinh thái Tín nhiệm & Giám sát an toàn không gian mạng",
@@ -43,7 +46,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://tinnhiemmang.vn",
         "description": "Cổng thông tin thuộc Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC) - Cục An toàn thông tin; cung cấp cảnh báo lừa đảo trực tuyến, nhận diện tổ chức, website và thiết bị tin cậy.",
         "reliability": "official",
-        "verified_on": "2026-10-15",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "Cảnh sát 113 — tình huống khẩn cấp",
@@ -51,7 +54,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://bocongan.gov.vn",
         "description": "Chỉ gọi khi cần trợ giúp khẩn cấp. Vụ việc không khẩn cấp: liên hệ Công an địa phương hoặc kênh tiếp nhận tố giác thích hợp.",
         "reliability": "official",
-        "verified_on": "2026-10-15",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "Tổng đài Quốc gia Bảo vệ Trẻ em — 111",
@@ -59,6 +62,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://tongdai111.vn",
         "description": "Hỗ trợ, bảo vệ trẻ em (kể cả bị lừa đảo/xâm hại trên mạng).",
         "reliability": "official",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "VNCERT/CC — Ứng cứu sự cố an ninh mạng",
@@ -66,6 +70,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://vncert.vn",
         "description": "Báo cáo sự cố tấn công mạng, mã độc.",
         "reliability": "official",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "Bảo hiểm xã hội Việt Nam",
@@ -73,6 +78,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://bhxh.gov.vn",
         "description": "Xác minh thông tin BHXH/BHYT; cảnh giác cuộc gọi giả danh 'cập nhật sổ BHXH'.",
         "reliability": "official",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "Ngân hàng Nhà nước Việt Nam",
@@ -80,6 +86,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://sbv.gov.vn",
         "description": "Cơ quan quản lý tiền tệ/ngân hàng; tra cứu cảnh báo tín dụng đen, tổ chức tín dụng hợp pháp.",
         "reliability": "official",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "Cổng Dịch vụ công Quốc gia",
@@ -87,6 +94,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://dichvucong.gov.vn",
         "description": "Xác minh dịch vụ công trực tuyến chính thức; cảnh giác dịch vụ công 'giả'.",
         "reliability": "official",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
     {
         "name": "Bộ Thông tin và Truyền thông",
@@ -94,6 +102,7 @@ VN_OFFICIAL_CHANNELS: List[Dict[str, Any]] = [
         "url": "https://mic.gov.vn",
         "description": "Quản lý viễn thông, báo chí, không gian mạng.",
         "reliability": "official",
+        "verified_on": SOURCE_VERIFIED_DATE,
     },
 ]
 
@@ -422,21 +431,21 @@ def bank_official_site(bank_name: str) -> Optional[Dict[str, str]]:
 
 
 def vn_reference_sources() -> List[Dict[str, str]]:
-    return [dict(s) for s in VN_REFERENCE_SOURCES]
+    return [{"verified_on": SOURCE_VERIFIED_DATE, **s} for s in VN_REFERENCE_SOURCES]
 
 
 def vn_press_sources() -> List[Dict[str, str]]:
-    return [dict(s) for s in VN_PRESS_SOURCES]
+    return [{"verified_on": SOURCE_VERIFIED_DATE, **s} for s in VN_PRESS_SOURCES]
 
 
 def vn_tinnhiem_sources() -> List[Dict[str, str]]:
     """Nguồn danh bạ Tín nhiệm mạng (tinnhiemmang.vn)."""
-    return [dict(s) for s in VN_TINNHIEM_SOURCES]
+    return [{"verified_on": SOURCE_VERIFIED_DATE, **s} for s in VN_TINNHIEM_SOURCES]
 
 
 def vn_tinnhiemmang_sources() -> List[Dict[str, str]]:
     """Nguồn tin tức và cảnh báo Tín nhiệm mạng (type='tinnhiemmang')."""
-    return [dict(s) for s in VN_REFERENCE_SOURCES if s.get("type") == "tinnhiemmang"]
+    return [{"verified_on": SOURCE_VERIFIED_DATE, **s} for s in VN_REFERENCE_SOURCES if s.get("type") == "tinnhiemmang"]
 
 
 # ---------------------------------------------------------------------------
@@ -484,11 +493,6 @@ def tinnhiem_dataset_stats() -> Dict[str, Any]:
     Hoi dong tham dinh can biet du lieu nguon "tuoi" co nao -> tra so lieu that
     doc tu file, khong hardcode.
     """
-    try:
-        from api.utils import tinnhiemmang as th
-        base = Path(th.__file__).resolve().parent
-    except Exception:
-        base = None
     stats: Dict[str, Any] = {"trusted": 0, "scam": 0, "updated_at": None}
     try:
         from api.utils import tinnhiemmang as th2

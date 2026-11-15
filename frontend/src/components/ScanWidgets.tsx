@@ -9,7 +9,22 @@ import Link from 'next/link';
 import { api } from '../lib/api';
 
 import { renderMd } from '../lib/chat/markdown';
+import { openSseStream } from '../lib/chat/stream';
+import { asStr, asNum, asArr } from '../lib/utils';
+import { riskBadge, riskGlow } from '../lib/risk';
+import { copyToClipboard, showToast } from '../lib/ui/feedback';
+import {
+  TurnstileWidget,
+  getTsToken,
+  resetTurnstile,
+  consumeTurnstileToken,
+} from './TurnstileWidget';
 import { MarkdownView } from './ui';
+import { Switch } from './ui/switch';
+
+export { asStr, asNum, asArr, riskBadge, riskGlow, showToast };
+export { TurnstileWidget, getTsToken, resetTurnstile, consumeTurnstileToken };
+export type { ToastType } from '../lib/ui/feedback';
 
 /* ============ Kiểu dữ liệu chung ============ */
 
@@ -42,16 +57,14 @@ export interface ProgressItem {
   step: string;
 }
 
-export function asStr(v: unknown, fallback = ''): string {
-  return typeof v === 'string' ? v : fallback;
-}
-
-export function asNum(v: unknown, fallback = 0): number {
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-export function asArr<T>(v: unknown): T[] {
-  return Array.isArray(v) ? (v as T[]) : [];
+export function patternLabel(p: unknown): string {
+  if (typeof p === 'string') return p;
+  if (p && typeof p === 'object') {
+    const o = p as Record<string, unknown>;
+    const l = o['label'] ?? o['pattern'];
+    return typeof l === 'string' ? l : JSON.stringify(p);
+  }
+  return String(p);
 }
 
 /* ============ Guardrail verdict helpers (góp ý hội đồng #1) ============
@@ -124,20 +137,9 @@ export function ensureScanStyles(): void {
   /* no-op: styles are loaded statically */
 }
 
-import { showToast } from '../lib/ui/feedback';
-export { showToast };
-export type { ToastType } from '../lib/ui/feedback';
-
 export function copyText(text: string, okMsg = 'Đã sao chép!'): void {
   if (!text) return;
-  try {
-    void navigator.clipboard.writeText(text).then(
-      () => showToast(okMsg, 'success'),
-      () => showToast('Không thể sao chép.', 'error'),
-    );
-  } catch {
-    showToast('Không thể sao chép.', 'error');
-  }
+  void copyToClipboard(text, okMsg, 'Không thể sao chép.');
 }
 
 /** Giữ tương thích event chat của base.html (trang React chưa có widget chat). */
@@ -149,155 +151,180 @@ export function dispatchChat(context: string): void {
   }
 }
 
-/* ============ Turnstile INVISIBLE, explicit render ============
- * Chạy ngầm, không hiện checkbox. Luồng:
- * - script nạp lazy (?render=explicit) khi form mount,
- * - turnstile.execute() sinh token dùng-một-lần (sống 5 phút),
- * - token hết hạn / lỗi / đã submit -> reset + execute lại để cấp token mới.
- * Backend verify qua siteverify (api/utils/security.py đã có).
- */
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (el: HTMLElement, opts: Record<string, unknown>) => string;
-      execute: (el: HTMLElement | string, opts?: Record<string, unknown>) => string | undefined;
-      reset: (widget?: string | HTMLElement) => void;
-      remove: (widget?: string | HTMLElement) => void;
-    };
-    onloadTurnstileCallback?: () => void;
-  }
-}
-
-let tsScriptPromise: Promise<void> | null = null;
-function loadTsScript(): Promise<void> {
-  if (typeof document === 'undefined') return Promise.resolve();
-  if (window.turnstile) return Promise.resolve();
-  if (!tsScriptPromise) {
-    tsScriptPromise = new Promise<void>((resolve) => {
-      const s = document.createElement('script');
-      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-      s.async = true;
-      s.defer = true;
-      s.onload = () => resolve();
-      s.onerror = () => resolve();
-      document.head.appendChild(s);
-      // Fallback: đừng treo form nếu script bị chặn
-      window.setTimeout(() => resolve(), 8000);
+/** Gọi SSE giải thích kết quả scan trên endpoint thống nhất `/scan/analyze-sse/`. */
+export function streamScanAiExplanation(opts: {
+  scanId?: number | null;
+  scanType: string;
+  scanData: ScanResult;
+  rawInput: string;
+  maskPii: boolean;
+  onStart?: () => void;
+  onDelta: (chunk: string) => void;
+  onDone?: () => void;
+  onError?: () => void;
+}): Promise<void> {
+  opts.onStart?.();
+  return openSseStream({
+    url: `${apiBase()}/scan/analyze-sse/`,
+    body: {
+      ...(opts.scanId ? { scan_id: opts.scanId } : {}),
+      scan_type: opts.scanType,
+      scan_data: opts.scanData,
+      raw_input: opts.rawInput,
+      mask_pii: opts.maskPii,
+    },
+    onEvent: (ev) => {
+      if (ev.type === 'delta') opts.onDelta(ev.text);
+      else if (ev.type === 'done') opts.onDone?.();
+    },
+  })
+    .catch(() => {
+      opts.onError?.();
+    })
+    .finally(() => {
+      opts.onDone?.();
     });
-  }
-  return tsScriptPromise;
 }
 
-const tsWidgets = new Map<string, HTMLElement>();
+/* ============ Privacy Masking Controls (Privacy by Default) ============ */
 
-/** Reset + cấp token mới (token chỉ dùng 1 lần / sống 5 phút).
- * Gọi sau mỗi lần submit (kể cả lỗi) để lần gửi sau có token tươi. */
-export function resetTurnstile(): void {
-  try {
-    if (!window.turnstile) return;
-    if (tsWidgets.size === 0) {
-      window.turnstile.reset();
-      return;
-    }
-    tsWidgets.forEach((_el, id) => {
-      try {
-        window.turnstile?.reset(id);
-      } catch {
-        /* ignore */
-      }
-    });
-  } catch {
-    /* bỏ qua */
-  }
-}
+const PRIVACY_STORAGE_KEY = 'shieldcall_scan_mask_pii';
 
-export function TurnstileWidget({ onToken }: { onToken?: (token: string) => void }): ReactNode {
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [token, setToken] = useState('');
-  const [expired, setExpired] = useState(false);
-  const siteKey = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
+const PRIVACY_SCOPE_HINT: Record<string, string> = {
+  phone: 'SĐT được che dạng 097****220 khi lưu lịch sử & giải thích AI',
+  account: 'Số tài khoản chỉ lưu dạng che (****1234) và mã băm một chiều',
+  email: 'Địa chỉ email (u***@domain) và nội dung nhạy cảm được che trước khi lưu',
+  message: 'Tự động che SĐT, STK, CCCD, email, OTP và mã bí mật trong lịch sử & OCR',
+  domain: 'Ẩn token, mã phiên và tham số nhạy cảm trong query URL khi lưu lịch sử',
+  qr: 'Tự động che SĐT, STK, CCCD và query token trong văn bản OCR / mã QR',
+  file: 'Tự động che dữ liệu cá nhân phát hiện trong tên tệp, mã độc và nhật ký phân tích',
+  audio: 'Tự động che SĐT, STK, CCCD, email trong bản chép lời cuộc gọi',
+};
+
+const PRIVACY_FIELD_LABELS: Record<string, string> = {
+  phone: 'Số điện thoại',
+  email: 'Email',
+  bank_account: 'Số tài khoản',
+  url_query: 'Tham số/token URL',
+  ocr_text: 'Văn bản OCR',
+  qr_payload: 'Nội dung QR',
+  transcript: 'Bản chép lời audio',
+  email_body: 'Nội dung email',
+  email_subject: 'Tiêu đề email',
+  file_meta: 'Tên tệp',
+  text_pii: 'Dữ liệu cá nhân trong giải thích',
+};
+
+export function useScanPrivacy(defaultValue = true): [boolean, (next: boolean) => void] {
+  const [maskPii, setMaskPiiState] = useState<boolean>(defaultValue);
 
   useEffect(() => {
-    if (!siteKey) return;
-    let alive = true;
-    let wid = '';
-    const push = (tok: string) => {
-      if (!alive) return;
-      setToken(tok);
-      if (tok) setExpired(false);
-      if (onToken) onToken(tok);
-    };
-    void loadTsScript().then(() => {
-      if (!alive || !boxRef.current || !window.turnstile) return;
-      try {
-        const id = window.turnstile.render(boxRef.current, {
-          sitekey: siteKey,
-          theme: 'dark',
-          callback: (t: unknown) => push(typeof t === 'string' ? t : ''),
-          'expired-callback': () => {
-            /* Token sống ~5 phút. Tự reset để hiện thử thách mới ngay thay vì
-             * để form kẹt ở trạng thái "chưa xác minh" mà không rõ lý do. */
-            push('');
-            setExpired(true);
-            try {
-              window.turnstile?.reset(wid || undefined);
-            } catch {
-              /* ignore */
-            }
-          },
-          'error-callback': () => push(''),
-        });
-        wid = typeof id === 'string' ? id : '';
-        if (wid) tsWidgets.set(wid, boxRef.current);
-      } catch (e) {
-        console.error('Turnstile render error', e);
-      }
-    });
-    return () => {
-      alive = false;
-      try {
-        if (wid) {
-          tsWidgets.delete(wid);
-          window.turnstile?.remove?.(wid);
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteKey]);
+    try {
+      const saved = localStorage.getItem(PRIVACY_STORAGE_KEY);
+      if (saved === '0' || saved === 'false') setMaskPiiState(false);
+      else if (saved === '1' || saved === 'true') setMaskPiiState(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
-  if (!siteKey) {
-    return (
-      <div className="mt-4 flex justify-center">
-        <p className="text-white/55 text-xs italic">
-          Xác minh anti-spam chưa được cấu hình (thiếu NEXT_PUBLIC_TURNSTILE_SITEKEY).
-        </p>
-        <input type="hidden" name="cf-turnstile-response" value="" readOnly />
-      </div>
-    );
-  }
+  const setMaskPii = (next: boolean): void => {
+    setMaskPiiState(next);
+    try {
+      localStorage.setItem(PRIVACY_STORAGE_KEY, next ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
 
+  return [maskPii, setMaskPii];
+}
+
+export function ScanPrivacyToggle({
+  scanType,
+  checked,
+  onChange,
+  compact = false,
+}: {
+  scanType: keyof typeof PRIVACY_SCOPE_HINT | string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  compact?: boolean;
+}): ReactNode {
+  const hint =
+    PRIVACY_SCOPE_HINT[scanType] ||
+    'Tự động che dữ liệu cá nhân (SĐT, STK, CCCD, email) trước khi lưu lịch sử & gửi AI';
   return (
-    <div className="mt-4 flex flex-col items-center gap-1 min-h-[65px]">
-      <div ref={boxRef} className="cf-turnstile" />
-      {expired && !token && (
-        <p className="text-warn-400 text-[11px] font-bold">Xác minh đã hết hạn — vui lòng xác minh lại.</p>
-      )}
-      <input type="hidden" name="cf-turnstile-response" value={token} readOnly />
+    <div
+      className={`rounded-2xl border transition-all ${
+        checked
+          ? 'bg-safe-500/[0.06] border-safe-500/25'
+          : 'bg-warn-500/[0.05] border-warn-500/25'
+      } ${compact ? 'px-3.5 py-2.5' : 'px-4 py-3'}`}
+    >
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <label className="flex items-center gap-3 cursor-pointer select-none flex-1 min-w-[220px]">
+          <Switch
+            checked={checked}
+            onCheckedChange={onChange}
+            size="sm"
+            aria-label="Che thông tin nhạy cảm khi lưu và hiển thị"
+          />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black text-white">
+                <i className={`bi ${checked ? 'bi-shield-lock-fill text-safe-400' : 'bi-eye text-warn-400'} mr-1.5`}></i>
+                Che thông tin nhạy cảm (PII)
+              </span>
+              <span
+                className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                  checked
+                    ? 'bg-safe-500/15 text-safe-300 border-safe-500/30'
+                    : 'bg-warn-500/15 text-warn-300 border-warn-500/30'
+                }`}
+              >
+                {checked ? 'Đang bật (Khuyên dùng)' : 'Đang tắt'}
+              </span>
+            </div>
+            <p className="text-[11px] text-white/55 mt-0.5 leading-snug">
+              {checked
+                ? `${hint}. Đối chiếu cục bộ (luật, Tín Nhiệm Mạng, Sandbox) vẫn chạy trên dữ liệu gốc trong RAM để giữ độ chính xác.`
+                : 'Chế độ nguyên văn: lưu lịch sử và cho phép AI phân tích đầy đủ dữ liệu theo quyền lựa chọn của bạn; nhật ký hệ thống (log) vẫn luôn tự động che PII.'}
+            </p>
+          </div>
+        </label>
+      </div>
     </div>
   );
 }
 
-/** Đọc token anti-spam y cách bản gốc (querySelector input ẩn). */
-export function getTsToken(): string {
-  try {
-    const el = document.querySelector<HTMLInputElement>('[name=cf-turnstile-response]');
-    return el?.value || '';
-  } catch {
-    return '';
-  }
+export function PrivacyReceiptBadge({ result }: { result: ScanResult | null | undefined }): ReactNode {
+  if (!result || typeof result !== 'object') return null;
+  if (typeof result['privacy_masked'] !== 'boolean') return null;
+  const masked = Boolean(result['privacy_masked']);
+  const fields = asArr<string>(result['privacy_protected_fields']);
+  const note = asStr(result['privacy_note']);
+  const mappedFields = fields.map((f) => PRIVACY_FIELD_LABELS[f] || f);
+
+  return (
+    <div
+      className={`mt-4 inline-flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-2 rounded-xl border text-left max-w-2xl mx-auto ${
+        masked
+          ? 'bg-safe-500/10 border-safe-500/25 text-safe-200'
+          : 'bg-warn-500/10 border-warn-500/25 text-warn-200'
+      }`}
+    >
+      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider shrink-0">
+        <i className={`bi ${masked ? 'bi-shield-check text-safe-400' : 'bi-incognito text-warn-400'}`}></i>
+        <span>{masked ? 'Đã che PII trước khi lưu' : 'Chế độ nguyên văn'}</span>
+      </div>
+      <span className="text-[11px] text-white/65 leading-snug">
+        {masked && mappedFields.length > 0
+          ? `Trường đã bảo vệ: ${mappedFields.join(', ')}.`
+          : note || (masked ? 'Dữ liệu định danh đã được tối thiểu hóa trước khi lưu và gửi AI ngoài.' : 'Lưu và gửi AI theo lựa chọn nguyên văn của bạn; nhật ký hệ thống vẫn tự động che PII.')}
+      </span>
+    </div>
+  );
 }
 
 /* ============ Tracker WS + polling (port logic Alpine bản gốc) ============ */
@@ -871,11 +898,13 @@ export interface GuardrailData {
   cautions?: string[];
   disclaimer?: string;
   refusal_script?: string;
-  official_channels?: Array<{ name?: string; phone?: string; url?: string; description?: string }>;
+  official_channels?: Array<{ name?: string; phone?: string; url?: string; description?: string; verified_on?: string }>;
   evidence_count?: number;
   sources_used?: string[];
   evidence?: EvidenceItem[];
   answer_asserts_absolute_safety?: boolean;
+  has_contradiction?: boolean;
+  contradiction_details?: string[];
   kind?: string;
 }
 
@@ -887,6 +916,8 @@ interface EvidenceItem {
   detail?: string;
   url?: string | null;
   limits?: string;
+  citation?: string;
+  updated_at?: string;
 }
 
 const RELIABILITY_META: Record<string, { label: string; cls: string }> = {
@@ -966,14 +997,30 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
                 : 'bg-white/5 text-white/60 border-white/10'
             }`}
           >
-            {g.is_conclusive ? 'Kết luận có bằng chứng xác thực' : 'Cần xác minh thêm'}
+            {g.is_conclusive ? 'Có đối chiếu nguồn tin cậy cao' : 'Cần xác minh thêm'}
           </span>
+          {g.has_contradiction && (
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black border bg-warn-500/10 text-warn-400 border-warn-500/20">
+              Bằng chứng mâu thuẫn
+            </span>
+          )}
         </div>
+
+        {g.has_contradiction && (g.contradiction_details || []).length > 0 && (
+          <div className="mt-3 p-3 rounded-xl bg-warn-500/10 border border-warn-500/20 text-xs text-warn-200 space-y-1">
+            <div className="font-black uppercase tracking-wider text-[10px] text-warn-400">
+              <i className="bi bi-exclamation-diamond me-1"></i>Phát hiện mâu thuẫn giữa các nguồn
+            </div>
+            {(g.contradiction_details || []).map((cd, idx) => (
+              <p key={idx} className="leading-relaxed">{cd}</p>
+            ))}
+          </div>
+        )}
 
         {tier === 'INSUFFICIENT' && (
           <p className="mt-3 text-xs text-white/60 leading-relaxed">
-            Hệ thống <b className="text-white/80">chưa thu thập đủ bằng chứng để kết luận</b>. Kết quả này{' '}
-            <b className="text-white/80">không đồng nghĩa “an toàn”</b> — hãy xác minh qua kênh chính thức trước khi
+            Hệ thống <b className="text-white/80">chưa thu thập đủ bằng chứng nhất quán để kết luận</b>. Kết quả này{' '}
+            <b className="text-white/80">không đồng nghĩa &ldquo;an toàn&rdquo; hay &ldquo;chắc chắn lừa đảo&rdquo;</b>, hãy xác minh qua kênh chính thức trước khi
             giao dịch hoặc chia sẻ thông tin.
           </p>
         )}
@@ -1009,8 +1056,16 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
                         {e.severity}
                       </span>
                     )}
+                    {e.updated_at && (
+                      <span className="text-[9px] font-bold text-white/40 ml-auto">
+                        Cập nhật: {e.updated_at}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-white/60 leading-relaxed">{e.detail}</p>
+                  {e.citation && (
+                    <p className="text-[10px] text-white/45">Trích dẫn: {e.citation}</p>
+                  )}
                   {e.url && (
                     <a
                       href={e.url}
@@ -1428,8 +1483,15 @@ export function ScanGuide({ scanType }: { scanType: ScanGuideType }): ReactNode 
               <div className="flex items-center gap-3 p-2.5 rounded-lg bg-safe-500/5 border border-safe-500/10">
                 <div className="w-3 h-3 rounded-full bg-safe-500 shrink-0"></div>
                 <div>
-                  <span className="text-safe-400 text-xs font-bold">XANH: An toàn</span>
-                  <p className="text-white/55 text-[11px]">Không phát hiện dấu hiệu lừa đảo</p>
+                  <span className="text-safe-400 text-xs font-bold">XANH: Ít rủi ro quan sát được</span>
+                  <p className="text-white/55 text-[11px]">Không thấy dấu hiệu xấu rõ ràng, vẫn nên thận trọng</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-500/10 border border-slate-400/20">
+                <div className="w-3 h-3 rounded-full bg-slate-400 shrink-0"></div>
+                <div>
+                  <span className="text-slate-300 text-xs font-bold">XÁM: Chưa đủ căn cứ</span>
+                  <p className="text-white/55 text-[11px]">Thiếu dữ liệu hoặc bằng chứng mâu thuẫn, cần tự xác minh</p>
                 </div>
               </div>
             </div>

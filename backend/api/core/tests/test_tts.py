@@ -154,7 +154,6 @@ class TtsCacheDirTest(TestCase):
     """
 
     def test_cache_dir_absolute_under_media_root(self):
-        from django.conf import settings
         with tempfile.TemporaryDirectory() as tmp:
             with override_settings(TTS_CACHE_DIR=tmp):
                 d = tts_service.cache_dir()

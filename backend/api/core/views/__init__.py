@@ -13,7 +13,10 @@ from .scan_views import (
 from .article_views import ArticleListView, ArticleDetailView
 from .report_views import ReportCreateView, ReportDetailView, CommunityReportStatsView
 from .trend_views import TrendDailyView, TrendHotView, ScamRadarStatsView, ScanLookupView, PublicStatsView
-from .user_views import UserScansView, UserScanPickerView, UserReportsView, UserAlertsView, PublicProfileView
+from .user_views import (
+    UserScansView, UserScanDetailView, UserScanPickerView,
+    UserReportsView, UserAlertsView, UserPrivacyDataDeleteView, PublicProfileView,
+)
 from .scan_views import ScanFileView, ScanAudioView as _ScanAudioView  # noqa: already imported above
 from .admin_views import (
     AdminReportsView, AdminReportActionView, AdminStatsView,
@@ -87,7 +90,7 @@ __all__ = [
     'ScanAudioView', 'ScanStatusView', 'ScanReportAdminView',
     'ReportCreateView', 'ReportDetailView', 'CommunityReportStatsView',
     'TrendDailyView', 'TrendHotView', 'ScamRadarStatsView', 'ScanLookupView', 'PublicStatsView',
-    'UserScansView', 'UserScanPickerView', 'UserReportsView', 'UserAlertsView', 'PublicProfileView',
+    'UserScansView', 'UserScanDetailView', 'UserScanPickerView', 'UserReportsView', 'UserAlertsView', 'UserPrivacyDataDeleteView', 'PublicProfileView',
     'AdminReportsView', 'AdminReportActionView', 'AdminStatsView',
     'AdminRAGManagementView', 'AdminRAGRebuildView', 'AdminRAGClearLogsView',
     'AdminUsersView', 'AdminUserActionView',

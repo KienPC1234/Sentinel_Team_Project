@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { api } from '../../lib/api';
+import { api, asList } from '../../lib/api';
+import { timeAgo } from '../../lib/date';
 import { AdminShell, useAdminGet } from './_shared';
 import { showToast } from '../../lib/ui/feedback';
 
@@ -79,21 +80,6 @@ function categoryLabel(c?: string): string {
 function priorityMeta(p?: string) {
   if (p && PRIORITY_CONFIG[p]) return PRIORITY_CONFIG[p];
   return { label: p || 'Thấp', color: 'text-slate-400' };
-}
-
-function timeAgo(dt?: string): string {
-  if (!dt) return '';
-  const diff = (Date.now() - new Date(dt).getTime()) / 1000;
-  if (Number.isNaN(diff)) return '';
-  if (diff < 60) return 'Vừa xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  return `${Math.floor(diff / 86400)} ngày trước`;
-}
-
-function asList(data: Ticket[] | { results?: Ticket[] } | null): Ticket[] {
-  if (!data) return [];
-  return Array.isArray(data) ? data : data.results || [];
 }
 
 const TICKETS_PAGE_SIZE = 20;

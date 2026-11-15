@@ -14,10 +14,11 @@ import base64
 import json
 import logging
 import re
+import threading
 import unicodedata
 import numpy as np
-from PIL import Image, ImageFilter, ImageEnhance
-from api.utils.ollama_client import analyze_text_for_scam, generate_response
+from PIL import Image
+from api.utils.ollama_client import analyze_text_for_scam
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +295,6 @@ def extract_ocr_with_boxes(image_file):
             - annotated_image_b64: base64-encoded annotated image
     """
     import base64
-    import numpy as np
     from PIL import ImageDraw, ImageFont
     try:
         from pyzbar import pyzbar
@@ -427,7 +427,7 @@ def extract_qr_data(image_file) -> list:
         return []
 
 
-def analyze_image_risk(ocr_text, image_file=None):
+def analyze_image_risk(ocr_text, image_file=None, *, external_consent: bool = False):
     """
     Analyze image for scam/phishing indicators using Ollama.
 
@@ -440,15 +440,15 @@ def analyze_image_risk(ocr_text, image_file=None):
     """
     if not ocr_text:
         return {
-            'is_safe': True,
-            'risk_level': 'SAFE',
-            'details': 'Ảnh trống hoặc không chứa văn bản'
+            'is_safe': False,
+            'insufficient_input': True,
+            'risk_level': 'YELLOW',
+            'details': 'Ảnh trống hoặc không chứa văn bản để phân tích'
         }
 
     # Use Ollama to analyze the text
     try:
-        # Ảnh/tài liệu do người dùng gửi quét = consent by action.
-        analysis = analyze_text_for_scam(ocr_text, external_consent=True)
+        analysis = analyze_text_for_scam(ocr_text, external_consent=external_consent)
 
         is_scam = analysis.get('is_scam', False)
         risk_score = analysis.get('risk_score', 0)
@@ -523,6 +523,8 @@ except ImportError:
     logger.warning("faster-whisper not installed. Audio transcription will be disabled.")
 
 _WHISPER_MODEL = None
+_WHISPER_LOCK = threading.RLock()
+
 
 def get_whisper_model():
     """
@@ -535,7 +537,12 @@ def get_whisper_model():
     if not FASTER_WHISPER_AVAILABLE:
         return None
 
-    if _WHISPER_MODEL is None:
+    if _WHISPER_MODEL is not None:
+        return _WHISPER_MODEL
+
+    with _WHISPER_LOCK:
+        if _WHISPER_MODEL is not None:
+            return _WHISPER_MODEL
         from django.conf import settings
 
         model_size = getattr(settings, 'WHISPER_FALLBACK_MODEL_SIZE', 'small')
@@ -686,27 +693,9 @@ def transcribe_audio(audio_file, language=None):
 
         segments = []
         full_text_parts = []
-        try:
-            segments_iter, info = model.transcribe(file_for_model, **transcribe_kwargs)
-            for seg in segments_iter:
-                segments.append({
-                    'start': round(seg.start, 2),
-                    'end':   round(seg.end, 2),
-                    'text':  seg.text.strip(),
-                })
-                full_text_parts.append(seg.text.strip())
-        except Exception as te:
-            err_msg = str(te).lower()
-            if any(k in err_msg for k in ('cublas', 'cuda', 'cudnn', 'device', 'library')):
-                logger.warning(f"Whisper GPU execution failed ({te}), falling back to CPU model...")
-                from faster_whisper import WhisperModel
-                from django.conf import settings
-                cpu_model = WhisperModel(getattr(settings, 'WHISPER_MODEL_SIZE', 'small'), device='cpu', compute_type='int8')
-                global _WHISPER_MODEL
-                _WHISPER_MODEL = cpu_model
-                segments_iter, info = cpu_model.transcribe(file_for_model, **transcribe_kwargs)
-                segments = []
-                full_text_parts = []
+        with _WHISPER_LOCK:
+            try:
+                segments_iter, info = model.transcribe(file_for_model, **transcribe_kwargs)
                 for seg in segments_iter:
                     segments.append({
                         'start': round(seg.start, 2),
@@ -714,8 +703,28 @@ def transcribe_audio(audio_file, language=None):
                         'text':  seg.text.strip(),
                     })
                     full_text_parts.append(seg.text.strip())
-            else:
-                raise
+            except Exception as te:
+                err_msg = str(te).lower()
+                if any(k in err_msg for k in ('cublas', 'cuda', 'cudnn', 'device', 'library')):
+                    logger.warning(f"Whisper GPU execution failed ({te}), falling back to CPU model...")
+                    from faster_whisper import WhisperModel
+                    from django.conf import settings
+                    model_size = getattr(settings, 'WHISPER_FALLBACK_MODEL_SIZE', getattr(settings, 'WHISPER_MODEL_SIZE', 'small'))
+                    cpu_model = WhisperModel(model_size, device='cpu', compute_type='int8')
+                    global _WHISPER_MODEL
+                    _WHISPER_MODEL = cpu_model
+                    segments_iter, info = cpu_model.transcribe(file_for_model, **transcribe_kwargs)
+                    segments = []
+                    full_text_parts = []
+                    for seg in segments_iter:
+                        segments.append({
+                            'start': round(seg.start, 2),
+                            'end':   round(seg.end, 2),
+                            'text':  seg.text.strip(),
+                        })
+                        full_text_parts.append(seg.text.strip())
+                else:
+                    raise
 
         transcript = ' '.join(full_text_parts)
         detected_lang = getattr(info, 'language', language or '')
@@ -748,7 +757,7 @@ def transcribe_audio(audio_file, language=None):
                 pass
 
 
-def analyze_audio_risk(transcript, phone_number=''):
+def analyze_audio_risk(transcript, phone_number='', *, external_consent: bool = False):
     """
     Analyze audio transcript for scam patterns using Ollama.
 
@@ -763,18 +772,17 @@ def analyze_audio_risk(transcript, phone_number=''):
         return {
             'risk_score': 0,
             'is_scam': False,
-            'warning_message': 'Không thể phân tích âm thanh trống',
+            'insufficient_input': True,
+            'risk_level': 'YELLOW',
+            'warning_message': 'Không có lời thoại để phân tích âm thanh',
             'duration': 0
         }
 
     try:
-        # Use Ollama to analyze transcript
-        # Voice do người dùng gửi quét = consent by action.
-        analysis = analyze_text_for_scam(transcript, external_consent=True)
+        analysis = analyze_text_for_scam(transcript, external_consent=external_consent)
 
         risk_score = analysis.get('risk_score', 0)
         is_scam = analysis.get('is_scam', False)
-        indicators = analysis.get('indicators', [])
         reason = analysis.get('reason', '')
 
         warning_message = reason if reason else 'Cuộc gọi bình thường'

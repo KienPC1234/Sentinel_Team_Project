@@ -3,7 +3,6 @@ Minimal Django settings for GitHub Actions CI testing.
 Uses SQLite, disables Redis/Celery/Channels dependencies.
 """
 
-import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent

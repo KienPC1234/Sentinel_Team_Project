@@ -16,12 +16,10 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 from urllib.parse import urlparse
 
-from django.conf import settings
 from django.core.files.base import ContentFile
-from django.utils import timezone
 from django.utils.text import slugify
 
 from api.core.models import Article, ArticleCategory, ArticleSourceType

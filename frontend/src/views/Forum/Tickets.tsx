@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '../../lib/api';
+import { timeAgo } from '../../lib/date';
 import { Spinner } from '../../components/ui';
 
 interface Ticket {
@@ -13,15 +14,6 @@ interface Ticket {
   status: string;
   admin_reply?: string | null;
   created_at?: string;
-}
-
-function timeAgo(dt?: string): string {
-  if (!dt) return '';
-  const diff = (Date.now() - new Date(dt).getTime()) / 1000;
-  if (diff < 60) return 'Vừa xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  return `${Math.floor(diff / 86400)} ngày trước`;
 }
 
 function statusLabel(s: string): string {

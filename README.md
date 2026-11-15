@@ -38,7 +38,8 @@ Findings are aggregated, enriched through FAISS RAG, and scored by the local LLM
 4. **Vietnamese threat intelligence** — national hotlines (NCSC 156, Police 113, VNCERT), bank/e-wallet emergency lines, scam vocabularies, and the **Tín nhiệm mạng** crawler ([`docs/TINNHIEM.md`](docs/TINNHIEM.md)).
 5. **PII redaction** — phones, emails, accounts, citizen IDs, cards, and secrets are sanitized before logging or cloud LLM transmission.
 
-> Evaluation dossier: [`docs/CAI_TIEN_THEO_HOI_DONG.md`](docs/CAI_TIEN_THEO_HOI_DONG.md).
+> Evaluation dossier (previous round): [`docs/CAI_TIEN_THEO_HOI_DONG.md`](docs/CAI_TIEN_THEO_HOI_DONG.md).
+> Final-round report: [`docs/BAO_CAO_CAI_TIEN_CHUNG_KET.md`](docs/BAO_CAO_CAI_TIEN_CHUNG_KET.md).
 > Limitations and roadmap: [`docs/REBUTTAL_QA.md`](docs/REBUTTAL_QA.md). Benchmark numbers are preliminary internal baselines.
 
 ---
@@ -63,7 +64,7 @@ Sentinel_Team_Project/
 ├── backend/           # Django 5.2 core (api, PKV, vector_store, scripts, sandbox)
 ├── frontend/          # Next.js 16 App Router UI
 ├── puppeteer_host/    # Headless browser cluster (TypeScript, anti-SSRF)
-├── docs/              # Architecture, setup, API, testing, evaluation papers
+├── docs/              # Documentation index, architecture, setup, API, evaluation papers
 └── ecosystem.config.js# PM2 orchestration for the 6 microservices
 ```
 
@@ -129,6 +130,7 @@ GPU is optional: set `WHISPER_DEVICE=cpu`, `VIETOCR_DEVICE=cpu`, `VECTOR_DB_USE_
 
 | Document | Contents |
 | :--- | :--- |
+| [docs/README.md](docs/README.md) | **Documentation index** — status, language, conventions, full list |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Topology, analysis pipeline, sandbox, Puppeteer, MCP |
 | [docs/SETUP.md](docs/SETUP.md) | Prerequisites, `.env`, S3, builds, PM2 services |
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Endpoint table, auth, Swagger / ReDoc |
@@ -136,6 +138,12 @@ GPU is optional: set `WHISPER_DEVICE=cpu`, `VIETOCR_DEVICE=cpu`, `VECTOR_DB_USE_
 | [docs/TINNHIEM.md](docs/TINNHIEM.md) | Trusted-domain crawler and threat feed |
 | [docs/OCR_VIETNAMESE.md](docs/OCR_VIETNAMESE.md) | OCR pipeline and CER benchmarks |
 | [docs/EVAL_GUIDE.md](docs/EVAL_GUIDE.md) | Threshold and inter-annotator evaluation |
+| [docs/EVAL_THRESHOLDS.md](docs/EVAL_THRESHOLDS.md) | Generated ROC / threshold results for the heuristic layer |
+| [docs/REBUTTAL_QA.md](docs/REBUTTAL_QA.md) | Judge Q&A, limitations, and remediation status |
+| [docs/LEGAL_AND_LICENSE.md](docs/LEGAL_AND_LICENSE.md) | AGPL compatibility and third-party license matrix |
+| [docs/BAO_CAO_CAI_TIEN_CHUNG_KET.md](docs/BAO_CAO_CAI_TIEN_CHUNG_KET.md) | Báo cáo cải tiến Vòng Chung kết (bản Markdown & PDF kèm theo) |
+| [docs/BAO_CAO_CAI_TIEN_CHUNG_KET.pdf](docs/BAO_CAO_CAI_TIEN_CHUNG_KET.pdf) | Bản PDF hoàn chỉnh nộp Chặng 1 Vòng Chung kết |
+| [docs/KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md](docs/KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md) | Bảng nộp bài Chặng 1, hướng dẫn cài đặt & khai báo AI/mã nguồn/dữ liệu |
 | [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) | Vietnamese feature and screen overview |
 
 Interactive API docs: `/api/docs/` (Swagger UI), `/api/redoc/` (ReDoc), `/api/schema/` (OpenAPI).

@@ -115,16 +115,29 @@ def find_duplicate_article(
         if hit:
             return hit
 
-    qs = Article.objects.filter(source_type__in=_NEWS_SOURCE_TYPES).order_by("-created_at")
+    qs = (
+        Article.objects
+        .filter(source_type__in=_NEWS_SOURCE_TYPES)
+        .only("id", "title", "summary", "content", "created_at")
+        .order_by("-created_at")
+    )
     if exclude_id:
         qs = qs.exclude(id=exclude_id)
     cands = list(qs[:recent])
 
-    probe_content = (summary or "") + " " + (content or "")
+    norm_title = _norm(title)
+    title_tokens = _tokens(title)
+    probe_tokens = _tokens((summary or "") + " " + (content or "")[:4000])
     best_article, best_title, best_summary, best_score = None, "", "", 0.0
     for art in cands:
-        ts = max(_sim(title, art.title), _jaccard(title, art.title))
-        cs = _content_sim(probe_content, (art.summary or "") + " " + (art.content or ""))
+        art_norm_title = _norm(art.title)
+        art_title_tokens = _tokens(art.title)
+        ts_seq = difflib.SequenceMatcher(None, norm_title, art_norm_title).ratio() if (norm_title and art_norm_title) else 0.0
+        ts_jac = (len(title_tokens & art_title_tokens) / len(title_tokens | art_title_tokens)) if (title_tokens and art_title_tokens) else 0.0
+        ts = max(ts_seq, ts_jac)
+
+        art_tokens = _tokens(((art.summary or "") + " " + (art.content or ""))[:4000])
+        cs = (len(probe_tokens & art_tokens) / len(probe_tokens | art_tokens)) if (probe_tokens and art_tokens) else 0.0
         if ts >= _TITLE_DUP_THRESHOLD and cs >= _CONTENT_DUP_THRESHOLD:
             logger.info("[NEWS-DEDUP] Trùng (title=%.2f, content=%.2f) với #%s: %s",
                         ts, cs, art.id, art.title[:60])

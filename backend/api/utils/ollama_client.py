@@ -4043,7 +4043,8 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         f"4. ĐỐI CHIẾU DOANH NGHIỆP VIỆT NAM: Nếu có dữ liệu TraTenCongTy, kiểm tra mức độ khớp tên pháp lý, MST, địa chỉ, đại diện pháp luật với website.\n"
         f"5. THỦ ĐOẠN LỪA ĐẢO: Ưu tiên phát hiện typo domain/Unicode, shortlink che đích, subdomain takeover, free-host phishing, yêu cầu dữ liệu nhạy cảm, thanh toán khó truy vết.\n"
         f"6. THỜI GIAN VẬN HÀNH HIỆN TẠI: Thời điểm server hiện tại là ngày {_current_date_str} (năm {_current_year}). Mọi mốc thời gian, kỳ cước hoặc giao dịch ghi nhận trong năm {_current_year} hoặc các năm gần đây là thời điểm vận hành bình thường, không được coi là mốc thời gian tương lai bất thường. Mô hình phải phân biệt giữa tính hợp lệ của thời điểm phát sinh tin nhắn với các dấu hiệu gian lận thực sự.\n"
-        f"7. THÔNG BÁO AN TOÀN VÀ KHUYẾN CÁO: Nếu nội dung là lời cảnh báo, khuyến cáo phòng chống lừa đảo từ cơ quan chức năng hoặc tin nhắn mã OTP hợp chuẩn nhắc nhở không chia sẻ mã (không chứa liên kết lạ, không yêu cầu nộp tiền), hãy xác định an toàn (is_scam: false, risk_score <= 15).\n\n"
+        f"7. THÔNG BÁO AN TOÀN VÀ KHUYẾN CÁO: Nếu nội dung là lời cảnh báo, khuyến cáo phòng chống lừa đảo từ cơ quan chức năng hoặc tin nhắn mã OTP hợp chuẩn nhắc nhở không chia sẻ mã (không chứa liên kết lạ, không yêu cầu nộp tiền), hãy xác định an toàn (is_scam: false, risk_score <= 15).\n"
+        f"8. DỮ LIỆU ĐÃ ĐƯỢC CHE BẢO MẬT (PII REDACTION): Nếu nội dung có các nhãn thay thế như [SĐT đã ẩn], [số tài khoản đã ẩn], [email đã ẩn], [CCCD/CMND đã ẩn], [mã tra cứu đã ẩn], [mã định danh đã ẩn], [số thẻ đã ẩn], [địa chỉ đã ẩn], đó là thông tin cá nhân được hệ thống ẩn tự động theo tùy chọn riêng tư của người dùng (KHÔNG phải thiếu dữ liệu hay lỗi hệ thống). Tuyệt đối KHÔNG từ chối phân tích hoặc kết luận không thể đánh giá chỉ vì các nhãn này; hãy phân tích bình thường dựa trên ngữ cảnh, hành vi dụ dỗ/đe dọa, yêu cầu chuyển tiền, mã OTP, liên kết lạ và thủ đoạn xung quanh.\n\n"
         f"QUY TẮC BẮT BUỘC CHO 'explanation':\n"
         f"1. GIỌNG VĂN: Tự nhiên, rõ ràng, quyết đoán, dễ hiểu cho người dân phổ thông và người lớn tuổi. Tuyệt đối không dùng thuật ngữ kỹ thuật khó hiểu hay câu từ quan liêu.\n"
         f"2. TUYỆT ĐỐI KHÔNG NÊU TÊN CÔNG CỤ HOẶC DATABASE NỘI BỘ: Tuyệt đối không nhắc đến các từ như ScamWave, Trustpilot, Sitejabber, Tranco, TraTenCongTy, VirusTotal, whois, OCR, LLM, mô hình AI. Thay vào đó, diễn giải trực tiếp bản chất thực tế: 'không có thông tin đăng ký doanh nghiệp chính danh', 'không thuộc hệ thống chính thức của doanh nghiệp', 'chưa ghi nhận tiền sử cảnh báo'.\n"
@@ -4099,11 +4100,12 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         )
         repaired = generate_response(
             repair_prompt,
-            model,
+            target_model,
             num_ctx=8192,
             max_tokens=4096,
             tools=[],
             format_schema=SCAM_ANALYSIS_SCHEMA,
+            allow_pii=safe_allow_pii,
             think=False,
         )
         parsed_result = _extract_json(repaired) if repaired else None
@@ -4113,12 +4115,12 @@ def analyze_text_for_scam(text: str, model: str = None, use_web_search: bool = F
         logger.warning("analyze_text_for_scam: Repair retry failed; rerunning primary analysis once.")
         response_retry = generate_response(
             prompt,
-            model,
+            target_model,
             num_ctx=16384,
             max_tokens=8192,
             tools=[],
             format_schema=SCAM_ANALYSIS_SCHEMA,
-            allow_pii=True,
+            allow_pii=safe_allow_pii,
             think="low",
         )
         parsed_result = _extract_json(response_retry) if response_retry else None
@@ -4376,9 +4378,10 @@ def moderate_forum_text_ai(text: str, model: str = None) -> Optional[Dict[str, A
         out = generate_response(
             FORUM_MOD_PROMPT.replace('{text}', snippet),
             model=model or SMALL_MODEL,
-            max_tokens=256,
+            max_tokens=1024,
             tools=[],
             tool_dispatch={},
+            think=False,
         )
         raw = (out or '').strip()
         if raw.startswith('```'):

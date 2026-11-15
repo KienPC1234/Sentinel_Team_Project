@@ -4,26 +4,8 @@ import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthContext';
-import { api, ApiError } from '../../lib/api';
-
-
-
-const TURNSTILE_SITEKEY = (process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY as string | undefined) || '';
-
-function errMsg(e: unknown, fallback: string): string {
-  if (e instanceof ApiError) {
-    const d = e.data as { error?: string } | null;
-    if (d && typeof d.error === 'string' && d.error) return d.error;
-    const det = (e.data as { details?: unknown } | null)?.details;
-    if (det && typeof det === 'object') {
-      const first = Object.values(det as Record<string, unknown>)[0];
-      if (Array.isArray(first) && typeof first[0] === 'string') return first[0];
-    }
-    return e.message || fallback;
-  }
-  if (e instanceof Error) return e.message || fallback;
-  return fallback;
-}
+import { api, getErrorMessage as errMsg } from '../../lib/api';
+import { TURNSTILE_SITEKEY, TurnstileWidget, getTsToken, resetTurnstile } from '../../components/TurnstileWidget';
 
 function passwordScore(value: string): number {
   let score = 0;
@@ -89,34 +71,10 @@ export default function Register() {
 
 
   useEffect(() => {
-    if (!TURNSTILE_SITEKEY) return;
-    if (document.querySelector('script[data-turnstile]')) return;
-    const s = document.createElement('script');
-    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-    s.async = true;
-    s.defer = true;
-    s.setAttribute('data-turnstile', '1');
-    document.body.appendChild(s);
-  }, []);
-
-  useEffect(() => {
     if (otpCooldown <= 0) return;
     const t = setInterval(() => setOtpCooldown((c) => (c <= 1 ? 0 : c - 1)), 1000);
     return () => clearInterval(t);
   }, [otpCooldown]);
-
-  function readTurnstileToken(): string {
-    return document.querySelector<HTMLInputElement>('[name=cf-turnstile-response]')?.value || '';
-  }
-
-  function resetTurnstile(): void {
-    const w = window as unknown as { turnstile?: { reset: () => void } };
-    try {
-      w.turnstile?.reset();
-    } catch {
-      /* ignore */
-    }
-  }
 
   async function requestOtp(tsToken: string): Promise<boolean> {
     const r = await api.post<{ message?: string }>('/auth/register/request-otp/', {
@@ -150,7 +108,7 @@ export default function Register() {
       setError('Mật khẩu còn quá yếu, vui lòng tăng độ mạnh');
       return;
     }
-    const tsToken = readTurnstileToken();
+    const tsToken = getTsToken();
     if (TURNSTILE_SITEKEY && !tsToken) {
       setError('Vui lòng hoàn thành captcha bảo mật');
       return;
@@ -192,7 +150,7 @@ export default function Register() {
 
   async function handleResend(): Promise<void> {
     if (loading || otpCooldown > 0) return;
-    const tsToken = readTurnstileToken();
+    const tsToken = getTsToken();
     if (TURNSTILE_SITEKEY && !tsToken) {
       setError('Vui lòng hoàn thành captcha để gửi lại OTP');
       return;
@@ -351,13 +309,7 @@ export default function Register() {
           )}
 
           <div className="flex justify-center py-2">
-            {TURNSTILE_SITEKEY ? (
-              <div className="cf-turnstile" data-sitekey={TURNSTILE_SITEKEY}></div>
-            ) : (
-              <p className="text-[10px] text-warn-300/70 font-bold uppercase tracking-widest">
-                Chưa cấu hình VITE_TURNSTILE_SITEKEY
-              </p>
-            )}
+            <TurnstileWidget />
           </div>
 
           <button

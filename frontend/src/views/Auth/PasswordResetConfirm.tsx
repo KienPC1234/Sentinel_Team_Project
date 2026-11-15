@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, getErrorMessage as errMsg } from '../../lib/api';
 
 /* Port từ PKV/templates/account/password_reset_from_key.html
  * (+ password_reset_from_key_done.html) sang React/liquid-glass.
@@ -44,16 +44,6 @@ function parseCreds(sp: { get(name: string): string | null }, params: unknown): 
   if (key) return splitKey(key);
 
   return fromRouteParams(params);
-}
-
-function errMsg(e: unknown, fallback: string): string {
-  if (e instanceof ApiError) {
-    const d = e.data as { error?: string } | null;
-    if (d && typeof d.error === 'string' && d.error) return d.error;
-    return e.message || fallback;
-  }
-  if (e instanceof Error) return e.message || fallback;
-  return fallback;
 }
 
 export default function PasswordResetConfirm() {

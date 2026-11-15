@@ -1,39 +1,30 @@
 """ShieldCall VN – Admin Views"""
-import re
-import hashlib
 import logging
 import json
-from urllib.parse import urlparse
 
-from django.contrib.auth import authenticate, get_user_model
-from django.db.models import Count, Sum, F, Q
+from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import datetime, time, timedelta
 
-from django.http import StreamingHttpResponse
-from rest_framework import status, permissions, generics, serializers
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework import status, generics, serializers
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
-from rest_framework.authtoken.models import Token
 
-from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 
 from api.core.models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus,
-    Article, LearnLesson
+    Domain,
+    BankAccount,
+    Report,
+    ScanEvent,
+    Article,
+    LearnLesson,
 )
-from django.shortcuts import render
 from api.core.serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer,
-    DomainSerializer, BankAccountSerializer,
-    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer,
-    ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
-    ScanAccountSerializer, ScanImageSerializer, ScanEventListSerializer,
-    TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
+    ReportListSerializer,
+    ReportModerateSerializer,
 )
 
 User = get_user_model()

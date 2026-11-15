@@ -2,18 +2,22 @@
 import logging
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Q, F, Count
+from django.db.models import Q, F
 from django.utils import timezone
 
-from rest_framework import status, serializers
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, inline_serializer
 
 from api.core.models import (
-    Announcement, AnnouncementReaction, DirectMessage, SupportTicket,
-    ForumPost, ForumComment, UserProfile,
+    Announcement,
+    AnnouncementReaction,
+    DirectMessage,
+    SupportTicket,
+    ForumPost,
+    ForumComment,
 )
 
 User = get_user_model()

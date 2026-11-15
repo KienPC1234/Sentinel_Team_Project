@@ -4,13 +4,11 @@ Fetches, normalizes, and ingests scam/phishing/malware indicators from
 active public threat feeds into the Domain model.
 """
 import csv
-import io
 import ipaddress
 import logging
 import re
 import time
 from typing import Any, Dict, Iterator, List, Optional
-from urllib.parse import urlparse
 
 import requests
 from django.conf import settings

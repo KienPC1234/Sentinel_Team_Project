@@ -2,14 +2,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import Link from 'next/link';
-import { api, ApiError, mediaUrl } from '../../lib/api';
+import { api, getErrorMessage, mediaUrl } from '../../lib/api';
 
 
 
 import { Spinner } from '../../components/ui';
 import { sanitizeHtml } from '../../lib/chat/markdown';
 import RichEditor, { getEditorData } from '../../components/RichEditor';
-import { showToast } from '../../lib/ui/feedback';
+import { scConfirm, showToast } from '../../lib/ui/feedback';
 import { fmtDate } from '../../lib/date';
 
 /* Types khớp UserSerializer + MeView (api/core/serializers.py, views/auth_views.py). */
@@ -61,19 +61,7 @@ interface MfaStatus {
 }
 
 function errMsg(e: unknown, fallback: string): string {
-  if (e instanceof ApiError) {
-    const d = e.data as { error?: string; message?: string; details?: Record<string, unknown> } | null;
-    let msg = (d && (d.error || d.message)) || e.message || fallback;
-    if (d?.details && typeof d.details === 'object') {
-      const extra = Object.entries(d.details)
-        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`)
-        .join('\n');
-      if (extra) msg += '\n' + extra;
-    }
-    return msg;
-  }
-  if (e instanceof Error) return e.message || fallback;
-  return fallback;
+  return getErrorMessage(e, fallback);
 }
 
 function toast(msg: string): void {
@@ -523,6 +511,7 @@ export default function Profile() {
             <i className="bi bi-chevron-right text-white/35 transition-transform group-hover:translate-x-1"></i>
           </Link>
           <MfaRow />
+          <ManagePersonalDataRow />
           <DeleteAccountRow />
           <Link
             href="/dashboard/"
@@ -946,7 +935,7 @@ function MfaRow() {
   }
 
   async function regenerateRecovery(): Promise<void> {
-    if (!window.confirm('Tạo bộ recovery code mới sẽ làm vô hiệu hóa bộ cũ. Tiếp tục?')) return;
+    if (!(await scConfirm('Tạo bộ recovery code mới sẽ làm vô hiệu hóa bộ cũ. Tiếp tục?', { icon: 'warning', confirmButtonText: 'Tạo bộ mới' }))) return;
     try {
       const d = await api.post<{ codes?: string[]; message?: string }>('/auth/mfa/recovery/', {});
       setCodes(d.codes || []);
@@ -1230,6 +1219,100 @@ function MfaRow() {
   );
 }
 
+function ManagePersonalDataRow() {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [scopes, setScopes] = useState<string[]>(['scans', 'chat_sessions', 'alerts']);
+
+  const toggleScope = (scope: string) => {
+    setScopes((prev) => (prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]));
+  };
+
+  async function submitClearData(): Promise<void> {
+    if (scopes.length === 0) return toastErr('Vui lòng chọn ít nhất một nhóm dữ liệu cần xóa.');
+    if (!(await scConfirm('Xóa dữ liệu cá nhân đã chọn khỏi tài khoản? Hành động này không thể hoàn tác.', { icon: 'warning', confirmButtonText: 'Xóa dữ liệu' }))) return;
+    setLoading(true);
+    try {
+      const res = await api.post<{
+        deleted?: { scans?: number; chat_sessions?: number; alerts?: number };
+        message?: string;
+      }>('/user/privacy/delete-data/', { scopes });
+      const d = res.deleted || {};
+      toastOk(
+        `Đã xóa: ${d.scans ?? 0} lượt quét, ${d.chat_sessions ?? 0} phiên chat AI, ${d.alerts ?? 0} cảnh báo.`
+      );
+      setOpen(false);
+    } catch (e) {
+      toastErr(errMsg(e, 'Không thể xóa dữ liệu cá nhân.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="p-6 bg-white/[0.01] border-b border-white/5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-warn-500/15 border border-warn-500/30 flex items-center justify-center text-warn-400">
+            <i className="bi bi-eraser-fill"></i>
+          </div>
+          <div>
+            <div className="text-sm font-black text-white uppercase tracking-wide">Quản lý &amp; xóa dữ liệu cá nhân</div>
+            <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest mt-1">
+              Xóa lịch sử quét, phiên chat AI hoặc cảnh báo đã lưu mà không cần xóa tài khoản.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="liquid-btn py-2.5 px-4 text-[10px] font-black uppercase tracking-widest bg-warn-500/15 text-warn-300 border border-warn-500/30 hover:bg-warn-500/25"
+        >
+          <i className="bi bi-sliders mr-1"></i> {open ? 'Thu gọn' : 'Chọn dữ liệu xóa'}
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-5 rounded-3xl border border-warn-500/20 bg-black/20 p-5 space-y-4 animate-fadein">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            {[
+              { id: 'scans', label: 'Lịch sử quét (ScanEvent)' },
+              { id: 'chat_sessions', label: 'Phiên hội thoại AI Chat' },
+              { id: 'alerts', label: 'Cảnh báo đã theo dõi' },
+            ].map((item) => {
+              const checked = scopes.includes(item.id);
+              return (
+                <label
+                  key={item.id}
+                  className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer ${
+                    checked ? 'bg-warn-500/15 border-warn-500/40 text-white' : 'bg-white/5 border-white/10 text-white/60'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleScope(item.id)}
+                    className="accent-amber-400"
+                  />
+                  <span className="font-bold">{item.label}</span>
+                </label>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => void submitClearData()}
+            disabled={loading || scopes.length === 0}
+            className="liquid-btn w-full py-3.5 text-[11px] font-black uppercase tracking-[0.2em] bg-warn-500 text-black hover:bg-warn-400 disabled:opacity-50"
+          >
+            {loading ? 'Đang xóa dữ liệu...' : 'Xác nhận xóa dữ liệu đã chọn'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DeleteAccountRow() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1242,7 +1325,7 @@ function DeleteAccountRow() {
     if (!password) return toastErr('Vui lòng nhập mật khẩu hiện tại.');
     if (norm !== 'XOA TAI KHOAN' && norm !== 'XÓA TÀI KHOẢN')
       return toastErr('Bạn phải nhập chính xác cụm từ xác nhận (XÓA TÀI KHOẢN).');
-    if (!window.confirm('Bạn chắc chắn muốn xóa tài khoản vĩnh viễn? Hành động này không thể khôi phục.')) return;
+    if (!(await scConfirm('Bạn chắc chắn muốn xóa tài khoản vĩnh viễn? Hành động này không thể khôi phục.', { icon: 'warning', confirmButtonText: 'Xóa vĩnh viễn' }))) return;
     setLoading(true);
     try {
       const d = await api.post<{ message?: string }>('/auth/account/delete/', {

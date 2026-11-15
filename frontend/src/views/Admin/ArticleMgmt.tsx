@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { api, mediaUrl } from '../../lib/api';
+import { scConfirm } from '../../lib/ui/feedback';
 import { AdminShell, useAdminGet } from './_shared';
 
 /* Port 1-1 từ PKV/templates/Admin/article_management.html.
@@ -31,7 +32,7 @@ export default function ArticleMgmt() {
   const articles = data || [];
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa bài viết này?')) return;
+    if (!(await scConfirm('Bạn có chắc chắn muốn xóa bài viết này?', { icon: 'warning', confirmButtonText: 'Xóa' }))) return;
     setDeletingId(id);
     setMsg(null);
     try {

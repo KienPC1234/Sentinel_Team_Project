@@ -1,5 +1,7 @@
 # Báo Cáo Đánh Giá Tập Kiểm Thử Độc Lập Thứ Hai (Holdout Set B - 40 mẫu)
 
+> **Trạng thái:** số liệu chụp · **Cập nhật:** 2026-11-04 · **Đối tượng:** người làm đánh giá, hội đồng
+
 > **Thời điểm thực nghiệm:** 2026-11-04 14:07:17  
 > **Tệp dữ liệu:** `holdout_test_set_b.jsonl`  
 > **Quy mô mẫu:** **40 mẫu** (20 mẫu lừa đảo, 20 mẫu an toàn)  

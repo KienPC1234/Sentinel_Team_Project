@@ -1,8 +1,14 @@
 # ShieldCall VN — API Reference
 
+> **Status:** current · **Updated:** 2026-11-15 · **Audience:** API integrators, frontend/backend engineers
+
 Base URL: `/api/v1` (Production: `https://<your-domain>/api/v1`)
 
 ## Endpoints
+
+> Bảng dưới đây liệt kê các endpoint ổn định, dùng nhiều nhất. Danh sách đầy đủ (kể cả endpoint
+> quản trị, forum, thông báo, học tập) nằm trong OpenAPI schema `/api/schema/` và Swagger UI.
+> Khi thêm route mới, cập nhật cả bảng này và `drf_spectacular`.
 
 | Endpoint | Method | Purpose | Authentication |
 | :--- | :--- | :--- | :--- |
@@ -21,6 +27,11 @@ Base URL: `/api/v1` (Production: `https://<your-domain>/api/v1`)
 | `/scan/analyze/stream/` | `POST` | Server-Sent Events (SSE) stream for scan events | Public / Token |
 | `/chat/stream/` | `POST` | Server-Sent Events (SSE) AI assistant stream | Session / Token |
 | `/chat/sessions/` | `GET`, `POST` | Manage chat conversation history sessions | Session / Token |
+| `/trust/sources/` | `GET` | Source reliability catalog, limits, and verification dates | Public |
+| `/trust/channels/` | `GET` | Official Vietnamese verification channels | Public |
+| `/trust/storage/` | `GET` | Object storage / S3 telemetry | Public |
+| `/health/` | `GET` | Service health probe for uptime monitors | Public |
+| `/notifications/` | `GET` | Authenticated user notification feed | Authenticated |
 | `/mcp/` | `GET` | Model Context Protocol discovery metadata | Public |
 | `/mcp/sse/` | `GET` | MCP Server-Sent Events endpoint for agents | Public |
 | `/mcp/messages/` | `POST` | MCP JSON-RPC message relay | Public |
@@ -40,6 +51,44 @@ Base URL: `/api/v1` (Production: `https://<your-domain>/api/v1`)
 | `/auth/login/` | `POST` | Credential validation and MFA challenge trigger | Public |
 | `/auth/mfa/verify/` | `POST` | Multi-Factor Authentication verification | Pre-auth Token |
 | `/auth/me/` | `GET` | Retrieve current authenticated user profile | Authenticated |
+
+## Streaming (SSE) event protocol
+
+Các endpoint stream dùng chung giao thức: mỗi dòng `data:` là **một JSON có trường `type`**.
+
+| `type` | Payload | Ý nghĩa |
+| :--- | :--- | :--- |
+| `status` | `{"value":"searching_knowledge"\|"thinking"\|"answering"\|"processing_images"\|"executing_tool:<tool>"}` | Trạng thái đang xử lý |
+| `thinking` | `{"text":"..."}` | Nội dung suy luận (hiển thị trong khối "Đã suy nghĩ") |
+| `delta` | `{"text":"..."}` | Một mẩu nội dung trả lời |
+| `metadata` | `{"metadata":{"internal_knowledge":[...],"web_search":[...]}}` | Nguồn tham khảo (RAG / web) |
+| `tool_calls` | `{"calls":[{"function":{"name":"scan_url","arguments":{...}}}]}` | AI bắt đầu gọi công cụ |
+| `tool_result` | `{"tool":"scan_url","status":"done","args":{...},"result":{...}}` | Kết quả công cụ |
+| `image` | `{"annotated_image":"data:image/png;base64,..."}` | Ảnh OCR đã khoanh vùng |
+| `title` | `{"value":"..."}` | Tiêu đề phiên vừa được sinh tự động |
+| `error` | `{"message":"..."}` | Lỗi (hiển thị toast, luồng vẫn kết thúc bằng `done`) |
+| `done` | `{"session_id":"...","title":"...","action_suggested":"NONE"}` | Kết thúc luồng |
+
+Ví dụ:
+
+```text
+data: {"type":"status","value":"searching_knowledge"}
+
+data: {"type":"metadata","metadata":{"internal_knowledge":[{"title":"...","url":"..."}]}}
+
+data: {"type":"delta","text":"Số điện thoại này "}
+
+data: {"type":"done","session_id":"...","title":"Tra cứu SĐT","action_suggested":"NONE"}
+```
+
+- **Endpoints:** `POST /chat/stream/` (Trợ lý AI, chat box, Emergency), `POST /scan/analyze-sse/`
+  và `POST /scan/analyze/stream/` (chỉ phát `delta` / `error` / `done`).
+- **Client:** dùng `openSseStream()` trong `frontend/src/lib/chat/stream.ts`; callback `onEvent`
+  nhận union `StreamEvent` đã chuẩn hoá. `normalizeStreamEvent()` vẫn map được payload cũ
+  (`{"chunk": ...}`) nên endpoint chưa chuyển đổi vẫn chạy.
+- **Nội bộ:** tầng vận chuyển LLM (`api/utils/ollama_client.stream_chat_ai`) dùng marker chuỗi
+  (`__THINK__`, `__TOOL_CALLS__`, …). `AIAgent.chat_stream` là ranh giới chuyển marker thành event
+  có `type`; **marker không bao giờ ra tới client**.
 
 ## Interactive Documentation
 

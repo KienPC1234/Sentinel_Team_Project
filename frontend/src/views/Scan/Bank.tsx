@@ -13,15 +13,18 @@ import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { openSseStream } from '../../lib/chat/stream';
 import {
+  PrivacyReceiptBadge,
   ScanGuide,
+  ScanPrivacyToggle,
   TurnstileWidget,
-  apiBase,
+  consumeTurnstileToken,
   dispatchChat,
-  getTsToken,
-  resetTurnstile,
+  riskBadge,
+  riskGlow,
   showToast,
+  streamScanAiExplanation,
+  useScanPrivacy,
 } from '../../components/ScanWidgets';
 import type { ScanResult } from '../../components/ScanWidgets';
 import { asStr, asNum, TrustGuardrailPanel, guardrailTone, guardrailLabel } from '../../components/ScanWidgets';
@@ -33,24 +36,11 @@ interface BankInfo {
   logo?: string;
 }
 
-function riskBadge(level: string): string {
-  if (level === 'RED') return 'bg-danger-500/20 text-danger-500 border border-danger-500/30';
-  if (level === 'YELLOW') return 'bg-warn-500/20 text-warn-500 border border-warn-500/30';
-  if (level === 'UNVERIFIED') return 'bg-slate-500/20 text-slate-300 border border-slate-400/30';
-  return 'bg-safe-500/20 text-safe-500 border border-safe-500/30';
-}
-
-function riskGlow(level: string): string {
-  if (level === 'RED') return 'bg-danger-500';
-  if (level === 'YELLOW') return 'bg-warn-500';
-  if (level === 'UNVERIFIED') return 'bg-slate-500';
-  return 'bg-safe-500';
-}
-
 export default function Bank() {
   const [bank, setBank] = useState('');
   const [account, setAccount] = useState('');
   const [banks, setBanks] = useState<BankInfo[]>([]);
+  const [maskPii, setMaskPii] = useScanPrivacy();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [aiText, setAiText] = useState('');
@@ -71,22 +61,23 @@ export default function Bank() {
     if (qa) setAccount(qa);
   }, []);
 
-  const streamAi = (data: ScanResult, bankName: string, acc: string): void => {
+  const streamAi = (data: ScanResult, bankName: string, acc: string, maskedFlag: boolean): void => {
     setAiLoading(true);
     setAiText('');
-    void openSseStream({
-      url: `${apiBase()}/scan/analyze-sse/`,
-      body: { scan_type: 'account', scan_data: data, raw_input: `${bankName} - ${acc}` },
-      onEvent: (ev) => {
-        if (ev.type === 'delta') setAiText((t) => t + ev.text);
-        else if (ev.type === 'done') setAiLoading(false);
-      },
-    })
-      .catch(() => {
+    const safeAcc = maskedFlag ? asStr(data['account_masked'], '****') : acc;
+    void streamScanAiExplanation({
+      scanId: typeof data['scan_id'] === 'number' ? data['scan_id'] : null,
+      scanType: 'account',
+      scanData: data,
+      rawInput: `${bankName} - ${safeAcc}`,
+      maskPii: maskedFlag,
+      onDelta: (t) => setAiText((prev) => prev + t),
+      onDone: () => setAiLoading(false),
+      onError: () => {
         setAiLoading(false);
         showToast('Không thể kết nối AI.', 'warning');
-      })
-      .finally(() => setAiLoading(false));
+      },
+    });
   };
 
   const submit = (e: React.FormEvent): void => {
@@ -95,16 +86,8 @@ export default function Bank() {
       showToast('Vui lòng điền đầy đủ', 'warning');
       return;
     }
-    const tsToken = getTsToken();
-    if (!tsToken) {
-      showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');
-      return;
-    }
-    try {
-      resetTurnstile();
-    } catch {
-      /* bỏ qua */
-    }
+    const tsToken = consumeTurnstileToken();
+    if (!tsToken) return;
     setLoading(true);
     setResult(null);
     setAiText('');
@@ -113,12 +96,13 @@ export default function Bank() {
       .post<ScanResult>('/scan/account/', {
         bank: bank.trim(),
         account: account.trim(),
+        mask_pii: maskPii,
         'cf-turnstile-response': tsToken,
       })
       .then((data) => {
         setResult(data);
         setLoading(false);
-        if (aiEnabled) streamAi(data, bank, account);
+        if (aiEnabled) streamAi(data, bank, account, maskPii);
       })
       .catch((err: unknown) => {
         showToast(err instanceof Error ? err.message : 'Có lỗi xảy ra.', 'error');
@@ -129,7 +113,7 @@ export default function Bank() {
   const toggleAi = (): void => {
     const next = !aiEnabled;
     setAiEnabled(next);
-    if (next && result && !aiText && !aiLoading) streamAi(result, bank, account);
+    if (next && result && !aiText && !aiLoading) streamAi(result, bank, account, maskPii);
   };
 
     const level = guardrailTone(result);
@@ -148,7 +132,7 @@ export default function Bank() {
             Kiểm tra <span className="glow-text">Tài khoản Ngân hàng</span>
           </h1>
           <p className="text-white/55 max-w-md mx-auto text-sm leading-relaxed">
-            Hệ thống tra cứu chéo dữ liệu ngân hàng để xác định tài khoản có lịch sử nhận tiền lừa đảo.
+            Tra cứu dấu hiệu rủi ro từ phản ánh cộng đồng; không kết luận danh tính cá nhân khi chưa có xác minh từ ngân hàng hoặc cơ quan chức năng.
           </p>
         </div>
 
@@ -200,6 +184,7 @@ export default function Bank() {
                   )}
                 </Button>
               </div>
+              <ScanPrivacyToggle scanType="account" checked={maskPii} onChange={setMaskPii} compact />
               <TurnstileWidget />
             </div>
           </form>
@@ -216,7 +201,8 @@ export default function Bank() {
                 </div>
 
                 <div className="text-5xl font-black text-white mb-2">{score}/100</div>
-                <div className="text-[10px] text-white/45 font-black tracking-widest uppercase mb-8">Chỉ số rủi ro tài chính</div>
+                <div className="text-[10px] text-white/45 font-black tracking-widest uppercase mb-4">Chỉ số rủi ro tài chính</div>
+                <PrivacyReceiptBadge result={result} />
               </div>
 
               <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -226,7 +212,7 @@ export default function Bank() {
                 </div>
                 <div className="p-5 rounded-3xl bg-white/[0.03] border border-white/5 space-y-2">
                   <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Số tài khoản</div>
-                  <div className="text-xl font-bold text-white/90 tracking-widest">{asStr(result['account_masked']) || account}</div>
+                  <div className="text-xl font-bold text-white/90 tracking-widest">{asStr(result['account_display']) || asStr(result['account_masked']) || account}</div>
                 </div>
               </div>
 

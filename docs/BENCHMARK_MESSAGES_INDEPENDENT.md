@@ -1,5 +1,7 @@
 # Báo Cáo Đánh Giá Độc Lập Hệ Thống Phát Hiện Tin Nhắn Lừa Đảo (ShieldCall VN)
 
+> **Trạng thái:** số liệu chụp · **Cập nhật:** 2026-11-04 · **Đối tượng:** người làm đánh giá, hội đồng
+
 > **Thời điểm thực nghiệm:** 2026-11-04 11:08:03  
 > **Tập dữ liệu kiểm thử độc lập:** `independent_test_set_vn.jsonl` (Hoàn toàn độc lập, chưa từng được sử dụng để tinh chỉnh bộ luật Heuristic hay Prompt LLM)  
 > **Quy mô mẫu:** **80 mẫu** (40 mẫu tin nhắn lừa đảo thực tế, 40 mẫu tin nhắn an toàn / bẫy nhầm lẫn biên)  

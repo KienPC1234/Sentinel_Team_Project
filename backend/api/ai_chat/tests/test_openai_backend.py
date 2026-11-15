@@ -1,18 +1,11 @@
-import json
 from unittest.mock import patch, MagicMock
 from django.test import TestCase
-from django.conf import settings
 
 from api.utils.ollama_client import (
     _format_openai_messages,
     _openai_chat_with_retry,
     _openai_chat_stream_with_retry,
     OpenAIResponseAdapter,
-    OpenAIStreamChunkAdapter,
-    _chat_with_retry,
-    _chat_stream_with_retry,
-    stream_chat_ai,
-    generate_response,
 )
 
 

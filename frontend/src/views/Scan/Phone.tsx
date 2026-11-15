@@ -9,13 +9,18 @@ import { api } from '../../lib/api';
 import { renderMd, safeUrl } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
 import {
+  PrivacyReceiptBadge,
   ScanGuide,
+  ScanPrivacyToggle,
   TurnstileWidget,
+  consumeTurnstileToken,
   copyText,
   dispatchChat,
   getTsToken,
-  resetTurnstile,
+  riskBadge,
+  riskGlow,
   showToast,
+  useScanPrivacy,
 } from '../../components/ScanWidgets';
 import type { ScanResult } from '../../components/ScanWidgets';
 import { asStr, asNum, asArr, TrustGuardrailPanel, guardrailTone, guardrailLabel } from '../../components/ScanWidgets';
@@ -26,24 +31,11 @@ interface OnlineMatch {
   snippet?: string;
 }
 
-function riskBadge(level: string): string {
-  if (level === 'RED') return 'bg-danger-500/20 text-danger-500 border border-danger-500/30';
-  if (level === 'YELLOW') return 'bg-warn-500/20 text-warn-500 border border-warn-500/30';
-  if (level === 'UNVERIFIED') return 'bg-slate-500/20 text-slate-300 border border-slate-400/30';
-  return 'bg-safe-500/20 text-safe-500 border border-safe-500/30';
-}
-
-function riskGlow(level: string): string {
-  if (level === 'RED') return 'bg-danger-500';
-  if (level === 'YELLOW') return 'bg-warn-500';
-  if (level === 'UNVERIFIED') return 'bg-slate-500';
-  return 'bg-safe-500';
-}
-
 export default function Phone() {
   const [phone, setPhone] = useState('');
   const [claimedVietnameseEntity, setClaimedVietnameseEntity] = useState(false);
   const [externalLookupConsent, setExternalLookupConsent] = useState(false);
+  const [maskPii, setMaskPii] = useScanPrivacy();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [aiText, setAiText] = useState('');
@@ -60,16 +52,8 @@ export default function Phone() {
       showToast('Số điện thoại không hợp lệ. VD: 0978589220 hoặc +84978589220', 'warning');
       return;
     }
-    const tsToken = getTsToken();
-    if (!tsToken) {
-      showToast('Vui lòng hoàn thành xác minh anti-spam', 'warning');
-      return;
-    }
-    try {
-      resetTurnstile();
-    } catch {
-      /* bỏ qua */
-    }
+    const tsToken = consumeTurnstileToken();
+    if (!tsToken) return;
     setLoading(true);
     setResult(null);
     setAiText('');
@@ -78,6 +62,7 @@ export default function Phone() {
         phone: phoneNormalized,
         claimed_vietnamese_entity: claimedVietnameseEntity,
         external_lookup_consent: externalLookupConsent,
+        mask_pii: maskPii,
         'cf-turnstile-response': tsToken,
       })
       .then((data) => {
@@ -90,7 +75,7 @@ export default function Phone() {
         showToast(msg, 'error');
         setLoading(false);
       });
-  }, [claimedVietnameseEntity, externalLookupConsent]);
+  }, [claimedVietnameseEntity, externalLookupConsent, maskPii]);
 
   // Tự động quét khi mở link ?phone=. Turnstile render BẤT ĐỒNG BỘ nên phải
   // CHỜ token sẵn sàng rồi mới submit (trước đây submit ngay -> thiếu token ->
@@ -188,6 +173,9 @@ export default function Phone() {
               />
               Tôi đồng ý gửi số điện thoại tới công cụ tìm kiếm bên ngoài để tra cứu bổ sung
             </label>
+            <div className="mt-4">
+              <ScanPrivacyToggle scanType="phone" checked={maskPii} onChange={setMaskPii} compact />
+            </div>
             <TurnstileWidget />
           </form>
         </div>
@@ -245,6 +233,7 @@ export default function Phone() {
                     style={{ width: `${score}%`, background: score >= 80 ? 'var(--sc-danger-500)' : score >= 50 ? 'var(--sc-warn-500)' : 'var(--sc-safe-500)' }}
                   ></div>
                 </div>
+                <PrivacyReceiptBadge result={result} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/5 border-b border-white/5">

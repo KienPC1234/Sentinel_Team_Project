@@ -1,39 +1,31 @@
 """ShieldCall VN – User Views"""
 import re
-import hashlib
 import logging
-import json
-from urllib.parse import urlparse
 
-from django.contrib.auth import authenticate, get_user_model
-from django.db.models import Count, Sum, F, Q
-from django.utils import timezone
-from datetime import timedelta
+from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.db.models import Q
 
-from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
-from rest_framework import status, permissions, generics, serializers
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework import status, serializers
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
 from drf_spectacular.utils import extend_schema
 
-from api.utils.ollama_client import analyze_text_for_scam, generate_response, stream_response
 from api.utils.trust_guard import verdict_tone, verdict_display
 
 from api.core.models import (
-    Domain, BankAccount, Report, ScanEvent, TrendDaily,
-    EntityLink, UserAlert, ScamType, RiskLevel, ReportStatus, ForumPost,
+    Report,
+    ScanEvent,
+    UserAlert,
+    ForumPost,
 )
 from api.core.serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer,
-    DomainSerializer, BankAccountSerializer,
-    ReportCreateSerializer, ReportListSerializer, ReportModerateSerializer,
-    ScanPhoneSerializer, ScanMessageSerializer, ScanDomainSerializer,
-    ScanAccountSerializer, ScanImageSerializer, ScanEventListSerializer,
-    TrendDailySerializer, TrendHotSerializer, UserAlertSerializer,
+    UserSerializer,
+    ReportListSerializer,
+    ScanEventListSerializer,
+    UserAlertSerializer,
     ForumPostSerializer,
 )
 
@@ -94,6 +86,112 @@ class UserScansView(APIView):
             },
         })
 
+    @extend_schema(responses={200: serializers.DictField()})
+    def delete(self, request):
+        """DELETE /api/v1/user/scans/ - Xoa toan bo lich su quet cua nguoi dung."""
+        qs = ScanEvent.objects.filter(user=request.user)
+        scan_ids = set(qs.values_list('id', flat=True))
+        deleted_count, _ = qs.delete()
+        active_ids = request.session.get('active_scan_ids', [])
+        if active_ids and scan_ids:
+            request.session['active_scan_ids'] = [sid for sid in active_ids if sid not in scan_ids]
+            request.session.modified = True
+        return Response({
+            'deleted_scans': deleted_count,
+            'message': f'Đã xóa {deleted_count} bản ghi lịch sử quét.',
+        })
+
+
+class UserScanDetailView(APIView):
+    """DELETE /api/v1/user/scans/<scan_id>/ - Xoa 1 ban ghi quet thuoc so huu."""
+    permission_classes = [AllowAny]
+
+    @extend_schema(responses={200: serializers.DictField()})
+    def delete(self, request, scan_id: int):
+        scan = get_object_or_404(ScanEvent, id=scan_id)
+        active_ids = request.session.get('active_scan_ids', [])
+        is_owner = (
+            (request.user.is_authenticated and scan.user_id == request.user.id)
+            or (scan.user_id is None and scan_id in active_ids)
+        )
+        if not is_owner:
+            if not request.user.is_authenticated:
+                return Response(
+                    {'error': 'Vui lòng đăng nhập để xóa bản ghi này.'},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            return Response(
+                {'error': 'Bạn không có quyền xóa bản ghi quét của người dùng khác.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if scan_id in active_ids:
+            request.session['active_scan_ids'] = [sid for sid in active_ids if sid != scan_id]
+            request.session.modified = True
+        scan.delete()
+        return Response({'deleted_id': scan_id, 'message': 'Đã xóa bản ghi quét.'})
+
+
+class UserPrivacyDataDeleteView(APIView):
+    """POST /api/v1/user/privacy/delete-data/ - Xoa du lieu ca nhan theo pham vi."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'scopes': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                    }
+                },
+            }
+        },
+        responses={200: serializers.DictField()},
+    )
+    def post(self, request):
+        raw_scopes = request.data.get('scopes') or []
+        if not isinstance(raw_scopes, list) or not raw_scopes:
+            return Response(
+                {'error': 'Vui lòng chọn ít nhất một nhóm dữ liệu cần xóa (scans, chat_sessions, alerts, all).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allowed = {'scans', 'chat_sessions', 'alerts', 'all'}
+        scopes = {str(s).strip().lower() for s in raw_scopes if str(s).strip()}
+        invalid = scopes - allowed
+        if invalid:
+            return Response(
+                {'error': f'Phạm vi xóa không hợp lệ: {", ".join(sorted(invalid))}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if 'all' in scopes:
+            scopes = {'scans', 'chat_sessions', 'alerts'}
+
+        deleted = {'scans': 0, 'chat_sessions': 0, 'alerts': 0}
+        with transaction.atomic():
+            if 'scans' in scopes:
+                scan_qs = ScanEvent.objects.filter(user=request.user)
+                scan_ids = set(scan_qs.values_list('id', flat=True))
+                deleted['scans'], _ = scan_qs.delete()
+                active_ids = request.session.get('active_scan_ids', [])
+                if active_ids and scan_ids:
+                    request.session['active_scan_ids'] = [sid for sid in active_ids if sid not in scan_ids]
+                    request.session.modified = True
+            if 'chat_sessions' in scopes:
+                from api.ai_chat.models import ChatSession
+                deleted['chat_sessions'], _ = ChatSession.objects.filter(user=request.user).delete()
+            if 'alerts' in scopes:
+                deleted['alerts'], _ = UserAlert.objects.filter(user=request.user).delete()
+
+        return Response({
+            'deleted': deleted,
+            'scopes': sorted(scopes),
+            'message': 'Đã xóa dữ liệu đã chọn khỏi tài khoản.',
+        })
+
 
 def _mask_scan_preview(scan: ScanEvent) -> str:
     raw = (scan.normalized_input or scan.raw_input or '').strip()
@@ -106,11 +204,9 @@ def _mask_scan_preview(scan: ScanEvent) -> str:
             return f'{compact[:2]}******'
         return f'{compact[:6]}******{compact[-3:]}'
 
-    if scan.scan_type == 'phone' and len(raw) > 6:
-        return f'{raw[:4]}****{raw[-2:]}'
-
-    if scan.scan_type == 'account' and len(raw) > 6:
-        return f'{raw[:3]}*****{raw[-3:]}'
+    if scan.scan_type in ('phone', 'account'):
+        from api.utils.privacy import mask_target_identifier
+        return mask_target_identifier(scan.scan_type, raw)
 
     return raw[:140]
 

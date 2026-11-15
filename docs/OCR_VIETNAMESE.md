@@ -1,6 +1,8 @@
 # OCR tiếng Việt — chuyển sang VietOCR
 
-> Trạng thái: **đã gỡ EasyOCR và PaddleOCR**. OCR hiện dùng **VietOCR** (Transformer tiếng Việt),
+> **Trạng thái:** đang dùng · **Cập nhật:** 2026-11-04 · **Đối tượng:** kỹ sư AI/OCR
+>
+> **Ghi chú:** đã gỡ EasyOCR và PaddleOCR. OCR hiện dùng **VietOCR** (Transformer tiếng Việt),
 > chạy trong **venv riêng** (`.venv-ocr`) và kết nối qua **bridge** (`backend/scripts/ocr_bridge.py`).
 
 ## 1. Vì sao (đo được, không phải cảm tính)

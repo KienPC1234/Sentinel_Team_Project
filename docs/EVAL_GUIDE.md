@@ -1,5 +1,7 @@
 # Hướng dẫn hoàn tất các phần đánh giá còn lại (dễ hiểu, cho người mới)
 
+> **Trạng thái:** đang dùng · **Cập nhật:** 2026-11-15 · **Đối tượng:** người làm đánh giá, không cần nền ML
+
 > Mục tiêu: bạn **không cần biết ML**. Chỉ cần làm theo các bước dưới đây.
 > Tất cả công cụ đã được dựng sẵn trong `backend/scripts/eval/`.
 
@@ -132,7 +134,7 @@ Câu hỏi cần trả lời: *"Các nhận định của AI có được bằng
 4. Công thức:
    - `Faithfulness = (# claim supported) / (# claim)`
    - `Hallucination rate = 1 - Faithfulness`
-5. Ghi vào báo cáo `docs/EVAL_AI_FAITHFULNESS.md`, nêu rõ số mẫu + ngày + người chấm.
+5. Ghi vào báo cáo đánh giá AI (tạo `docs/EVAL_AI_FAITHFULNESS.md` khi đã có số liệu), nêu rõ số mẫu + ngày + người chấm.
 
 > Cảnh báo: dùng AI chấm AI dễ thiên vị. Tối thiểu 20% mẫu phải được người kiểm lại.
 

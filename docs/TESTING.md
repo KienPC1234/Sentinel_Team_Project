@@ -1,5 +1,7 @@
 # ShieldCall VN — Verification & Test Suites
 
+> **Status:** current · **Updated:** 2026-11-15 · **Audience:** engineers, CI maintainers
+
 Execute test suites to validate database integrity, LLM reasoning, sandbox analysis, and API endpoints.
 
 ```bash
@@ -12,7 +14,7 @@ Execute test suites to validate database integrity, LLM reasoning, sandbox analy
 .venv/bin/python backend/manage.py test api.core.tests.test_sandbox_and_puppeteer
 
 # --- Frontend Verification ---
-cd frontend && npx tsc --noEmit && npx oxlint && cd ..
+cd frontend && npm run lint && npx tsc --noEmit && cd ..
 
 # --- Puppeteer Headless Host (26/26 Deep Test Suite) ---
 cd puppeteer_host && npm test && cd ..

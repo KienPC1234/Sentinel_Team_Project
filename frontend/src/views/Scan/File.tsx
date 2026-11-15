@@ -10,14 +10,16 @@ import { ApiError, api } from '../../lib/api';
 
 import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
-import { openSseStream } from '../../lib/chat/stream';
 import {
+  PrivacyReceiptBadge,
   ScanGuide,
+  ScanPrivacyToggle,
   TurnstileWidget,
-  apiBase,
-  getTsToken,
+  consumeTurnstileToken,
   resetTurnstile,
   showToast,
+  streamScanAiExplanation,
+  useScanPrivacy,
 } from '../../components/ScanWidgets';
 import type { ScanResult } from '../../components/ScanWidgets';
 import { asStr, asNum, asArr, guardrailTone, guardrailLabel, TrustGuardrailPanel } from '../../components/ScanWidgets';
@@ -79,6 +81,7 @@ function cleanAiText(text: string): string {
 
 export default function File() {
   const [file, setFile] = useState<File | null>(null);
+  const [maskPii, setMaskPii] = useScanPrivacy();
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -128,23 +131,18 @@ export default function File() {
   const startAi = (res: ScanResult, sid: number, fileName: string): void => {
     setAiStreaming(true);
     setAiExplanation('');
-    void openSseStream({
-      url: `${apiBase()}/scan/analyze/stream/`,
-      body: {
-        scan_id: sid,
-        scan_type: 'file',
-        scan_data: res,
-        raw_input: fileName,
-      },
-      onEvent: (ev) => {
-        if (ev.type === 'delta') setAiExplanation((t) => t + ev.text);
-        else if (ev.type === 'done') setAiStreaming(false);
-      },
-    })
-      .catch(() => {
+    void streamScanAiExplanation({
+      scanId: sid,
+      scanType: 'file',
+      scanData: res,
+      rawInput: fileName,
+      maskPii,
+      onDelta: (t) => setAiExplanation((prev) => prev + t),
+      onDone: () => setAiStreaming(false),
+      onError: () => {
         setAiExplanation(asStr(res['ai_explanation']) || asStr(res['summary']) || 'Không thể tạo báo cáo AI vào lúc này.');
-      })
-      .finally(() => setAiStreaming(false));
+      },
+    });
   };
 
   const startPolling = (sid: number): void => {
@@ -202,28 +200,16 @@ export default function File() {
 
   const startScan = (): void => {
     if (!file) return;
-    const tsToken = getTsToken();
-    if (!tsToken) {
-      showToast('Vui lòng hoàn thành xác minh anti-spam.', 'warning');
-      try {
-        resetTurnstile();
-      } catch {
-        /* bỏ qua */
-      }
-      return;
-    }
+    const tsToken = consumeTurnstileToken();
+    if (!tsToken) return;
     setLoading(true);
     setProgress(15);
     setStatusMsg('Đang tải file lên kiểm tra...');
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('mask_pii', maskPii ? 'true' : 'false');
     formData.append('cf-turnstile-response', tsToken);
-    try {
-      resetTurnstile();
-    } catch {
-      /* bỏ qua */
-    }
 
     api
       .upload<{ scan_id?: number; error?: string }>('/scan/file/', formData)
@@ -343,6 +329,9 @@ export default function File() {
 
               {file && !loading && !scanning && (
                 <div className="mt-8 flex flex-col items-center gap-6">
+                  <div className="w-full max-w-xl">
+                    <ScanPrivacyToggle scanType="file" checked={maskPii} onChange={setMaskPii} compact />
+                  </div>
                   <TurnstileWidget />
                   <button
                     type="button"
@@ -416,6 +405,7 @@ export default function File() {
                   </div>
                   <h2 className="text-2xl font-black text-white">{fileName}</h2>
                   <p className="text-white/60 text-sm">{asStr(result['summary'])}</p>
+                  <PrivacyReceiptBadge result={result} />
                 </div>
               </div>
             </div>

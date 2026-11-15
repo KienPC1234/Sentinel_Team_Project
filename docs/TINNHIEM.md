@@ -1,6 +1,8 @@
 # Danh bạ Tín nhiệm mạng (`tinnhiemmang.vn`) — thư viện & crawler
 
-> Cập nhật: **2026-10-15**. Nguồn: <https://tinnhiemmang.vn> (hệ thống "Tín nhiệm mạng"
+> **Trạng thái:** đang dùng · **Cập nhật:** 2026-10-16 · **Đối tượng:** kỹ sư dữ liệu, backend
+>
+> Nguồn: <https://tinnhiemmang.vn> (hệ thống "Tín nhiệm mạng"
 > do Cục An ninh mạng / NCSC–VNCERT vận hành).
 
 Tài liệu này mô tả thư viện `api/utils/tinnhiemmang.py` và CLI

@@ -2,22 +2,23 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions, serializers
 from django.http import StreamingHttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 import json
 import uuid
 import base64
 import io
 import logging
-import os
 import asyncio
 import threading
 
-from .models import ChatFolder, ChatSession, ChatMessage, ChatAction, ChatMessageImage, ChatbotConfig, SavedMessage
-from django.core.files.base import ContentFile
+from .models import ChatFolder, ChatSession, ChatMessage, ChatbotConfig, SavedMessage
 from .serializers import (
-    ChatAIRequestSerializer, ChatAIResponseSerializer, ChatFolderSerializer, 
-    ChatSessionSerializer, ChatbotConfigSerializer, SavedMessageSerializer
+    ChatAIRequestSerializer,
+    ChatFolderSerializer,
+    ChatSessionSerializer,
+    ChatbotConfigSerializer,
+    SavedMessageSerializer,
 )
 from api.utils.ai_agent import get_agent
 from api.core.throttling import AIChatThrottle
@@ -303,16 +304,8 @@ class ChatAIStreamView(APIView):
         scan_context = request.data.get('scan_context', '')
         safe_mode = request.data.get('safe_mode', False)
         debug = request.data.get('debug', False)
-        def _parse_strict_bool(val) -> bool:
-            if isinstance(val, bool):
-                return val
-            if isinstance(val, (int, float)):
-                return val == 1
-            if isinstance(val, str):
-                return val.strip().lower() in ('true', '1', 'yes')
-            return False
-
-        user_consent = _parse_strict_bool(request.data.get('consent_external_llm')) or _parse_strict_bool(request.data.get('allow_pii'))
+        from api.utils.privacy import parse_strict_bool
+        user_consent = parse_strict_bool(request.data.get('consent_external_llm')) or parse_strict_bool(request.data.get('allow_pii'))
         # Khách vãng lai cũng được đồng ý rõ ràng (checkbox trên UI): PII chỉ gửi
         # ra ngoài khi có opt-in tường minh + ghi audit (llm_access.log). Mặc định
         # không đồng ý → vẫn ẩn PII như cũ.
@@ -418,9 +411,24 @@ class ChatAIStreamView(APIView):
                     _vision_fn, _vision_on = None, False
                 if images_data and _vision_fn and _vision_on:
                     yield f"data: {json.dumps({'type': 'status', 'value': 'analyzing_image'})}\n\n"
+                    _vloop = asyncio.get_running_loop()
                     for i, img_b64 in enumerate(images_data):
+                        # Chạy vision trong thread + heartbeat mỗi 15s: model 32B có thể
+                        # suy luận 30-60s, không phát byte nào sẽ bị proxy (Cloudflare
+                        # ~100s) cắt. Quá 150s/ảnh thì bỏ qua, fallback OCR.
+                        vis = None
                         try:
-                            vis = _vision_fn(img_b64, hint=user_message or "")
+                            _vfut = _vloop.run_in_executor(
+                                None, _vision_fn, img_b64, user_message or "")
+                            _waited = 0.0
+                            while not _vfut.done():
+                                await asyncio.sleep(15)
+                                _waited += 15
+                                if _waited >= 150:
+                                    break
+                                yield ": ping\n\n"
+                            if _vfut.done():
+                                vis = _vfut.result()
                         except Exception as ve:
                             logging.getLogger(__name__).warning(f"Vision error: {ve}")
                             vis = None
@@ -534,7 +542,6 @@ class ChatAIStreamView(APIView):
         response.streaming = True
         return response
 
-from django.views import View
 
 class ChatSearchView(APIView):
     """

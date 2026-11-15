@@ -14,10 +14,12 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 
 
 _PREDICTOR = None
 _DEVICE = None
+_PREDICTOR_LOCK = threading.Lock()
 
 # Model cục bộ (ưu tiên) để service không phụ thuộc mạng và không đọc /tmp.
 _MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "vietocr")
@@ -26,10 +28,13 @@ _LOCAL_WEIGHTS = os.path.join(_MODEL_DIR, "vgg_transformer.pth")
 
 
 def _get_predictor():
-    """Nạp VietOCR predictor 1 lần/tiến trình (cache toàn cục) — tránh nạp lại mỗi request."""
+    """Nạp VietOCR predictor 1 lần/tiến trình (double-checked lock) — tránh nạp lại/đua GPU."""
     global _PREDICTOR, _DEVICE
-    if _PREDICTOR is None:
-        import os
+    if _PREDICTOR is not None:
+        return _PREDICTOR, _DEVICE
+    with _PREDICTOR_LOCK:
+        if _PREDICTOR is not None:
+            return _PREDICTOR, _DEVICE
         import torch
         from vietocr.tool.predictor import Predictor
         from vietocr.tool.config import Cfg
@@ -54,6 +59,7 @@ def _get_predictor():
 
 _CRAFT = None
 _CRAFT_FAILED = False
+_CRAFT_LOCK = threading.Lock()
 
 
 def _patch_craft_numpy2():
@@ -109,10 +115,13 @@ def _patch_craft_numpy2():
 
 
 def _get_craft():
-    """Craft detector (nếu đã cài craft-text-detector) — cache toàn cục."""
+    """Craft detector (nếu đã cài craft-text-detector) — cache toàn cục, thread-safe."""
     global _CRAFT
-    if _CRAFT is None:
-        import os
+    if _CRAFT is not None:
+        return _CRAFT
+    with _CRAFT_LOCK:
+        if _CRAFT is not None:
+            return _CRAFT
         import torch
         import torchvision.models.vgg as vgg
         if not hasattr(vgg, "model_urls"):
@@ -131,11 +140,13 @@ def _get_craft():
 def _detect_boxes(path: str, img):
     """Phát hiện vùng chữ: CRAFT (nếu cài & tương thích) → fallback projection."""
     global _CRAFT_FAILED
-    det = (__import__("os").getenv("OCR_DETECTOR") or "auto").strip().lower()
+    det = (os.getenv("OCR_DETECTOR") or "auto").strip().lower()
     if det in ("auto", "craft") and not _CRAFT_FAILED:
         try:
+            import torch
             craft = _get_craft()
-            pred = craft.detect_text(path)
+            with torch.inference_mode():
+                pred = craft.detect_text(path)
             # detect_text trả "boxes" là ndarray (N,4,2) khi có phát hiện —
             # không dùng `or []` vì truth-test trên ndarray nhiều phần tử sẽ raise.
             raw_boxes = pred.get("boxes")
@@ -236,10 +247,22 @@ def run_vietocr(path: str, want_boxes: bool):
     crops_sorted = [crops_pil[i] for i in order]
     metas_sorted = [metas[i] for i in order]
 
-    try:
-        texts = predictor.predict_batch(crops_sorted)   # batch trên GPU (nhanh hơn nhiều)
-    except Exception:
-        texts = [predictor.predict(p) for p in crops_sorted]
+    import torch
+    batch_size = max(1, int(os.getenv("OCR_BATCH_SIZE", "32") or 32))
+    texts = []
+    with torch.inference_mode():
+        for start in range(0, len(crops_sorted), batch_size):
+            chunk = crops_sorted[start:start + batch_size]
+            try:
+                texts.extend(predictor.predict_batch(chunk))
+            except Exception as exc:
+                if "out of memory" in str(exc).lower() and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                for p in chunk:
+                    try:
+                        texts.append(predictor.predict(p))
+                    except Exception:
+                        texts.append("")
 
     out_texts, regions = [], []
     for t, (X1, Y1, X2, Y2) in zip(texts, metas_sorted):

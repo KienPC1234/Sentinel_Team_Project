@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { api } from '../../lib/api';
+import { scConfirm } from '../../lib/ui/feedback';
 import { AdminShell, useAdminGet } from './_shared';
 
 interface LessonItem {
@@ -25,7 +26,7 @@ export default function LearnMgmt() {
   const list = data || [];
 
   const handleNotify = async (id: number, title: string) => {
-    if (!window.confirm(`Gửi thông báo email và push đến tất cả người dùng về bài học "${title}"?`)) return;
+    if (!(await scConfirm(`Gửi thông báo email và push đến tất cả người dùng về bài học "${title}"?`, { icon: 'question', confirmButtonText: 'Gửi thông báo' }))) return;
     setNotifyingId(id);
     setMsg(null);
     try {
@@ -40,7 +41,7 @@ export default function LearnMgmt() {
   };
 
   const handleDelete = async (id: number, title: string) => {
-    if (!window.confirm(`Bạn có chắc muốn xóa bài học "${title}"?`)) return;
+    if (!(await scConfirm(`Bạn có chắc muốn xóa bài học "${title}"?`, { icon: 'warning', confirmButtonText: 'Xóa' }))) return;
     setDeletingId(id);
     setMsg(null);
     try {

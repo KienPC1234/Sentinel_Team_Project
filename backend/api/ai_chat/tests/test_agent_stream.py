@@ -1,5 +1,5 @@
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from django.test import TestCase, TransactionTestCase, AsyncClient
 from django.contrib.auth import get_user_model
 from django.urls import reverse
