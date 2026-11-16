@@ -18,15 +18,6 @@ from api.utils.trust_guard import level_from_score as _level_from_score
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-if not logger.handlers:
-    fh = logging.FileHandler('llm_access.log')
-    fh.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
-    try:
-        from api.utils.privacy import PIIRedactionFilter
-        fh.addFilter(PIIRedactionFilter())  # điểm #5: ẩn PII khỏi log tác vụ
-    except Exception:
-        pass
-    logger.addHandler(fh)
 
 
 def _run_with_timeout(fn, timeout: float = 15.0, default=None):
@@ -219,10 +210,12 @@ def recompute_phone_risk(phone_number: str):
         return
 
     # Calculate Score using the unified engine
+    from api.utils.privacy import mask_phone_display
+    masked_phone = mask_phone_display(phone_number)
     try:
         result = _phone_risk_score(phone_number)
     except Exception as exc:
-        logger.warning(f'recompute_phone_risk failed for {phone_number}: {exc}')
+        logger.warning(f'recompute_phone_risk failed for {masked_phone}: {exc}')
         return
 
     # Map API level string directly to Enum
@@ -247,9 +240,9 @@ def recompute_phone_risk(phone_number: str):
             }
         )
     except Exception as exc:
-        logger.warning(f'recompute_phone_risk DB update failed for {phone_number}: {exc}')
+        logger.warning(f'recompute_phone_risk DB update failed for {masked_phone}: {exc}')
         return
-    logger.info(f'Recomputed risk for {phone_number}: score={(result or {}).get("risk_score")}')
+    logger.info(f'Recomputed risk for {masked_phone}: score={(result or {}).get("risk_score")}')
 
 
 @shared_task(name='core.daily_trend_aggregation')
@@ -285,41 +278,6 @@ def daily_trend_aggregation(date_str: str = None):
         )
 
     logger.info(f'Trend aggregation for {target_date}: {len(aggregated)} types')
-
-
-@shared_task(name='core.scan_domain_async')
-def scan_domain_async(url: str, user_id: int = None):
-    """
-    Async domain scan for heavy analysis.
-    """
-    from api.core.views.scan_views import _analyze_domain
-    from api.core.models import ScanEvent
-
-    try:
-        result = _analyze_domain(url)
-        if not isinstance(result, dict):
-            raise ValueError('Domain analyzer returned no result')
-        owner_id = None
-        if user_id is not None:
-            from django.contrib.auth import get_user_model
-            try:
-                owner_id = get_user_model().objects.filter(id=int(user_id)).values_list('id', flat=True).first()
-            except (TypeError, ValueError):
-                owner_id = None
-
-        ScanEvent.objects.create(
-            user_id=owner_id,
-            scan_type='domain',
-            raw_input=url,
-            normalized_input=result.get('domain') or url,
-            result_json=result,
-            risk_score=int(result.get('risk_score') or 0),
-            risk_level=result.get('risk_level') or 'SAFE',
-        )
-        return result
-    except Exception as exc:
-        logger.warning(f'scan_domain_async failed for {url}: {exc}')
-        return {'error': str(exc)[:300]}
 
 
 @shared_task(name='core.deduplicate_reports')
@@ -592,6 +550,18 @@ def _attach_guardrail(result_json, kind):
     return result_json
 
 
+def _resolve_synced_risk_level(result_json, base_level):
+    """Đồng bộ risk_level DB với guardrail để không lưu SAFE khi thiếu căn cứ."""
+    from api.core.models import RiskLevel
+    level = str(base_level or RiskLevel.GREEN)
+    if isinstance(result_json, dict):
+        tier = (result_json.get('guardrail') or {}).get('tier')
+        if tier == 'INSUFFICIENT' and level == RiskLevel.SAFE:
+            level = RiskLevel.YELLOW
+        result_json['risk_level'] = level
+    return level
+
+
 def _apply_task_privacy_and_guardrail(scan_event, result_json, kind):
     """Gan guardrail roi ap dung che PII theo tuy chon `privacy_masked` cua ban ghi quet."""
     guarded = _attach_guardrail(result_json, kind)
@@ -636,14 +606,23 @@ def _notify_scan_complete(scan_event, title_suffix=''):
 
         risk_level = getattr(scan_event, 'risk_level', 'SAFE')
         risk_score = getattr(scan_event, 'risk_score', 0)
+        rj = getattr(scan_event, 'result_json', None)
+        tier = (rj.get('guardrail') or {}).get('tier') if isinstance(rj, dict) else None
 
+        tier_labels = {
+            'CONFIRMED_RISK': '[Nguy cơ cao] Đã đối chiếu nguồn',
+            'HIGH_RISK': '[Nguy cơ cao]',
+            'SUSPICIOUS': '[Đáng ngờ] Cần thận trọng',
+            'LIKELY_SAFE': '[Có khả năng an toàn]',
+            'INSUFFICIENT': '[Chưa đủ căn cứ] Cần xác minh',
+        }
         level_labels = {
             'RED': '[Nguy hiểm] Cao',
             'YELLOW': '[Cảnh báo] Trung bình',
-            'GREEN': '[An toàn] Thấp',
-            'SAFE': '[An toàn] Thấp',
+            'GREEN': '[Rủi ro thấp] Cần đối chiếu',
+            'SAFE': '[Chưa đủ căn cứ] Cần xác minh',
         }
-        level_text = level_labels.get(risk_level, '[An toàn] Thấp')
+        level_text = tier_labels.get(tier) or level_labels.get(risk_level, '[Chưa đủ căn cứ] Cần xác minh')
 
         title = f"Kết quả quét: {level_text}"
         message = f"{title_suffix} - Điểm rủi ro: {risk_score}/100"
@@ -726,11 +705,12 @@ def perform_scan_task(self, scan_event_id):
             }
 
         result = _apply_task_privacy_and_guardrail(scan_event, result, scan_type or 'generic')
-        scan_event.result_json = result
         scan_event.risk_score = result.get('risk_score', 0)
         db_level = result.get('risk_level', RiskLevel.SAFE)
         if result.get('insufficient_input') and int(scan_event.risk_score or 0) < 10:
             db_level = RiskLevel.YELLOW
+        db_level = _resolve_synced_risk_level(result, db_level)
+        scan_event.result_json = result
         scan_event.risk_level = db_level
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
@@ -836,7 +816,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
                 if _vision_fn:
                     send_progress(f"Ảnh {i+1}: Model vision đang nhìn trực tiếp...", step="vision")
                     try:
-                        vis = _vision_fn(img_b64)
+                        vis = _vision_fn(img_b64, allow_pii=_has_external_pii_consent(scan_event))
                     except Exception as ve:
                         logger.warning(f"Vision hook error for image {i+1}: {ve}")
                         vis = None
@@ -997,11 +977,12 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         # Gắn guardrail + che PII NGAY trên `result` (để payload WS cũng đồng nhất), rồi lưu DB
         # bỏ ảnh annotate cho nhẹ JSON field.
         result = _apply_task_privacy_and_guardrail(scan_event, result, 'qr')
+        synced_level = _resolve_synced_risk_level(result, level)
         scan_event.result_json = {
             k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')
         }
         scan_event.risk_score = score
-        scan_event.risk_level = level
+        scan_event.risk_level = synced_level
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
         
@@ -1149,9 +1130,10 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
         }
 
         result = _apply_task_privacy_and_guardrail(scan_event, result, 'audio')
+        synced_level = _resolve_synced_risk_level(result, level)
         scan_event.result_json = result
         scan_event.risk_score = score
-        scan_event.risk_level = level
+        scan_event.risk_level = synced_level
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
 
@@ -1586,9 +1568,10 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         result['risk_level'] = _level_from_score(final_risk_score)
 
         result = _apply_task_privacy_and_guardrail(scan_event, result, 'domain')
+        synced_level = _resolve_synced_risk_level(result, result.get('risk_level'))
         scan_event.result_json = result
         scan_event.risk_score = result['risk_score']
-        scan_event.risk_level = result['risk_level']
+        scan_event.risk_level = synced_level
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
 
@@ -1850,129 +1833,68 @@ def process_forum_comment_report(report_id):
     except Exception as e:
         logger.error(f"Error in process_forum_comment_report: {e}")
 
-@shared_task
+@shared_task(name='core.send_bulk_lesson_email')
 def send_bulk_lesson_email(lesson_id):
+    """Notify all active users about a new lesson (email + WebPush).
+
+    This used to run inline inside ``AdminLearnNotifyView``: one SMTP connection
+    plus up to 200 WebPush calls per HTTP request, which regularly exceeded the
+    reverse-proxy/Next.js timeout. Keep the fan-out in Celery and let the API
+    return ``202 queued`` immediately.
     """
-    Sends notification email to all users who have profiles.
-    """
-    from api.core.models import LearnLesson, UserProfile
-    from api.utils.email_utils import send_new_lesson_email
     from django.conf import settings
-    
+    from api.core.models import LearnLesson
+    from api.utils.email_utils import send_new_lesson_email
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+
     try:
         lesson = LearnLesson.objects.get(id=lesson_id)
-        if not lesson.is_published: return
-        
-        emails = list(UserProfile.objects.filter(user__is_active=True).values_list('user__email', flat=True))
-        emails = [e for e in emails if e] # Filter valid ones
-        
-        if not emails: return
-        
-        site_url = (getattr(settings, 'SITE_URL', None) or os.getenv('SITE_URL', 'https://sc.fptoj.com')).rstrip('/')
-        lesson_url = f"{site_url}/learn/lesson/{lesson.slug}/"
-        
-        # Send in batches of 10 to avoid spam limits/timeouts
-        for i in range(0, len(emails), 10):
-            batch = emails[i:i+10]
-            send_new_lesson_email(batch, lesson.title, lesson_url)
-            
     except LearnLesson.DoesNotExist:
-        pass
-    except Exception as e:
-        logger.error(f"Error in send_bulk_lesson_email: {e}")
+        logger.warning("send_bulk_lesson_email: lesson #%s not found", lesson_id)
+        return {'status': 'not_found', 'lesson_id': lesson_id}
 
-@shared_task(name='core.analyze_content_task', bind=True)
-def analyze_content_task(self, scan_event_id, content: str, urls: list = None):
-    """
-    Perform deep analysis on text content (Email/SMS) using LLM and URL checks.
-    """
-    from api.core.models import ScanEvent, ScanStatus, RiskLevel
-    from api.utils.ollama_client import analyze_text_for_scam
+    site_url = (getattr(settings, 'SITE_URL', None) or os.getenv('SITE_URL', 'https://sc.fptoj.com')).rstrip('/')
+    lesson_url = f"{site_url}/learn/lesson/{lesson.slug}/"
 
-    if urls is None: urls = []
+    active_users = User.objects.filter(is_active=True).only('id', 'email')
+    emails = sorted({
+        str(email or '').strip()
+        for email in active_users.values_list('email', flat=True)
+        if str(email or '').strip()
+    })
 
+    sent_email_count = 0
+    for i in range(0, len(emails), 100):
+        sent_email_count += send_new_lesson_email(emails[i:i + 100], lesson.title, lesson_url)
+
+    # Reuse the tested broadcast fan-out (in-app rows + WebSocket + chunked
+    # native WebPush) instead of doing N blocking push calls in this task.
+    push_dispatched = False
     try:
-        scan = ScanEvent.objects.get(id=scan_event_id)
-        scan.status = ScanStatus.PROCESSING
-        scan.job_id = self.request.id
-        scan.save()
-        
-        logger.info(f"Analyzing content for ScanEvent #{scan_event_id}...")
-        
-        # 1. AI Analysis of Text Body
-        # Summarize content if too long
-        ai_input = content[:5000] 
-        if urls:
-            ai_input += f"\n\nContained URLs: {', '.join(urls)}"
-            
-        consent_pii = _has_external_pii_consent(scan)
-        ai_res = analyze_text_for_scam(ai_input, use_web_search=True, external_consent=consent_pii)
-        
-        current_risk_score = scan.risk_score
-        current_details = scan.result_json or {}
-        
-        ai_score = ai_res.get('risk_score', 0)
-        
-        # Merge results - AI usually gives the comprehensive verdict
-        final_score = max(current_risk_score, ai_score)
-        
-        if 'reasons' not in current_details:
-             current_details['reasons'] = []
-             
-        # Add AI explanation
-        ai_notice = ai_res.get('ai_notice')
-        if ai_notice:
-            current_details['ai_notice'] = ai_notice
-            current_details['reasons'].append(ai_notice)
-        explanation = ai_res.get('explanation') or ai_res.get('reason')
-        if explanation:
-            current_details['ai_explanation'] = explanation
-        
-        current_details['ai_full_response'] = ai_res
-        # Include web sources and context at top level for frontend
-        current_details['web_sources'] = ai_res.get('web_sources', [])
-        current_details['web_context'] = ai_res.get('web_context', '')
-        
-        # 2. URL Analysis (Logic can be expanded here)
-        if urls and final_score < 100:
-             # Basic heuristic if not using VT
-             suspicious_tlds = ['.xyz', '.top', '.club', '.info', '.ru', '.cn']
-             for url in urls:
-                 if any(tld in url for tld in suspicious_tlds):
-                     final_score = max(final_score, 60)
-                     current_details['reasons'].append(f"Suspicious URL TLD found: {url}")
+        admin_broadcast_task.delay(
+            title='Bài học mới trên ShieldCall',
+            message=f'{lesson.title}',
+            url=f'/learn/lesson/{lesson.slug}/',
+            notification_type='info',
+            send_webpush=True,
+            send_inapp=True,
+        )
+        push_dispatched = True
+    except Exception as exc:
+        logger.warning("send_bulk_lesson_email: push dispatch failed: %s", exc)
 
-        final_score = min(100, final_score)
-        
-        # Determine Level
-        level = RiskLevel.SAFE
-        if final_score >= 80: level = RiskLevel.RED
-        elif final_score >= 40: level = RiskLevel.YELLOW
-        elif final_score >= 15: level = RiskLevel.GREEN
-        if ai_res.get('insufficient_input') and final_score < 10:
-            current_details['insufficient_input'] = True
-            level = RiskLevel.YELLOW
-
-        current_details['risk_score'] = final_score
-        current_details['risk_level'] = level
-        current_details = _apply_task_privacy_and_guardrail(scan, current_details, scan.scan_type or 'email')
-
-        # Update ScanEvent
-        scan.risk_score = final_score
-        scan.risk_level = level
-        scan.result_json = current_details
-        scan.status = ScanStatus.COMPLETED
-        scan.save()
-        
-        logger.info(f"ScanEvent #{scan_event_id} analysis complete. Score: {final_score}")
-        
-    except ScanEvent.DoesNotExist:
-        logger.error(f"ScanEvent #{scan_event_id} not found.")
-    except Exception as e:
-        logger.error(f"analyze_content_task failed: {e}")
-        if 'scan' in locals():
-            scan.status = ScanStatus.FAILED
-            scan.save()
+    logger.info(
+        "send_bulk_lesson_email: lesson #%s -> %s emails, push_dispatched=%s",
+        lesson_id, sent_email_count, push_dispatched,
+    )
+    return {
+        'status': 'ok',
+        'lesson_id': lesson_id,
+        'sent_emails': sent_email_count,
+        'push_dispatched': push_dispatched,
+    }
 
 @shared_task(name='core.perform_message_scan_task', bind=True)
 def perform_message_scan_task(self, scan_event_id: int, message_text: str, images_b64: list):
@@ -2250,11 +2172,12 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         # Gắn guardrail + che PII NGAY trên `result` (để payload WS cũng đồng nhất), rồi lưu DB
         # bỏ ảnh annotate cho nhẹ JSON field.
         result = _apply_task_privacy_and_guardrail(scan_event, result, 'message')
+        synced_level = _resolve_synced_risk_level(result, level)
         scan_event.result_json = {
             k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')
         }
         scan_event.risk_score = final_score
-        scan_event.risk_level = level
+        scan_event.risk_level = synced_level
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
 
@@ -2478,10 +2401,11 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             seen_detail_keys.add(normalized_key)
             deduped_details.append(text)
         
-        # Determine Risk Level
-        scan_event.risk_level = _level_from_score(final_score)
-            
+        # Determine Risk Level before guardrail attachment
+        prelim_level = _level_from_score(final_score)
         scan_event.risk_score = final_score
+        result_json['risk_score'] = final_score
+        result_json['risk_level'] = str(prelim_level)
         result_json['analysis_result'] = deduped_details[:40]
         result_json['eml_weighted_score'] = eml_score
         result_json['eml_score_components'] = eml_res.get('components', {})
@@ -2511,6 +2435,7 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             result_json['searched_urls'] = analysis.get('searched_urls', [])
         # Gắn guardrail + áp dụng che PII đồng nhất trước khi lưu DB & push WS.
         result_json = _apply_task_privacy_and_guardrail(scan_event, result_json, 'email')
+        scan_event.risk_level = _resolve_synced_risk_level(result_json, prelim_level)
         scan_event.result_json = result_json
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
@@ -2585,7 +2510,7 @@ def perform_file_scan_task(self, scan_event_id, file_path):
             # Determine risk level
             if malicious >= 1 or risk_score >= 70:
                 risk_level = RiskLevel.RED
-            elif suspicious >= 1 or risk_score >= 30:
+            elif suspicious >= 1 or risk_score >= 40:
                 risk_level = RiskLevel.YELLOW
             else:
                 risk_level = RiskLevel.GREEN
@@ -2598,6 +2523,14 @@ def perform_file_scan_task(self, scan_event_id, file_path):
             if not details:
                 details.append("Không phát hiện chữ ký độc hại hay cấu trúc bất thường.")
 
+            raw_verdict = vt_result.get('verdict')
+            if not raw_verdict or raw_verdict == 'SAFE':
+                raw_verdict = (
+                    'MALICIOUS' if malicious >= 1
+                    else 'SUSPICIOUS' if suspicious >= 1
+                    else 'INSUFFICIENT'
+                )
+
             scan_event.result_json = {
                 'file_name': display_name,
                 'file_size': file_size,
@@ -2608,7 +2541,7 @@ def perform_file_scan_task(self, scan_event_id, file_path):
                 'total': total,
                 'risk_score': risk_score,
                 'risk_level': risk_level,
-                'verdict': vt_result.get('verdict', 'SAFE'),
+                'verdict': raw_verdict,
                 'threat_family': threat_family,
                 'forensic_evidence': forensic_evidence,
                 'file_metadata': file_metadata,
@@ -2626,9 +2559,14 @@ def perform_file_scan_task(self, scan_event_id, file_path):
             if vt_result.get('sources'):
                 scan_event.result_json['sources'] = vt_result.get('sources')
             scan_event.result_json = _apply_task_privacy_and_guardrail(scan_event, scan_event.result_json, 'file')
+            guardrail_tier = (scan_event.result_json.get('guardrail') or {}).get('tier')
+            if guardrail_tier == 'INSUFFICIENT':
+                scan_event.result_json['verdict'] = 'INSUFFICIENT'
+            elif guardrail_tier == 'LIKELY_SAFE' and scan_event.result_json.get('verdict') in (None, '', 'INSUFFICIENT'):
+                scan_event.result_json['verdict'] = 'LIKELY_SAFE'
             display_name = scan_event.result_json.get('file_name', display_name)
             scan_event.risk_score = risk_score
-            scan_event.risk_level = risk_level
+            scan_event.risk_level = _resolve_synced_risk_level(scan_event.result_json, risk_level)
         else:
             # Sandbox không trả kết quả => ĐÂY LÀ THẤT BẠI, không được trình bày là
             # "GREEN/an toàn". Trước đây đánh dấu COMPLETED/GREEN/0 và push "[An toàn]".

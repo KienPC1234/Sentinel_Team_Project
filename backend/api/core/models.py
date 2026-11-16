@@ -961,7 +961,12 @@ def sync_vector_db(sender, instance, **kwargs):
     """
     try:
         from django.core.cache import cache
+        from django.conf import settings
         from api.maintenance.tasks import rebuild_vector_index
+        # Test/CI runs must not overwrite the developer's real FAISS index in
+        # backend/vector_store when fixtures create articles/lessons.
+        if not getattr(settings, 'VECTOR_DB_AUTO_REBUILD', True):
+            return
         if not cache.add('vector_rebuild_queued', 1, timeout=300):
             return
         rebuild_vector_index.delay(trigger='AUTO')

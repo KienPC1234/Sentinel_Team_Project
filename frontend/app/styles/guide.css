@@ -1,0 +1,114 @@
+/* Tour hướng dẫn (driver.js) — theme tối đồng bộ ShieldCall VN.
+ * Giữ popover gọn, chữ đủ lớn, nổi trên nav (z-50) và chat widget nhưng dưới
+ * modal hệ thống. Lớp .scv-guide-popover được truyền qua popoverClass. */
+
+/* SVG overlay của driver.js dùng path cutout để khoét lỗ sáng: tuyệt đối giữ nền
+ * SVG trong suốt để phần tử đang được hướng dẫn không bị phủ mờ/làm tối bên trong. */
+.driver-overlay {
+  background: transparent !important;
+}
+
+.driver-active-element {
+  border-radius: 12px;
+  outline: 2px solid rgba(34, 211, 238, 0.55);
+  outline-offset: 2px;
+}
+
+.scv-guide-popover.driver-popover {
+  background: rgba(13, 13, 31, 0.98);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65), 0 0 32px rgba(34, 211, 238, 0.08);
+  color: #f1f5f9;
+  max-width: min(360px, calc(100vw - 3rem));
+  padding: 16px 18px 14px;
+}
+
+.scv-guide-popover .driver-popover-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.scv-guide-popover .driver-popover-description {
+  color: rgba(203, 213, 225, 0.92);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.scv-guide-popover .driver-popover-progress-text {
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.scv-guide-popover .driver-popover-footer {
+  margin-top: 12px;
+}
+
+.scv-guide-popover .driver-popover-btn {
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 16px;
+  text-shadow: none;
+}
+
+.scv-guide-popover .driver-popover-next-btn {
+  background: #06b6d4;
+  border: 1px solid #06b6d4;
+  color: #020617;
+}
+
+.scv-guide-popover .driver-popover-next-btn:hover {
+  background: #22d3ee;
+  border-color: #22d3ee;
+  color: #020617;
+}
+
+.scv-guide-popover .driver-popover-prev-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #cbd5e1;
+}
+
+.scv-guide-popover .driver-popover-prev-btn:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.scv-guide-popover .driver-popover-close-btn {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.scv-guide-popover .driver-popover-close-btn:hover {
+  color: #fff;
+}
+
+.scv-guide-popover .driver-popover-arrow {
+  border-color: rgba(13, 13, 31, 0.98);
+}
+
+/* Banner gợi ý: trượt lên nhẹ, tôn trọng reduced-motion. */
+.scv-guide-banner {
+  animation: scv-guide-up 0.25s ease-out both;
+}
+
+@keyframes scv-guide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scv-guide-banner {
+    animation: none;
+  }
+}

@@ -78,11 +78,14 @@ def _verify_turnstile_or_api_key(request):
 
 def _register_scan_in_session(request, scan_id: int) -> None:
     """Persist scan_id into the session so the anonymous creator can poll it without 403."""
-    active = request.session.get('active_scan_ids', [])
+    session = getattr(request, 'session', None)
+    if session is None:
+        return
+    active = session.get('active_scan_ids', [])
     if scan_id not in active:
         active.append(scan_id)
-        request.session['active_scan_ids'] = active[-30:]
-        request.session.modified = True
+        session['active_scan_ids'] = active[-30:]
+        session.modified = True
 
 
 
@@ -116,6 +119,9 @@ def _safe_target_value(scan_event: ScanEvent) -> str:
 
     if scan_event.scan_type == 'account' and len(raw) > 6:
         return f'{raw[:3]}*****{raw[-3:]}'
+
+    if scan_event.scan_type in ('email', 'domain', 'qr'):
+        return mask_scan_raw_input(scan_event.scan_type, raw, mask_pii=True)[:500]
 
     return raw[:500]
 
@@ -191,6 +197,7 @@ from api.utils.normalization import normalize_phone, normalize_phone_e164, norma
 from api.utils.vn_phone_numbering import analyze_number_structure, NUMBERING_SOURCE
 from api.utils.vt_client import VTClient
 from api.utils.trust_guard import apply_guardrail, level_from_score as _level_from_score
+from api.utils.scan_token import issue_scan_token, read_scan_token
 
 import math
 import phonenumbers
@@ -688,6 +695,7 @@ class ScanPhoneView(APIView):
         _document_scan_for_admin(scan_event)
         _register_scan_in_session(request, scan_event.id)
         result['scan_id'] = scan_event.id
+        result['scan_token'] = issue_scan_token(scan_event.id)
 
         return Response(result)
 
@@ -855,6 +863,7 @@ class ScanEmailView(APIView):
 
             res_data = {
                 'scan_id': scan_event.id,
+                'scan_token': issue_scan_token(scan_event.id),
                 'email': clean_email,
                 'risk_score': final_score,
                 'risk_level': str(level),
@@ -868,6 +877,9 @@ class ScanEmailView(APIView):
                 }
             }
             apply_guardrail(res_data, kind='email')
+            if (res_data.get('guardrail') or {}).get('tier') == 'INSUFFICIENT' and level == RiskLevel.SAFE:
+                level = RiskLevel.YELLOW
+                res_data['risk_level'] = str(level)
             _, _, res_data = apply_scan_privacy(
                 'email',
                 res_data,
@@ -892,6 +904,7 @@ class ScanEmailView(APIView):
         # 8. Return Preliminary Result
         return Response({
             'scan_id': scan_event.id,
+            'scan_token': issue_scan_token(scan_event.id),
             'status': 'processing',
             'message': 'Đang phân tích chuyên sâu...',
             'preliminary_score': base_risk_score,
@@ -1175,6 +1188,7 @@ class ScanMessageView(APIView):
 
             return Response({
                 'scan_id': scan_event.id,
+                'scan_token': issue_scan_token(scan_event.id),
                 'status': 'completed',
                 **analysis
             })
@@ -1201,6 +1215,7 @@ class ScanMessageView(APIView):
         _register_scan_in_session(request, scan_event.id)
         return Response({
             'scan_id': scan_event.id,
+            'scan_token': issue_scan_token(scan_event.id),
             'status': 'pending',
             'message': 'Đang phân tích tin nhắn...'
         })
@@ -1715,6 +1730,7 @@ class ScanDomainView(APIView):
             _register_scan_in_session(request, scan_event.id)
             return Response({
                 'scan_id': scan_event.id,
+                'scan_token': issue_scan_token(scan_event.id),
                 'status': 'pending',
                 'message': 'Đang cào dữ liệu và phân tích chuyên sâu...',
                 'task_id': task.id,
@@ -1747,6 +1763,7 @@ class ScanDomainView(APIView):
         _document_scan_for_admin(scan_event)
         _register_scan_in_session(request, scan_event.id)
         result['scan_id'] = scan_event.id
+        result['scan_token'] = issue_scan_token(scan_event.id)
 
         return Response(result)
 
@@ -1941,6 +1958,7 @@ class ScanAccountView(APIView):
         )
 
         result['scan_id'] = scan_event.id
+        result['scan_token'] = issue_scan_token(scan_event.id)
         scan_event.result_json = result
         scan_event.save(update_fields=['result_json'])
 
@@ -2020,6 +2038,7 @@ class ScanImageView(APIView):
             _register_scan_in_session(request, scan_event.id)
             return Response({
                 'scan_id': scan_event.id,
+                'scan_token': issue_scan_token(scan_event.id),
                 'status': scan_event.status,
                 'message': 'Đang tải lên và phân tích hình ảnh...',
                 'privacy_masked': mask_pii,
@@ -2094,6 +2113,7 @@ class ScanFileView(APIView):
             _register_scan_in_session(request, scan_event.id)
             return Response({
                 'scan_id': scan_event.id,
+                'scan_token': issue_scan_token(scan_event.id),
                 'status': scan_event.status,
                 'message': 'Đang tải lên và phân tích file...'
             })
@@ -2182,6 +2202,7 @@ class ScanAudioView(APIView):
             _register_scan_in_session(request, scan_event.id)
             return Response({
                 'scan_id': scan_event.id,
+                'scan_token': issue_scan_token(scan_event.id),
                 'status': scan_event.status,
                 'message': 'Đang nhận diện giọng nói và phân tích rủi ro...'
             })
@@ -2203,28 +2224,35 @@ class ScanStatusView(APIView):
 
     @extend_schema(responses={200: serializers.DictField()})
     def get(self, request, scan_id):
-        from api.core.models import ScanEvent, ScanStatus
+        from api.core.models import ScanEvent, ScanStatus, RiskLevel
         try:
             event = ScanEvent.objects.get(id=scan_id)
-            active_scans = request.session.get('active_scan_ids', [])
+            session = getattr(request, 'session', None)
+            active_scans = session.get('active_scan_ids', []) if session is not None else []
             is_in_session = (
                 scan_id in active_scans 
                 or str(scan_id) in [str(x) for x in active_scans]
             )
+            token_scan_id = read_scan_token(
+                request.query_params.get('scan_token') or request.headers.get('X-Scan-Token')
+            )
+            is_token_owner = token_scan_id == event.id
 
             # Allow access if:
             # 1. Staff / Admin
             # 2. Authenticated owner of the scan
             # 3. Creator within active session (active_scan_ids)
-            # 4. Publicly referable (owner opted-in via is_public_referable)
+            # 4. Valid signed scan token returned at scan creation
+            # 5. Publicly referable (owner opted-in via is_public_referable)
             # NOTE: anonymous scans (user_id None) are NOT publicly visible by
             # default — fixes IDOR/data-leakage. Actively running scans are
-            # visible only to their session owner, staff, or referable scans.
+            # visible only to their session owner, staff, token holder, or referable scans.
             can_view = bool(
                 request.user.is_staff
                 or (request.user.is_authenticated and event.user_id == request.user.id)
                 or event.is_public_referable
                 or is_in_session
+                or is_token_owner
             )
             if not can_view:
                 return Response({'error': 'Bạn không có quyền truy cập kết quả quét này.'}, status=status.HTTP_403_FORBIDDEN)
@@ -2238,8 +2266,14 @@ class ScanStatusView(APIView):
                     apply_guardrail(result_payload, kind=event.scan_type or 'generic')
                     # Lưu lại để lịch sử/lookup/MCP cũng có evidence + guardrail
                     # (trước đây chỉ sửa trong bộ nhớ -> mất khi serialize lại).
+                    update_fields = ['result_json']
+                    tier = (result_payload.get('guardrail') or {}).get('tier')
+                    if tier == 'INSUFFICIENT' and event.risk_level == RiskLevel.SAFE:
+                        event.risk_level = RiskLevel.YELLOW
+                        result_payload['risk_level'] = RiskLevel.YELLOW
+                        update_fields.append('risk_level')
                     event.result_json = result_payload
-                    event.save(update_fields=['result_json'])
+                    event.save(update_fields=update_fields)
                 except Exception:
                     pass
             return Response({
@@ -2274,7 +2308,10 @@ class ScanReportAdminView(APIView):
             scan_id in active_scans or str(scan_id) in [str(x) for x in (active_scans or [])]
         )
         owns = bool(event.user_id and event.user_id == request.user.id)
-        if not (request.user.is_staff or owns or is_in_session):
+        token_owner = read_scan_token(
+            request.data.get('scan_token') or request.headers.get('X-Scan-Token')
+        ) == event.id
+        if not (request.user.is_staff or owns or is_in_session or token_owner):
             return Response({'error': 'Bạn không có quyền gửi xác minh cho scan này.'}, status=403)
 
         if event.status != ScanStatus.COMPLETED:

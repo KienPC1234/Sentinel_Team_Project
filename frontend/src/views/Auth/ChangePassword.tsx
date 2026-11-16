@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, setToken as saveAuthToken } from '../../lib/api';
 
 /* Port từ PKV/templates/Auth/change_password.html.
  * Bản gốc là form POST Django classic; bản React dùng API đã có:
@@ -72,7 +72,7 @@ export default function ChangePassword() {
         token: token.trim(),
       });
       /* Backend xoay DRF token khi đổi mật khẩu — lưu token mới kẻo bị văng. */
-      if (d.token) setToken(d.token);
+      if (d.token) saveAuthToken(d.token);
       setDone('Đổi mật khẩu thành công!');
       setOldPassword('');
       setNew1('');

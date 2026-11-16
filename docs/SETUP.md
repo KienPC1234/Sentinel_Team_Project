@@ -1,6 +1,6 @@
 # ShieldCall VN — Setup & Deployment
 
-> **Status:** current · **Updated:** 2026-11-15 · **Audience:** operators, backend engineers
+> **Status:** current · **Updated:** 2026-11-16 · **Audience:** operators, backend engineers
 
 Complete installation and deployment guide for the ShieldCall VN stack.
 
@@ -33,9 +33,17 @@ sudo usermod -aG docker $USER
 
 ---
 
-## 2. Environment Configuration (`.env`)
+## 2. Environment Configuration (`.env` & `settings.py`)
 
-Create `backend/.env`:
+Initialize Django settings and environment files from the templates:
+
+```bash
+cp backend/PKV/settings.py.example backend/PKV/settings.py
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+Edit `backend/.env` for your environment (`DB_ENGINE=sqlite3` works out of the box for local evaluation; switch to `DB_ENGINE=mysql` in production):
 
 ```bash
 # Core
@@ -43,6 +51,7 @@ DEBUG=False
 SECRET_KEY='<cryptographically_secure_token>'
 ALLOWED_HOSTS=<your-domain>,localhost,127.0.0.1
 SITE_URL=https://<your-domain>
+SCAN_TOKEN_MAX_AGE=86400
 
 # Database (MariaDB / MySQL)
 DB_ENGINE=mysql

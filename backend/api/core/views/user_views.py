@@ -68,12 +68,16 @@ class UserScansView(APIView):
         _now = _tz.now()
         _cur_tz = _tz.get_current_timezone()
         _today = _now.astimezone(_cur_tz).date()
-        _last7 = []
-        for _i in range(6, -1, -1):
-            _day = _today - _td(days=_i)
-            _start = _tz.make_aware(_dt_cls.combine(_day, _time_cls.min), _cur_tz)
-            _end = _tz.make_aware(_dt_cls.combine(_day, _time_cls.max), _cur_tz)
-            _last7.append(qs.filter(created_at__range=(_start, _end)).count())
+        _start_day = _today - _td(days=6)
+        _range_start = _tz.make_aware(_dt_cls.combine(_start_day, _time_cls.min), _cur_tz)
+        _range_end = _tz.make_aware(_dt_cls.combine(_today, _time_cls.max), _cur_tz)
+        _day_counts = {_today - _td(days=_i): 0 for _i in range(6, -1, -1)}
+        for _dt in qs.filter(created_at__range=(_range_start, _range_end)).values_list('created_at', flat=True):
+            if _dt is not None:
+                _d = _dt.astimezone(_cur_tz).date()
+                if _d in _day_counts:
+                    _day_counts[_d] += 1
+        _last7 = [_day_counts[_today - _td(days=_i)] for _i in range(6, -1, -1)]
         return Response({
             'results': data,
             'count': total,
@@ -86,7 +90,7 @@ class UserScansView(APIView):
             },
         })
 
-    @extend_schema(responses={200: serializers.DictField()})
+    @extend_schema(operation_id='user_scans_clear', responses={200: serializers.DictField()})
     def delete(self, request):
         """DELETE /api/v1/user/scans/ - Xoa toan bo lich su quet cua nguoi dung."""
         qs = ScanEvent.objects.filter(user=request.user)
@@ -103,17 +107,48 @@ class UserScansView(APIView):
 
 
 class UserScanDetailView(APIView):
-    """DELETE /api/v1/user/scans/<scan_id>/ - Xoa 1 ban ghi quet thuoc so huu."""
+    """PATCH/DELETE /api/v1/user/scans/<scan_id>/ - Tuy chinh quyen chia se hoac xoa 1 ban ghi quet."""
     permission_classes = [AllowAny]
+
+    @staticmethod
+    def _authorize_scan(request, scan: ScanEvent):
+        active_ids = request.session.get('active_scan_ids', []) if hasattr(request, 'session') else []
+        is_owner = (
+            (request.user.is_authenticated and scan.user_id == request.user.id)
+            or (scan.user_id is None and (scan.id in active_ids or str(scan.id) in [str(x) for x in active_ids]))
+        )
+        return is_owner, active_ids
+
+    @extend_schema(responses={200: serializers.DictField()})
+    def patch(self, request, scan_id: int):
+        scan = get_object_or_404(ScanEvent, id=scan_id)
+        is_owner, _ = self._authorize_scan(request, scan)
+        if not is_owner:
+            if not request.user.is_authenticated:
+                return Response(
+                    {'error': 'Vui lòng đăng nhập để cập nhật bản ghi này.'},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            return Response(
+                {'error': 'Bạn không có quyền chỉnh sửa bản ghi quét của người dùng khác.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if 'is_public_referable' not in request.data:
+            return Response({'error': 'Thiếu trường is_public_referable.'}, status=status.HTTP_400_BAD_REQUEST)
+        from api.utils.privacy import parse_strict_bool
+        next_public = parse_strict_bool(request.data.get('is_public_referable'))
+        scan.is_public_referable = next_public
+        scan.save(update_fields=['is_public_referable'])
+        return Response({
+            'id': scan.id,
+            'is_public_referable': bool(scan.is_public_referable),
+            'message': 'Đã bật tham chiếu công khai.' if next_public else 'Đã chuyển bản ghi quét về chế độ riêng tư.',
+        })
 
     @extend_schema(responses={200: serializers.DictField()})
     def delete(self, request, scan_id: int):
         scan = get_object_or_404(ScanEvent, id=scan_id)
-        active_ids = request.session.get('active_scan_ids', [])
-        is_owner = (
-            (request.user.is_authenticated and scan.user_id == request.user.id)
-            or (scan.user_id is None and scan_id in active_ids)
-        )
+        is_owner, active_ids = self._authorize_scan(request, scan)
         if not is_owner:
             if not request.user.is_authenticated:
                 return Response(
@@ -125,11 +160,103 @@ class UserScanDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if scan_id in active_ids:
+        if scan_id in active_ids and hasattr(request, 'session'):
             request.session['active_scan_ids'] = [sid for sid in active_ids if sid != scan_id]
             request.session.modified = True
         scan.delete()
         return Response({'deleted_id': scan_id, 'message': 'Đã xóa bản ghi quét.'})
+
+
+class UserPrivacyDataExportView(APIView):
+    """GET /api/v1/user/privacy/export-data/ - Xuat ban sao du lieu ca nhan cua user dang JSON."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: serializers.DictField()})
+    def get(self, request):
+        from django.utils import timezone as _tz
+        from api.ai_chat.models import ChatSession
+        user = request.user
+        profile = getattr(user, 'profile', None)
+
+        scans = []
+        for s in ScanEvent.objects.filter(user=user).order_by('-created_at')[:500]:
+            scans.append({
+                'id': s.id,
+                'scan_type': s.scan_type,
+                'raw_input': s.raw_input,
+                'normalized_input': s.normalized_input,
+                'status': s.status,
+                'risk_score': s.risk_score,
+                'risk_level': s.risk_level,
+                'is_public_referable': bool(s.is_public_referable),
+                'result_json': s.result_json,
+                'created_at': s.created_at.isoformat() if s.created_at else None,
+            })
+
+        chat_sessions = []
+        for sess in ChatSession.objects.filter(user=user).prefetch_related('messages').order_by('-updated_at')[:200]:
+            chat_sessions.append({
+                'id': str(sess.id),
+                'title': sess.title,
+                'created_at': sess.created_at.isoformat() if sess.created_at else None,
+                'updated_at': sess.updated_at.isoformat() if sess.updated_at else None,
+                'messages': [
+                    {
+                        'id': m.id,
+                        'role': m.role,
+                        'message': m.message,
+                        'created_at': m.created_at.isoformat() if m.created_at else None,
+                    }
+                    for m in sess.messages.all().order_by('created_at')
+                ],
+            })
+
+        reports = [
+            {
+                'id': r.id,
+                'target_type': r.target_type,
+                'target_value': r.target_value,
+                'scam_type': r.scam_type,
+                'severity': r.severity,
+                'status': r.status,
+                'description': r.description,
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in Report.objects.filter(reporter=user).order_by('-created_at')[:500]
+        ]
+
+        alerts = [
+            {
+                'id': a.id,
+                'target_type': a.target_type,
+                'target_value': a.target_value,
+                'risk_level': a.risk_level,
+                'note': a.note,
+                'created_at': a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in UserAlert.objects.filter(user=user).order_by('-created_at')[:500]
+        ]
+
+        payload = {
+            'exported_at': _tz.now().isoformat(),
+            'account': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'date_joined': user.date_joined.isoformat() if user.date_joined else None,
+                'display_name': getattr(profile, 'display_name', '') if profile else '',
+                'gender': getattr(profile, 'gender', '') if profile else '',
+                'bio': getattr(profile, 'bio', '') if profile else '',
+                'messenger_link': getattr(profile, 'messenger_link', '') if profile else '',
+            },
+            'scans': scans,
+            'chat_sessions': chat_sessions,
+            'reports': reports,
+            'alerts': alerts,
+        }
+        resp = Response(payload, status=status.HTTP_200_OK)
+        resp['Content-Disposition'] = 'attachment; filename="shieldcall-my-data.json"'
+        return resp
 
 
 class UserPrivacyDataDeleteView(APIView):
@@ -198,7 +325,7 @@ def _mask_scan_preview(scan: ScanEvent) -> str:
     if not raw:
         return f'Scan #{scan.id}'
 
-    if scan.scan_type in ('message', 'file', 'audio'):
+    if scan.scan_type in ('message', 'file', 'audio', 'qr'):
         compact = re.sub(r'\s+', ' ', raw)
         if len(compact) <= 12:
             return f'{compact[:2]}******'
@@ -208,7 +335,16 @@ def _mask_scan_preview(scan: ScanEvent) -> str:
         from api.utils.privacy import mask_target_identifier
         return mask_target_identifier(scan.scan_type, raw)
 
-    return raw[:140]
+    if scan.scan_type == 'email':
+        from api.utils.privacy import mask_email_display
+        return mask_email_display(raw)
+
+    if scan.scan_type == 'domain':
+        from api.utils.privacy import mask_url_query
+        return mask_url_query(raw)[:140]
+
+    from api.utils.privacy import redact_pii
+    return redact_pii(raw[:140])
 
 
 class UserScanPickerView(APIView):
@@ -334,10 +470,19 @@ class UserAlertsView(APIView):
 
     @extend_schema(request={'application/json': {'type': 'object', 'properties': {'id': {'type': 'integer'}}}}, responses={200: serializers.DictField()})
     def delete(self, request):
-        alert_id = request.data.get('id')
-        if alert_id:
-            UserAlert.objects.filter(user=request.user, id=alert_id).delete()
-        return Response({'message': 'Đã xóa cảnh báo.'})
+        raw_id = request.data.get('id') if hasattr(request, 'data') and isinstance(request.data, dict) else None
+        if not raw_id:
+            raw_id = request.query_params.get('id')
+        if not raw_id:
+            return Response({'error': 'Thiếu id cảnh báo cần xóa.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            alert_id = int(raw_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'id cảnh báo không hợp lệ.'}, status=status.HTTP_400_BAD_REQUEST)
+        deleted_count, _ = UserAlert.objects.filter(user=request.user, id=alert_id).delete()
+        if not deleted_count:
+            return Response({'error': 'Không tìm thấy cảnh báo cần xóa.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'deleted_id': alert_id, 'message': 'Đã xóa cảnh báo.'})
 
 
 class PublicProfileView(APIView):

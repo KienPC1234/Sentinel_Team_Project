@@ -1,12 +1,14 @@
 """
-ShieldCall VN – MCP Server HTTP Client
-Handles communication with the ShieldCall backend API using API Key authentication.
+ShieldCall VN - MCP Server HTTP Client
+Handles communication with the ShieldCall backend API using API Key authentication,
+HTTP connection pooling, and short-lived TTL caching for static/slow-changing metadata.
 """
 import os
-import json
+import time
+import threading
 import logging
 import requests
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 logger = logging.getLogger("shieldcall_mcp.client")
 
@@ -20,12 +22,28 @@ class ShieldCallClient:
         self.api_url = raw_url.rstrip("/")
         self.api_key = api_key or os.getenv("SHIELDCALL_API_KEY", "")
         self.timeout = timeout
+        self._session = requests.Session()
+        self._session.headers.update(self._headers())
+        self._cache: Dict[str, Tuple[float, Any]] = {}
+        self._cache_lock = threading.Lock()
+
+    def _cached(self, key: str, ttl_sec: int, loader: Callable[[], Any]) -> Any:
+        now = time.monotonic()
+        with self._cache_lock:
+            entry = self._cache.get(key)
+            if entry is not None and entry[0] > now:
+                return entry[1]
+        val = loader()
+        if isinstance(val, (dict, list)) and not (isinstance(val, dict) and val.get("error")):
+            with self._cache_lock:
+                self._cache[key] = (time.monotonic() + ttl_sec, val)
+        return val
 
     def _headers(self) -> Dict[str, str]:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "ShieldCall-MCP-Server/1.0",
+            "User-Agent": "ShieldCall-MCP-Server/1.1",
         }
         if self.api_key:
             headers["X-API-Key"] = self.api_key
@@ -35,7 +53,7 @@ class ShieldCallClient:
     def _request(self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None) -> Dict[str, Any]:
         url = f"{self.api_url}/{endpoint.lstrip('/')}"
         try:
-            resp = requests.request(
+            resp = self._session.request(
                 method=method,
                 url=url,
                 headers=self._headers(),
@@ -96,7 +114,7 @@ class ShieldCallClient:
 
     def get_supported_banks(self) -> Any:
         """Lấy danh sách các ngân hàng được hỗ trợ tại Việt Nam từ VietQR."""
-        return self._request("GET", "scan/banks/")
+        return self._cached("scan/banks/", 3600, lambda: self._request("GET", "scan/banks/"))
 
     def lookup_scam_db(self, query: str, entity_type: str = "all") -> Dict[str, Any]:
         """Tra cứu thực thể trong kho dữ liệu cộng đồng ShieldCall VN."""
@@ -104,7 +122,19 @@ class ShieldCallClient:
 
     def get_scam_radar_trends(self) -> Dict[str, Any]:
         """Lấy số liệu radar và xu hướng thủ đoạn lừa đảo mới nhất."""
-        return self._request("GET", "trends/radar-stats/")
+        return self._cached("trends/radar-stats/", 300, lambda: self._request("GET", "trends/radar-stats/"))
+
+    def get_trust_sources(self) -> Dict[str, Any]:
+        """Lấy danh mục nguồn dữ liệu đối chiếu, ngày cập nhật và giới hạn công cụ."""
+        return self._cached("trust/sources/", 1800, lambda: self._request("GET", "trust/sources/"))
+
+    def get_trust_channels(self) -> Dict[str, Any]:
+        """Lấy danh sách kênh xác minh và đường dây nóng chính thức tại Việt Nam."""
+        return self._cached("trust/channels/", 1800, lambda: self._request("GET", "trust/channels/"))
+
+    def get_trust_policy(self) -> Dict[str, Any]:
+        """Lấy chính sách Trust Guardrail 5 tầng và tối thiểu hóa dữ liệu nhạy cảm."""
+        return self._cached("trust/policy/", 1800, lambda: self._request("GET", "trust/policy/"))
 
     @staticmethod
     def normalize_scam_type(scam_type: str) -> str:

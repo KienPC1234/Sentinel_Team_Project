@@ -168,10 +168,19 @@ class MCPIntegrationTest(TestCase):
             self.assertIn('emergency_advisor', prompt_names)
             self.assertIn('scam_investigator', prompt_names)
 
-            # Test prompt content retrieval
+            # Test prompt content retrieval (aligned with Trust Guardrail 5 tiers)
             p = await server.get_prompt('shieldcall_sentry', {})
             self.assertTrue(len(p.messages) > 0)
-            self.assertIn('ShieldCall Sentry', p.messages[0].content.text)
+            prompt_text = p.messages[0].content.text
+            self.assertIn('ShieldCall Sentry', prompt_text)
+            self.assertIn('INSUFFICIENT', prompt_text)
+            self.assertNotIn('0 - 19 (SAFE)', prompt_text)
+
+            resources = await server.list_resources()
+            res_uris = [str(r.uri) for r in resources]
+            self.assertIn('shieldcall://trust/sources', res_uris)
+            self.assertIn('shieldcall://trust/channels', res_uris)
+            self.assertIn('shieldcall://trust/policy', res_uris)
 
         asyncio.run(run_checks())
 
@@ -402,5 +411,120 @@ class RemoteMCPViewsTest(TestCase):
         self.assertTrue(len(content) > 0)
         self.assertEqual(content[0]['type'], 'text')
         self.assertIn('MB', content[0]['text'])
+
+    def test_mcp_handshake_and_resources_consume_zero_quota_and_tool_consumes_one(self):
+        """Handshakes/listing/resources do not burn daily quota; tools/call bills once (no double billing)."""
+        self.key_obj.requests_today = 0
+        self.key_obj.save(update_fields=['requests_today'])
+
+        for method, params in (
+            ("initialize", {"protocolVersion": "2024-11-05"}),
+            ("tools/list", {}),
+            ("prompts/list", {}),
+            ("resources/list", {}),
+            ("resources/read", {"uri": "shieldcall://trust/sources"}),
+        ):
+            r = self.client.post(
+                f'/api/v1/mcp/messages/?api_key={self.raw_token}',
+                data=json.dumps({"jsonrpc": "2.0", "id": 50, "method": method, "params": params}),
+                content_type='application/json',
+            )
+            self.assertEqual(r.status_code, 200)
+
+        self.key_obj.refresh_from_db()
+        self.assertEqual(self.key_obj.requests_today, 0)
+
+        r_call = self.client.post(
+            f'/api/v1/mcp/messages/?api_key={self.raw_token}',
+            data=json.dumps({
+                "jsonrpc": "2.0",
+                "id": 51,
+                "method": "tools/call",
+                "params": {"name": "check_phone", "arguments": {"phone_number": "0912345678"}},
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(r_call.status_code, 200)
+        self.key_obj.refresh_from_db()
+        self.assertEqual(self.key_obj.requests_today, 1)
+
+    def test_mcp_batch_and_scan_full_incident_guardrail_masks_pii(self):
+        """JSON-RPC batch works; scan_full_incident runs parallel with guardrail, masks PII, and bills once."""
+        self.key_obj.requests_today = 0
+        self.key_obj.save(update_fields=['requests_today'])
+
+        batch = [
+            {
+                "jsonrpc": "2.0",
+                "id": 60,
+                "method": "resources/read",
+                "params": {"uri": "shieldcall://trust/channels"},
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 61,
+                "method": "tools/call",
+                "params": {
+                    "name": "scan_full_incident",
+                    "arguments": {
+                        "phone_number": "0988776655",
+                        "bank_name": "VCB",
+                        "account_number": "1234567890",
+                    },
+                },
+            },
+        ]
+        resp = self.client.post(
+            f'/api/v1/mcp/messages/?api_key={self.raw_token}',
+            data=json.dumps(batch),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        items = resp.json()
+        self.assertIsInstance(items, list)
+        self.assertEqual(len(items), 2)
+
+        res_channels = json.loads(items[0]['result']['contents'][0]['text'])
+        self.assertIn('channels', res_channels)
+
+        incident_payload = json.loads(items[1]['result']['content'][0]['text'])
+        self.assertIn('guardrail', incident_payload)
+        self.assertNotEqual(incident_payload.get('overall_risk_level'), 'safe')
+        self.assertEqual(incident_payload['guardrail'].get('tier'), 'INSUFFICIENT')
+        threats_blob = "\n".join(incident_payload.get('detected_threats', []))
+        self.assertNotIn('0988776655', threats_blob)
+        self.assertNotIn('1234567890', threats_blob)
+        self.assertIn('latency_ms', incident_payload)
+
+        self.key_obj.refresh_from_db()
+        self.assertEqual(self.key_obj.requests_today, 1)
+
+    def test_remote_mcp_quota_rollover_resets_daily_and_enforces_monthly(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from api.core.views.mcp_remote_views import _mcp_consume_quota
+
+        today = timezone.now().date()
+        self.key_obj.last_reset_date = today - timedelta(days=40)
+        self.key_obj.requests_today = self.key_obj.daily_quota
+        self.key_obj.requests_this_month = 42
+        self.key_obj.save(update_fields=['last_reset_date', 'requests_today', 'requests_this_month'])
+
+        err = _mcp_consume_quota(self.key_obj)
+        self.assertIsNone(err)
+        self.key_obj.refresh_from_db()
+        self.assertEqual(self.key_obj.requests_today, 1)
+        self.assertEqual(self.key_obj.requests_this_month, 1)
+        self.assertEqual(self.key_obj.last_reset_date, today)
+
+        self.key_obj.monthly_quota = 5
+        self.key_obj.requests_this_month = 5
+        self.key_obj.save(update_fields=['monthly_quota', 'requests_this_month'])
+        err_month = _mcp_consume_quota(self.key_obj)
+        self.assertIsNotNone(err_month)
+        self.assertEqual(err_month.get('status'), 429)
+        self.assertEqual(err_month.get('code'), 'QUOTA_EXCEEDED')
+
+
 
 

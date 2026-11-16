@@ -26,6 +26,8 @@ interface Lesson {
   content?: string;
   reactions_count?: number;
   quizzes_count?: number;
+  _targetUrl?: string;
+  _badge?: string;
 }
 
 interface QuizOption {
@@ -91,11 +93,17 @@ function syncCat(_tab: Tab, cat: FilterCat): FilterCat {
   return cat;
 }
 
+function toEpoch(v?: string | null): number {
+  if (!v) return 0;
+  const ts = Date.parse(v);
+  return Number.isFinite(ts) ? ts : 0;
+}
+
 function sortItems<T>(items: T[], sortBy: SortBy, title: (x: T) => string, date: (x: T) => string | undefined): T[] {
   const list = [...items];
   if (sortBy === 'alpha') list.sort((a, b) => title(a).localeCompare(title(b), 'vi'));
-  else if (sortBy === 'oldest') list.sort((a, b) => (date(a) || '').localeCompare(date(b) || ''));
-  else list.sort((a, b) => (date(b) || '').localeCompare(date(a) || ''));
+  else if (sortBy === 'oldest') list.sort((a, b) => toEpoch(date(a)) - toEpoch(date(b)));
+  else list.sort((a, b) => toEpoch(date(b)) - toEpoch(date(a)));
   return list;
 }
 
@@ -164,7 +172,8 @@ function LessonCard({ lesson, onOpen }: { lesson: Lesson; onOpen: () => void }) 
         )}
         <div className="absolute top-3 left-3">
           <span className="px-2 py-1 rounded-lg bg-brand-500/20 text-brand-300 text-[10px] font-bold tracking-wide backdrop-blur-sm border border-brand-500/20">
-            <i className="bi bi-stars mr-1"></i>AI
+            <i className={`bi ${lesson._badge === 'Cẩm nang' ? 'bi-shield-check' : 'bi-stars'} mr-1`}></i>
+            {lesson._badge || 'AI'}
           </span>
         </div>
       </div>
@@ -206,13 +215,20 @@ function LessonCard({ lesson, onOpen }: { lesson: Lesson; onOpen: () => void }) 
 }
 
 function ArticleListItem({ article, onOpen }: { article: Article; onOpen: () => void }) {
+  const displayDate = article.published_date || article.created_at;
+  const sourceBadge =
+    article.source_type === 'press'
+      ? 'VnExpress'
+      : article.source_type === 'tinnhiemmang'
+      ? 'Tín nhiệm mạng'
+      : article.author_name || 'ShieldCall VN';
   return (
     <div
       className="learn-card liquid-card p-0 group overflow-hidden border border-white/5 hover:border-brand-500/30 transition-all flex items-stretch gap-3 sm:gap-5 cursor-pointer focus-visible:outline-none"
       data-kind="article"
       data-cat={article.category}
       data-title={article.title}
-      data-date={isoDate(article.created_at)}
+      data-date={isoDate(displayDate)}
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -238,12 +254,15 @@ function ArticleListItem({ article, onOpen }: { article: Article; onOpen: () => 
         )}
       </div>
       <div className="flex-1 min-w-0 py-4 pr-4 sm:py-5 sm:pr-6 flex flex-col justify-center gap-1.5">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <span className="px-2.5 py-0.5 rounded-full bg-warn-500/10 text-warn-400 text-[10px] font-bold tracking-wide">
             {article.category_display || article.category}
           </span>
-          <span className="text-[11px] font-medium text-white/55" title={fmtDateLong(article.created_at)}>
-            {fmtDate(article.created_at)}
+          <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 text-[10px] font-semibold">
+            {sourceBadge}
+          </span>
+          <span className="text-[11px] font-medium text-white/55" title={fmtDateLong(displayDate)}>
+            {fmtDate(displayDate)}
           </span>
         </div>
         <h3 className="text-[15px] sm:text-[16px] font-bold leading-snug text-white line-clamp-2 group-hover:text-brand-400 transition-colors">
@@ -683,20 +702,25 @@ function ScenarioPlayerCard({ scenario }: { scenario: Scenario; index: number })
   );
 }
 
-export default function LearnHub() {
+export default function LearnHub({ initialTab = 'lessons' }: { initialTab?: Tab }) {
   const router = useRouter();
   const sp = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<Tab>(() => {
-    const t = (sp.get('tab') || 'lessons').toLowerCase();
-    return isTab(t) ? t : 'lessons';
+    const raw = sp.get('tab');
+    if (raw) {
+      const t = raw.toLowerCase();
+      if (isTab(t)) return t;
+    }
+    return initialTab;
   });
   const [filterCat, setFilterCat] = useState<FilterCat>(() => {
-    const t = (sp.get('tab') || 'lessons').toLowerCase();
-    const tab: Tab = isTab(t) ? t : 'lessons';
+    const rawTab = (sp.get('tab') || initialTab).toLowerCase();
+    const tab: Tab = isTab(rawTab) ? rawTab : initialTab;
     const c = (sp.get('category') || 'all').toLowerCase();
     return syncCat(tab, isFilterCat(c) ? c : 'all');
   });
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'press' | 'tinnhiemmang' | 'internal'>('all');
   const [searchInput, setSearchInput] = useState<string>(() => sp.get('q') || '');
   const [searchQuery, setSearchQuery] = useState<string>(() => sp.get('q') || '');
   const [sortBy, setSortBy] = useState<SortBy>('newest');
@@ -758,6 +782,14 @@ export default function LearnHub() {
     setActiveTab(t);
     setFilterCat((c) => syncCat(t, c));
     if (t === 'news') setSortBy('newest');
+    else setSourceFilter('all');
+    if (typeof window !== 'undefined') {
+      const nextUrl =
+        t === 'news' ? '/learn/news/' : t === 'lessons' ? '/learn/' : `/learn/?tab=${t}`;
+      if (window.location.pathname + window.location.search !== nextUrl) {
+        window.history.replaceState(null, '', nextUrl);
+      }
+    }
   };
 
   /* @click.outside="sortOpen=false" */
@@ -777,8 +809,32 @@ export default function LearnHub() {
     return filterCat === cat;
   };
 
+  const isExternalNews = (a: Article): boolean =>
+    a.source_type === 'press' || a.source_type === 'tinnhiemmang';
+
+  const newsArticles = articles.filter(isExternalNews);
+  const internalGuideLessons: Lesson[] = articles
+    .filter((a) => !isExternalNews(a))
+    .map((a) => ({
+      slug: `art-${a.slug}`,
+      title: a.title,
+      category: a.category,
+      category_display: a.category_display,
+      cover_image: a.cover_image,
+      created_at: a.published_date || a.created_at,
+      summary: a.summary,
+      reactions_count: a.reactions_count,
+      _targetUrl: `/learn/${a.slug}/`,
+      _badge: 'Cẩm nang',
+    }));
+
+  const combinedLessons: Lesson[] = [
+    ...lessons.map((l) => ({ ...l, _targetUrl: `/learn/lesson/${l.slug}/`, _badge: 'AI' })),
+    ...internalGuideLessons,
+  ];
+
   const visibleLessons = sortItems(
-    lessons.filter(
+    combinedLessons.filter(
       (l) => matchSearch(l.title, l.summary || stripTags(l.content || ''), searchQuery) && matchCatForTab(l.category),
     ),
     sortBy,
@@ -787,10 +843,15 @@ export default function LearnHub() {
   );
 
   const visibleArticles = sortItems(
-    articles.filter((a) => matchSearch(a.title, a.summary || '', searchQuery) && matchCatForTab(a.category)),
+    newsArticles.filter(
+      (a) =>
+        matchSearch(a.title, a.summary || '', searchQuery) &&
+        matchCatForTab(a.category) &&
+        (sourceFilter === 'all' || (a.source_type || 'internal') === sourceFilter),
+    ),
     sortBy,
     (a) => a.title,
-    (a) => a.created_at,
+    (a) => a.published_date || a.created_at,
   );
 
   const visibleQuizzes = quizzes.filter((q) => matchSearch(q.question, q.explanation || '', searchQuery));
@@ -811,8 +872,8 @@ export default function LearnHub() {
 
   /* Số lượng hiển thị ở mỗi tab (cho người dùng biết còn bao nhiêu nội dung). */
   const tabCounts: Record<Tab, number> = {
-    lessons: lessons.length,
-    news: articles.length,
+    lessons: combinedLessons.length,
+    news: newsArticles.length,
     quiz: quizzes.length,
     scenarios: scenarios.length,
   };
@@ -824,6 +885,9 @@ export default function LearnHub() {
     alert: 'Cảnh báo',
     story: 'Câu chuyện',
     news: 'Tin tức',
+    inclusive: 'Bao trùm',
+    empathy: 'Góc thấu cảm',
+    tinnhiemmang: 'Tín nhiệm mạng',
   };
 
   /* Tải thêm: tránh dồn hàng chục thẻ vào một trang dài lê thê. */
@@ -831,7 +895,7 @@ export default function LearnHub() {
   const [shown, setShown] = useState(PAGE_STEP);
   useEffect(() => {
     setShown(PAGE_STEP);
-  }, [activeTab, filterCat, searchQuery, sortBy]);
+  }, [activeTab, filterCat, sourceFilter, searchQuery, sortBy]);
 
   const shownLessons = visibleLessons.slice(0, shown);
   const shownArticles = visibleArticles.slice(0, shown);
@@ -843,6 +907,7 @@ export default function LearnHub() {
     setSearchInput('');
     setSearchQuery('');
     setFilterCat('all');
+    setSourceFilter('all');
   };
 
   const tabs: Array<{ key: Tab; label: string; icon: string }> = [
@@ -869,6 +934,7 @@ export default function LearnHub() {
         </div>
         <input
           type="text"
+          data-tour="learn-search"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder={searchPlaceholder}
@@ -895,8 +961,14 @@ export default function LearnHub() {
     </div>
   );
 
+  const SOURCE_LABEL: Record<string, string> = {
+    press: 'VnExpress',
+    tinnhiemmang: 'Tín nhiệm mạng',
+    internal: 'ShieldCall VN',
+  };
+
   /* Chip cho biết đang lọc/tìm gì — trước đây in ra mã tiếng Anh ("alert"). */
-  const activeChips = (filterCat !== 'all' || searchQuery) && (
+  const activeChips = (filterCat !== 'all' || sourceFilter !== 'all' || searchQuery) && (
     <div className="flex flex-wrap items-center justify-center gap-2">
       <span className="text-[12px] font-medium text-white/65">Đang lọc</span>
       {filterCat !== 'all' && (
@@ -906,6 +978,19 @@ export default function LearnHub() {
             type="button"
             onClick={() => setFilterCat('all')}
             aria-label="Bỏ lọc theo danh mục"
+            className="text-white/65 hover:text-danger-400 transition-colors"
+          >
+            <i className="bi bi-x"></i>
+          </button>
+        </span>
+      )}
+      {sourceFilter !== 'all' && (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 border border-border text-[12px] font-medium text-white/85">
+          <span>{SOURCE_LABEL[sourceFilter] || sourceFilter}</span>
+          <button
+            type="button"
+            onClick={() => setSourceFilter('all')}
+            aria-label="Bỏ lọc theo nguồn"
             className="text-white/65 hover:text-danger-400 transition-colors"
           >
             <i className="bi bi-x"></i>
@@ -962,13 +1047,17 @@ export default function LearnHub() {
         <div
           className="inline-flex items-center justify-center w-20 h-20 rounded-[2.5rem] bg-brand-500/10 text-brand-400 border border-brand-500/20 shadow-lg shadow-brand-500/10 mb-5"
         >
-          <i className="bi bi-book-half text-4xl"></i>
+          <i className={`bi ${activeTab === 'news' ? 'bi-newspaper' : 'bi-book-half'} text-4xl`}></i>
         </div>
         <h1 className="text-4xl font-bold text-white tracking-normal leading-tight">
-          <span className="glow-text">Học cách phòng tránh</span>
+          <span className="glow-text">
+            {activeTab === 'news' ? 'Tin tức & Cảnh báo lừa đảo' : 'Học cách phòng tránh'}
+          </span>
         </h1>
         <p className="text-white/75 text-sm font-medium tracking-wide prose-sm">
-          Kiến thức là vũ khí tốt nhất để bảo vệ bản thân và gia đình
+          {activeTab === 'news'
+            ? 'Cập nhật tin thời sự và cảnh báo thủ đoạn mới nhất từ VnExpress, Tín nhiệm mạng (NCSC) và ShieldCall VN'
+            : 'Kiến thức là vũ khí tốt nhất để bảo vệ bản thân và gia đình'}
         </p>
       </div>
 
@@ -1011,7 +1100,7 @@ export default function LearnHub() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 relative" style={{ zIndex: 50 }}>
               <div className="learn-filter-scroll w-full sm:w-auto pb-1">
                 <div className="flex items-center justify-start sm:justify-center gap-2 min-w-max px-1">
-                  <FilterPill active={filterCat === 'all'} activeClass="bg-brand-500/20 text-brand-400 border-brand-500/30 shadow-lg shadow-brand-500/10" onClick={() => setFilterCat('all')} label="Tất cả" />
+                  <FilterPill active={filterCat === 'all' && sourceFilter === 'all'} activeClass="bg-brand-500/20 text-brand-400 border-brand-500/30 shadow-lg shadow-brand-500/10" onClick={() => { setFilterCat('all'); setSourceFilter('all'); }} label="Tất cả" />
                   {activeTab === 'lessons' && (
                     <FilterPill
                       active={filterCat === 'guide'}
@@ -1022,42 +1111,69 @@ export default function LearnHub() {
                     />
                   )}
                   {activeTab === 'news' && (
-                    <FilterPill
-                      active={filterCat === 'news'}
-                      activeClass="bg-brand-500/20 text-brand-400 border-brand-500/30 shadow-lg shadow-brand-500/10"
-                      onClick={() => setFilterCat('news')}
-                      icon="bi-newspaper"
-                      label="Tin tức"
-                    />
+                    <>
+                      <FilterPill
+                        active={filterCat === 'news'}
+                        activeClass="bg-brand-500/20 text-brand-400 border-brand-500/30 shadow-lg shadow-brand-500/10"
+                        onClick={() => setFilterCat(filterCat === 'news' ? 'all' : 'news')}
+                        icon="bi-newspaper"
+                        label="Tin tức"
+                      />
+                      <FilterPill
+                        active={filterCat === 'alert'}
+                        activeClass="bg-danger-500/20 text-danger-400 border-danger-500/30 shadow-lg shadow-danger-500/10"
+                        onClick={() => setFilterCat(filterCat === 'alert' ? 'all' : 'alert')}
+                        icon="bi-exclamation-triangle"
+                        label="Cảnh báo"
+                      />
+                      <FilterPill
+                        active={sourceFilter === 'press'}
+                        activeClass="bg-sky-500/20 text-sky-400 border-sky-500/30 shadow-lg shadow-sky-500/10"
+                        onClick={() => setSourceFilter(sourceFilter === 'press' ? 'all' : 'press')}
+                        icon="bi-broadcast"
+                        label="VnExpress"
+                      />
+                      <FilterPill
+                        active={sourceFilter === 'tinnhiemmang'}
+                        activeClass="bg-safe-500/20 text-safe-400 border-safe-500/30 shadow-lg shadow-safe-500/10"
+                        onClick={() => setSourceFilter(sourceFilter === 'tinnhiemmang' ? 'all' : 'tinnhiemmang')}
+                        icon="bi-shield-check"
+                        label="Tín nhiệm mạng"
+                      />
+                    </>
                   )}
-                  <FilterPill
-                    active={filterCat === 'alert'}
-                    activeClass="bg-danger-500/20 text-danger-400 border-danger-500/30 shadow-lg shadow-danger-500/10"
-                    onClick={() => setFilterCat('alert')}
-                    icon="bi-exclamation-triangle"
-                    label="Cảnh báo"
-                  />
-                  <FilterPill
-                    active={filterCat === 'story'}
-                    activeClass="bg-brand2-500/20 text-brand2-400 border-brand2-500/30 shadow-lg shadow-brand2-500/10"
-                    onClick={() => setFilterCat('story')}
-                    icon="bi-chat-heart"
-                    label="Câu chuyện"
-                  />
-                  <FilterPill
-                    active={filterCat === 'inclusive'}
-                    activeClass="bg-sky-500/20 text-sky-400 border-sky-500/30 shadow-lg shadow-sky-500/10"
-                    onClick={() => setFilterCat('inclusive')}
-                    icon="bi-people-fill"
-                    label="Bao trùm"
-                  />
-                  <FilterPill
-                    active={filterCat === 'empathy'}
-                    activeClass="bg-purple-500/20 text-purple-400 border-purple-500/30 shadow-lg shadow-purple-500/10"
-                    onClick={() => setFilterCat('empathy')}
-                    icon="bi-heart-fill"
-                    label="Góc thấu cảm"
-                  />
+                  {activeTab === 'lessons' && (
+                    <>
+                      <FilterPill
+                        active={filterCat === 'alert'}
+                        activeClass="bg-danger-500/20 text-danger-400 border-danger-500/30 shadow-lg shadow-danger-500/10"
+                        onClick={() => setFilterCat('alert')}
+                        icon="bi-exclamation-triangle"
+                        label="Cảnh báo"
+                      />
+                      <FilterPill
+                        active={filterCat === 'story'}
+                        activeClass="bg-brand2-500/20 text-brand2-400 border-brand2-500/30 shadow-lg shadow-brand2-500/10"
+                        onClick={() => setFilterCat('story')}
+                        icon="bi-chat-heart"
+                        label="Câu chuyện"
+                      />
+                      <FilterPill
+                        active={filterCat === 'inclusive'}
+                        activeClass="bg-sky-500/20 text-sky-400 border-sky-500/30 shadow-lg shadow-sky-500/10"
+                        onClick={() => setFilterCat('inclusive')}
+                        icon="bi-people-fill"
+                        label="Bao trùm"
+                      />
+                      <FilterPill
+                        active={filterCat === 'empathy'}
+                        activeClass="bg-purple-500/20 text-purple-400 border-purple-500/30 shadow-lg shadow-purple-500/10"
+                        onClick={() => setFilterCat('empathy')}
+                        icon="bi-heart-fill"
+                        label="Góc thấu cảm"
+                      />
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1149,7 +1265,11 @@ export default function LearnHub() {
               {activeTab === 'lessons' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {shownLessons.map((lesson) => (
-                    <LessonCard key={lesson.slug} lesson={lesson} onOpen={() => router.push(`/learn/lesson/${lesson.slug}/`)} />
+                    <LessonCard
+                      key={lesson.slug}
+                      lesson={lesson}
+                      onOpen={() => router.push(lesson._targetUrl || `/learn/lesson/${lesson.slug}/`)}
+                    />
                   ))}
                 </div>
               )}

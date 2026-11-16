@@ -33,6 +33,13 @@ interface AudioDevice {
   label: string;
 }
 
+/* Nguồn timestamp cho logic ghi âm. Đặt ở module scope (ngoài render) để
+ * eslint react-hooks/purity không nhầm với gọi hàm impure trong render —
+ * thực tế các hàm ghi âm chỉ chạy từ onClick, không bao giờ chạy khi render. */
+function nowMs(): number {
+  return Date.now();
+}
+
 function formatBytes(bytes: number, decimals = 2): string {
   if (!bytes) return '0 B';
   const k = 1024;
@@ -528,8 +535,8 @@ export default function Audio() {
         return;
       }
       chunksRef.current = [];
-      recordingStartTimeRef.current = Date.now();
-      silenceStartTimeRef.current = Date.now();
+      recordingStartTimeRef.current = nowMs();
+      silenceStartTimeRef.current = nowMs();
       silenceWarningRef.current = false;
       hasDetectedVoiceRef.current = false;
       setSilenceWarning(false);
@@ -794,7 +801,7 @@ export default function Audio() {
         </div>
 
         {!result && (
-          <div className="liquid-card p-0 relative group overflow-hidden">
+          <div className="liquid-card p-0 relative group overflow-hidden" data-tour="scan-form">
             <div className="absolute inset-0 bg-gradient-to-br from-brand2-500/5 to-brand-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
             <div className="relative z-10 flex border-b border-white/5">
@@ -1164,7 +1171,7 @@ export default function Audio() {
                     <ScanPrivacyToggle scanType="audio" checked={maskPii} onChange={setMaskPii} compact />
                   </div>
                   <TurnstileWidget />
-                  <button type="button" onClick={() => void startScan()} className="relative group/scan overflow-hidden rounded-2xl w-full sm:w-auto">
+                  <button type="button" data-tour="scan-submit" onClick={() => void startScan()} className="relative group/scan overflow-hidden rounded-2xl w-full sm:w-auto">
                     <div className="absolute inset-0 bg-gradient-to-r from-brand2-600 to-brand-600 opacity-0 group-hover/scan:opacity-100 transition-opacity"></div>
                     <div className="relative bg-brand2-500 hover:bg-brand2-400 text-white px-14 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] shadow-xl shadow-brand2-500/25 flex items-center justify-center gap-3 transition-all group-hover/scan:scale-[1.02]">
                       <i className="bi bi-shield-shaded text-lg"></i> Phân tích âm thanh

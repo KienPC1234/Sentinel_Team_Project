@@ -29,10 +29,8 @@ INSTALLED_APPS = [
     'django_otp.plugins.otp_totp',
     'django_otp.plugins.otp_static',
     'django_otp.plugins.otp_email',
-    'api.sessions_api',
     'api.phone_security',
     'api.ai_chat',
-    'api.media_analysis',
     'api.maintenance',
     'api.core',
     'PKV',
@@ -95,6 +93,9 @@ CHANNEL_LAYERS = {
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# Never let tests/fixtures rewrite the real RAG index in backend/vector_store.
+VECTOR_DB_AUTO_REBUILD = False
+
 SITE_ID = 1
 STATIC_URL = 'static/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -102,6 +103,7 @@ MEDIA_URL = '/media/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'api.core.exceptions.api_exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'api.core.authentication.APIKeyAuthentication',
         'rest_framework.authentication.SessionAuthentication',
@@ -143,7 +145,6 @@ LLM_TEMPERATURE = 0.3
 LLM_MAX_TOKENS = 4096
 SEARXNG_URL = 'https://search.fptoj.com'
 SEARXNG_API_KEY = ''
-EASYOCR_GPU = False
 VT_API_KEY = ''
 WEBPUSH_VAPID_PUBLIC_KEY = ''
 WEBPUSH_VAPID_PRIVATE_KEY = ''

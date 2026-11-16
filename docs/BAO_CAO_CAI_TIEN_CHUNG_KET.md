@@ -1,10 +1,10 @@
 # BÁO CÁO CẢI TIẾN VÒNG CHUNG KẾT - SHIELDCALL VN
 
-> **Trạng thái:** hồ sơ nộp · **Cập nhật:** 2026-11-15 · **Đối tượng:** hội đồng giám khảo
+> **Trạng thái:** hồ sơ nộp · **Cập nhật:** 2026-11-16 · **Đối tượng:** hội đồng giám khảo
 
 - **Đề thi**: Đề cải tiến - Phiên bản 1 (Nộp / cập nhật bài - Chặng 1)
 - **Hệ thống**: ShieldCall VN (Nền tảng phòng chống lừa đảo đa kênh tại Việt Nam)
-- **Ngày cập nhật hồ sơ**: 2026-11-15
+- **Ngày cập nhật hồ sơ**: 2026-11-16
 - **Liên kết mã nguồn**: https://github.com/KienPC1234/Sentinel_Team_Project
 - **Liên kết sản phẩm chạy thử**: https://sc.fptoj.com
 
@@ -18,7 +18,7 @@ Trên nền tảng kiến trúc đa vector sẵn có (tin nhắn, số điện t
 |---|---|---|---|
 | **1. Kiểm soát kết luận ảnh hưởng người dùng** | Bổ sung tầng `INSUFFICIENT`, phát hiện và từ chối kết luận quá mức khi bằng chứng mâu thuẫn (`has_contradiction`) hoặc thiếu dữ liệu; khóa cứng không bao giờ gán nhãn kết luận dứt khoát cho cá nhân/tài khoản ngân hàng/SĐT; ưu tiên hướng dẫn hành động an toàn qua kênh chính thức. | `backend/api/utils/trust_guard.py`, `backend/api/core/views/scan_views.py`, `backend/api/utils/prompts.py`, `frontend/src/components/ScanWidgets.tsx`, `frontend/src/views/Scan/Bank.tsx` | 20/20 ca kiểm thử guardrail Chung kết đạt chuẩn (`insufficient_refusal_rate = 1.0`, `contradiction_refusal_rate = 1.0`). |
 | **2. Truy xuất nguồn & đánh giá tình huống Việt Nam** | Gắn `updated_at` / `verified_on` và `citation` cho toàn bộ 16 nguồn trong `SOURCE_CATALOG`, từng phần tử `evidence[]`, danh sách `VN_OFFICIAL_CHANNELS` và báo chí chính thống; hiển thị công khai trên `/trust/` và từng kết quả quét; đánh giá định lượng trên bộ 80 tin nhắn thực tế Việt Nam (`independent_test_set_vn.jsonl`) và 20 kịch bản Chung kết (`vn_final_suite.jsonl`). | `backend/api/utils/vn_sources.py`, `backend/api/utils/trust_guard.py`, `backend/api/utils/scam_rules.py`, `frontend/src/views/Trust.tsx`, `backend/scripts/eval/evaluate_vn_final.py` | Bảng nguồn - nhận định đầy đủ 16 nguồn; tỷ lệ báo nhầm (FPR) bộ tin nhắn VN giảm xuống 2.5% (1/40 ca hợp lệ). |
-| **3. Bảo vệ dữ liệu nhạy cảm & truy vết xử lý** | Vá lỗi lộ PII khi LLM repair/retry (`allow_pii=safe_allow_pii`), đồng bộ nút gạt quyền riêng tư từng lượt quét (`ScanPrivacyToggle`, mặc định bật `mask_pii=True`) tới cả lưu trữ và Cloud LLM (`_has_external_pii_consent`) kèm quy tắc prompt chống AI từ chối trên nhãn đã che, che SĐT/CCCD/Email/STK/token trong log qua `PIIRedactionFilter`, phân tách xử lý cục bộ và dịch vụ ngoài qua sơ đồ luồng dữ liệu, bổ sung xóa từng lượt quét/toàn bộ/theo nhóm. | `backend/api/utils/ollama_client.py`, `backend/api/utils/privacy.py`, `backend/api/core/tasks.py`, `backend/api/core/views/scan_views.py`, `backend/api/core/views/user_views.py`, `frontend/src/components/ScanWidgets.tsx`, `frontend/src/views/Dashboard.tsx`, `frontend/src/views/Auth/Profile.tsx` | Kiểm thử IDOR 403/401, log `llm_access.log` tự động che toàn bộ PII, 39/39 unit test `test_trust_privacy` (gồm luồng đồng ý PII & fallback không lưu `SAFE`). |
+| **3. Bảo vệ dữ liệu nhạy cảm & truy vết xử lý** | Vá lỗi lộ PII khi LLM repair/retry (`allow_pii=safe_allow_pii`), đồng bộ nút gạt quyền riêng tư từng lượt quét (`ScanPrivacyToggle`, mặc định bật `mask_pii=True`) tới cả lưu trữ và Cloud LLM (`_has_external_pii_consent`) kèm quy tắc prompt chống AI từ chối trên nhãn đã che, gia cố chống prompt injection (`sanitize_delimiter_text`), che SĐT/CCCD/Email/STK/token trong log qua `PIIRedactionFilter`, phân tách xử lý cục bộ và dịch vụ ngoài qua sơ đồ luồng dữ liệu, bổ sung xuất JSON cá nhân (`export-data`) và xóa từng lượt quét/toàn bộ/theo nhóm. | `backend/api/utils/ollama_client.py`, `backend/api/utils/privacy.py`, `backend/api/core/tasks.py`, `backend/api/core/views/scan_views.py`, `backend/api/core/views/user_views.py`, `frontend/src/components/ScanWidgets.tsx`, `frontend/src/views/Dashboard.tsx`, `frontend/src/views/Auth/Profile.tsx` | Kiểm thử IDOR 403/401, log `llm_access.log` tự động che toàn bộ PII (0 SĐT/email thô), 48/48 unit test `test_trust_privacy` (gồm xuất JSON, đồng ý PII, fallback file không lưu `SAFE` & signal xóa ảnh `ChatMessageImage`). |
 
 ---
 
@@ -72,7 +72,7 @@ Dưới đây là bảng ánh xạ đầy đủ 16 nguồn dữ liệu đang v�
 | `phone_numbering` | Cấu trúc kho số viễn thông VN (metadata) | Vừa (`medium`) | Kiểm tra đầu số +84/di động/cố định/VoIP theo `libphonenumber` và quy hoạch Bộ TT&TT. | Chỉ kiểm tra hợp lệ hình thức; không xác thực chủ thuê bao hay chống giả mạo Caller ID. | `2026-11-15` |
 | `tranco` | Tranco (thứ hạng phổ biến) | Vừa (`medium`) | Đánh giá mức độ phổ biến tên miền toàn cầu dùng làm ngữ cảnh phụ. | Độ phổ biến cao không đồng nghĩa hoàn toàn an toàn. | `2026-11-15` |
 | `heuristic` | Heuristic tiếng Việt (`scam_rules`) | Vừa (`medium`) | Nhận diện cụm từ mồi nhử tiếng Việt, nhận biết ngữ cảnh khuyến cáo công an & SMS OTP chuẩn ngân hàng. | Có thể báo nhầm nếu văn bản hợp pháp chứa cụm từ nhạy cảm (ví dụ chuyển khoản cá nhân). | `2026-11-15` |
-| `rag` | Kho tri thức ShieldCall (FAISS RAG) | Vừa (`medium`) | Truy xuất 240 mục kịch bản/hướng dẫn xử lý tình huống Việt Nam làm ngữ cảnh cho trợ lý AI. | Dữ liệu biên soạn tĩnh theo phiên bản; cần đối chiếu kênh chính thức với vụ việc mới. | `2026-11-15` |
+| `rag` | Kho tri thức ShieldCall (FAISS RAG) | Vừa (`medium`) | Truy xuất 279 mục kịch bản/hướng dẫn xử lý tình huống Việt Nam làm ngữ cảnh cho trợ lý AI. | Dữ liệu biên soạn tĩnh theo phiên bản; cần đối chiếu kênh chính thức với vụ việc mới. | `2026-11-16` |
 | `community` | Báo cáo cộng đồng | Vừa (`medium`) | Phản ánh do người dùng đóng góp (tách riêng `approved` và `pending`). | Chưa xác minh pháp lý; có thể sai sót hoặc bị lạm dụng; không kết luận danh tính cá nhân. | `2026-11-15` |
 | `web_search` | Tìm kiếm/OSINT web | Vừa (`medium`) | Đối chiếu thông tin doanh nghiệp (TraTenCongTy) và tin tức công khai khi người dùng đồng ý. | Nguồn mở đa dạng độ tin cậy; phải kiểm chứng lại từ nguồn gốc. | `2026-11-15` |
 | `ai_model` | Mô hình ngôn ngữ (LLM) | Thấp (`low`) | Tổng hợp giải thích tiếng Việt dễ hiểu cho người dân và gợi ý từ chối an toàn. | Có thể nhận diện sai (hallucination); chỉ là lớp diễn giải, không phải bằng chứng gốc. | `2026-11-15` |
@@ -117,9 +117,9 @@ flowchart LR
 
     subgraph LOCAL ["Vùng xử lý cục bộ trên máy chủ ShieldCall"]
         direction TB
-        API -->|"Mask số hiển thị + Hash SHA-256 STK"| DB[("PostgreSQL / SQLite (ScanEvent, BankAccount)")]
+        API -->|"Mask số hiển thị + Hash SHA-256 STK"| DB[("MariaDB / SQLite (ScanEvent, BankAccount)")]
         API -->|"Lọc PIIRedactionFilter trước khi ghi"| LOG["System Logs (SĐT/CCCD/Email/STK đã che)"]
-        API -->|"Văn bản / Heuristic"| RULES["scam_rules + trust_guard + FAISS RAG (240 mục)"]
+        API -->|"Văn bản / Heuristic"| RULES["scam_rules + trust_guard + FAISS RAG (279 mục)"]
         API -->|"Ảnh / Audio / File"| ISOLATED["OCR / Whisper / ClamAV / YARA / Zero-Trust Sandbox (tắt mạng)"]
     end
 
@@ -156,7 +156,9 @@ Bổ sung hoàn chỉnh vòng đời quản lý dữ liệu mà không ép ngư�
 | Chức năng | API Endpoint | Phân quyền & An toàn | Giao diện người dùng |
 |---|---|---|---|
 | Xóa từng lượt quét | `DELETE /api/v1/user/scans/<scan_id>/` | Kiểm tra quyền sở hữu (`scan.user_id == request.user.id` hoặc phiên ẩn danh khớp `active_scan_ids`); từ chối HTTP 403/401 nếu truy cập chéo (`test_user_data_deletion_endpoints_and_idor`). | Bảng Lịch sử quét trên `/dashboard` (cột Thao tác). |
+| Bật/tắt chia sẻ công khai | `PATCH /api/v1/user/scans/<scan_id>/` | Chỉ chủ sở hữu được bật/tắt `is_public_referable` cho mã tra cứu cộng đồng. | Cột Thao tác trên `/dashboard`. |
 | Xóa toàn bộ lịch sử quét | `DELETE /api/v1/user/scans/` | Xóa mọi `ScanEvent` của tài khoản hiện tại và dọn `active_scan_ids` trong session. | Nút `"Xóa toàn bộ lịch sử quét"` trên `/dashboard`. |
+| Xuất dữ liệu cá nhân (JSON) | `GET /api/v1/user/privacy/export-data/` | Xuất bản sao JSON gồm lịch sử quét (kèm `is_public_referable`), hội thoại AI và cảnh báo của chính tài khoản đang đăng nhập. | Nút `"Xuất JSON"` trên `/profile`. |
 | Xóa dữ liệu chọn lọc theo nhóm | `POST /api/v1/user/privacy/delete-data/` | Hỗ trợ chọn `scopes`: `["scans", "chat_sessions", "alerts"]` hoặc `["all"]` trong transaction atomic, trả về đúng số bản ghi đã xóa. | Thẻ `"Quản lý & xóa dữ liệu cá nhân"` ngay trên `/profile`. |
 | Xóa phiên hội thoại AI / Tài khoản | `DELETE /api/v1/chat/sessions/clear-all/`, `POST /api/v1/auth/account/delete/` | Xóa toàn bộ `ChatSession` hoặc xóa tài khoản có xác nhận mật khẩu. | `/ai-assistant` và `/profile`. |
 
@@ -168,7 +170,7 @@ Toàn bộ các bài kiểm tra dưới đây được chạy lại sau lần ch
 
 | Hạng mục kiểm tra | Lệnh thực thi | Kết quả quan sát được |
 |---|---|---|
-| Django System Check & Full Backend Test Suite | `../.venv/bin/python manage.py check && ../.venv/bin/python manage.py test --noinput` | `System check identified no issues (0 silenced).` \| **264/264 tests PASSED (`OK`, 125.39s)**; riêng nhóm guardrail/privacy (`api.core.tests.test_trust_privacy`): **39/39 PASSED** |
+| Django System Check & Full Backend Test Suite | `DJANGO_SETTINGS_MODULE=PKV.settings_ci ../.venv/bin/python manage.py test --noinput` | `System check identified no issues (0 silenced).` \| **301 tests (`OK`, skipped=6 test AI Red-Team `RUN_LIVE_AI_TESTS=1`, 163.45s)**; gồm **48/48 PASSED** cho `api.core.tests.test_trust_privacy` và **21/21 PASSED** cho `api.core.tests.test_mcp_and_api_keys` |
 | Bộ đánh giá VN & Guardrail Chung kết | `../.venv/bin/python scripts/eval/evaluate_vn_final.py` | 80 tin nhắn VN: **Precision 96.15%, Recall 62.5%, F1 75.76%, FPR 2.5%**; 20 ca Guardrail Chung kết: **20/20 PASSED (`insufficient_refusal_rate=1.0`, `contradiction_refusal_rate=1.0`)** |
-| Kiểm tra TypeScript & Lint Frontend | `cd frontend && npx tsc --noEmit && npx oxlint` | `tsc`: **0 errors**; `oxlint`: **0 errors** (136 warnings trên 199 tệp) |
-| Đóng gói Production Next.js | `cd frontend && npm run build` | Hoàn tất build 61/61 route Next.js 16.4.5 và đồng bộ `sw.js` thành công |
+| Kiểm tra TypeScript, Lint & Tour Frontend | `cd frontend && npx tsc --noEmit && npx oxlint && npm run check:tours` | `tsc`: **0 errors**; `oxlint`: **0 errors** (141 warnings trên 204 tệp); `check:tours`: **19 tour, 16 neo, 18 bước có element** |
+| Đóng gói Production Next.js | `cd frontend && npm run build` | Hoàn tất build **78 route** (73 trang và 5 route hệ thống/proxy) Next.js 16.4.5 và đồng bộ `sw.js` thành công |

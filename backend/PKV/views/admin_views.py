@@ -2,12 +2,15 @@
 import logging
 import json
 import re
-from django.shortcuts import redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from functools import wraps
+
+from django.contrib.auth.views import redirect_to_login
 from django.contrib import messages
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.db import transaction
+from rest_framework.decorators import api_view, permission_classes
 from api.core.models import LearnLesson, Article, LearnQuiz, LearnScenario, Report
+from api.core.permissions import IsAdminOrSuperAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -132,20 +135,61 @@ YÊU CẦU:
         logger.warning(f"Summary generation failed: {exc}")
         return ''
 
+def _wants_json(request) -> bool:
+    """True when the caller expects an API/JSON response instead of HTML."""
+    content_type = getattr(request, 'content_type', '') or ''
+    return bool(
+        request.path.startswith('/api/')
+        or 'application/json' in (request.headers.get('accept') or '')
+        or request.headers.get('x-requested-with') == 'XMLHttpRequest'
+        or content_type.startswith('application/json')
+    )
+
+
+def _json_error(message: str, status: int, code: str = 'ERROR') -> JsonResponse:
+    return JsonResponse({'error': message, 'code': code}, status=status)
+
+
+def _get_report_for_request(request, report_id: int):
+    """Fetch a report or build a JSON/HTML 404 response for the caller."""
+    report = Report.objects.filter(id=report_id).first()
+    if report is None:
+        if _wants_json(request):
+            return None, _json_error('Báo cáo không tồn tại.', 404, 'NOT_FOUND')
+        raise Http404('Báo cáo không tồn tại.')
+    return report, None
+
+
 def admin_required(view_func):
-    """Decorator to require staff (Admin) or super admin"""
-    @login_required
+    """Require staff/super-admin; keep HTML redirects for pages, JSON for APIs."""
+    @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
-        if request.user.is_staff or (hasattr(request.user, 'profile') and request.user.profile.is_super_admin):
-            return view_func(request, *args, **kwargs)
-        return HttpResponseForbidden("Bạn không có quyền truy cập trang này.")
+        user = getattr(request, 'user', None)
+        if user is None or not getattr(user, 'is_authenticated', False):
+            if _wants_json(request):
+                return _json_error('Yêu cầu đăng nhập để thực hiện thao tác này.', 401, 'AUTH_REQUIRED')
+            return redirect_to_login(request.get_full_path())
+
+        profile = getattr(user, 'profile', None)
+        is_admin = bool(
+            getattr(user, 'is_staff', False)
+            or getattr(user, 'is_superuser', False)
+            or (profile is not None and getattr(profile, 'is_super_admin', False))
+        )
+        if not is_admin:
+            if _wants_json(request):
+                return _json_error('Bạn không có quyền thực hiện thao tác này.', 403, 'PERMISSION_DENIED')
+            return HttpResponseForbidden("Bạn không có quyền truy cập trang này.")
+        return view_func(request, *args, **kwargs)
     return _wrapped_view
 
 
 @admin_required
 def approve_report(request, report_id):
     """Approve a community report"""
-    report = get_object_or_404(Report, id=report_id)
+    report, error = _get_report_for_request(request, report_id)
+    if error:
+        return error
     report.status = 'approved'
     report.moderator = request.user
     report.save(update_fields=['status', 'moderator'])
@@ -172,7 +216,9 @@ def approve_report(request, report_id):
 @admin_required
 def reject_report(request, report_id):
     """Reject a community report"""
-    report = get_object_or_404(Report, id=report_id)
+    report, error = _get_report_for_request(request, report_id)
+    if error:
+        return error
     report.status = 'rejected'
     report.moderator = request.user
     report.save(update_fields=['status', 'moderator'])
@@ -203,7 +249,9 @@ def analyze_report_ai(request, report_id):
     from api.utils.media_utils import extract_ocr_text
     import traceback
     
-    report = get_object_or_404(Report, id=report_id)
+    report, error = _get_report_for_request(request, report_id)
+    if error:
+        return error
     
     try:
         # Re-run OCR if evidence exists and no OCR text
@@ -254,7 +302,9 @@ def update_report_note(request, report_id):
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Method not allowed'}, status=405)
     
-    report = get_object_or_404(Report, id=report_id)
+    report, error = _get_report_for_request(request, report_id)
+    if error:
+        return error
     
     try:
         data = json.loads(request.body)
@@ -272,7 +322,8 @@ def update_report_note(request, report_id):
     })
 
 
-@admin_required
+@api_view(['POST'])
+@permission_classes([IsAdminOrSuperAdmin])
 def magic_create_article_api(request):
     """AI API to generate article structure — dispatched to Celery with WS progress."""
     if request.method != 'POST':
@@ -308,7 +359,8 @@ def magic_create_article_api(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-@admin_required
+@api_view(['POST'])
+@permission_classes([IsAdminOrSuperAdmin])
 def magic_save_article_api(request):
     """API to save the AI-generated article (news only, no quiz/scenario)."""
     if request.method != 'POST':
@@ -336,7 +388,8 @@ def magic_save_article_api(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-@admin_required
+@api_view(['POST'])
+@permission_classes([IsAdminOrSuperAdmin])
 def magic_create_lesson_api(request):
     """AI API to generate lesson structure — dispatched to Celery with WS progress."""
     if request.method != 'POST':
@@ -382,7 +435,8 @@ def magic_create_lesson_api(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-@admin_required
+@api_view(['POST'])
+@permission_classes([IsAdminOrSuperAdmin])
 def generate_summary_api(request):
     """Generate short summary from title/content via SMALL_MODEL."""
     if request.method != 'POST':
@@ -400,7 +454,8 @@ def generate_summary_api(request):
         logger.error(f"Error in generate_summary_api: {exc}")
         return JsonResponse({'status': 'error', 'message': str(exc)}, status=500)
 
-@admin_required
+@api_view(['POST'])
+@permission_classes([IsAdminOrSuperAdmin])
 def magic_save_lesson_api(request):
     """API to save the AI-generated lesson, multiple quizzes and scenario"""
     if request.method != 'POST':

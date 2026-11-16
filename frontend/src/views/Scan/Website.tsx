@@ -153,6 +153,7 @@ export default function Website() {
 
         <div className="liquid-card p-6 sm:p-8">
           <form
+            data-tour="scan-form"
             onSubmit={(e) => {
               e.preventDefault();
               handleScan();
@@ -169,6 +170,7 @@ export default function Website() {
               />
               <button
                 type="button"
+                data-tour="scan-submit"
                 onClick={() => handleScan()}
                 className="liquid-btn bg-brand-500 text-black px-10 py-4 font-black hover:bg-brand-400"
                 disabled={loading}

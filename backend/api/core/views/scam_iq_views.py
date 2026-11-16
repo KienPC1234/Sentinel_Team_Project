@@ -4,6 +4,7 @@ from django.core.cache import cache
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from api.core.tasks import generate_scam_iq_exam_task, score_scamiq_responses_task
 from api.core.models import ScamIQAttempt
@@ -289,6 +290,7 @@ class ScamIQAttemptView(APIView):
 class ScamIQHistoryView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(operation_id='scam_iq_history_list')
     def get(self, request):
         limit = request.query_params.get('limit', '15')
         try:
@@ -322,3 +324,11 @@ class ScamIQHistoryView(APIView):
             'count': len(data),
             'results': data,
         })
+
+
+class ScamIQStatusAliasView(ScamIQHistoryView):
+    """Backward-compatible ``/api/v1/scam-iq/status/`` alias (history listing)."""
+
+    @extend_schema(operation_id='scam_iq_status_alias_list')
+    def get(self, request):
+        return super().get(request)

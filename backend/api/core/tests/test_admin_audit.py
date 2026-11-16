@@ -52,11 +52,14 @@ class AdminBroadcastValidationTest(TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_broadcast_queued(self):
-        resp = self.client.post('/api/v1/admin/notifications/broadcast/', {
-            'title': 'Bao tri', 'message': 'He thong bao tri luc 2h.',
-        }, format='json')
+        from unittest.mock import patch
+        with patch('api.core.tasks.admin_broadcast_task.delay') as mock_delay:
+            resp = self.client.post('/api/v1/admin/notifications/broadcast/', {
+                'title': 'Bao tri', 'message': 'He thong bao tri luc 2h.',
+            }, format='json')
         self.assertEqual(resp.status_code, 202)
         self.assertEqual(resp.data['status'], 'queued')
+        mock_delay.assert_called_once()
 
 
 class AdminUsersPagingTest(TestCase):

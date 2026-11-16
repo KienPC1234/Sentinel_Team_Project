@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 from api.utils.security import verify_turnstile_token
 
 from api.core.models import (
@@ -273,6 +274,7 @@ class LearnLessonListView(APIView):
     """GET /api/v1/learn/lessons/ — danh sách bài học đã xuất bản (LearnHub tab Bài học)."""
     permission_classes = [AllowAny]
 
+    @extend_schema(operation_id='learn_lessons_list')
     def get(self, request):
 
         category = request.query_params.get('category')
@@ -389,6 +391,7 @@ class LearnLessonDetailView(APIView):
     """GET /api/v1/learn/lessons/<slug>/ — chi tiết bài học + quiz + scenario."""
     permission_classes = [AllowAny]
 
+    @extend_schema(operation_id='learn_lessons_retrieve')
     def get(self, request, slug):
         from api.core.models import LearnLesson, LearnQuiz, LearnReactionType, LearnScenario, LessonReaction
 

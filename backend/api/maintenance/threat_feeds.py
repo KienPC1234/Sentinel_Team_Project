@@ -387,7 +387,7 @@ def sync_threat_feeds(
 
         if not FEED_CONFIGS.get(src_key, {}).get("enabled", True):
             reason = FEED_CONFIGS[src_key].get("disabled_reason", "disabled")
-            logger.warning(f"[ThreatIntel] Bỏ qua nguồn {src_key}: {reason}")
+            logger.info(f"[ThreatIntel] Bỏ qua nguồn {src_key} (đang tắt): {reason}")
             stats["sources"][src_key] = {"fetched": 0, "valid_domains": 0,
                                           "status": "SKIPPED", "error": reason}
             continue

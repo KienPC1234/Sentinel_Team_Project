@@ -15,6 +15,7 @@ import {
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { SITE_CONFIG } from '../lib/site-config';
+import { TourHelpButton } from './TourGuide';
 import { cn } from '../lib/utils';
 import { mediaUrl } from '../lib/api';
 import type { Me } from '../lib/api';
@@ -122,7 +123,7 @@ function UserMenu({ user }: { user: Me }) {
               <i className="bi bi-person-fill leading-none"></i>
             )}
           </span>
-          <span className="font-bold text-slate-100 text-xs max-w-[120px] truncate leading-normal hidden sm:inline">
+          <span className="font-bold text-slate-100 text-[11px] xl:text-xs max-w-[82px] xl:max-w-[120px] truncate leading-normal hidden sm:inline">
             {user.username}
           </span>
           <i className="bi bi-chevron-down text-[10px] text-slate-400 opacity-70 leading-none hidden sm:inline"></i>
@@ -245,15 +246,15 @@ function DropMenu({
         <button
           type="button"
           className={cn(
-            "h-8 px-2.5 xl:px-3 rounded-full inline-flex items-center gap-1.5 text-xs transition-all outline-none cursor-pointer select-none",
+            "h-8 px-2 xl:px-3 rounded-full inline-flex items-center gap-1 xl:gap-1.5 text-[clamp(10.5px,0.85vw,12px)] whitespace-nowrap shrink-0 transition-all outline-none cursor-pointer select-none",
             active
               ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 font-bold shadow-sm shadow-cyan-500/10"
               : "text-slate-300 hover:text-white hover:bg-white/[0.08] font-semibold border border-transparent data-[state=open]:bg-white/[0.1] data-[state=open]:text-cyan-400"
           )}
         >
-          <i className={`bi ${icon} text-xs leading-none`}></i>
+          <i className={`bi ${icon} text-[11px] xl:text-xs leading-none shrink-0`}></i>
           <span>{label}</span>
-          <i className="bi bi-chevron-down text-[10px] opacity-60 leading-none"></i>
+          <i className="bi bi-chevron-down text-[9px] xl:text-[10px] opacity-60 leading-none shrink-0"></i>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -306,7 +307,7 @@ export function Navbar() {
 
   const navLinkCls = (active: boolean) =>
     cn(
-      "h-8 px-2.5 xl:px-3 rounded-full inline-flex items-center gap-1.5 text-xs transition-all outline-none no-underline select-none",
+      "h-8 px-2 xl:px-3 rounded-full inline-flex items-center gap-1 xl:gap-1.5 text-[clamp(10.5px,0.85vw,12px)] whitespace-nowrap shrink-0 transition-all outline-none no-underline select-none",
       active
         ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 font-bold shadow-sm shadow-cyan-500/10"
         : "text-slate-300 hover:text-white hover:bg-white/[0.08] font-semibold border border-transparent"
@@ -314,65 +315,67 @@ export function Navbar() {
 
   return (
     <nav className="nav-premium">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-[72px] gap-4">
+      <div className="max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 xl:px-8">
+        <div className="flex items-center justify-between h-16 sm:h-[72px] gap-2 xl:gap-4">
           {/* 1. Left: Brand Logo */}
           <div className="flex items-center shrink-0">
-            <Link href="/" className="flex items-center gap-3 group shrink-0 no-underline">
+            <Link href="/" className="flex items-center gap-2 xl:gap-3 group shrink-0 no-underline">
               <img
                 src="/logo.png"
-                className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform shrink-0"
+                className="w-8 h-8 xl:w-10 xl:h-10 object-contain drop-shadow-[0_0_12px_rgba(6,182,212,0.35)] group-hover:scale-105 transition-transform shrink-0"
                 alt="ShieldCall VN"
               />
               <div className="hidden sm:flex flex-col justify-center">
-                <h2 className="text-[17px] sm:text-lg font-black text-white leading-none tracking-tight">
+                <h2 className="text-[15px] xl:text-lg font-black text-white leading-none tracking-tight whitespace-nowrap">
                   ShieldCall <span className="text-brand-400">VN</span>
                 </h2>
-                <p className="text-[9px] sm:text-[10px] text-white/45 font-bold uppercase tracking-widest mt-1">Community Guard</p>
+                <p className="text-[8px] xl:text-[10px] text-white/45 font-bold uppercase tracking-widest mt-1 whitespace-nowrap">Community Guard</p>
               </div>
             </Link>
           </div>
 
           {/* 2. Center: Navigation Capsule (Centered & Balanced) */}
-          <div className="hidden lg:flex items-center justify-center flex-1 max-w-3xl mx-auto px-2">
-            <div className="flex items-center gap-1 p-1 rounded-full bg-white/[0.035] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
+          <div className="hidden lg:flex items-center justify-center flex-1 min-w-0 px-1 xl:px-2">
+            <div className="flex items-center gap-0.5 xl:gap-1 p-1 rounded-full bg-white/[0.035] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] max-w-full">
               <DropMenu label="Kiểm tra" icon="bi-shield-check" items={SCAN_MENU} active={isScanActive} />
               <DropMenu label="Báo cáo" icon="bi-flag" items={REPORT_MENU} active={isReportActive} />
               <Link href="/scam-radar/" className={navLinkCls(isRadarActive)}>
-                <i className="bi bi-radar text-xs leading-none"></i>
+                <i className="bi bi-radar text-[11px] xl:text-xs leading-none shrink-0"></i>
                 <span>Radar</span>
               </Link>
               <Link href="/forum/" className={navLinkCls(isForumActive)}>
-                <i className="bi bi-chat-left-text text-xs leading-none"></i>
+                <i className="bi bi-chat-left-text text-[11px] xl:text-xs leading-none shrink-0"></i>
                 <span>Diễn đàn</span>
               </Link>
               <Link href="/learn/" className={navLinkCls(isLearnActive)}>
-                <i className="bi bi-journal-bookmark text-xs leading-none"></i>
+                <i className="bi bi-journal-bookmark text-[11px] xl:text-xs leading-none shrink-0"></i>
                 <span>Kiến thức</span>
               </Link>
               <Link
                 href="/nguoi-cao-tuoi/"
                 className={cn(
-                  "h-8 px-2.5 xl:px-3 rounded-full inline-flex items-center gap-1.5 text-xs transition-all outline-none no-underline select-none",
+                  "h-8 px-2 xl:px-3 rounded-full inline-flex items-center gap-1 xl:gap-1.5 text-[clamp(10.5px,0.85vw,12px)] whitespace-nowrap shrink-0 transition-all outline-none no-underline select-none",
                   isElderActive
                     ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 font-bold shadow-sm shadow-emerald-500/15"
                     : "text-emerald-400/90 hover:text-emerald-200 hover:bg-emerald-500/10 font-semibold border border-emerald-500/20 hover:border-emerald-500/35"
                 )}
               >
-                <i className="bi bi-person-hearts text-xs leading-none text-emerald-400"></i>
+                <i className="bi bi-person-hearts text-[11px] xl:text-xs leading-none text-emerald-400 shrink-0"></i>
                 <span>Người cao tuổi</span>
               </Link>
             </div>
           </div>
 
           {/* 3. Right: Action Controls */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 xl:gap-2.5 shrink-0" data-tour="nav-actions">
+            <TourHelpButton />
             <Link
               href="/emergency/"
-              className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-bold text-rose-300 bg-rose-500/15 border border-rose-500/35 hover:bg-rose-500/25 hover:border-rose-500/50 hover:text-white transition-all shadow-sm shadow-rose-500/10 no-underline shrink-0"
+              className="hidden sm:inline-flex items-center gap-1.5 h-8 xl:h-9 px-2.5 xl:px-3.5 rounded-full text-[11px] xl:text-xs font-bold text-rose-300 bg-rose-500/15 border border-rose-500/35 hover:bg-rose-500/25 hover:border-rose-500/50 hover:text-white transition-all shadow-sm shadow-rose-500/10 no-underline whitespace-nowrap shrink-0"
             >
-              <i className="bi bi-exclamation-triangle-fill text-xs text-rose-400 leading-none"></i>
-              <span>Hỗ trợ khẩn cấp</span>
+              <i className="bi bi-exclamation-triangle-fill text-[11px] xl:text-xs text-rose-400 leading-none shrink-0"></i>
+              <span className="hidden xl:inline">Hỗ trợ khẩn cấp</span>
+              <span className="xl:hidden">Khẩn cấp</span>
             </Link>
             {user && <NotificationBell />}
             {user ? (

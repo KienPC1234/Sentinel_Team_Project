@@ -45,7 +45,7 @@
 \setlength{\headheight}{15pt}
 \fancyhf{}
 \fancyhead[L]{\small ShieldCall VN --- Báo cáo cải tiến Chung kết (Chặng 1)}
-\fancyhead[R]{\small 15/11/2026}
+\fancyhead[R]{\small 16/11/2026}
 \fancyfoot[C]{\small \thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
@@ -63,14 +63,14 @@
 \begin{center}
   {\Large\bfseries BÁO CÁO CẢI TIẾN KỸ THUẬT VÒNG CHUNG KẾT}\\[4pt]
   {\large\bfseries Hệ thống ShieldCall VN: Kiểm soát kết luận, Truy xuất nguồn Việt Nam và Bảo vệ dữ liệu nhạy cảm}\\[8pt]
-  {\small Đề cải tiến --- Phiên bản 1 (Nộp / cập nhật bài --- Chặng 1) \quad|\quad Ngày cập nhật: 15/11/2026}\\[3pt]
+  {\small Đề cải tiến --- Phiên bản 1 (Nộp / cập nhật bài --- Chặng 1) \quad|\quad Ngày cập nhật: 16/11/2026}\\[3pt]
   {\small Mã nguồn: \url{https://github.com/KienPC1234/Sentinel_Team_Project} \quad|\quad Demo: \url{https://sc.fptoj.com}}
 \end{center}
 \vspace{2pt}
 \noindent\rule{\textwidth}{0.6pt}
 
 \begin{abstract}
-\noindent Trên nền tảng phát hiện lừa đảo đa kênh (tin nhắn, số điện thoại, URL/domain, QR/ảnh VietOCR + CRAFT, tệp tin trong Zero-Trust Sandbox, âm thanh Faster-Whisper và tra cứu RAG/Tín nhiệm mạng), báo cáo trình bày ba nhóm cải tiến theo yêu cầu của Hội đồng giám khảo: (1) bổ sung tầng kết luận \code{INSUFFICIENT}, phát hiện mâu thuẫn bằng chứng và khóa trần quy kết cá nhân đối với số tài khoản/số điện thoại; (2) chuẩn hóa 16 nguồn tri thức kèm ngày cập nhật, giới hạn công bố và đánh giá thực nghiệm trên 80 tin nhắn Việt Nam (Precision 96.15\%, FPR 2.50\%) cùng 20 kịch bản kiểm thử guardrail Chung kết (đạt 20/20); (3) che thông tin định danh cá nhân (PII) toàn cục trong nhật ký (0 SĐT/CCCD/email thô trên 1.530 dòng \code{llm\_access.log}), đồng bộ nút gạt quyền riêng tư \code{ScanPrivacyToggle} trên 8 luồng quét và hoàn thiện API xóa dữ liệu cá nhân (39/39 unit test privacy và 264/264 test backend đạt chuẩn).
+\noindent Trên nền tảng phát hiện lừa đảo đa kênh (tin nhắn, số điện thoại, URL/domain, QR/ảnh VietOCR + CRAFT, tệp tin trong Zero-Trust Sandbox, âm thanh Faster-Whisper và tra cứu RAG/Tín nhiệm mạng), báo cáo trình bày ba nhóm cải tiến theo yêu cầu của Hội đồng giám khảo: (1) bổ sung tầng kết luận \code{INSUFFICIENT}, phát hiện mâu thuẫn bằng chứng và khóa trần quy kết cá nhân đối với số tài khoản/số điện thoại; (2) chuẩn hóa 16 nguồn tri thức (cùng chỉ mục RAG mở rộng lên 279 mục) kèm ngày cập nhật, giới hạn công bố và đánh giá thực nghiệm trên 80 tin nhắn Việt Nam (Precision 96.15\%, FPR 2.50\%) cùng 20 kịch bản kiểm thử guardrail Chung kết (đạt 20/20); (3) che thông tin định danh cá nhân (PII) toàn cục trong nhật ký (0 SĐT/email thô trên 1.777 dòng \code{llm\_access.log}), đồng bộ nút gạt quyền riêng tư \code{ScanPrivacyToggle} trên 8 luồng quét, gia cố chống prompt injection và hoàn thiện API xuất/xóa dữ liệu cá nhân (48/48 test \code{test\_trust\_privacy}; toàn bộ backend CI đạt 295 test mặc định + 6 test AI Red-Team tách riêng qua \code{RUN\_LIVE\_AI\_TESTS=1}).
 \end{abstract}
 
 \begin{table}[ht]
@@ -91,7 +91,7 @@ Gắn \code{updated\_at}/\allowbreak\code{verified\_on} và \code{citation} cho 
 \midrule
 3. Bảo vệ PII \& truy vết xử lý &
 Lọc PII toàn cục qua \code{PIIRedactionFilter}; đồng bộ \code{ScanPrivacyToggle} (bật che mặc định) tới lưu trữ và Cloud LLM kèm quy tắc prompt chống từ chối trên nhãn che; bổ sung API xóa dữ liệu. &
-1.530 dòng \code{llm\_access.log} có 0 PII thô; kiểm thử phân quyền IDOR trả 403/401; 39/39 test \code{test\_trust\_privacy}. \\
+1.777 dòng \code{llm\_access.log} có 0 SĐT/email thô; kiểm thử phân quyền IDOR trả 403/401; bổ sung xuất JSON (\code{export-data}) và gia cố chống prompt injection; 48/48 test \code{test\_trust\_privacy}. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -198,7 +198,7 @@ Toàn bộ 16 nguồn tri thức từ \code{source\_catalog()} và thống kê T
 \code{phone\_numbering} & Kho số viễn thông VN & Vừa & Đối chiếu +84/di động/cố định/VoIP theo \code{libphonenumber} \& Bộ KH\&CN. & Chỉ kiểm tra cấu trúc; không xác thực chủ thuê bao/Caller ID. & 15/11/2026 \\
 \code{tranco} & Tranco (phổ biến toàn cầu) & Vừa & Xếp hạng độ phổ biến tên miền làm ngữ cảnh phụ. & Phổ biến cao không đồng nghĩa hoàn toàn an toàn. & 15/11/2026 \\
 \code{heuristic} & Heuristic VN (\code{scam\_rules}) & Vừa & Bắt cụm từ mồi nhử, phân biệt khuyến cáo công an \& SMS OTP thật. & Có thể báo nhầm nếu văn bản thật chứa từ khóa chuyển khoản. & 15/11/2026 \\
-\code{rag} & Kho tri thức ShieldCall (FAISS) & Vừa & Truy xuất 240 mục kịch bản xử lý tình huống VN cho AI. & Dữ liệu tĩnh theo phiên bản; cần đối chiếu thêm kênh chính thức. & 15/11/2026 \\
+\code{rag} & Kho tri thức ShieldCall (FAISS) & Vừa & Truy xuất 279 mục kịch bản xử lý tình huống VN cho AI. & Dữ liệu tĩnh theo phiên bản; cần đối chiếu thêm kênh chính thức. & 16/11/2026 \\
 \code{community} & Báo cáo cộng đồng & Vừa & Phản ánh người dùng đóng góp (tách riêng \code{approved} và \code{pending}). & Chưa xác minh pháp lý; không dùng kết luận danh tính cá nhân. & 15/11/2026 \\
 \code{web\_search} & Tìm kiếm / OSINT web & Vừa & Tra cứu doanh nghiệp (TraTenCongTy) và tin công khai khi có consent. & Nguồn mở đa dạng độ tin cậy; phải kiểm chứng từ nguồn gốc. & 15/11/2026 \\
 \code{ai\_model} & Mô hình ngôn ngữ (LLM) & Thấp & Diễn giải tiếng Việt dễ hiểu và gợi ý kịch bản từ chối an toàn. & Có thể nhận định sai; chỉ là lớp diễn giải, không phải bằng chứng gốc. & 15/11/2026 \\
@@ -261,7 +261,8 @@ Hình~2 minh họa ranh giới xử lý cục bộ (OCR, giọng nói, sandbox c
 \subsection{Cơ chế tối thiểu hóa dữ liệu và quyền kiểm soát của người dùng}
 
 \begin{enumerate}[leftmargin=1.6em, itemsep=2pt]
-  \item \textbf{Che PII trong nhật ký (\code{PIIRedactionFilter}):} Áp dụng cho mọi logger hệ thống và \code{llm\_access.log}. Rà soát trực tiếp 1.530 dòng tại \code{backend/llm\_access.log} ghi nhận 0 SĐT, 0 CCCD và 0 email thô; chuỗi kiểm thử có SĐT, STK, email, CCCD được tự động thay thành \code{[SĐT đã ẩn]}, \code{[số tài khoản đã ẩn]}, \code{[email đã ẩn]}, \code{[CCCD/CMND đã ẩn]}.
+  \item \textbf{Che PII trong nhật ký (\code{PIIRedactionFilter}):} Áp dụng cho mọi logger hệ thống và \code{llm\_access.log}. Rà soát trực tiếp 1.777 dòng tại \code{backend/llm\_access.log} ghi nhận 0 SĐT thô và 0 email thô; chuỗi kiểm thử có SĐT, STK, email, CCCD được tự động thay thành \code{[SĐT đã ẩn]}, \code{[số tài khoản đã ẩn]}, \code{[email đã ẩn]}, \code{[CCCD/CMND đã ẩn]}.
+  \item \textbf{Gia cố chống Prompt Injection \& lạm dụng AI:} Làm sạch thẻ phân cách người dùng qua \code{sanitize\_delimiter\_text} trên cả luồng quét và cá nhân hóa hội thoại (\code{ChatbotConfig}), đồng thời tách riêng 6 kịch bản AI Red-Team tốn token vào \code{test\_ai\_redteam\_live.py} (kích hoạt khi đặt \code{RUN\_LIVE\_AI\_TESTS=1}).
   \item \textbf{Kiểm soát PII từng lượt quét (\code{ScanPrivacyToggle}):} Nút gạt trên cả 8 luồng quét (mặc định bật \code{mask\_pii=True}) điều khiển đồng bộ lưu trữ \code{ScanEvent} và tham số \code{external\_consent} tới Cloud LLM. Khi bật che, hệ thống giữ lại phần tên miền email (\code{***@domain}), chạy \code{redact\_for\_external\_llm} và áp dụng quy tắc prompt số 8 để AI phân tích bình thường trên nhãn đã ẩn; khi người dùng chủ động tắt nút gạt, AI đọc nguyên văn theo lựa chọn của chủ dữ liệu trong khi nhật ký vẫn che PII.
   \item \textbf{An toàn retry, băm tài khoản và quét tệp:} Mọi nhánh sửa JSON và retry LLM giữ nguyên trạng thái \code{allow\_pii=safe\_allow\_pii}; \code{BankAccount} chỉ lưu \code{account\_number\_hash} (SHA-256) và dạng che 4 số cuối; kiểm tra tệp VirusTotal đặt \code{upload\_if\_unknown=False} (chỉ tra mã băm).
 \end{enumerate}
@@ -277,7 +278,9 @@ Hình~2 minh họa ranh giới xử lý cục bộ (OCR, giọng nói, sandbox c
 \textbf{Chức năng} & \textbf{API Endpoint} & \textbf{Phân quyền \& An toàn} & \textbf{Giao diện} \\
 \midrule
 Xóa từng lượt quét & \code{DELETE /api/v1/\allowbreak user/scans/<scan\_id>/} & Kiểm tra quyền sở hữu hoặc phiên ẩn danh \code{active\_scan\_ids}; trả 403/401 nếu truy cập chéo. & Cột Thao tác (\code{/dashboard}) \\
+Bật/tắt chia sẻ công khai & \code{PATCH /api/v1/\allowbreak user/scans/<scan\_id>/} & Chỉ chủ sở hữu được bật/tắt \code{is\_public\_referable} cho mã tra cứu cộng đồng. & Cột Thao tác (\code{/dashboard}) \\
 Xóa toàn bộ lịch sử & \code{DELETE /api/v1/\allowbreak user/scans/} & Xóa mọi \code{ScanEvent} của tài khoản hiện tại và dọn \code{active\_scan\_ids} trong session. & Nút xóa toàn bộ (\code{/dashboard}) \\
+Xuất dữ liệu cá nhân & \code{GET /api/v1/\allowbreak user/privacy/export-data/} & Xuất bản sao JSON gồm lịch sử quét (kèm \code{is\_public\_referable}), hội thoại AI và cảnh báo. & Nút Xuất JSON (\code{/profile}) \\
 Xóa theo nhóm & \code{POST /api/v1/\allowbreak user/privacy/delete-data/} & Chọn \code{scopes} (\code{scans}, \code{chat\_sessions}, \code{alerts} hoặc \code{all}) trong transaction atomic. & Thẻ quản lý dữ liệu (\code{/profile}) \\
 Xóa chat / Tài khoản & \code{DELETE /api/v1/\allowbreak chat/sessions/clear-all/}\newline\code{POST /api/v1/\allowbreak auth/account/delete/} & Xóa toàn bộ \code{ChatSession} hoặc xóa tài khoản sau khi xác nhận mật khẩu. & \code{/ai-assistant} và \code{/profile} \\
 \bottomrule
@@ -294,10 +297,10 @@ Xóa chat / Tài khoản & \code{DELETE /api/v1/\allowbreak chat/sessions/clear-
 \toprule
 \textbf{Hạng mục kiểm tra} & \textbf{Lệnh thực thi} & \textbf{Kết quả quan sát được} \\
 \midrule
-Kiểm thử Trust/PII \& Check & \code{../.venv/bin/python manage.py check \&\& manage.py test api.core.tests.test\_trust\_privacy --noinput} & \code{System check}: 0 issues; \textbf{39/39 tests PASSED} (4.78s). Bộ kiểm thử đầy đủ \textbf{264/264 tests OK} trước bước cô lập cache key cho test. \\
+Kiểm thử Backend đầy đủ \& Guardrail & \code{DJANGO\_SETTINGS\_MODULE=PKV.settings\_ci ../.venv/bin/python manage.py test --noinput} & \code{System check}: 0 issues; \textbf{301 tests PASSED} (\code{OK}, skipped=6 test AI Red-Team \code{RUN\_LIVE\_AI\_TESTS=1}, 163.45s); gồm \textbf{48/48} test \code{test\_trust\_privacy} và \textbf{21/21} test \code{test\_mcp\_and\_api\_keys}. \\
 Đánh giá VN \& Guardrail & \code{../.venv/bin/python scripts/eval/evaluate\_vn\_final.py} & 80 tin nhắn VN: \textbf{Precision 96.15\%, Recall 62.50\%, F1 75.76\%, FPR 2.50\%}; 20 ca Guardrail: \textbf{20/20 PASSED}. \\
-TypeScript \& Oxlint & \code{cd frontend \&\& npx tsc --noEmit \&\& npx oxlint} & \code{tsc}: \textbf{0 errors}; \code{oxlint}: \textbf{0 errors} (136 warnings trên 199 tệp). \\
-Build Production Frontend & \code{cd frontend \&\& npm run build} & Hoàn tất build \textbf{61/61 route} Next.js 16.4.5 và đồng bộ \code{sw.js}. \\
+TypeScript, Oxlint \& Tour & \code{cd frontend \&\& npx tsc --noEmit \&\& npx oxlint \&\& npm run check:tours} & \code{tsc}: \textbf{0 errors}; \code{oxlint}: \textbf{0 errors} (141 warnings trên 204 tệp); \code{check:tours}: \textbf{19 tour, 16 neo}. \\
+Build Production Frontend & \code{cd frontend \&\& npm run build} & Hoàn tất build \textbf{78 route} (73 trang và 5 route hệ thống/proxy) Next.js 16.4.5 và đồng bộ \code{sw.js}. \\
 \bottomrule
 \end{tabularx}
 \end{table}

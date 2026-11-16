@@ -137,7 +137,7 @@ export default function Bank() {
         </div>
 
         <Card className="bg-slate-900/60 backdrop-blur-md border border-white/10 shadow-2xl rounded-3xl p-6 sm:p-8">
-          <form onSubmit={submit}>
+          <form onSubmit={submit} data-tour="scan-form">
             <div className="space-y-4">
               <div className="relative">
                 <Select value={bank} onValueChange={setBank}>
@@ -173,6 +173,7 @@ export default function Bank() {
                 />
                 <Button
                   type="submit"
+                  data-tour="scan-submit"
                   variant="cyber"
                   className="h-14 px-8 rounded-2xl font-black text-sm uppercase tracking-wider cursor-pointer"
                   disabled={loading}

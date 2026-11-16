@@ -660,6 +660,7 @@ export default function ScamIQ() {
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
               onClick={() => void startExam()}
+              data-tour="scam-iq-start"
               disabled={loading}
               className="liquid-btn py-3 px-6 bg-brand-500 text-black font-black hover:bg-brand-400 disabled:opacity-50 transition-all"
             >

@@ -204,7 +204,7 @@ export default function Message() {
         <Card
           className={`bg-slate-900/60 backdrop-blur-md border border-white/10 shadow-2xl rounded-3xl p-6 sm:p-8 ${isDragging ? 'border-brand-500 border-dashed ring-4 ring-brand-500/20' : ''}`}
         >
-          <form onSubmit={submit}>
+          <form onSubmit={submit} data-tour="scan-form">
             {previewImage && (
               <div
                 className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
@@ -266,7 +266,7 @@ export default function Message() {
                     <i className="bi bi-trash mr-1.5"></i> XÓA TẤT CẢ
                   </Button>
                 )}
-                <Button type="submit" variant="cyber" className="h-14 px-10 rounded-2xl font-black text-sm uppercase tracking-wider cursor-pointer" disabled={loading}>
+                <Button type="submit" data-tour="scan-submit" variant="cyber" className="h-14 px-10 rounded-2xl font-black text-sm uppercase tracking-wider cursor-pointer" disabled={loading}>
                   {!loading ? (
                     <span className="inline-flex items-center gap-2"><i className="bi bi-cpu"></i> PHÂN TÍCH</span>
                   ) : (

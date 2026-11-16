@@ -43,6 +43,12 @@ class ScanProgressConsumer(AsyncWebsocketConsumer):
             return True
         if event.is_public_referable:
             return True
+        from urllib.parse import parse_qs
+        from api.utils.scan_token import read_scan_token
+        query = parse_qs(self.scope.get('query_string', b'').decode('utf-8', errors='ignore'))
+        token = (query.get('scan_token') or [None])[0]
+        if read_scan_token(token) == event.id:
+            return True
         active = session.get('active_scan_ids', []) if session is not None else []
         return self.scan_id in active or str(self.scan_id) in [str(x) for x in (active or [])]
 

@@ -92,7 +92,12 @@ export async function openSseStream(opts: SseOptions): Promise<void> {
     signal: opts.signal,
     body: opts.body != null ? JSON.stringify(opts.body) : undefined,
   });
-  if (!response.ok) throw new StreamHttpError(response.status);
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok || !contentType.includes('text/event-stream')) {
+    // A redirect to /login/ or an HTML error page would otherwise look like an
+    // empty (but successful) stream and the UI would silently hang.
+    throw new StreamHttpError(response.ok ? 502 : response.status);
+  }
   if (!response.body || typeof response.body.getReader !== 'function') {
     throw new Error('Streaming is not supported by this browser/response');
   }

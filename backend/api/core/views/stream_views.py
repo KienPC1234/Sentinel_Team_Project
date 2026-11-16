@@ -7,6 +7,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 
 from api.utils.ollama_client import stream_response
+from api.utils.security import verify_turnstile_token
+from api.utils.scan_token import read_scan_token
 from api.utils.prompts import (
     CHAT_SYSTEM_PROMPT, 
     SCAN_PHONE_PROMPT, 
@@ -16,7 +18,7 @@ from api.utils.prompts import (
     SCAN_EMAIL_PROMPT,
     SCAN_FILE_PROMPT,
 )
-from api.core.throttling import AIChatThrottle
+from api.core.throttling import AIChatThrottle, client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,25 @@ class ScanAnalyzeSSEView(APIView):
             raw_input = str(raw_input)
         if scan_type is not None and not isinstance(scan_type, str):
             scan_type = str(scan_type)
+
+        # An anonymous caller without a scan_id is basically asking for a free
+        # LLM completion. Require Turnstile for that path; authenticated users
+        # and API-key clients keep the existing behaviour. When scan_id is
+        # present the DB record is authoritative (see the ownership check below).
+        is_authenticated = bool(
+            getattr(request.user, 'is_authenticated', False)
+            or getattr(request, 'is_api_key_auth', False)
+        )
+        if not scan_id and not is_authenticated:
+            cf_token = request.data.get('cf-turnstile-response')
+            if not verify_turnstile_token(cf_token, remote_ip=client_ip(request)):
+                return Response(
+                    {
+                        'error': 'Xác minh anti-spam không hợp lệ. Vui lòng thử lại.',
+                        'code': 'TURNSTILE_REQUIRED',
+                    },
+                    status=400,
+                )
 
         # Đăng nhập không đồng nghĩa với đồng ý gửi PII ra mô hình LLM ngoài.
         # Yêu cầu đồng thuận tường minh (consent_external_llm / allow_pii)
@@ -80,11 +101,18 @@ class ScanAnalyzeSSEView(APIView):
             except (TypeError, ValueError):
                 sid = scan_id
             is_in_session = sid in (active_scans or []) or str(sid) in [str(x) for x in (active_scans or [])]
+            token_scan_id = read_scan_token(
+                request.data.get('scan_token')
+                or request.query_params.get('scan_token')
+                or request.headers.get('X-Scan-Token')
+            )
+            is_token_owner = token_scan_id == ev.id
             can_view = bool(
                 getattr(request.user, 'is_staff', False)
                 or (getattr(request.user, 'is_authenticated', False) and ev.user_id == request.user.id)
                 or ev.is_public_referable
                 or is_in_session
+                or is_token_owner
             )
             if not can_view:
                 return Response({'error': 'Bạn không có quyền truy cập kết quả quét này.'}, status=403)
@@ -128,6 +156,9 @@ class ScanAnalyzeSSEView(APIView):
 
         def event_stream():
             try:
+                # Flush headers early so proxies do not hold the response while
+                # the LLM prompt is being prepared.
+                yield ": ping\n\n"
                 if scan_type == 'file':
                     proofs = scan_data.get('forensic_evidence', [])
                     proofs_str = '\n'.join([
@@ -157,17 +188,20 @@ class ScanAnalyzeSSEView(APIView):
                         if raw_snippet else ''
                     )
 
+                    guardrail_info = scan_data.get('guardrail') or {}
+                    guardrail_tier = guardrail_info.get('tier') or 'INSUFFICIENT'
+                    from api.utils.prompts import sanitize_delimiter_text
                     prompt = SCAN_FILE_PROMPT.format(
                         file_name=scan_data.get('file_name', raw_input or 'Uploaded file'),
                         file_size=f"{round(scan_data.get('file_size', file_meta.get('size_bytes', 0)) / 1024, 1)} KB",
-                        risk_level=scan_data.get('risk_level', scan_data.get('verdict', 'SAFE')),
+                        risk_level=scan_data.get('risk_level') or guardrail_tier,
                         risk_score=scan_data.get('risk_score', 0),
-                        verdict=scan_data.get('verdict', 'SAFE'),
+                        verdict=scan_data.get('verdict') or guardrail_tier,
                         threat_family=scan_data.get('threat_family') or 'Unclassified',
-                        forensic_evidence=proofs_str,
+                        forensic_evidence=sanitize_delimiter_text(proofs_str, limit=4000),
                         file_metadata=meta_str,
                         engines=engines_str,
-                        script_snippet=snippet_section,
+                        script_snippet=sanitize_delimiter_text(snippet_section, limit=4000),
                     )
                 elif scan_type == 'phone':
                     prompt = SCAN_PHONE_PROMPT.format(
@@ -175,10 +209,13 @@ class ScanAnalyzeSSEView(APIView):
                         scan_data=json.dumps(scan_data, ensure_ascii=False)
                     )
                 elif scan_type == 'message':
-                    prompt = SCAN_MESSAGE_PROMPT.format(message=raw_input)
+                    from api.utils.prompts import sanitize_delimiter_text
+                    prompt = SCAN_MESSAGE_PROMPT.format(message=sanitize_delimiter_text(raw_input))
                 elif scan_type == 'email':
+                    from api.utils.prompts import sanitize_delimiter_text
                     extracted = scan_data.get('extracted_info', {})
                     security_checks = scan_data.get('security_checks', [])
+                    raw_email_content = scan_data.get('content_snippet', scan_data.get('content', '(không có nội dung)'))
                     prompt = SCAN_EMAIL_PROMPT.format(
                         email=raw_input,
                         subject=extracted.get('subject', '(không có tiêu đề)'),
@@ -186,7 +223,7 @@ class ScanAnalyzeSSEView(APIView):
                         attachment_count=extracted.get('attachment_count', 0),
                         preliminary_score=scan_data.get('preliminary_score', scan_data.get('risk_score', 0)),
                         security_checks=', '.join(security_checks) if security_checks else 'Không có dữ liệu',
-                        content=scan_data.get('content_snippet', scan_data.get('content', '(không có nội dung)'))
+                        content=sanitize_delimiter_text(raw_email_content)
                     )
                 elif scan_type == 'domain':
                     prompt = SCAN_DOMAIN_PROMPT.format(
@@ -194,18 +231,28 @@ class ScanAnalyzeSSEView(APIView):
                         scan_data=json.dumps(scan_data, ensure_ascii=False)
                     )
                 elif scan_type == 'account':
-                    # input might be "Bank - Account"
-                    try:
-                        bank, acc = raw_input.split(' - ')
-                    except:
+                    if ' - ' in raw_input:
+                        bank, acc = raw_input.split(' - ', 1)
+                    elif ':' in raw_input:
+                        bank, acc = raw_input.split(':', 1)
+                    else:
                         bank, acc = 'N/A', raw_input
                     prompt = SCAN_ACCOUNT_PROMPT.format(
-                        bank=bank,
-                        account=acc,
+                        bank=bank.strip() or 'N/A',
+                        account=acc.strip(),
                         scan_data=json.dumps(scan_data, ensure_ascii=False)
                     )
                 else:
                     prompt = f"Hãy phân tích rủi ro an ninh mạng cho {scan_type} sau bằng tiếng Việt: {raw_input}. Dữ liệu kèm theo: {json.dumps(scan_data, ensure_ascii=False)}"
+
+                _guard = (scan_data.get('guardrail') or {}) if isinstance(scan_data, dict) else {}
+                _tier = _guard.get('tier')
+                if _tier in ('INSUFFICIENT', 'SUSPICIOUS'):
+                    prompt += (
+                        f"\n\n[LƯU Ý GUARDRAIL: Trạng thái đánh giá hiện tại là {_tier} "
+                        f"({_guard.get('label', _tier)}). Không khẳng định chắc chắn an toàn hay quy kết lừa đảo tuyệt đối; "
+                        f"hãy nêu rõ giới hạn dữ liệu và khuyến nghị xác minh qua kênh chính thức.]"
+                    )
 
                 # Giải thích kết quả quét: chỉ dùng target gốc khi caller đã xác
                 # thực; người dùng ẩn danh được redact PII trước khi gửi LLM cloud.
@@ -227,7 +274,7 @@ class ScanAnalyzeSSEView(APIView):
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         resp = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
-        resp['Cache-Control'] = 'no-cache'
+        resp['Cache-Control'] = 'no-cache, no-store'
         resp['X-Accel-Buffering'] = 'no'
         return resp
 

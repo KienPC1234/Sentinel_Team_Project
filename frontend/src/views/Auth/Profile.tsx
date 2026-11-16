@@ -35,6 +35,7 @@ interface ProfileUser {
   messenger_link?: string;
   date_joined?: string;
   is_staff?: boolean;
+  has_usable_password?: boolean;
   rank_info?: RankInfo | null;
   rank_points?: number;
   accolade_title?: string;
@@ -488,6 +489,7 @@ export default function Profile() {
           />
           <EmailChangeRow
             current={user.email || ''}
+            hasUsablePassword={user.has_usable_password !== false}
             onDone={(em) => {
               applyUser({ ...user, email: em });
               toastOk('Đổi email thành công.');
@@ -512,7 +514,7 @@ export default function Profile() {
           </Link>
           <MfaRow />
           <ManagePersonalDataRow />
-          <DeleteAccountRow />
+          <DeleteAccountRow hasUsablePassword={user.has_usable_password !== false} />
           <Link
             href="/dashboard/"
             className="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all group"
@@ -647,7 +649,15 @@ function UsernameRow({ current, onDone }: { current: string; onDone: (u: string)
   );
 }
 
-function EmailChangeRow({ current, onDone }: { current: string; onDone: (e: string) => void }) {
+function EmailChangeRow({
+  current,
+  hasUsablePassword = true,
+  onDone,
+}: {
+  current: string;
+  hasUsablePassword?: boolean;
+  onDone: (e: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otpRequested, setOtpRequested] = useState(false);
@@ -667,7 +677,7 @@ function EmailChangeRow({ current, onDone }: { current: string; onDone: (e: stri
   async function requestOtp(): Promise<void> {
     const em = newEmail.trim().toLowerCase();
     if (!em) return toastErr('Vui lòng nhập email mới.');
-    if (!password) return toastErr('Vui lòng nhập mật khẩu hiện tại.');
+    if (hasUsablePassword && !password) return toastErr('Vui lòng nhập mật khẩu hiện tại.');
     setLoading(true);
     try {
       const d = await api.post<{ message?: string }>('/auth/email-change/request/', {
@@ -745,18 +755,20 @@ function EmailChangeRow({ current, onDone }: { current: string; onDone: (e: stri
               placeholder="new-email@example.com"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/45 uppercase tracking-widest ml-1">
-              Mật khẩu hiện tại
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="liquid-input w-full py-3.5 px-5 text-sm font-bold"
-              placeholder="••••••••"
-            />
-          </div>
+          {hasUsablePassword && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-white/45 uppercase tracking-widest ml-1">
+                Mật khẩu hiện tại
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="liquid-input w-full py-3.5 px-5 text-sm font-bold"
+                placeholder="••••••••"
+              />
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <button
@@ -1222,11 +1234,33 @@ function MfaRow() {
 function ManagePersonalDataRow() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [scopes, setScopes] = useState<string[]>(['scans', 'chat_sessions', 'alerts']);
 
   const toggleScope = (scope: string) => {
     setScopes((prev) => (prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]));
   };
+
+  async function exportMyData(): Promise<void> {
+    setExporting(true);
+    try {
+      const data = await api.get<Record<string, unknown>>('/user/privacy/export-data/');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shieldcall-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toastOk('Đã tải xuống bản sao dữ liệu cá nhân (JSON).');
+    } catch (e) {
+      toastErr(errMsg(e, 'Không thể xuất dữ liệu cá nhân.'));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function submitClearData(): Promise<void> {
     if (scopes.length === 0) return toastErr('Vui lòng chọn ít nhất một nhóm dữ liệu cần xóa.');
@@ -1251,32 +1285,44 @@ function ManagePersonalDataRow() {
 
   return (
     <div className="p-6 bg-white/[0.01] border-b border-white/5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-warn-500/15 border border-warn-500/30 flex items-center justify-center text-warn-400">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <div className="w-10 h-10 shrink-0 rounded-xl bg-warn-500/15 border border-warn-500/30 flex items-center justify-center text-warn-400">
             <i className="bi bi-eraser-fill"></i>
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-sm font-black text-white uppercase tracking-wide">Quản lý &amp; xóa dữ liệu cá nhân</div>
             <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest mt-1">
-              Xóa lịch sử quét, phiên chat AI hoặc cảnh báo đã lưu mà không cần xóa tài khoản.
+              Tải bản sao JSON hoặc xóa từng nhóm lịch sử quét, chat AI, cảnh báo mà không cần xóa tài khoản.
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="liquid-btn py-2.5 px-4 text-[10px] font-black uppercase tracking-widest bg-warn-500/15 text-warn-300 border border-warn-500/30 hover:bg-warn-500/25"
-        >
-          <i className="bi bi-sliders mr-1"></i> {open ? 'Thu gọn' : 'Chọn dữ liệu xóa'}
-        </button>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => void exportMyData()}
+            disabled={exporting}
+            className="liquid-btn h-10 px-4 min-w-[132px] whitespace-nowrap inline-flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-brand-500/15 text-brand-300 border border-brand-500/30 hover:bg-brand-500/25 disabled:opacity-50"
+          >
+            <i className="bi bi-download"></i>
+            <span>{exporting ? 'Đang xuất...' : 'Xuất JSON'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="liquid-btn h-10 px-4 min-w-[132px] whitespace-nowrap inline-flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-warn-500/15 text-warn-300 border border-warn-500/30 hover:bg-warn-500/25"
+          >
+            <i className="bi bi-sliders"></i>
+            <span>{open ? 'Thu gọn' : 'Xóa dữ liệu'}</span>
+          </button>
+        </div>
       </div>
 
       {open && (
         <div className="mt-5 rounded-3xl border border-warn-500/20 bg-black/20 p-5 space-y-4 animate-fadein">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             {[
-              { id: 'scans', label: 'Lịch sử quét (ScanEvent)' },
+              { id: 'scans', label: 'Lịch sử quét' },
               { id: 'chat_sessions', label: 'Phiên hội thoại AI Chat' },
               { id: 'alerts', label: 'Cảnh báo đã theo dõi' },
             ].map((item) => {
@@ -1313,7 +1359,7 @@ function ManagePersonalDataRow() {
   );
 }
 
-function DeleteAccountRow() {
+function DeleteAccountRow({ hasUsablePassword = true }: { hasUsablePassword?: boolean }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [password, setPassword] = useState('');
@@ -1322,7 +1368,7 @@ function DeleteAccountRow() {
   async function submitDelete(e: FormEvent): Promise<void> {
     e.preventDefault();
     const norm = confirmationText.trim().toUpperCase();
-    if (!password) return toastErr('Vui lòng nhập mật khẩu hiện tại.');
+    if (hasUsablePassword && !password) return toastErr('Vui lòng nhập mật khẩu hiện tại.');
     if (norm !== 'XOA TAI KHOAN' && norm !== 'XÓA TÀI KHOẢN')
       return toastErr('Bạn phải nhập chính xác cụm từ xác nhận (XÓA TÀI KHOẢN).');
     if (!(await scConfirm('Bạn chắc chắn muốn xóa tài khoản vĩnh viễn? Hành động này không thể khôi phục.', { icon: 'warning', confirmButtonText: 'Xóa vĩnh viễn' }))) return;
@@ -1375,18 +1421,20 @@ function DeleteAccountRow() {
             Nhập mật khẩu hiện tại và gõ chính xác cụm từ <span className="font-black text-danger-300">XÓA TÀI KHOẢN</span>{' '}
             (hoặc <span className="font-bold text-danger-300">XOA TAI KHOAN</span>) để xác nhận xóa tài khoản.
           </p>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-white/45 uppercase tracking-widest ml-1">
-              Mật khẩu hiện tại
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="liquid-input w-full py-3.5 px-5 text-sm font-bold"
-              placeholder="••••••••"
-            />
-          </div>
+          {hasUsablePassword && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-white/45 uppercase tracking-widest ml-1">
+                Mật khẩu hiện tại
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="liquid-input w-full py-3.5 px-5 text-sm font-bold"
+                placeholder="••••••••"
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-white/45 uppercase tracking-widest ml-1">
               Cụm từ xác nhận

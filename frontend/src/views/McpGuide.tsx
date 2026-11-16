@@ -93,31 +93,38 @@ const PLAYGROUND_TOOLS: ToolDef[] = [
 const PROMPT_SENTRY = `You are ShieldCall Sentry, an automated cybersecurity assistant and scam detection copilot integrated with the ShieldCall VN platform.
 
 OPERATIONAL DIRECTIVES:
-1. Multi-entity incidents: If an incident involves multiple indicators (e.g., phone number, URL/domain, and bank account), immediately call 'scan_full_incident' to run a unified composite triage.
-2. Single-entity inquiries: Query the corresponding ShieldCall MCP tool (check_phone, check_bank_account, check_url_or_domain, analyze_message, check_email_sender, get_supported_banks) before providing analysis.
-3. Standardized Risk Scoring Scale:
-   - 0-19: SAFE (Low likelihood of malicious intent)
-   - 20-49: LOW (Exercise caution, unverified identifiers)
-   - 50-79: MEDIUM (Suspicious patterns detected, potential fraud)
-   - 80-100: CRITICAL (Confirmed malicious activity, verified fraud reports)
-4. Tactical guidance: Explicitly instruct users never to transfer funds, install unverified APK packages, or provide OTP credentials to untrusted parties.`;
+1. Proactive Tool & Resource Usage:
+   - For multi-entity incidents (phone, URL/domain, bank account, email, message), immediately call 'scan_full_incident' to run parallel composite triage.
+   - For single-entity checks, query the matching ShieldCall MCP tool (check_phone, check_bank_account, check_url_or_domain, analyze_message, check_email_sender, get_supported_banks, lookup_scam_db, get_scam_radar_trends) before concluding.
+   - Use MCP resources (shieldcall://trust/sources, shieldcall://trust/channels, shieldcall://trust/policy) for data freshness dates and official VN hotlines.
 
-const PROMPT_EMERGENCY = `You are a specialized Incident Response Agent integrated with the ShieldCall VN security platform.
+2. Trust Guardrail & Risk Tiers (MANDATORY):
+   - Always check 'guardrail.tier', 'guardrail.is_conclusive', 'guardrail.has_contradiction', and 'evidence[]' (with source + updated_at).
+   - INSUFFICIENT: Missing data, gray-zone signals (10-39 unconfirmed), pending community reports only, or conflicting sources (has_contradiction=true). NEVER claim an entity is "safe" or "definitely a scammer".
+   - LIKELY_SAFE: Score < 10 backed by high-reliability benign verification (tinnhiemmang trusted or VirusTotal clean) and zero contradictions. Still advise verifying OTP/transfers carefully.
+   - SUSPICIOUS (10-69 / unverified warnings): Recommend pausing transactions and verifying independently.
+   - HIGH_RISK (>= 70 or verified community reports) & CONFIRMED_RISK (only domain/url/file corroborated by NCSC/ClamAV/YARA/VirusTotal >= 3): Recommend halting transfers immediately.
+   - Anti-Accusation Rule: For individuals, phone numbers, and bank accounts (is_conclusive=false), NEVER state the holder is definitively a criminal/scammer.
+
+3. Privacy & Official Channels:
+   - Respect PII masking ([SĐT đã ẩn], ****1234, ab***@domain); cite source updated_at and VN official channels (113 Police, 156 VNCERT/NCSC, https://khonggianmang.vn, or official bank hotline).`;
+
+const PROMPT_EMERGENCY = `You are the ShieldCall Emergency Incident Responder for active Vietnamese financial fraud, credential phishing, or suspicious APK compromises.
 
 IMMEDIATE INCIDENT RESPONSE PROTOCOL:
-1. CONTAINMENT: Instruct the victim to immediately contact their bank's fraud desk to freeze impacted accounts and payment cards. If malicious software was installed, immediately disconnect the device from cellular and Wi-Fi networks.
-2. IDENTIFIER TRIAGE: Invoke 'scan_full_incident', 'check_bank_account', or 'check_phone' to cross-reference fraud records against the threat intelligence database.
-3. EVIDENCE PRESERVATION: Instruct the user to preserve transaction receipts, FT codes, chat transcripts, and caller IDs without alerting the adversary.
-4. INCIDENT ESCALATION: Guide the user to file official reports with law enforcement authorities and invoke 'report_scam' to record new threat indicators.`;
+1. CONTAINMENT: Instruct the user to call their issuing bank's official hotline immediately (refer to shieldcall://trust/channels) to freeze impacted accounts/cards. If an unverified .APK was installed, enable Airplane Mode and revoke Accessibility permissions immediately.
+2. PARALLEL TRIAGE: Invoke 'scan_full_incident', 'check_bank_account', 'check_phone', or 'lookup_scam_db', reporting 'guardrail.tier' and 'evidence[]' transparently (distinguishing pending vs verified reports).
+3. EVIDENCE PRESERVATION: Preserve chat logs, transfer receipts, FT reference codes, beneficiary bank details, and call timestamps without alerting the suspect.
+4. OFFICIAL ESCALATION: Guide the user to report to Police (113) and NCSC/VNCERT (156 / https://khonggianmang.vn), and log anonymized indicators via 'report_scam' when corroborated.`;
 
-const PROMPT_INVESTIGATOR = `You are a Technical Fraud Forensic Analyst integrated with the ShieldCall VN threat intelligence platform.
+const PROMPT_INVESTIGATOR = `You are a Cyber Fraud Investigation and Forensic Analyst with ShieldCall VN.
 
 TECHNICAL INVESTIGATION PROTOCOL:
-- Evaluate domain WHOIS, age, and Levenshtein distance against known legitimate services to detect lookalike phishing domains.
-- Validate email authentication headers including SPF, DKIM, and DMARC alignment via 'check_email_sender'.
-- Analyze telecommunication carrier prefixes to identify VoIP or disposable virtual numbers via 'check_phone'.
-- Verify banking BIN codes and fraud records via 'get_supported_banks' and 'check_bank_account'.
-- Correlate indicators using 'scan_full_incident' to output a structured technical risk analysis report.`;
+- Domain Analysis: Inspect Tín nhiệm mạng status, VirusTotal consensus, typosquatting distance, WHOIS domain age, DNS, and SSL validity via 'check_url_or_domain'.
+- Email Authentication: Validate SPF, DKIM, DMARC alignment and phishing cues via 'check_email_sender'.
+- Telephony Infrastructure: Inspect carrier prefixes, VoIP/virtual indicators, and moderation status via 'check_phone' without asserting criminal guilt of individual subscribers.
+- Banking Verification: Verify bank BIN/name via 'get_supported_banks' and separate 'reports_verified' from 'reports_pending' via 'check_bank_account'.
+- Composite Correlation: Run 'scan_full_incident' for parallel triage, report any 'has_contradiction' explicitly as INSUFFICIENT, and cite sources with updated_at.`;
 
 interface PromptCard {
   id: string;
@@ -553,11 +560,17 @@ export default function McpGuide() {
   };
 
   const getResultRiskLevel = (): RiskKey => {
+    const gObj = obj(resultObj.guardrail);
+    const tier = (str(gObj.tier) || str(resultObj.overall_tier)).toUpperCase();
+    if (['CONFIRMED_RISK', 'HIGH_RISK'].includes(tier)) return 'CRITICAL';
+    if (['SUSPICIOUS'].includes(tier)) return 'WARNING';
+    if (['INSUFFICIENT'].includes(tier)) return 'LOW';
+    if (['LIKELY_SAFE'].includes(tier)) return 'SAFE';
     const raw = (str(resultObj.risk_level) || str(resultObj.overall_risk_level)).toUpperCase();
     if (['RED', 'CRITICAL', 'HIGH'].includes(raw)) return 'CRITICAL';
     if (['YELLOW', 'MEDIUM', 'WARN', 'WARNING', 'ORANGE'].includes(raw)) return 'WARNING';
-    if (['LOW'].includes(raw)) return 'LOW';
-    return 'SAFE';
+    if (['GREEN'].includes(raw)) return 'SAFE';
+    return 'LOW';
   };
 
   const getResultThreats = (): string[] => {
@@ -728,26 +741,32 @@ export default function McpGuide() {
 
     await Promise.all(tasks);
 
-    let overallLevel = 'SAFE';
-    if (maxScore >= 80) overallLevel = 'CRITICAL';
-    else if (maxScore >= 50) overallLevel = 'MEDIUM';
-    else if (maxScore >= 20) overallLevel = 'LOW';
+    let overallLevel = 'YELLOW';
+    let overallTier = 'INSUFFICIENT';
+    if (maxScore >= 70) {
+      overallLevel = 'RED';
+      overallTier = 'HIGH_RISK';
+    } else if (maxScore >= 40) {
+      overallLevel = 'YELLOW';
+      overallTier = 'SUSPICIOUS';
+    }
 
     const recommendedActions: string[] = [];
-    if (maxScore >= 80) {
+    if (maxScore >= 70) {
       recommendedActions.push('CHẶN KHẨN CẤP: Tuyệt đối không chuyển tiền hoặc cung cấp mã OTP/thông tin cá nhân.');
       recommendedActions.push('Liên hệ đường dây nóng ngân hàng để tạm khóa tài khoản hoặc thẻ thanh toán nếu đã cung cấp thông tin.');
-      recommendedActions.push('Thu thập bằng chứng và gửi báo cáo lừa đảo qua công cụ report_scam.');
-    } else if (maxScore >= 50) {
-      recommendedActions.push('CẢNH GIÁC CAO ĐỘ: Phát hiện tín hiệu bất thường về hạ tầng hoặc dấu hiệu bẫy tâm lý mạo danh.');
+      recommendedActions.push('Đối chiếu qua Công an (113), VNCERT/NCSC (156) hoặc https://khonggianmang.vn trước khi báo cáo.');
+    } else if (maxScore >= 40) {
+      recommendedActions.push('CẢNH GIÁC: Phát hiện tín hiệu bất thường hoặc cần thêm xác thực độc lập.');
       recommendedActions.push('Xác minh độc lập qua kênh tổng đài chính thức của đơn vị trước khi giao dịch.');
     } else {
-      recommendedActions.push('Không ghi nhận chỉ số đe dọa trực tiếp. Tiếp tục duy trì nguyên tắc an toàn thông tin cơ bản.');
+      recommendedActions.push('CHƯA ĐỦ CĂN CỨ (INSUFFICIENT): Thiếu dữ liệu xác nhận; không mặc định an toàn. Luôn xác minh qua kênh chính thức trước khi chuyển tiền hoặc đọc OTP.');
     }
 
     return {
       overall_risk_score: maxScore,
       overall_risk_level: overallLevel,
+      overall_tier: overallTier,
       entities_scanned: entitiesScanned,
       detected_threats: allThreats,
       recommended_actions: recommendedActions,
@@ -2595,7 +2614,7 @@ export default function McpGuide() {
                   <p><span className="text-brand-400">phone:</span> "0912345678" → <span className="text-warn-400">Đầu số dịch vụ / Nghi vấn số ảo</span></p>
                   <p><span className="text-brand-400">url:</span> "dichvucong-vn.top" → <span className="text-danger-400">Tên miền giả mạo Cổng Dịch Vụ Công Quốc Gia (Không SSL)</span></p>
                   <p><span className="text-brand-400">bank:</span> "MBBank" - <span className="text-brand-400">account:</span> "0987654321" → <span className="text-danger-400">Tài khoản có dấu hiệu gian lận</span></p>
-                  <p className="text-danger-400 font-bold pt-1 border-t border-white/5">→ Overall Risk Score: 100/100 (CRITICAL / RED)</p>
+                  <p className="text-danger-400 font-bold pt-1 border-t border-white/5">→ Overall Risk Score: 100/100 (HIGH_RISK / CONFIRMED_RISK)</p>
                 </div>
               </div>
             </div>

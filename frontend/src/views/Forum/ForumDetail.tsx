@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import { api, ApiError, mediaUrl } from '../../lib/api';
+import { scanTokenQuery } from '../../lib/scanToken';
 import { fmtDateTime as formatDate, timeAgo } from '../../lib/date';
 import { riskRingBoxClass as levelClass } from '../../lib/risk';
 import { EmptyState, Spinner } from '../../components/ui';
@@ -272,7 +273,7 @@ export default function ForumDetail() {
     }
     setReferencedScanLoading(true);
     api
-      .get<RefScan>(`/scan/status/${scanId}/`)
+      .get<RefScan>(`/scan/status/${scanId}/${scanTokenQuery(scanId)}`)
       .then((payload) => {
         setReferencedScan({
           id: Number(payload.id || scanId),
@@ -1438,10 +1439,10 @@ export default function ForumDetail() {
                 </select>
                 <select value={scanPickerFilters.riskLevel} onChange={(e) => patchFilters({ riskLevel: e.target.value })} className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
                   <option value="">Mọi mức độ</option>
-                  <option value="RED">RED</option>
-                  <option value="YELLOW">YELLOW</option>
-                  <option value="GREEN">GREEN</option>
-                  <option value="SAFE">SAFE</option>
+                  <option value="RED">RED (Nguy cơ cao)</option>
+                  <option value="YELLOW">YELLOW (Cảnh báo / Chưa đủ căn cứ)</option>
+                  <option value="GREEN">GREEN (Rủi ro thấp)</option>
+                  <option value="SAFE">SAFE (Bản ghi cũ)</option>
                 </select>
                 <div className="flex gap-2">
                   <input type="text" value={scanPickerFilters.q} onChange={(e) => patchFilters({ q: e.target.value })} placeholder="Từ khóa..." className="bg-[var(--sc-night-1)]/60 border border-white/10 rounded-xl flex-1 px-4 py-2 text-sm font-bold text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />

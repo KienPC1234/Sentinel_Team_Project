@@ -193,6 +193,7 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
         )}
 
         <div
+          data-tour="scan-form"
           className={`liquid-card p-6 sm:p-8 ${isDragging ? 'border-brand-500 border-dashed ring-4 ring-brand-500/20' : ''}`}
         >
           <form
@@ -224,7 +225,7 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
                   <i className="bi bi-trash mr-2"></i> XÓA TẤT CẢ
                 </button>
               )}
-              <button type="submit" className="liquid-btn bg-brand-500 text-black px-12 py-4 font-black hover:bg-brand-400" disabled={loading}>
+              <button type="submit" data-tour="scan-submit" className="liquid-btn bg-brand-500 text-black px-12 py-4 font-black hover:bg-brand-400" disabled={loading}>
                 {!loading ? (
                   <span><i className="bi bi-cpu mr-2"></i> PHÂN TÍCH</span>
                 ) : (

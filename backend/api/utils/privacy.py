@@ -507,7 +507,7 @@ def apply_scan_privacy(
     safe_result["privacy_protected_fields"] = dedup_fields
     safe_result["privacy_redacted_count"] = max(redacted_count, len(dedup_fields))
     safe_result["privacy_note"] = (
-        "Đã bật chế độ che PII: phân tích lõi thực hiện cục bộ, dữ liệu định danh (SĐT, Email, STK, CCCD, URL token) được che trước khi lưu lịch sử & gửi mô hình AI ngoài."
+        "Đã bật chế độ che thông tin nhạy cảm: phân tích lõi thực hiện cục bộ, dữ liệu định danh (SĐT, Email, STK, CCCD, URL token) được che trước khi lưu lịch sử & gửi mô hình AI ngoài."
     )
     return safe_raw, safe_norm, safe_result
 

@@ -1,4 +1,5 @@
-from django.db.models import Count, Q
+from django.db.models import Count, DateField, Q
+from django.db.models.functions import Cast, Coalesce
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import AllowAny
@@ -33,6 +34,7 @@ class ArticleListView(APIView):
         raw_limit = request.query_params.get('limit')
         limit = min(int(raw_limit), 500) if raw_limit and raw_limit.isdigit() else 200
 
+        sort_param = (request.query_params.get('sort') or 'newest').strip().lower()
         articles = (
             Article.objects
             .filter(is_published=True)
@@ -40,9 +42,15 @@ class ArticleListView(APIView):
             .annotate(
                 reactions_total=Count('reactions', distinct=True),
                 comments_total=Count('comments', filter=Q(comments__is_hidden=False), distinct=True),
+                sort_date=Coalesce('published_date', Cast('created_at', DateField())),
             )
-            .order_by('-created_at')
         )
+        if sort_param == 'oldest':
+            articles = articles.order_by('sort_date', 'created_at', 'id')
+        elif sort_param == 'alpha':
+            articles = articles.order_by('title', '-sort_date', '-id')
+        else:
+            articles = articles.order_by('-sort_date', '-created_at', '-id')
 
         if category and category != 'all':
             articles = articles.filter(category=category)

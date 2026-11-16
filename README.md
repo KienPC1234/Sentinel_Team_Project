@@ -90,8 +90,10 @@ python3.11 -m venv .venv
 .venv/bin/pip install -U pip && .venv/bin/pip install -r backend/requirements.txt
 .venv/bin/pip install gdown && .venv/bin/pip install --no-deps vietocr==0.3.13
 
-# 3) Configure backend/.env (see docs/SETUP.md for every variable)
-#    Minimum: DEBUG, SECRET_KEY, ALLOWED_HOSTS, DB_*, REDIS_*, OLLAMA_BASE_URL
+# 3) Configure backend/PKV/settings.py and backend/.env (see docs/SETUP.md for every variable)
+cp backend/PKV/settings.py.example backend/PKV/settings.py
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
 
 # 4) Database, knowledge base, sandbox image
 cd backend && python manage.py migrate && python manage.py collectstatic --noinput

@@ -182,7 +182,7 @@ export default function Lookup() {
       </div>
 
 
-      <div className="liquid-card p-6 space-y-5">
+      <div className="liquid-card p-6 space-y-5" data-tour="scan-form">
         <form onSubmit={submitSearch} className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
           <div className="relative">
             <i className="bi bi-search absolute left-3.5 top-1/2 -translate-y-1/2 text-white/35 pointer-events-none z-10"></i>
@@ -194,7 +194,7 @@ export default function Lookup() {
               className="w-full h-11 pl-10 pr-3 rounded-xl bg-white/[0.03] border border-white/10 text-white text-sm placeholder:text-white/35 focus:outline-none focus:border-brand-500/40"
             />
           </div>
-          <button type="submit" className="h-11 px-5 rounded-xl bg-brand-500 text-black text-sm font-black hover:bg-brand-400 transition-colors">
+          <button type="submit" data-tour="scan-submit" className="h-11 px-5 rounded-xl bg-brand-500 text-black text-sm font-black hover:bg-brand-400 transition-colors">
             Tra cứu
           </button>
         </form>

@@ -20,10 +20,22 @@ PROMPT_GUARD = """Quy tắc an toàn bắt buộc (ưu tiên cao nhất, ghi đ�
 7. ĐỊNH DẠNG: Tuyệt đối không sử dụng emoji và không sử dụng gạch nối dài em-dash trong toàn bộ câu trả lời."""
 
 
-def wrap_user_data(text: str, label: str = "DU_LIEU_NGUOI_DUNG", limit: int = 8000) -> str:
-    """Bọc dữ liệu người dùng vào delimiter + strip control chars + giới hạn độ dài."""
+import re as _re
+
+
+def sanitize_delimiter_text(text: str, label: str = "DU_LIEU_NGUOI_DUNG", limit: int = 8000) -> str:
+    """Làm sạch control char, giới hạn độ dài và vô hiệu hóa thẻ đóng/mở giả mạo bên trong dữ liệu."""
     clean = ''.join(ch for ch in str(text or '') if ch == '\t' or ch == '\n' or (' ' <= ch <= '~') or ord(ch) > 127)
     clean = clean.strip()[:limit]
+    if label:
+        tag_pattern = _re.compile(r'<\s*/?\s*' + _re.escape(label) + r'\b[^>]*>', _re.IGNORECASE)
+        clean = tag_pattern.sub(lambda m: f"[{m.group(0).strip('<>').strip()}]", clean)
+    return clean
+
+
+def wrap_user_data(text: str, label: str = "DU_LIEU_NGUOI_DUNG", limit: int = 8000) -> str:
+    """Bọc dữ liệu người dùng vào delimiter + strip control chars + chống phá thẻ."""
+    clean = sanitize_delimiter_text(text, label=label, limit=limit)
     return f"<{label}>\n{clean}\n</{label}>"
 
 

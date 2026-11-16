@@ -1,6 +1,6 @@
 # HỒ SƠ NỘP BÀI CHẶNG 1 & KHAI BÁO MINH BẠCH - SHIELDCALL VN
 
-> **Trạng thái:** hồ sơ nộp · **Cập nhật:** 2026-11-15 · **Đối tượng:** hội đồng giám khảo, người nộp bài
+> **Trạng thái:** hồ sơ nộp · **Cập nhật:** 2026-11-16 · **Đối tượng:** hội đồng giám khảo, người nộp bài
 
 Tài liệu tổng hợp đầy đủ các mục bắt buộc theo biểu mẫu **Nộp / cập nhật bài - Chặng 1 (Vòng Chung kết)**.
 
@@ -13,9 +13,9 @@ Tài liệu tổng hợp đầy đủ các mục bắt buộc theo biểu mẫu 
 | **Liên kết mã nguồn (HTTPS)** | `https://github.com/KienPC1234/Sentinel_Team_Project` |
 | **Liên kết sản phẩm chạy thử (HTTPS)** | `https://sc.fptoj.com` |
 | **Liên kết báo cáo cải tiến PDF/Word (HTTPS)** | `https://github.com/KienPC1234/Sentinel_Team_Project/blob/master/docs/BAO_CAO_CAI_TIEN_CHUNG_KET.pdf` (sau khi push commit mới nhất lên GitHub) |
-| **Commit / tag / phiên bản mã nguồn** | Kiểm tra bằng `git rev-parse --short HEAD` và `git tag` sau khi commit bản Chung kết (trước bản cập nhật này: tag `1.0b`, base commit `a6e41da`). |
-| **Tài khoản dùng thử sản phẩm** | Trên CSDL hiện tại ghi nhận tài khoản người dùng chuẩn (`ha_tri`) và tài khoản quản trị/staff (`admin_sentinel`, `tri_kien`), hoặc người dùng/BGK có thể đăng ký trực tiếp tài khoản mới tại `https://sc.fptoj.com/register/`. *Lưu ý vận hành: mật khẩu thử nghiệm cần được người phụ trách đội thi cấp/đặt trước hoặc kiểm tra lại từ quản trị viên trước khi điền vào form nộp bài; không lưu mật khẩu thật vào mã nguồn công khai.* |
-| **Mật khẩu dùng thử** | *Không nhúng mật khẩu thật vào tài liệu công khai trong repo git; quản trị viên hệ thống lấy/đặt trực tiếp mật khẩu cho tài khoản dùng thử khi nộp biểu mẫu.* |
+| **Commit / tag / phiên bản mã nguồn** | Kiểm tra bằng `git rev-parse --short HEAD` và `git tag` sau khi commit & push bản Chung kết (base commit hiện tại trên remote: `de5c44f`, tag gần nhất: `1.0b`). |
+| **Tài khoản dùng thử sản phẩm** | Đã tạo sẵn tài khoản người dùng chuẩn (`is_staff=False, is_superuser=False`, email đã xác thực) dành riêng cho Hội đồng giám khảo: `bgk_demo` (hoặc BGK có thể tự đăng ký mới tại `https://sc.fptoj.com/register/`). *Không lưu mật khẩu thật trong repository git công khai; mật khẩu dùng thử được gửi riêng qua ô biểu mẫu nộp bài / kênh trao đổi trực tiếp.* |
+| **Mật khẩu dùng thử** | *Không nhúng mật khẩu thật vào tài liệu công khai trong repo git; lấy giá trị mật khẩu dùng thử tương ứng cho tài khoản `bgk_demo` từ bảng hướng dẫn nộp bài riêng của đội thi.* |
 
 ---
 
@@ -31,28 +31,52 @@ Tài liệu tổng hợp đầy đủ các mục bắt buộc theo biểu mẫu 
 
 ### 2.2. Cài đặt và khởi chạy nhanh (Development / Self-host)
 
-1. **Sao chép mã nguồn và cấu hình biến môi trường**: Tạo `backend/.env` hoặc cấu hình biến môi trường (`SECRET_KEY`, `DATABASE_URL` hoặc SQLite mặc định, `REDIS_URL`, `OLLAMA_BASE_URL` / `OLLAMA_API_KEY`, `VIRUSTOTAL_API_KEY` tùy chọn, `NEXT_PUBLIC_API_BASE_URL` ở `frontend/.env.local`).
-2. **Khởi chạy Backend Django + Celery**:
+1. **Sao chép mã nguồn và cài đặt môi trường Python (3.11+)**:
+
+```bash
+git clone https://github.com/KienPC1234/Sentinel_Team_Project.git
+cd Sentinel_Team_Project
+python3.11 -m venv .venv
+.venv/bin/pip install -U pip
+.venv/bin/pip install -r backend/requirements.txt
+# Tùy chọn OCR tiếng Việt dùng chung trong venv chính:
+.venv/bin/pip install gdown && .venv/bin/pip install --no-deps vietocr==0.3.13
+```
+
+2. **Khởi tạo cấu hình từ tệp mẫu**:
+
+```bash
+cp backend/PKV/settings.py.example backend/PKV/settings.py
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+> Mặc định `backend/.env.example` dùng `DB_ENGINE=sqlite3` để chạy ngay không cần cài MariaDB; khi triển khai thật có thể đổi sang `DB_ENGINE=mysql` kèm `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` và cấu hình `REDIS_URL`, `OLLAMA_BASE_URL` / `OLLAMA_API_KEY`.
+
+3. **Khởi chạy Backend Django + Celery**:
 
 ```bash
 cd backend
 ../.venv/bin/python manage.py migrate
+../.venv/bin/python manage.py collectstatic --noinput
 ../.venv/bin/python manage.py runserver 0.0.0.0:8001
 # Terminal khác (nếu chạy tác vụ quét bất đồng bộ):
 ../.venv/bin/celery -A PKV worker -l info
 ```
 
-3. **Khởi chạy Frontend Next.js**:
+4. **Cài đặt & khởi chạy Frontend Next.js (và dịch vụ Puppeteer tùy chọn)**:
 
 ```bash
 cd frontend
 npm ci
 npm run build
-npm run start -- -p 3000
+API_TARGET=http://127.0.0.1:8001 npm run start -- -p 3000
+# Tùy chọn chạy trình duyệt quét URL (cổng 3010):
+cd ../puppeteer_host && npm ci && npm run build && npm run start
 ```
 
-4. **Hoặc chạy đồng bộ toàn bộ dịch vụ qua PM2 (`ecosystem.config.js`)**: khởi động các tiến trình `pkv-web` (Django :8001), `pkv-frontend` (Next.js :3000), `pkv-celery`, `pkv-celery-beat`, `pkv-puppeteer` (:3010), `pkv-ai` (:5010).
-5. **Kiểm tra nhanh sau cài đặt**:
+5. **Hoặc chạy đồng bộ toàn bộ dịch vụ qua PM2 (`ecosystem.config.js`)**: khởi động các tiến trình `pkv-web` (Django `:8001`), `pkv-frontend` (Next.js `:3000`), `pkv-celery`, `pkv-celery-beat`, `pkv-puppeteer` (`:3010`), `pkv-ai` (`:5010`).
+6. **Kiểm tra nhanh sau cài đặt**:
 
 ```bash
 cd backend
@@ -71,7 +95,7 @@ cd backend
 |---|---|---|
 | Mô hình ngôn ngữ LLM qua Ollama Cloud / Local (`Ollama` API: `qwen`, `deepseek`, `gemma` theo cấu hình `OLLAMA_MODEL` / `OLLAMA_BASE_URL`) | Diễn giải ngữ nghĩa tin nhắn/trang web/ảnh sang tiếng Việt tự nhiên, tổng hợp khuyến nghị hành động an toàn và kịch bản từ chối giao dịch; **không** thay thế bằng chứng gốc. | Tuân thủ nút gạt che PII trên từng lượt quét (`ScanPrivacyToggle`, mặc định BẬT `mask_pii=True`): khi bật, `redact_for_external_llm` ẩn SĐT/CCCD/Email/STK trước khi gửi Cloud LLM (kèm quy tắc prompt giữ khả năng phân tích ngữ cảnh trên nhãn đã che); chỉ gửi nguyên văn khi chạy local hoặc người dùng chủ động tắt `mask_pii=False`. Log hệ thống (`PIIRedactionFilter`) luôn ẩn PII bất biến. |
 | `faster-whisper` / Whisper (chạy cục bộ) | Chuyển giọng nói thành văn bản (Speech-to-Text) cho tệp âm thanh/cuộc gọi tải lên. | Chạy cục bộ trên máy chủ, không gửi file âm thanh ra dịch vụ bên ngoài. |
-| Embedding / RAG (`sentence-transformers`, `faiss-cpu`, `torch`) | Vector hóa và truy xuất 240 mục tài liệu phòng chống lừa đảo tiếng Việt tại máy chủ. | Chạy cục bộ hoàn toàn với chỉ mục `backend/vector_store`. |
+| Embedding / RAG (`sentence-transformers`, `faiss-cpu`, `torch`) | Vector hóa và truy xuất 279 mục tài liệu phòng chống lừa đảo tiếng Việt tại máy chủ. | Chạy cục bộ hoàn toàn với chỉ mục `backend/vector_store`. |
 | OCR / QR (`pyzbar`, VietOCR + CRAFT, fallback Tesseract) | Trích xuất nội dung chữ tiếng Việt và mã QR từ ảnh chụp màn hình/biên lai. | Xử lý cục bộ trên máy chủ (`pkv-ai` / `ocr_bridge`). |
 
 ### 3.2. Mã nguồn và thư viện bên thứ ba (Giấy phép dự án: `AGPL-3.0-or-later`)

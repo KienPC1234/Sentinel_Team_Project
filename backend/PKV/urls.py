@@ -13,7 +13,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from django.http import HttpResponse
 
 from .views.auth_overrides import TurnstilePasswordResetView
-from .views.proxy_views import frontend_proxy_view
+from .views.proxy_views import frontend_proxy_view, api_not_found_view
 from api.core.views import MCPConnectSSEView, MCPMessagesView
 from api.core import views as core_api_views
 from .views.admin_views import (
@@ -136,6 +136,9 @@ urlpatterns = [
 
     # Media files serving (avatars, reports, forum uploads, covers, etc.)
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+
+    # Unknown API paths must stay JSON (never fall through to the Next.js page proxy).
+    re_path(r'^api(?:/(?P<path>.*))?$', api_not_found_view, name='api-not-found'),
 
     # Reverse proxy all frontend routes and Next.js assets to Next.js production server (port 3000)
     re_path(r'^(?P<path>.*)$', frontend_proxy_view, name='frontend-proxy'),
