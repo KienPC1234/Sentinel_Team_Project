@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { Navbar, Footer } from '@/components/Layout';
 import ChatWidget from '@/components/ChatWidget';
 import UserCardPopup from '@/components/UserCardPopup';
+import { TourPrompt } from '@/components/TourGuide';
 
 export function LayoutShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '';
@@ -30,6 +31,7 @@ export function LayoutShell({ children }: { children: ReactNode }) {
       <Footer />
       {!hideFloatingChat && <ChatWidget />}
       <UserCardPopup />
+      <TourPrompt />
     </div>
   );
 }

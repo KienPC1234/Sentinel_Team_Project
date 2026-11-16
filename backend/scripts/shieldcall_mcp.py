@@ -45,6 +45,7 @@ Usage:
 import os
 import sys
 import json
+import time
 import logging
 import argparse
 import inspect
@@ -52,7 +53,8 @@ import queue
 import threading
 import uuid
 import re
-from typing import Any, Dict, List, Optional, Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Optional, Callable, Tuple
 from urllib import request as urllib_request
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
@@ -64,6 +66,23 @@ logging.basicConfig(
     stream=sys.stderr,
 )
 logger = logging.getLogger("shieldcall_mcp")
+
+
+def _mask_identifier(kind: str, value: str) -> str:
+    """Minimize PII in human-readable MCP threat summaries without blinding identifiers."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    if kind == "phone":
+        digits = re.sub(r"\s+", "", raw)
+        return f"{digits[:4]}****{digits[-2:]}" if len(digits) > 6 else "***"
+    if kind == "account":
+        return f"****{raw[-4:]}" if len(raw) > 4 else "****"
+    if kind == "email" and "@" in raw:
+        local, dom = raw.split("@", 1)
+        head = local[:2] if len(local) >= 2 else (local[:1] or "*")
+        return f"{head}***@{dom}"
+    return raw
 
 
 # ==============================================================================
@@ -83,6 +102,21 @@ class ShieldCallClient:
         self.api_url = raw_url.rstrip("/")
         self.api_key = api_key or os.getenv("SHIELDCALL_API_KEY", "")
         self.timeout = timeout
+        self._ssl_ctx = ssl.create_default_context()
+        self._cache: Dict[str, Tuple[float, Any]] = {}
+        self._cache_lock = threading.Lock()
+
+    def _cached(self, key: str, ttl_sec: int, loader: Callable[[], Any]) -> Any:
+        now = time.monotonic()
+        with self._cache_lock:
+            entry = self._cache.get(key)
+            if entry is not None and entry[0] > now:
+                return entry[1]
+        val = loader()
+        if isinstance(val, (dict, list)) and not (isinstance(val, dict) and val.get("error")):
+            with self._cache_lock:
+                self._cache[key] = (time.monotonic() + ttl_sec, val)
+        return val
 
     def _headers(self) -> Dict[str, str]:
         headers = {
@@ -118,10 +152,8 @@ class ShieldCallClient:
             method=method,
         )
 
-        ctx = ssl.create_default_context()
-
         try:
-            with urllib_request.urlopen(req, timeout=self.timeout, context=ctx) as response:
+            with urllib_request.urlopen(req, timeout=self.timeout, context=self._ssl_ctx) as response:
                 resp_bytes = response.read()
                 resp_text = resp_bytes.decode("utf-8")
                 try:
@@ -194,7 +226,7 @@ class ShieldCallClient:
 
     def get_supported_banks(self) -> Any:
         """Retrieve verified Vietnamese banks with BIN codes and identifiers."""
-        return self._request("GET", "scan/banks/")
+        return self._cached("scan/banks/", 3600, lambda: self._request("GET", "scan/banks/"))
 
     def lookup_scam_db(self, query: str, entity_type: str = "all") -> Dict[str, Any]:
         """Query threat and scam database records by keyword or identifier."""
@@ -202,7 +234,19 @@ class ShieldCallClient:
 
     def get_scam_radar_trends(self) -> Dict[str, Any]:
         """Retrieve real-time scam statistics and prevalent regional threat patterns."""
-        return self._request("GET", "trends/radar-stats/")
+        return self._cached("trends/radar-stats/", 300, lambda: self._request("GET", "trends/radar-stats/"))
+
+    def get_trust_sources(self) -> Dict[str, Any]:
+        """Retrieve reliability catalog, source update timestamps, and limitations."""
+        return self._cached("trust/sources/", 1800, lambda: self._request("GET", "trust/sources/"))
+
+    def get_trust_channels(self) -> Dict[str, Any]:
+        """Retrieve verified Vietnamese official anti-fraud channels and hotlines."""
+        return self._cached("trust/channels/", 1800, lambda: self._request("GET", "trust/channels/"))
+
+    def get_trust_policy(self) -> Dict[str, Any]:
+        """Retrieve ShieldCall Trust Guardrail and privacy policy metadata."""
+        return self._cached("trust/policy/", 1800, lambda: self._request("GET", "trust/policy/"))
 
     @staticmethod
     def normalize_scam_type(scam_type: str) -> str:
@@ -262,55 +306,56 @@ class ShieldCallClient:
 # 2. SYSTEM PERSONA PROMPTS
 # ==============================================================================
 
-SHIELDCALL_SENTRY_PROMPT = """You are the ShieldCall Sentry assistant, an automated cybersecurity and fraud-prevention monitor integrated with the ShieldCall VN threat intelligence platform.
+SHIELDCALL_SENTRY_PROMPT = """You are the ShieldCall Sentry assistant, an automated cybersecurity and anti-fraud copilot integrated with the ShieldCall VN threat intelligence platform.
 
 ### Core Operational Principles:
 1. Proactive Tool Dispatch:
-   - For multi-entity incidents (involving telephone numbers, URLs, and bank accounts simultaneously), invoke the `scan_full_incident` tool to perform comprehensive inspection in a single call.
-   - For isolated indicators of compromise, invoke the corresponding ShieldCall MCP tool prior to formulating conclusions:
-     - `check_phone`: Inspect phone numbers (+84, local prefixes) against blacklists, telecom registries, and VoIP/virtual indicators.
-     - `check_bank_account`: Verify bank account numbers and beneficiary institutions against financial fraud records.
-     - `check_url_or_domain`: Inspect domains and URLs for phishing signatures, typosquatting/lookalike patterns, SSL status, and WHOIS registration age.
-     - `analyze_message`: Parse SMS, chat, or email content for social engineering, law enforcement impersonation, and OTP solicitation patterns.
-     - `check_email_sender`: Inspect sender domains for SPF, DKIM, DMARC alignment, and phishing heuristics.
-     - `get_supported_banks`: Retrieve verified Vietnamese bank codes and BIN registry for beneficiary verification.
-     - `lookup_scam_db`: Query community fraud incident archives by identifier or keyword.
-     - `get_scam_radar_trends`: Retrieve real-time regional scam trends and prevalent threat patterns.
+   - For multi-entity incidents (phone numbers, URLs, bank accounts, emails, messages), invoke `scan_full_incident` to run parallel multi-vector inspection in one call.
+   - For isolated indicators, invoke the corresponding MCP tool before formulating conclusions:
+     - `check_phone`: Inspect phone numbers (+84, local prefixes) against blacklists, telecom metadata, and VoIP/virtual indicators.
+     - `check_bank_account`: Verify bank account numbers and beneficiary institutions against financial fraud records (separates verified vs pending reports).
+     - `check_url_or_domain`: Inspect domains/URLs for phishing signatures, lookalike domains, Tín nhiệm mạng, VirusTotal, SSL, and WHOIS age.
+     - `analyze_message`: Parse SMS/chat text for Vietnamese social engineering scripts and scam patterns.
+     - `check_email_sender`: Inspect sender domains for SPF/DKIM/DMARC alignment and phishing heuristics.
+     - `get_supported_banks`: Retrieve Vietnamese bank codes and BIN registry.
+     - `lookup_scam_db` / `get_scam_radar_trends`: Query archived scam reports and live regional trends.
+   - Use MCP resources (`shieldcall://trust/sources`, `shieldcall://trust/channels`, `shieldcall://trust/policy`) when users ask for data sources, update dates, or official VN verification hotlines.
 
-2. Risk Scoring Standards:
-   - 0 - 19 (SAFE): No threat indicators identified.
-   - 20 - 49 (LOW): Low risk, standard security precautions apply.
-   - 50 - 79 (MEDIUM): Elevated risk. Associated with suspicious metadata, short domain lifespans, or community warnings.
-   - 80 - 100 (CRITICAL): High threat level. Confirmed malicious indicator, blacklisted entity, or multiple victim reports.
+2. Trust Guardrail & Risk Tiers (MANDATORY):
+   - Always check `guardrail.tier`, `guardrail.is_conclusive`, `guardrail.has_contradiction`, and `evidence[]` (with `source` + `updated_at`) returned by ShieldCall tools.
+   - `INSUFFICIENT` (`CHƯA ĐỦ CƠ SỞ XÁC MINH`): Missing data, gray-zone signals (10-39 without confirmation), pending community reports only, or conflicting sources (`has_contradiction=true`). NEVER claim an entity is "safe" or "definitely a scammer".
+   - `LIKELY_SAFE`: Score < 10 backed by high-reliability benign verification (`tinnhiemmang` trusted or VirusTotal clean) and zero contradictions. Still advise verifying OTP/transfers carefully.
+   - `SUSPICIOUS` (10-69 / unverified warnings): Recommend pausing transactions and verifying independently.
+   - `HIGH_RISK` (>= 70 or verified community reports) & `CONFIRMED_RISK` (only domain/url/file corroborated by NCSC/ClamAV/YARA/VirusTotal >= 3): Recommend halting transfers immediately.
+   - Strict Anti-Accusation Rule: For individuals, phone numbers, and bank accounts (`is_conclusive=false`), NEVER declare the holder is definitively a criminal/scammer. Cite the exact records and advise verification via official channels.
 
-3. Response Protocol:
-   - Provide direct, concise, and technical assessments without conversational filler.
-   - Deliver clear mitigation steps: instruct users never to transfer funds, avoid installing unverified APK binaries, and never disclose OTP tokens.
-   - Direct users to invoke `report_scam` when novel fraudulent entities or tactics are discovered.
+3. Privacy & Response Protocol:
+   - Respect PII masking (`[SĐT đã ẩn]`, `****1234`, `ab***@domain`); analyze context normally without demanding unmasked personal IDs.
+   - Always cite source `updated_at` / tool evidence and provide VN official channels when warning or uncertain (113 Police, 156 VNCERT/NCSC spam hotline, https://khonggianmang.vn, or the user's official bank hotline).
+   - Direct users to `report_scam` only when corroborated scam evidence is confirmed.
 """
 
-SHIELDCALL_EMERGENCY_PROMPT = """You are the ShieldCall Emergency Incident Responder. The user may be experiencing active financial fraud, unauthorized credential compromise, or phishing exploitation.
+SHIELDCALL_EMERGENCY_PROMPT = """You are the ShieldCall Emergency Incident Responder for active Vietnamese financial fraud, credential phishing, or suspicious APK compromises.
 
 ### 4-Step Incident Response Protocol:
 1. Step 1: Immediate Containment:
-   - Instruct the user to immediately contact the issuing bank hotline to freeze cards, lock accounts, and halt digital transactions.
-   - If a suspicious mobile application (.APK) was installed: instruct the user to immediately enable Airplane Mode to sever network connectivity and revoke Accessibility permissions.
-2. Step 2: Entity Identification and Profiling:
-   - Query threat intelligence via `scan_full_incident`, `check_bank_account`, `check_phone`, or `lookup_scam_db` to profile the adversary infrastructure.
+   - Instruct the user to call their issuing bank's official hotline immediately (refer to `shieldcall://trust/channels`) to lock cards, accounts, and suspend digital banking.
+   - If an unverified `.APK` file was installed: enable Airplane Mode immediately to cut network access, revoke Accessibility permissions, and run malware scan without transferring funds or OTPs.
+2. Step 2: Parallel Entity Triage:
+   - Query `scan_full_incident`, `check_bank_account`, `check_phone`, or `lookup_scam_db` and report both `guardrail.tier` and cited `evidence[]` transparently (clearly distinguishing `pending` vs `verified` reports).
 3. Step 3: Evidence Preservation:
-   - Guide the user to capture comprehensive digital evidence: screenshots of chat logs, transfer receipts with reference numbers, beneficiary bank details, and call records.
-4. Step 4: Formal Escalation and Reporting:
-   - Advise the user to submit an official crime report to local law enforcement with the preserved digital evidence.
-   - Invoke `report_scam` to submit the threat actor parameters to the ShieldCall database.
+   - Advise preserving screenshots of chat logs, transfer receipts / transaction reference codes, beneficiary bank details, URLs, and call timestamps without alerting suspects.
+4. Step 4: Official Reporting:
+   - Direct the user to file an official report with Police (113 / local cybercrime division) and NCSC/VNCERT (156 / `https://khonggianmang.vn`), and optionally log anonymized indicators via `report_scam`.
 """
 
 SHIELDCALL_INVESTIGATOR_PROMPT = """You are a Cyber Fraud Investigation and Forensic Analyst with ShieldCall VN.
-Your objective is to conduct technical entity inspection on suspicious indicators:
-- Domain Analysis: Assess typosquatting distance (Levenshtein lookalike metrics), domain registration age via WHOIS, DNS records, and SSL certificate validity.
-- Email Authentication: Validate SPF, DKIM, DMARC policies, and MX server configurations via `check_email_sender`.
-- Telephony Infrastructure: Classify carrier networks, detect VoIP/virtual allocations, and flag premium-rate number prefixes via `check_phone`.
-- Banking Verification: Validate institution BIN codes via `get_supported_banks` and cross-reference structured fraud syndicate accounts.
-- Incident Correlation: Correlate multiple indicators using `scan_full_incident` and synthesize structured findings into a clear technical summary.
+Conduct evidence-cited technical triage across entities while respecting uncertainty guardrails:
+- Domain Analysis: Check Tín nhiệm mạng status, VirusTotal consensus, typosquatting distance, WHOIS domain age, DNS, and SSL validity via `check_url_or_domain`.
+- Email Authentication: Validate SPF, DKIM, DMARC alignment and phishing cues via `check_email_sender`.
+- Telephony Infrastructure: Check carrier prefix metadata, VoIP/virtual indicators, and moderation status via `check_phone` (without concluding subscriber criminal guilt).
+- Banking Verification: Validate bank BIN/name via `get_supported_banks` and separate `reports_verified` from `reports_pending` via `check_bank_account`.
+- Composite Triage: Run `scan_full_incident` for parallel correlation, report any `has_contradiction` explicitly as `INSUFFICIENT`, and list cited sources with `updated_at`.
 """
 
 
@@ -321,16 +366,17 @@ Your objective is to conduct technical entity inspection on suspicious indicator
 class ZeroDepMCPServer:
     """
     Model Context Protocol (JSON-RPC 2.0) server implementation
-    supporting stdio and Server-Sent Events (SSE) transports.
+    supporting stdio, SSE, and Streamable HTTP transports.
     """
 
     PROTOCOL_VERSION = "2024-11-05"
 
-    def __init__(self, name: str = "shieldcall-vn", version: str = "1.0.0"):
+    def __init__(self, name: str = "shieldcall-vn", version: str = "1.1.0"):
         self.name = name
         self.version = version
         self.tools: Dict[str, Dict[str, Any]] = {}
         self.prompts: Dict[str, Dict[str, Any]] = {}
+        self.resources: Dict[str, Dict[str, Any]] = {}
 
     def tool(self, name: Optional[str] = None):
         """Decorator to register an MCP tool."""
@@ -372,6 +418,8 @@ class ZeroDepMCPServer:
                     "properties": props,
                     "required": required,
                 },
+                "param_names": set(sig.parameters.keys()),
+                "required_params": list(required),
                 "func": func,
             }
             return func
@@ -388,6 +436,37 @@ class ZeroDepMCPServer:
             }
             return func
         return decorator
+
+    def resource(self, uri: str, name: str, description: str = "", mime_type: str = "application/json"):
+        """Decorator to register a read-only MCP resource."""
+        def decorator(func: Callable):
+            self.resources[uri] = {
+                "uri": uri,
+                "name": name,
+                "description": description or (func.__doc__ or "").strip(),
+                "mimeType": mime_type,
+                "func": func,
+            }
+            return func
+        return decorator
+
+    def handle_payload(self, payload: Any) -> Any:
+        """Process either a single JSON-RPC 2.0 object or a JSON-RPC 2.0 batch list."""
+        if isinstance(payload, list):
+            if not payload:
+                return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request: empty batch"}}
+            responses = []
+            for item in payload:
+                if not isinstance(item, dict):
+                    responses.append({"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request"}})
+                    continue
+                resp = self.handle_request(item)
+                if resp is not None:
+                    responses.append(resp)
+            return responses if responses else None
+        if not isinstance(payload, dict):
+            return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request"}}
+        return self.handle_request(payload)
 
     def handle_request(self, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Process a JSON-RPC 2.0 request and return the response."""
@@ -448,8 +527,30 @@ class ZeroDepMCPServer:
                 }
 
             tool_def = self.tools[tool_name]
+            if not isinstance(arguments, dict):
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32602, "message": "Invalid params: 'arguments' must be an object."},
+                }
+            param_names = tool_def.get("param_names")
+            filtered_args = (
+                {k: v for k, v in arguments.items() if k in param_names}
+                if isinstance(param_names, set)
+                else arguments
+            )
+            missing = [p for p in tool_def.get("required_params", []) if p not in filtered_args]
+            if missing:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "content": [{"type": "text", "text": f"Missing required parameter(s) for {tool_name}: {', '.join(missing)}"}],
+                        "isError": True,
+                    },
+                }
             try:
-                result_val = tool_def["func"](**arguments)
+                result_val = tool_def["func"](**filtered_args)
                 text_out = result_val if isinstance(result_val, str) else json.dumps(result_val, ensure_ascii=False)
                 return {
                     "jsonrpc": "2.0",
@@ -508,7 +609,41 @@ class ZeroDepMCPServer:
             }
 
         if method == "resources/list":
-            return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": []}}
+            resources_list = [
+                {
+                    "uri": r["uri"],
+                    "name": r["name"],
+                    "description": r["description"],
+                    "mimeType": r["mimeType"],
+                }
+                for r in self.resources.values()
+            ]
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": resources_list}}
+
+        if method == "resources/read":
+            uri = params.get("uri")
+            if uri not in self.resources:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32602, "message": f"Resource '{uri}' not found."},
+                }
+            res_def = self.resources[uri]
+            raw_val = res_def["func"]()
+            text_out = raw_val if isinstance(raw_val, str) else json.dumps(raw_val, ensure_ascii=False)
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "contents": [
+                        {
+                            "uri": uri,
+                            "mimeType": res_def["mimeType"],
+                            "text": text_out,
+                        }
+                    ]
+                },
+            }
 
         if method == "resources/templates/list":
             return {"jsonrpc": "2.0", "id": req_id, "result": {"resourceTemplates": []}}
@@ -679,13 +814,130 @@ class ZeroDepMCPServer:
 # 4. SERVER INITIALIZATION & TOOL REGISTRATION
 # ==============================================================================
 
+def _dump_compact(data: Any) -> str:
+    """Serialize tool output compactly without wasted indentation tokens."""
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
+def synthesize_incident_guardrail(entities_scanned: Dict[str, Any], max_score: int) -> Dict[str, Any]:
+    """Synthesize evidence-aware multi-entity guardrail verdict for scan_full_incident."""
+    tier_rank = {
+        "CONFIRMED_RISK": 4,
+        "HIGH_RISK": 3,
+        "SUSPICIOUS": 2,
+        "INSUFFICIENT": 1,
+        "LIKELY_SAFE": 0,
+    }
+    tiers: List[str] = []
+    has_contradiction = False
+    evidences: List[Dict[str, Any]] = []
+    seen_ev = set()
+    official_channels: List[Dict[str, Any]] = []
+    seen_ch = set()
+
+    for kind, res in entities_scanned.items():
+        if not isinstance(res, dict):
+            continue
+        g = res.get("guardrail") or {}
+        if isinstance(g, dict):
+            t = str(g.get("tier") or "")
+            if t in tier_rank:
+                tiers.append(t)
+            if g.get("has_contradiction"):
+                has_contradiction = True
+            for ch in (g.get("official_channels") or []):
+                if isinstance(ch, dict):
+                    ch_key = ch.get("name") or ch.get("phone") or ch.get("url")
+                    if ch_key and ch_key not in seen_ch:
+                        seen_ch.add(ch_key)
+                        official_channels.append(ch)
+        for ev in (res.get("evidence") or []):
+            if isinstance(ev, dict):
+                ev_key = (ev.get("source"), ev.get("detail") or ev.get("summary"))
+                if ev_key not in seen_ev:
+                    seen_ev.add(ev_key)
+                    evidences.append(ev)
+
+    has_benign = any(t == "LIKELY_SAFE" for t in tiers)
+    has_risk = any(t in ("SUSPICIOUS", "HIGH_RISK", "CONFIRMED_RISK") for t in tiers) or max_score >= 40
+    if has_benign and has_risk:
+        has_contradiction = True
+
+    if not entities_scanned or has_contradiction:
+        overall_tier = "INSUFFICIENT"
+    elif tiers:
+        top_tier = max(tiers, key=lambda t: tier_rank.get(t, 1))
+        if top_tier == "LIKELY_SAFE" and any(t != "LIKELY_SAFE" for t in tiers):
+            overall_tier = "INSUFFICIENT"
+        else:
+            overall_tier = top_tier
+    else:
+        if max_score >= 70:
+            overall_tier = "HIGH_RISK"
+        elif max_score >= 10:
+            overall_tier = "SUSPICIOUS"
+        else:
+            overall_tier = "INSUFFICIENT"
+
+    personal_only_flag = set(entities_scanned.keys()) <= {"phone", "bank_account"}
+    is_conclusive = bool(
+        overall_tier == "CONFIRMED_RISK"
+        and not has_contradiction
+        and not personal_only_flag
+    )
+
+    if overall_tier in ("CONFIRMED_RISK", "HIGH_RISK"):
+        overall_level = "red"
+        recommended_actions = [
+            "[DANGER] Tạm dừng mọi giao dịch chuyển tiền tới tài khoản liên quan.",
+            "[WARNING] Tuyệt đối không bấm liên kết lạ, cài tệp APK hoặc đọc mã OTP.",
+            "[ACTION] Liên hệ ngay tổng đài chính thức của ngân hàng nếu đã phát sinh giao dịch.",
+            "[VERIFY] Đối chiếu qua Công an (113), VNCERT/NCSC (156) hoặc https://khonggianmang.vn.",
+        ]
+    elif overall_tier == "SUSPICIOUS":
+        overall_level = "yellow"
+        recommended_actions = [
+            "[WARNING] Có dấu hiệu đáng ngờ nhưng chưa đủ xác thực độc lập; tạm hoãn giao dịch.",
+            "[VERIFY] Gọi trực tiếp tổng đài chính thức của tổ chức/ngân hàng để kiểm chứng.",
+        ]
+    elif overall_tier == "LIKELY_SAFE":
+        overall_level = "green"
+        recommended_actions = [
+            "[INFO] Tín hiệu sạch từ nguồn tin cậy và chưa phát hiện mâu thuẫn; vẫn cảnh giác với yêu cầu chuyển tiền hoặc OTP.",
+        ]
+    else:
+        overall_level = "yellow"
+        recommended_actions = [
+            "[INSUFFICIENT] Chưa đủ căn cứ nhất quán để kết luận an toàn hoặc lừa đảo.",
+            "[VERIFY] Không kết luận vội; hãy xác minh qua kênh chính thức (113, 156, hotline ngân hàng) trước khi giao dịch.",
+        ]
+
+    return {
+        "overall_tier": overall_tier,
+        "overall_risk_level": overall_level,
+        "recommended_actions": recommended_actions,
+        "guardrail": {
+            "tier": overall_tier,
+            "is_conclusive": is_conclusive,
+            "requires_verification": not is_conclusive,
+            "has_contradiction": has_contradiction,
+            "evidence_count": len(evidences),
+            "official_channels": official_channels[:6],
+            "cautions": [
+                "Không tự khẳng định cá nhân/chủ tài khoản chắc chắn lừa đảo; chỉ trình bày bằng chứng đã đối chiếu.",
+            ],
+        },
+        "evidence": evidences[:20],
+    }
+
+
 def create_server(
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
     server_name: str = "shieldcall-vn",
     client: Optional[Any] = None,
 ) -> ZeroDepMCPServer:
-    """Initialize and register all tools and prompts for ShieldCall MCP Server."""
+    """Initialize and register all tools, prompts, and resources for ShieldCall MCP Server."""
     client = client or ShieldCallClient(api_url=api_url, api_key=api_key)
     server = ZeroDepMCPServer(server_name)
 
@@ -699,7 +951,7 @@ def create_server(
             phone_number: Phone number to evaluate (e.g., '0912345678', '+84988776655').
         """
         data = client.scan_phone((phone_number or "").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def check_bank_account(bank_name: str, account_number: str) -> str:
@@ -711,7 +963,7 @@ def create_server(
             account_number: Bank account number to verify.
         """
         data = client.scan_bank_account(bank=(bank_name or "").strip(), account=(account_number or "").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def check_url_or_domain(url: str) -> str:
@@ -723,7 +975,7 @@ def create_server(
             url: URL or domain name to inspect (e.g., 'https://vietcombank-ebank.xyz', 'dichvucong-vn.top').
         """
         data = client.scan_domain((url or "").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def analyze_message(message_content: str) -> str:
@@ -735,7 +987,7 @@ def create_server(
             message_content: Full text of the suspicious message or dialogue.
         """
         data = client.scan_message((message_content or "").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def lookup_scam_db(query: str, entity_type: str = "all") -> str:
@@ -747,7 +999,7 @@ def create_server(
             entity_type: Filter category ('all', 'phone', 'account', 'domain', 'report').
         """
         data = client.lookup_scam_db(query=(query or "").strip(), entity_type=(entity_type or "all").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def get_scam_radar_trends() -> str:
@@ -755,7 +1007,7 @@ def create_server(
         Retrieve real-time regional scam trends and prevalent threat patterns (Scam Radar).
         """
         data = client.get_scam_radar_trends()
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def get_supported_banks() -> str:
@@ -763,7 +1015,7 @@ def create_server(
         Retrieve the list of supported Vietnamese banks with BIN codes, short names, and identifiers.
         """
         data = client.get_supported_banks()
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def check_email_sender(
@@ -784,7 +1036,7 @@ def create_server(
             content=(email_content or "").strip(),
             subject=(email_subject or "").strip(),
         )
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def scan_full_incident(
@@ -796,9 +1048,9 @@ def create_server(
         sender_email: str = "",
     ) -> str:
         """
-        Perform a unified multi-entity security assessment for a suspected scam incident.
+        Perform a unified parallel multi-entity security assessment for a suspected scam incident.
         Concurrently checks phone numbers, bank accounts, domains, emails, and message text,
-        then synthesizes an overall risk assessment.
+        then synthesizes an evidence-backed guardrail assessment without echoing raw PII.
 
         Args:
             message_content: Suspicious message or narrative text.
@@ -808,10 +1060,7 @@ def create_server(
             url: Suspicious link or domain.
             sender_email: Sender email address.
         """
-        entities_scanned = {}
-        all_threats = []
-        max_score = 0
-
+        t0 = time.monotonic()
         p_val = (phone_number or "").strip()
         b_name = (bank_name or "").strip()
         a_val = (account_number or "").strip()
@@ -819,83 +1068,83 @@ def create_server(
         e_val = (sender_email or "").strip()
         m_val = (message_content or "").strip()
 
+        wrap_worker = getattr(client, "_wrap_worker", None)
+        jobs: List[Tuple[str, Callable[[], Any]]] = []
         if p_val:
-            p_res = client.scan_phone(p_val)
-            entities_scanned["phone"] = p_res
-            p_score = int(p_res.get("risk_score", 0)) if isinstance(p_res, dict) else 0
-            max_score = max(max_score, p_score)
-            if isinstance(p_res, dict) and p_res.get("details"):
-                all_threats.extend([f"[Phone {p_val}] {d}" for d in p_res.get("details", [])])
-
+            jobs.append(("phone", lambda: client.scan_phone(p_val)))
         if a_val:
-            b_res = client.scan_bank_account(bank=b_name or "Other", account=a_val)
-            entities_scanned["bank_account"] = b_res
-            b_score = int(b_res.get("risk_score", 0)) if isinstance(b_res, dict) else 0
-            max_score = max(max_score, b_score)
-            if isinstance(b_res, dict) and b_res.get("details"):
-                all_threats.extend([f"[Bank {b_name} {a_val}] {d}" for d in b_res.get("details", [])])
-
+            jobs.append(("bank_account", lambda: client.scan_bank_account(bank=b_name or "Other", account=a_val)))
         if u_val:
-            u_res = client.scan_domain(u_val)
-            entities_scanned["url"] = u_res
-            u_score = int(u_res.get("risk_score", 0)) if isinstance(u_res, dict) else 0
-            max_score = max(max_score, u_score)
-            if isinstance(u_res, dict) and u_res.get("details"):
-                all_threats.extend([f"[URL {u_val}] {d}" for d in u_res.get("details", [])])
-
+            jobs.append(("url", lambda: client.scan_domain(u_val)))
         if e_val:
-            e_res = client.scan_email(email=e_val, content=m_val)
-            entities_scanned["email"] = e_res
-            e_score = int(e_res.get("risk_score", 0)) if isinstance(e_res, dict) else 0
-            max_score = max(max_score, e_score)
-            if isinstance(e_res, dict) and e_res.get("security_checks"):
-                all_threats.extend([f"[Email {e_val}] {c}" for c in e_res.get("security_checks", [])])
-
+            jobs.append(("email", lambda: client.scan_email(email=e_val, content=m_val)))
         if m_val:
-            m_res = client.scan_message(m_val)
-            entities_scanned["message"] = m_res
-            m_score = int(m_res.get("risk_score", 0)) if isinstance(m_res, dict) else 0
-            max_score = max(max_score, m_score)
-            if isinstance(m_res, dict) and m_res.get("patterns_found"):
-                all_threats.extend([f"[Message Pattern] {p}" for p in m_res.get("patterns_found", [])])
-            if isinstance(m_res, dict) and m_res.get("explanation"):
-                all_threats.append(f"[AI Assessment] {m_res.get('explanation')}")
+            jobs.append(("message", lambda: client.scan_message(m_val)))
 
-        if max_score >= 70:
-            overall_level = "red"
-            recommended_actions = [
-                "[DANGER] DO NOT TRANSFER FUNDS to the specified account.",
-                "[WARNING] Do not click links or disclose OTP credentials under any circumstances.",
-                "[ACTION] Immediately contact issuing bank support to freeze accounts if funds were already transferred.",
-                "[REPORT] Submit formal report to law enforcement and preserve all digital evidence.",
-            ]
-        elif max_score >= 40:
-            overall_level = "yellow"
-            recommended_actions = [
-                "[WARNING] Suspected fraud patterns detected. Halt all pending transactions.",
-                "[VERIFY] Independently verify counterparty credentials through official communication channels.",
-                "[REPORT] Submit details to ShieldCall threat database to alert the community.",
-            ]
-        elif max_score >= 10:
-            overall_level = "green"
-            recommended_actions = [
-                "[INFO] Low risk detected. Exercise standard security diligence for any unexpected financial requests.",
-            ]
-        else:
-            overall_level = "safe"
-            recommended_actions = [
-                "[SAFE] No confirmed threat indicators recorded in the security database.",
-            ]
+        entities_scanned: Dict[str, Any] = {}
+        if len(jobs) > 1:
+            with ThreadPoolExecutor(max_workers=min(5, len(jobs))) as pool:
+                future_map = {
+                    pool.submit(wrap_worker(fn) if callable(wrap_worker) else fn): key
+                    for key, fn in jobs
+                }
+                for fut in as_completed(future_map):
+                    key = future_map[fut]
+                    try:
+                        entities_scanned[key] = fut.result()
+                    except Exception as exc:
+                        entities_scanned[key] = {"error": str(exc)}
+        elif len(jobs) == 1:
+            key, fn = jobs[0]
+            try:
+                entities_scanned[key] = fn()
+            except Exception as exc:
+                entities_scanned[key] = {"error": str(exc)}
 
+        all_threats: List[str] = []
+        max_score = 0
+
+        for key in ("phone", "bank_account", "url", "email", "message"):
+            res = entities_scanned.get(key)
+            if not isinstance(res, dict):
+                continue
+            max_score = max(max_score, int(res.get("risk_score", 0) or 0))
+            if key == "phone":
+                masked_p = res.get("phone_masked") or _mask_identifier("phone", p_val)
+                for d in (res.get("details") or []):
+                    all_threats.append(f"[Phone {masked_p}] {d}")
+            elif key == "bank_account":
+                masked_a = res.get("account_masked") or _mask_identifier("account", a_val)
+                bank_lbl = res.get("bank") or b_name or "Bank"
+                for d in (res.get("details") or []):
+                    all_threats.append(f"[Bank {bank_lbl} {masked_a}] {d}")
+            elif key == "url":
+                for d in (res.get("details") or []):
+                    all_threats.append(f"[URL {res.get('domain') or u_val}] {d}")
+            elif key == "email":
+                masked_e = res.get("email") or _mask_identifier("email", e_val)
+                for c in (res.get("security_checks") or []):
+                    all_threats.append(f"[Email {masked_e}] {c}")
+            elif key == "message":
+                for p in (res.get("patterns_found") or []):
+                    all_threats.append(f"[Message Pattern] {p}")
+                if res.get("explanation"):
+                    all_threats.append(f"[AI Assessment] {res.get('explanation')}")
+
+        synth = synthesize_incident_guardrail(entities_scanned, max_score)
         composite_report = {
             "overall_risk_score": max_score,
-            "overall_risk_level": overall_level,
+            "overall_risk_level": synth["overall_risk_level"],
+            "overall_tier": synth["overall_tier"],
+            "guardrail": synth["guardrail"],
+            "evidence": synth["evidence"],
             "entities_scanned": entities_scanned,
             "detected_threats": all_threats,
-            "recommended_actions": recommended_actions,
+            "recommended_actions": synth["recommended_actions"],
             "entities_count": len(entities_scanned),
+            "latency_ms": round((time.monotonic() - t0) * 1000.0, 1),
         }
-        return json.dumps(composite_report, ensure_ascii=False, indent=2)
+        return _dump_compact(composite_report)
 
     @server.tool()
     def report_scam(
@@ -922,7 +1171,35 @@ def create_server(
             description=(description or "").strip(),
             evidence_note=(evidence_note or "").strip(),
         )
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
+
+    # --------------------------------------------------------------------------
+    # RESOURCES (VN Official Channels, Source Reliability Catalog, Trust Policy)
+    # --------------------------------------------------------------------------
+
+    @server.resource(
+        uri="shieldcall://trust/sources",
+        name="ShieldCall Source Catalog",
+        description="Danh mục 16 nguồn phân tích, ngày cập nhật (updated_at), độ tin cậy và giới hạn công cụ.",
+    )
+    def trust_sources_resource() -> Any:
+        return client.get_trust_sources() if hasattr(client, "get_trust_sources") else {"sources": []}
+
+    @server.resource(
+        uri="shieldcall://trust/channels",
+        name="Vietnam Official Verification Channels",
+        description="Kênh xác minh & trình báo chính thức tại Việt Nam (113, 156, NCSC, 39 ngân hàng/ví).",
+    )
+    def trust_channels_resource() -> Any:
+        return client.get_trust_channels() if hasattr(client, "get_trust_channels") else {"channels": []}
+
+    @server.resource(
+        uri="shieldcall://trust/policy",
+        name="ShieldCall Trust Guardrail & Privacy Policy",
+        description="Nguyên tắc kiểm soát kết luận vùng xám, vai trò AI và chính sách che PII.",
+    )
+    def trust_policy_resource() -> Any:
+        return client.get_trust_policy() if hasattr(client, "get_trust_policy") else {}
 
     # --------------------------------------------------------------------------
     # PROMPTS

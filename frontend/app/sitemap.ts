@@ -30,6 +30,7 @@ const STATIC_ROUTES: Entry[] = [
   { path: '/report/', priority: 0.85, changeFrequency: 'weekly' },
   { path: '/reports/', priority: 0.85, changeFrequency: 'daily' },
   { path: '/learn/', priority: 0.9, changeFrequency: 'daily' },
+  { path: '/learn/news/', priority: 0.9, changeFrequency: 'daily' },
   { path: '/forum/', priority: 0.8, changeFrequency: 'daily' },
   { path: '/forum/announcements/', priority: 0.75, changeFrequency: 'weekly' },
   { path: '/ai-assistant/', priority: 0.75, changeFrequency: 'weekly' },

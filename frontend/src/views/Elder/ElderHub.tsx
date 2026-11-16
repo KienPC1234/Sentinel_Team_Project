@@ -867,7 +867,7 @@ export default function ElderHub() {
               })}
             </div>
 
-            <form className="elder-card space-y-6" onSubmit={runCheck} noValidate>
+            <form className="elder-card space-y-6" onSubmit={runCheck} noValidate data-tour="elder-form">
               {kind === 'phone' && (
                 <div>
                   <label className="elder-label" htmlFor="elder-phone">

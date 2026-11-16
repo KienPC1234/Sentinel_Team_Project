@@ -373,12 +373,17 @@ def build_evidence(result: Dict[str, Any]) -> List[Dict[str, Any]]:
                         "chờ kiểm duyệt",
                         "chưa xác thực",
                         "không tìm thấy",
+                        "không phát hiện",
+                        "không ghi nhận",
                         "không có dấu hiệu",
+                        "không có chữ ký độc hại",
                         "chưa phát hiện",
                         "chưa có dữ liệu",
+                        "chưa ghi nhận",
                         "chưa thấy",
                         "chưa đủ căn cứ",
                         "chỉ mang tính tham khảo",
+                        "0 chỉ số độc hại",
                     )
                 ):
                     sev = "INFO"

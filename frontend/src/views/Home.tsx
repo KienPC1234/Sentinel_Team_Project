@@ -39,6 +39,7 @@ interface ContentItem {
   summary?: string;
   category_display?: string;
   cover_image?: string | null;
+  published_date?: string | null;
   created_at?: string;
 }
 
@@ -90,7 +91,7 @@ function FeaturedCard({
               {item.title}
             </h3>
             <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1.5">
-              <i className="bi bi-clock text-[10px]"></i> {fmtDate(item.created_at)}
+              <i className="bi bi-clock text-[10px]"></i> {fmtDate(item.published_date || item.created_at)}
             </p>
           </div>
         </div>
@@ -132,7 +133,7 @@ function FeaturedCard({
           )}
           <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-white/5">
             <span className="flex items-center gap-1.5">
-              <i className="bi bi-calendar3 text-[10px]"></i> {fmtDate(item.created_at)}
+              <i className="bi bi-calendar3 text-[10px]"></i> {fmtDate(item.published_date || item.created_at)}
             </span>
             <span
               className={`font-semibold flex items-center gap-1 text-[11px] ${
@@ -192,7 +193,7 @@ function MiniRow({
         </h4>
         <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400">
           <span className="flex items-center gap-1">
-            <i className="bi bi-clock text-[9px]"></i> {fmtDate(item.created_at)}
+            <i className="bi bi-clock text-[9px]"></i> {fmtDate(item.published_date || item.created_at)}
           </span>
           {item.category_display && (
             <span className="px-1.5 py-0.2 rounded bg-white/5 text-[10px] text-slate-300">
@@ -267,7 +268,7 @@ export default function Home() {
   const featuredLesson = latestLessons[0];
   const restLessons = latestLessons.slice(1, 4);
 
-  const newsOnly = articles.filter((a) => a.category === 'news');
+  const newsOnly = articles.filter((a) => a.source_type === 'press' || a.source_type === 'tinnhiemmang');
   const articlesPool = newsOnly.length >= 4 ? newsOnly : articles;
   const latestArticles = articlesPool.slice(0, 4);
   const featuredArticle = latestArticles[0];
@@ -323,7 +324,7 @@ export default function Home() {
                 variant="outline"
                 className="h-14 px-8 border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-white rounded-xl font-bold transition-all duration-300 inline-flex items-center gap-2 backdrop-blur-md hover:-translate-y-0.5"
               >
-                <Link href="/scam-iq-exam/">
+                <Link href="/scam-iq-exam/" data-tour="home-scam-iq">
                   <i className="bi bi-patch-question-fill text-brand2-400"></i> BÀI KIỂM TRA SCAM IQ
                 </Link>
               </Button>
@@ -368,7 +369,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <form onSubmit={submitLookup} className="relative group">
+                  <form onSubmit={submitLookup} className="relative group" data-tour="home-scanner">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-brand-500 to-brand2-500 rounded-2xl blur opacity-0 group-focus-within:opacity-30 transition duration-500"></div>
                     <div className="relative flex items-center">
                       <i className="bi bi-search absolute left-5 top-1/2 -translate-y-1/2 text-brand-400 text-lg pointer-events-none z-10"></i>
@@ -481,7 +482,7 @@ export default function Home() {
                 Tin tức mới
               </h2>
               <Link
-                href="/learn/?tab=news&category=news"
+                href="/learn/news/"
                 className="text-brand-400 text-xs font-semibold uppercase tracking-wider hover:text-brand-300 flex items-center gap-1 transition-colors"
               >
                 Xem tất cả <i className="bi bi-arrow-right text-[11px]"></i>

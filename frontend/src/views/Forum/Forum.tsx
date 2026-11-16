@@ -305,7 +305,7 @@ export default function Forum() {
                 <i className="bi bi-list-ul"></i>
               </button>
             </div>
-            <Link href="/forum/create/" className="bg-gradient-to-r from-brand-400 to-brand-600 text-[var(--sc-night-1)] px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:scale-105 transition-all shadow-lg shadow-brand-500/20 text-sm">
+            <Link href="/forum/create/" data-tour="forum-create" className="bg-gradient-to-r from-brand-400 to-brand-600 text-[var(--sc-night-1)] px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:scale-105 transition-all shadow-lg shadow-brand-500/20 text-sm">
               <i className="bi bi-pencil-fill"></i> Tạo chủ đề
             </Link>
           </div>
@@ -505,6 +505,7 @@ export default function Forum() {
                     <i className="bi bi-search absolute left-5 top-1/2 -translate-y-1/2 text-white/45 group-focus-within:text-brand-400 transition-colors pointer-events-none z-10"></i>
                     <input
                       type="text"
+                      data-tour="forum-search"
                       value={searchQuery}
                       onChange={(e) => {
                         setSearchQuery(e.target.value);

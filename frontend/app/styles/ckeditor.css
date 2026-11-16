@@ -1,13 +1,8 @@
 /* ============================================================================
  * CKEditor 5 — theme ShieldCall (dark) + đồng bộ nội dung với forum
  * ----------------------------------------------------------------------------
- * Port từ backend/PKV/static/css/ckeditor5.css (bản Django) — bản gốc chưa
- * được nối vào app Next.js nên editor hiện render nền sáng mặc định, lệch hoàn
- * toàn với theme navy + cyan của web.
- *
- * Nguyên tắc: nội dung soạn thảo (.ck-host .ck.ck-editor__editable) và nội dung hiển
- * thị ở forum (.richtext-content) dùng CHUNG một bộ rule nên WYSIWYG khớp với
- * thứ người dùng đọc được sau khi đăng.
+ * Theme này thay cho bản Django cũ (đã gỡ khỏi backend). Nội dung soạn thảo
+ * và nội dung hiển thị ở forum dùng chung bộ rule để WYSIWYG khớp với kết quả.
  * ========================================================================== */
 
 /* :root:root (0,2,0) thay vì :root (0,1,0) để luôn thắng bản :root mặc định

@@ -15,7 +15,7 @@ from .report_views import ReportCreateView, ReportDetailView, CommunityReportSta
 from .trend_views import TrendDailyView, TrendHotView, ScamRadarStatsView, ScanLookupView, PublicStatsView
 from .user_views import (
     UserScansView, UserScanDetailView, UserScanPickerView,
-    UserReportsView, UserAlertsView, UserPrivacyDataDeleteView, PublicProfileView,
+    UserReportsView, UserAlertsView, UserPrivacyDataDeleteView, UserPrivacyDataExportView, PublicProfileView,
 )
 from .scan_views import ScanFileView, ScanAudioView as _ScanAudioView  # noqa: already imported above
 from .admin_views import (
@@ -63,7 +63,7 @@ from .admin_forum_views import (
     AdminForumBanActionView,
     AdminForumModeratorView,
 )
-from .scam_iq_views import ScamIQStartView, ScamIQStatusView, ScamIQSubmitView, ScamIQAttemptView, ScamIQHistoryView
+from .scam_iq_views import ScamIQStartView, ScamIQStatusView, ScamIQSubmitView, ScamIQAttemptView, ScamIQHistoryView, ScamIQStatusAliasView
 from .api_key_views import (
     UserAPIKeyListCreateView, UserAPIKeyDetailView,
     UserAPIKeyToggleView, UserAPIKeyRegenerateView,
@@ -72,7 +72,7 @@ from .mcp_remote_views import (
     MCPConnectSSEView, MCPMessagesView, MCPDiscoveryView,
     mcp_download_script_view,
 )
-from .helps_views import HelpsDetailAPIView
+from .helps_views import HelpsDetailAPIView, HelpsIndexView, HelpsDetailView
 from .trust_views import (
     SourceCatalogView, TrustPolicyView, VNOfficialChannelsView,
     PrivacyNoticeView, RedactPreviewView, StorageStatusView,
@@ -90,7 +90,7 @@ __all__ = [
     'ScanAudioView', 'ScanStatusView', 'ScanReportAdminView',
     'ReportCreateView', 'ReportDetailView', 'CommunityReportStatsView',
     'TrendDailyView', 'TrendHotView', 'ScamRadarStatsView', 'ScanLookupView', 'PublicStatsView',
-    'UserScansView', 'UserScanDetailView', 'UserScanPickerView', 'UserReportsView', 'UserAlertsView', 'UserPrivacyDataDeleteView', 'PublicProfileView',
+    'UserScansView', 'UserScanDetailView', 'UserScanPickerView', 'UserReportsView', 'UserAlertsView', 'UserPrivacyDataDeleteView', 'UserPrivacyDataExportView', 'PublicProfileView',
     'AdminReportsView', 'AdminReportActionView', 'AdminStatsView',
     'AdminRAGManagementView', 'AdminRAGRebuildView', 'AdminRAGClearLogsView',
     'AdminUsersView', 'AdminUserActionView',
@@ -116,10 +116,12 @@ __all__ = [
     'AdminForumReportsView', 'AdminForumReportActionView',
     'AdminForumCommentReportsView', 'AdminForumCommentReportActionView',
     'AdminForumBansView', 'AdminForumBanActionView', 'AdminForumModeratorView',
-    'ScamIQStartView', 'ScamIQStatusView', 'ScamIQSubmitView', 'ScamIQAttemptView', 'ScamIQHistoryView',
+    'ScamIQStartView', 'ScamIQStatusView', 'ScamIQSubmitView', 'ScamIQAttemptView', 'ScamIQHistoryView', 'ScamIQStatusAliasView',
     'UserAPIKeyListCreateView', 'UserAPIKeyDetailView', 'UserAPIKeyToggleView', 'UserAPIKeyRegenerateView',
     'MCPConnectSSEView', 'MCPMessagesView', 'MCPDiscoveryView',
     'HelpsDetailAPIView',
+    'HelpsIndexView',
+    'HelpsDetailView',
     'SourceCatalogView', 'TrustPolicyView', 'VNOfficialChannelsView',
     'PrivacyNoticeView', 'RedactPreviewView', 'StorageStatusView',
     'PasswordResetRequestView', 'PasswordResetConfirmView',

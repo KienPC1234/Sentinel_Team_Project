@@ -492,6 +492,7 @@ class AdminScenariosView(APIView):
     """GET/POST /api/v1/admin/scenarios/ — List and create scenarios"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(operation_id='admin_scenarios_list')
     def get(self, request):
         scenarios = LearnScenario.objects.select_related('article', 'lesson').order_by('-created_at')[:100]
         data = [{
@@ -541,6 +542,7 @@ class AdminScenarioDetailView(APIView):
     """GET/PUT/DELETE /api/v1/admin/scenarios/<int:scenario_id>/"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(operation_id='admin_scenarios_retrieve')
     def get(self, request, scenario_id):
         try:
             sc = LearnScenario.objects.select_related('article', 'lesson').get(id=scenario_id)
@@ -624,6 +626,7 @@ class AdminLearnView(APIView):
     """GET/POST /api/v1/admin/learn/ — List and create lessons"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(operation_id='admin_learn_list')
     def get(self, request):
         lessons = LearnLesson.objects.prefetch_related('quizzes', 'scenarios').order_by('-created_at')[:100]
         data = [{
@@ -709,6 +712,7 @@ class AdminLearnDetailView(APIView):
     """GET/PUT/DELETE /api/v1/admin/learn/<int:lesson_id>/"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(operation_id='admin_learn_retrieve')
     def get(self, request, lesson_id):
         try:
             lesson = LearnLesson.objects.prefetch_related('quizzes', 'scenarios').get(id=lesson_id)
@@ -841,47 +845,36 @@ class AdminLearnNotifyView(APIView):
     """POST /api/v1/admin/learn/<int:lesson_id>/notify/ — Broadcast new lesson"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses={202: serializers.DictField()})
     def post(self, request, lesson_id):
         try:
             lesson = LearnLesson.objects.get(id=lesson_id)
         except LearnLesson.DoesNotExist:
             return Response({'error': 'Bài học không tồn tại.'}, status=status.HTTP_404_NOT_FOUND)
 
-        active_users = User.objects.filter(is_active=True)
-        user_emails = list(active_users.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
-        user_emails = sorted(set(user_emails))
-
-        from api.utils.email_utils import send_new_lesson_email
-        lesson_url = f"/learn/lesson/{lesson.slug}/"
-        sent_email_count = send_new_lesson_email(user_emails, lesson.title, lesson_url) if user_emails else 0
-
-        push_count = 0
-        from api.utils.push_service import PushNotificationService
-        for user in active_users[:200]:
-            try:
-                PushNotificationService.send_push(
-                    user_id=user.id,
-                    title='Bài học mới trên ShieldCall',
-                    message=f'{lesson.title}',
-                    url=lesson_url,
-                    notification_type='info'
-                )
-                push_count += 1
-            except Exception:
-                pass
+        # Fan-out (SMTP + WebPush) belongs in Celery: this used to block the
+        # admin request for minutes and was cut by the Next.js/Django timeouts.
+        from api.core.tasks import send_bulk_lesson_email
+        try:
+            send_bulk_lesson_email.delay(lesson.id)
+        except Exception:
+            logger.exception('Failed to enqueue lesson notification for lesson #%s', lesson_id)
+            return Response(
+                {'error': 'Không thể xếp hàng gửi thông báo lúc này. Vui lòng thử lại.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         return Response({
-            'status': 'ok',
-            'sent_emails': sent_email_count,
-            'push_count': push_count,
-            'message': f'Đã gửi {sent_email_count} email và {push_count} thông báo push.',
-        })
+            'status': 'queued',
+            'message': 'Đã xếp hàng gửi email và push đến người dùng. Quá trình chạy nền có thể mất vài phút.',
+        }, status=status.HTTP_202_ACCEPTED)
 
 
 class AdminArticlesView(APIView):
     """GET/POST /api/v1/admin/articles/ — List all articles & create new article"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(operation_id='admin_articles_list')
     def get(self, request):
         articles = Article.objects.all().order_by('-created_at')[:100]
         data = [{
@@ -941,6 +934,7 @@ class AdminArticleDetailView(APIView):
     """GET/PUT/DELETE /api/v1/admin/articles/<int:article_id>/"""
     permission_classes = [IsAdminUser]
 
+    @extend_schema(operation_id='admin_articles_retrieve')
     def get(self, request, article_id):
         try:
             a = Article.objects.get(id=article_id)

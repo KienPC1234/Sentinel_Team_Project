@@ -149,7 +149,11 @@ class ScamRadarStatsView(APIView):
                 steps = 7
 
             reports_qs = Report.objects.filter(status=ReportStatus.APPROVED)
-            scans_qs = ScanEvent.objects.filter(status=ScanStatus.COMPLETED, risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW])
+            scans_qs = ScanEvent.objects.filter(
+                status=ScanStatus.COMPLETED,
+                risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW],
+                risk_score__gte=40,
+            )
             reports_base = reports_qs
             scans_base = scans_qs
 
@@ -413,6 +417,7 @@ class ScanLookupView(APIView):
         except (TypeError, ValueError):
             page = 1
         per_page = 20
+        fetch_limit = min(2000, max(200, page * per_page))
 
         now = timezone.now()
         results = []
@@ -448,10 +453,11 @@ class ScanLookupView(APIView):
             'qr': 'QR / Ảnh', 'email': 'Email', 'audio': 'Âm thanh', 'file': 'Tệp tin',
         }
 
-        for scan in scan_qs.order_by('-created_at')[:200]:
+        scan_total = scan_qs.count()
+        for scan in scan_qs.order_by('-created_at')[:fetch_limit]:
             rj = scan.result_json if isinstance(scan.result_json, dict) else {}
             raw_target = scan.normalized_input or scan.raw_input
-            if scan.scan_type in ('message', 'file', 'audio'):
+            if scan.scan_type in ('message', 'file', 'audio', 'qr'):
                 compact = re.sub(r'\s+', ' ', str(raw_target or '')).strip()
                 if len(compact) <= 12:
                     safe_target = f'{compact[:2]}******' if len(compact) > 2 else '******'
@@ -463,8 +469,15 @@ class ScanLookupView(APIView):
             elif scan.scan_type == 'account' and len(str(raw_target or '')) > 6:
                 t_str = str(raw_target or '')
                 safe_target = f'{t_str[:3]}*****{t_str[-3:]}'
+            elif scan.scan_type == 'email':
+                from api.utils.privacy import mask_email_display
+                safe_target = mask_email_display(raw_target or '')
+            elif scan.scan_type == 'domain':
+                from api.utils.privacy import mask_url_query
+                safe_target = mask_url_query(raw_target or '')[:500]
             else:
-                safe_target = str(raw_target or '')[:500]
+                from api.utils.privacy import redact_pii
+                safe_target = redact_pii(str(raw_target or '')[:500])
 
             results.append({
                 'id': scan.id,
@@ -534,10 +547,11 @@ class ScanLookupView(APIView):
 
         is_staff_user = bool(request.user and request.user.is_authenticated and request.user.is_staff)
 
-        for report in report_qs.select_related('reporter').order_by('-created_at')[:200]:
+        report_total = report_qs.count()
+        for report in report_qs.order_by('-created_at')[:fetch_limit]:
             risk_map = {'critical': 'RED', 'high': 'RED', 'medium': 'YELLOW', 'low': 'GREEN'}
             risk_level = risk_map.get(report.severity, 'YELLOW')
-            risk_display = 'Nguy hiểm' if risk_level == 'RED' else ('Cảnh báo' if risk_level == 'YELLOW' else 'An toàn')
+            risk_display = 'Nguy hiểm' if risk_level == 'RED' else ('Cảnh báo' if risk_level == 'YELLOW' else 'Thấp / Cần đối chiếu')
 
             # Redact/mask identifiers and free-text fields for unprivileged public access
             target_val = report.target_value
@@ -601,7 +615,7 @@ class ScanLookupView(APIView):
         # Sort by time (newest first)
         results.sort(key=lambda x: x['created_at'], reverse=True)
 
-        total = len(results)
+        total = scan_total + report_total
         start = (page - 1) * per_page
         paginated = results[start:start + per_page]
 
@@ -625,7 +639,8 @@ class PublicStatsView(APIView):
             return Response(cached)
         total_scans = ScanEvent.objects.count()
         scam_detected = ScanEvent.objects.filter(
-            risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW]
+            risk_level__in=[RiskLevel.RED, RiskLevel.YELLOW],
+            risk_score__gte=40,
         ).count()
         data = {
             'total_scans': total_scans,

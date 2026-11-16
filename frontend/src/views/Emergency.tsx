@@ -358,7 +358,7 @@ export default function Emergency() {
                   Liên hệ ngay để tạm ngừng mọi dịch vụ tài chính liên quan
                 </p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-tour="emergency-call">
                 {BANKS.map((b) => (
                   <a
                     key={b.name}

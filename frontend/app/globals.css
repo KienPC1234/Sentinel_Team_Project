@@ -8,6 +8,8 @@
 @import "./styles/learn.css";
 /* Stylesheet riêng cho trang Trợ giúp người cao tuổi /nguoi-cao-tuoi/. */
 @import "./styles/elder.css";
+/* Tour hướng dẫn từng trang (driver.js) — nút ? trên nav + banner gợi ý. */
+@import "./styles/guide.css";
 
 @custom-variant dark (&:is(.dark *));
 

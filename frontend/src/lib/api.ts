@@ -3,6 +3,8 @@
  * NEXT_PUBLIC_API_BASE_URL tới domain Django, ví dụ https://<domain>/api/v1
  */
 
+import { rememberScanTokenFromPayload } from './scanToken';
+
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL as string | undefined) || '/api/v1';
 const TOKEN_KEY = 'sc_token';
 
@@ -52,6 +54,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
   if (res.status === 204) return undefined as T;
   const text = await res.text();
+  const contentType = res.headers.get('content-type') || '';
+  // Django's login_required / allauth redirects return a 200 HTML page after
+  // fetch follows the 302. Treat that (and any HTML body) as an auth/contract
+  // error instead of silently casting it to T.
+  if (/^\s*</.test(text) || (res.redirected && !contentType.includes('application/json'))) {
+    const message = res.redirected
+      ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+      : 'Máy chủ trả về dữ liệu không hợp lệ (HTML thay vì JSON).';
+    throw new ApiError(res.redirected ? 401 : (res.ok ? 502 : res.status), message, text);
+  }
   let data: unknown = null;
   try {
     data = text ? JSON.parse(text) : null;
@@ -72,6 +84,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!msg) msg = `Request failed (HTTP ${res.status})`;
     throw new ApiError(res.status, msg, data);
   }
+  rememberScanTokenFromPayload(data);
   return data as T;
 }
 
@@ -84,7 +97,8 @@ export const api = {
     request<T>(path, { method: 'PUT', body: body instanceof FormData ? body : JSON.stringify(body ?? {}) }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body instanceof FormData ? body : JSON.stringify(body ?? {}) }),
-  del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  del: <T>(path: string, body?: unknown) =>
+    request<T>(path, body === undefined ? { method: 'DELETE' } : { method: 'DELETE', body: JSON.stringify(body) }),
   upload: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form }),
 };
 
@@ -103,6 +117,7 @@ export interface Article {
   title: string;
   summary?: string;
   cover_image?: string | null;
+  published_date?: string | null;
   created_at?: string;
   category?: string;
   category_display?: string;
@@ -211,6 +226,16 @@ export async function postSameOrigin<T = Record<string, unknown>>(path: string, 
     body: JSON.stringify(body ?? {}),
   });
   const text = await res.text();
+  const contentType = res.headers.get('content-type') || '';
+  // The Django admin-cp endpoints are session-authenticated. When the session
+  // expires Django redirects to /login/, fetch follows it, and we would get a
+  // 200 HTML page. Never report that as a successful admin action.
+  if (/^\s*</.test(text) || (res.redirected && !contentType.includes('application/json'))) {
+    const message = res.redirected
+      ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+      : 'Máy chủ trả về dữ liệu không hợp lệ (HTML thay vì JSON).';
+    throw new ApiError(res.redirected ? 401 : (res.ok ? 502 : res.status), message, text);
+  }
   let parsed: unknown = null;
   try {
     parsed = text ? JSON.parse(text) : {};

@@ -1,8 +1,8 @@
 # ShieldCall VN — Frontend Next.js (tách riêng)
 
-Giao diện Next.js 16 (App Router) + Tailwind v4, port 1-1 từ template Django
-(`PKV/templates/`). Bản HTML gốc được **giữ nguyên để đối chiếu** — component
-ở đây map trực tiếp từ class/markup bản gốc (xem `PORT_MAP`).
+Giao diện Next.js 16 (App Router) + Tailwind v4. Các trang HTML cũ đã được port
+sang `src/views/`; backend hiện chỉ còn template email (OTP, reset mật khẩu,
+welcome) và không còn page template Django.
 
 ## Chạy dev
 

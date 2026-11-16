@@ -1,6 +1,6 @@
 # ShieldCall VN — API Reference
 
-> **Status:** current · **Updated:** 2026-11-15 · **Audience:** API integrators, frontend/backend engineers
+> **Status:** current · **Updated:** 2026-11-16 · **Audience:** API integrators, frontend/backend engineers
 
 Base URL: `/api/v1` (Production: `https://<your-domain>/api/v1`)
 
@@ -22,9 +22,9 @@ Base URL: `/api/v1` (Production: `https://<your-domain>/api/v1`)
 | `/scan/audio/` | `POST` | Speech-to-text and voice phishing detection | Turnstile / Token |
 | `/scan/file/` | `POST` | Zero-Trust Docker sandbox file analysis | Turnstile / Token |
 | `/scan/lookup/` | `GET` | Multi-vector threat intelligence search across reports | Public |
-| `/scan/status/<scan_id>/` | `GET` | Asynchronous scan status and result retrieval | Session / Auth |
+| `/scan/status/<scan_id>/` | `GET` | Asynchronous scan status and result retrieval | Session / Auth / `scan_token` |
 | `/scan/<scan_id>/report-admin/` | `POST` | Request administrator verification for scan verdict | Authenticated |
-| `/scan/analyze/stream/` | `POST` | Server-Sent Events (SSE) stream for scan events | Public / Token |
+| `/scan/analyze/stream/` | `POST` | Server-Sent Events (SSE) stream for scan events | Turnstile / Session / Token |
 | `/chat/stream/` | `POST` | Server-Sent Events (SSE) AI assistant stream | Session / Token |
 | `/chat/sessions/` | `GET`, `POST` | Manage chat conversation history sessions | Session / Token |
 | `/trust/sources/` | `GET` | Source reliability catalog, limits, and verification dates | Public |
@@ -51,6 +51,31 @@ Base URL: `/api/v1` (Production: `https://<your-domain>/api/v1`)
 | `/auth/login/` | `POST` | Credential validation and MFA challenge trigger | Public |
 | `/auth/mfa/verify/` | `POST` | Multi-Factor Authentication verification | Pre-auth Token |
 | `/auth/me/` | `GET` | Retrieve current authenticated user profile | Authenticated |
+
+## Error envelope
+
+DRF errors use:
+
+```json
+{"error": "Mô tả lỗi", "code": "VALIDATION_ERROR", "details": {"field": ["..."]}}
+```
+
+`code` is stable (`AUTH_REQUIRED`, `PERMISSION_DENIED`, `NOT_FOUND`, `RATE_LIMITED`, …);
+`details` is only present for field/validation errors. Manual view responses keep the
+same top-level `error` string so existing clients do not break.
+
+## Scan access token
+
+Every scan creation endpoint returns both `scan_id` and a signed `scan_token`. The token lets
+token-only/mobile clients (or a Next.js deployment without session cookies) access the result:
+
+- `GET /scan/status/<id>/?scan_token=<token>` or header `X-Scan-Token: <token>`
+- `POST /scan/analyze-sse/` body `{"scan_id": ..., "scan_token": ...}`
+- `POST /scan/<id>/report-admin/` body `{"scan_token": ...}`
+- WebSocket `/ws/scan/<id>/?scan_token=<token>`
+
+Tokens are bound to one scan id and expire after `SCAN_TOKEN_MAX_AGE` (default 24h). Session
+ownership and `is_public_referable` remain supported as fallbacks.
 
 ## Streaming (SSE) event protocol
 
@@ -83,9 +108,12 @@ data: {"type":"done","session_id":"...","title":"Tra cứu SĐT","action_suggest
 
 - **Endpoints:** `POST /chat/stream/` (Trợ lý AI, chat box, Emergency), `POST /scan/analyze-sse/`
   và `POST /scan/analyze/stream/` (chỉ phát `delta` / `error` / `done`).
+- **Turnstile:** anonymous `POST /scan/analyze-sse/` without a valid owned/public `scan_id`
+  requires `cf-turnstile-response`; authenticated users and API keys are exempt. When `scan_id`
+  is supplied, the server ignores client-provided `scan_data` and reads the stored record.
 - **Client:** dùng `openSseStream()` trong `frontend/src/lib/chat/stream.ts`; callback `onEvent`
-  nhận union `StreamEvent` đã chuẩn hoá. `normalizeStreamEvent()` vẫn map được payload cũ
-  (`{"chunk": ...}`) nên endpoint chưa chuyển đổi vẫn chạy.
+  nhận union `StreamEvent` đã chuẩn hoá. Payload không có trường `type` (hoặc type lạ) bị bỏ qua,
+  nên backend phải phát đúng các event trong bảng trên.
 - **Nội bộ:** tầng vận chuyển LLM (`api/utils/ollama_client.stream_chat_ai`) dùng marker chuỗi
   (`__THINK__`, `__TOOL_CALLS__`, …). `AIAgent.chat_stream` là ranh giới chuyển marker thành event
   có `type`; **marker không bao giờ ra tới client**.

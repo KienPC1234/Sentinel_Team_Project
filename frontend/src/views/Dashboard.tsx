@@ -27,6 +27,7 @@ interface ScanRow {
   normalized_input?: string;
   risk_level?: string;
   risk_score?: number;
+  is_public_referable?: boolean;
   result_json?: Record<string, unknown>;
   created_at?: string;
 }
@@ -179,7 +180,35 @@ export default function Dashboard() {
   };
 
   const [deletingScanId, setDeletingScanId] = useState<number | null>(null);
+  const [togglingPublicId, setTogglingPublicId] = useState<number | null>(null);
+  const [deletingAlertId, setDeletingAlertId] = useState<number | null>(null);
   const [clearingScans, setClearingScans] = useState(false);
+
+  const toggleScanPublic = async (scan: ScanRow) => {
+    const nextPublic = !scan.is_public_referable;
+    setTogglingPublicId(scan.id);
+    try {
+      await api.patch(`/user/scans/${scan.id}/`, { is_public_referable: nextPublic });
+      setScans((prev) => prev.map((x) => (x.id === scan.id ? { ...x, is_public_referable: nextPublic } : x)));
+    } catch {
+      /* ignore */
+    } finally {
+      setTogglingPublicId(null);
+    }
+  };
+
+  const deleteAlert = async (alertId: number) => {
+    if (!(await scConfirm('Xóa cảnh báo đã lưu này?', { icon: 'warning', confirmButtonText: 'Xóa' }))) return;
+    setDeletingAlertId(alertId);
+    try {
+      await api.del(`/user/alerts/?id=${alertId}`);
+      setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    } catch {
+      /* ignore */
+    } finally {
+      setDeletingAlertId(null);
+    }
+  };
 
   const deleteScan = async (id: number) => {
     if (!(await scConfirm('Xóa bản ghi quét này khỏi lịch sử cá nhân?', { icon: 'warning', confirmButtonText: 'Xóa' }))) return;
@@ -309,7 +338,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-tour="dashboard-stats">
         {[
           { icon: 'bi-cpu', color: 'text-brand-400', bg: 'bg-brand-500/10', l: 'Tổng Scan', v: String(totalScans), vc: 'text-white' },
           { icon: 'bi-shield-exclamation', color: 'text-danger-500', bg: 'bg-danger-500/10', l: 'Rủi Ro', v: String(dangerScans), vc: 'text-danger-500' },
@@ -435,7 +464,7 @@ export default function Dashboard() {
                             <div className="flex items-center gap-2 max-w-xs">
                               <span className="text-xs font-black text-white/80 tracking-wide truncate">{scan.raw_input || scan.normalized_input}</span>
                               {scan.result_json?.['privacy_masked'] === true && (
-                                <span className="shrink-0 px-2 py-0.5 rounded-full bg-safe-500/10 border border-safe-500/25 text-[9px] font-black text-safe-300 uppercase">Che PII</span>
+                                <span className="shrink-0 px-2 py-0.5 rounded-full bg-safe-500/10 border border-safe-500/25 text-[9px] font-black text-safe-300 uppercase">Đã ẩn danh</span>
                               )}
                             </div>
                           </td>
@@ -445,15 +474,37 @@ export default function Dashboard() {
                             </span>
                           </td>
                           <td className="px-6 py-5 text-right">
-                            <button
-                              type="button"
-                              onClick={() => { void deleteScan(scan.id); }}
-                              disabled={deletingScanId === scan.id}
-                              aria-label={`Xóa bản ghi ${scan.id}`}
-                              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-danger-300 hover:bg-danger-500/20 hover:border-danger-500/30 disabled:opacity-40"
-                            >
-                              <i className="bi bi-trash3"></i>
-                            </button>
+                            <div className="inline-flex items-center gap-1.5">
+                              <Link
+                                href={`/scan/status/${scan.id}/`}
+                                title="Xem chi tiết kết quả"
+                                className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-brand-300 hover:bg-brand-500/15 hover:border-brand-500/30"
+                              >
+                                <i className="bi bi-eye"></i>
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => { void toggleScanPublic(scan); }}
+                                disabled={togglingPublicId === scan.id}
+                                title={scan.is_public_referable ? 'Đang cho phép tham chiếu công khai (bấm để chuyển riêng tư)' : 'Đang riêng tư (bấm để cho phép tham chiếu công khai)'}
+                                className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold disabled:opacity-40 ${
+                                  scan.is_public_referable
+                                    ? 'bg-brand-500/15 border-brand-500/30 text-brand-300 hover:bg-brand-500/25'
+                                    : 'bg-white/5 border-white/10 text-white/55 hover:bg-white/10'
+                                }`}
+                              >
+                                <i className={`bi ${scan.is_public_referable ? 'bi-globe2' : 'bi-lock-fill'}`}></i>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { void deleteScan(scan.id); }}
+                                disabled={deletingScanId === scan.id}
+                                aria-label={`Xóa bản ghi ${scan.id}`}
+                                className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-danger-300 hover:bg-danger-500/20 hover:border-danger-500/30 disabled:opacity-40"
+                              >
+                                <i className="bi bi-trash3"></i>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         );
@@ -512,7 +563,15 @@ export default function Dashboard() {
                       <div className="text-[10px] font-bold text-white/55 uppercase tracking-widest mt-1">Mức Độ: {alert.risk_level} • {alert.created_at ? new Date(alert.created_at).toLocaleDateString('vi-VN') : ''}</div>
                     </div>
                   </div>
-                  <i className="bi bi-bookmark-fill text-white/20"></i>
+                  <button
+                    type="button"
+                    disabled={deletingAlertId === alert.id}
+                    onClick={() => deleteAlert(alert.id)}
+                    title="Xóa cảnh báo"
+                    className="w-9 h-9 rounded-xl border border-white/10 bg-white/5 hover:bg-danger-500/20 hover:border-danger-500/40 text-white/60 hover:text-danger-400 transition-colors flex items-center justify-center disabled:opacity-40"
+                  >
+                    <i className="bi bi-trash3"></i>
+                  </button>
                 </div>
               ))}
               {alerts.length === 0 && (

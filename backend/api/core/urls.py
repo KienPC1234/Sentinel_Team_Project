@@ -65,6 +65,7 @@ urlpatterns = [
     path('user/reports/', views.UserReportsView.as_view(), name='user-reports'),
     path('user/alerts/', views.UserAlertsView.as_view(), name='user-alerts'),
     path('user/privacy/delete-data/', views.UserPrivacyDataDeleteView.as_view(), name='user-privacy-delete-data'),
+    path('user/privacy/export-data/', views.UserPrivacyDataExportView.as_view(), name='user-privacy-export-data'),
     path('user/profile/<str:username>/', views.PublicProfileView.as_view(), name='public-profile'),
     path('user/api-keys/', views.UserAPIKeyListCreateView.as_view(), name='user-api-keys'),
     path('user/api-keys/<int:pk>/', views.UserAPIKeyDetailView.as_view(), name='user-api-key-detail'),
@@ -165,8 +166,8 @@ urlpatterns = [
     path('user/card/<str:username>/', views.UserCardView.as_view(), name='user-card'),
 
     # Helps Center API
-    path('helps/', views.HelpsDetailAPIView.as_view(), name='api-helps-index'),
-    path('helps/<slug:slug>/', views.HelpsDetailAPIView.as_view(), name='api-helps-detail'),
+    path('helps/', views.HelpsIndexView.as_view(), name='api-helps-index'),
+    path('helps/<slug:slug>/', views.HelpsDetailView.as_view(), name='api-helps-detail'),
 
     # Debug
     path('debug/system/', DebugSystemView.as_view(), name='debug-system'),
@@ -202,5 +203,5 @@ urlpatterns = [
     path('reports/', views.PublicStatsView.as_view(), name='reports-alias'),
     path('emergency/', views.HelpsDetailAPIView.as_view(), kwargs={'slug': 'emergency'}, name='emergency-alias'),
     path('report/lookup/', views.ScanLookupView.as_view(), name='report-lookup-alias'),
-    path('scam-iq/status/', views.ScamIQHistoryView.as_view(), name='scam-iq-status-alias'),
+    path('scam-iq/status/', views.ScamIQStatusAliasView.as_view(), name='scam-iq-status-alias'),
 ]

@@ -1,17 +1,22 @@
 """
 ShieldCall VN - MCP Server Implementation
-Exposes cybersecurity, scam detection, and risk analysis tools to MCP clients.
+Exposes cybersecurity, scam detection, risk analysis tools, prompts, and resources to MCP clients.
 """
-import os
-import json
+import time
 import logging
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from mcp.server.mcpserver import MCPServer
 from mcp_server.client import ShieldCallClient
 from mcp_server.prompts import (
     SHIELDCALL_SENTRY_PROMPT,
     SHIELDCALL_EMERGENCY_PROMPT,
     SHIELDCALL_INVESTIGATOR_PROMPT,
+)
+from scripts.shieldcall_mcp import (
+    _dump_compact,
+    _mask_identifier,
+    synthesize_incident_guardrail,
 )
 
 logger = logging.getLogger("shieldcall_mcp.server")
@@ -40,7 +45,7 @@ def create_server(
             phone_number: Phone number to evaluate (e.g., '0912345678', '+84988776655').
         """
         data = client.scan_phone((phone_number or "").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def check_bank_account(bank_name: str, account_number: str) -> str:
@@ -52,7 +57,7 @@ def create_server(
             account_number: Bank account number to verify.
         """
         data = client.scan_bank_account(bank=(bank_name or "").strip(), account=(account_number or "").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def check_url_or_domain(url: str) -> str:
@@ -64,7 +69,7 @@ def create_server(
             url: URL or domain name to inspect (e.g., 'https://vietcombank-ebank.xyz', 'dichvucong-vn.top').
         """
         data = client.scan_domain((url or "").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def analyze_message(message_content: str) -> str:
@@ -76,7 +81,7 @@ def create_server(
             message_content: Full text of the suspicious message or dialogue.
         """
         data = client.scan_message((message_content or "").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def lookup_scam_db(query: str, entity_type: str = "all") -> str:
@@ -88,7 +93,7 @@ def create_server(
             entity_type: Filter category ('all', 'phone', 'account', 'domain', 'report').
         """
         data = client.lookup_scam_db(query=(query or "").strip(), entity_type=(entity_type or "all").strip())
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def get_scam_radar_trends() -> str:
@@ -96,7 +101,7 @@ def create_server(
         Retrieve real-time regional scam trends and prevalent threat patterns (Scam Radar).
         """
         data = client.get_scam_radar_trends()
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def get_supported_banks() -> str:
@@ -104,7 +109,7 @@ def create_server(
         Retrieve the list of supported Vietnamese banks with BIN codes, short names, and identifiers.
         """
         data = client.get_supported_banks()
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def check_email_sender(
@@ -125,7 +130,7 @@ def create_server(
             content=(email_content or "").strip(),
             subject=(email_subject or "").strip(),
         )
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
 
     @server.tool()
     def scan_full_incident(
@@ -149,10 +154,7 @@ def create_server(
             url: Suspicious link or domain.
             sender_email: Sender email address.
         """
-        entities_scanned = {}
-        all_threats = []
-        max_score = 0
-
+        t0 = time.monotonic()
         p_val = (phone_number or "").strip()
         b_name = (bank_name or "").strip()
         a_val = (account_number or "").strip()
@@ -160,83 +162,73 @@ def create_server(
         e_val = (sender_email or "").strip()
         m_val = (message_content or "").strip()
 
+        jobs: List[Tuple[str, Callable[[], Any]]] = []
         if p_val:
-            p_res = client.scan_phone(p_val)
-            entities_scanned["phone"] = p_res
-            p_score = int(p_res.get("risk_score", 0)) if isinstance(p_res, dict) else 0
-            max_score = max(max_score, p_score)
-            if isinstance(p_res, dict) and p_res.get("details"):
-                all_threats.extend([f"[Phone {p_val}] {d}" for d in p_res.get("details", [])])
-
+            jobs.append(("phone", lambda: client.scan_phone(p_val)))
         if a_val:
-            b_res = client.scan_bank_account(bank=b_name or "Other", account=a_val)
-            entities_scanned["bank_account"] = b_res
-            b_score = int(b_res.get("risk_score", 0)) if isinstance(b_res, dict) else 0
-            max_score = max(max_score, b_score)
-            if isinstance(b_res, dict) and b_res.get("details"):
-                all_threats.extend([f"[Bank {b_name} {a_val}] {d}" for d in b_res.get("details", [])])
-
+            jobs.append(("bank_account", lambda: client.scan_bank_account(bank=b_name or "Other", account=a_val)))
         if u_val:
-            u_res = client.scan_domain(u_val)
-            entities_scanned["url"] = u_res
-            u_score = int(u_res.get("risk_score", 0)) if isinstance(u_res, dict) else 0
-            max_score = max(max_score, u_score)
-            if isinstance(u_res, dict) and u_res.get("details"):
-                all_threats.extend([f"[URL {u_val}] {d}" for d in u_res.get("details", [])])
-
+            jobs.append(("url", lambda: client.scan_domain(u_val)))
         if e_val:
-            e_res = client.scan_email(email=e_val, content=m_val)
-            entities_scanned["email"] = e_res
-            e_score = int(e_res.get("risk_score", 0)) if isinstance(e_res, dict) else 0
-            max_score = max(max_score, e_score)
-            if isinstance(e_res, dict) and e_res.get("security_checks"):
-                all_threats.extend([f"[Email {e_val}] {c}" for c in e_res.get("security_checks", [])])
-
+            jobs.append(("email", lambda: client.scan_email(email=e_val, content=m_val)))
         if m_val:
-            m_res = client.scan_message(m_val)
-            entities_scanned["message"] = m_res
-            m_score = int(m_res.get("risk_score", 0)) if isinstance(m_res, dict) else 0
-            max_score = max(max_score, m_score)
-            if isinstance(m_res, dict) and m_res.get("patterns_found"):
-                all_threats.extend([f"[Message Pattern] {p}" for p in m_res.get("patterns_found", [])])
-            if isinstance(m_res, dict) and m_res.get("explanation"):
-                all_threats.append(f"[AI Assessment] {m_res.get('explanation')}")
+            jobs.append(("message", lambda: client.scan_message(m_val)))
 
-        if max_score >= 70:
-            overall_level = "red"
-            recommended_actions = [
-                "[DANGER] DO NOT TRANSFER FUNDS to the specified account.",
-                "[WARNING] Do not click links or disclose OTP credentials under any circumstances.",
-                "[ACTION] Immediately contact issuing bank support to freeze accounts if funds were already transferred.",
-                "[REPORT] Submit formal report to law enforcement and preserve all digital evidence.",
-            ]
-        elif max_score >= 40:
-            overall_level = "yellow"
-            recommended_actions = [
-                "[WARNING] Suspected fraud patterns detected. Halt all pending transactions.",
-                "[VERIFY] Independently verify counterparty credentials through official communication channels.",
-                "[REPORT] Submit details to ShieldCall threat database to alert the community.",
-            ]
-        elif max_score >= 10:
-            overall_level = "green"
-            recommended_actions = [
-                "[INFO] Low risk detected. Exercise standard security diligence for any unexpected financial requests.",
-            ]
-        else:
-            overall_level = "safe"
-            recommended_actions = [
-                "[SAFE] No confirmed threat indicators recorded in the security database.",
-            ]
+        entities_scanned: Dict[str, Any] = {}
+        if len(jobs) > 1:
+            with ThreadPoolExecutor(max_workers=min(5, len(jobs))) as pool:
+                future_map = {pool.submit(fn): key for key, fn in jobs}
+                for fut in as_completed(future_map):
+                    key = future_map[fut]
+                    try:
+                        entities_scanned[key] = fut.result()
+                    except Exception as exc:
+                        entities_scanned[key] = {"error": str(exc)}
+        elif len(jobs) == 1:
+            key, fn = jobs[0]
+            try:
+                entities_scanned[key] = fn()
+            except Exception as exc:
+                entities_scanned[key] = {"error": str(exc)}
 
+        all_threats: List[str] = []
+        max_score = 0
+        for key in ("phone", "bank_account", "url", "email", "message"):
+            res = entities_scanned.get(key)
+            if not isinstance(res, dict):
+                continue
+            max_score = max(max_score, int(res.get("risk_score", 0) or 0))
+            if key == "phone":
+                masked_p = res.get("phone_masked") or _mask_identifier("phone", p_val)
+                all_threats.extend([f"[Phone {masked_p}] {d}" for d in (res.get("details") or [])])
+            elif key == "bank_account":
+                masked_a = res.get("account_masked") or _mask_identifier("account", a_val)
+                bank_lbl = res.get("bank") or b_name or "Bank"
+                all_threats.extend([f"[Bank {bank_lbl} {masked_a}] {d}" for d in (res.get("details") or [])])
+            elif key == "url":
+                all_threats.extend([f"[URL {res.get('domain') or u_val}] {d}" for d in (res.get("details") or [])])
+            elif key == "email":
+                masked_e = res.get("email") or _mask_identifier("email", e_val)
+                all_threats.extend([f"[Email {masked_e}] {c}" for c in (res.get("security_checks") or [])])
+            elif key == "message":
+                all_threats.extend([f"[Message Pattern] {p}" for p in (res.get("patterns_found") or [])])
+                if res.get("explanation"):
+                    all_threats.append(f"[AI Assessment] {res.get('explanation')}")
+
+        synth = synthesize_incident_guardrail(entities_scanned, max_score)
         composite_report = {
             "overall_risk_score": max_score,
-            "overall_risk_level": overall_level,
+            "overall_risk_level": synth["overall_risk_level"],
+            "overall_tier": synth["overall_tier"],
+            "guardrail": synth["guardrail"],
+            "evidence": synth["evidence"],
             "entities_scanned": entities_scanned,
             "detected_threats": all_threats,
-            "recommended_actions": recommended_actions,
+            "recommended_actions": synth["recommended_actions"],
             "entities_count": len(entities_scanned),
+            "latency_ms": round((time.monotonic() - t0) * 1000.0, 1),
         }
-        return json.dumps(composite_report, ensure_ascii=False, indent=2)
+        return _dump_compact(composite_report)
 
     @server.tool()
     def report_scam(
@@ -263,7 +255,26 @@ def create_server(
             description=(description or "").strip(),
             evidence_note=(evidence_note or "").strip(),
         )
-        return json.dumps(data, ensure_ascii=False, indent=2)
+        return _dump_compact(data)
+
+    # --------------------------------------------------------------------------
+    # RESOURCES
+    # --------------------------------------------------------------------------
+
+    @server.resource("shieldcall://trust/sources", mime_type="application/json")
+    def resource_trust_sources() -> str:
+        """Vietnamese anti-fraud data sources, last-updated timestamps, and tool limitations."""
+        return _dump_compact(client.get_trust_sources())
+
+    @server.resource("shieldcall://trust/channels", mime_type="application/json")
+    def resource_trust_channels() -> str:
+        """Official Vietnamese police, VNCERT/NCSC, and bank verification hotlines."""
+        return _dump_compact(client.get_trust_channels())
+
+    @server.resource("shieldcall://trust/policy", mime_type="application/json")
+    def resource_trust_policy() -> str:
+        """ShieldCall Trust Guardrail 5-tier verdict and PII minimization policy."""
+        return _dump_compact(client.get_trust_policy())
 
     # --------------------------------------------------------------------------
     # PROMPTS

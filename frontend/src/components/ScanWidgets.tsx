@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { api } from '../lib/api';
+import { getScanToken, scanTokenQuery } from '../lib/scanToken';
 
 import { renderMd } from '../lib/chat/markdown';
 import { openSseStream } from '../lib/chat/stream';
@@ -164,14 +165,17 @@ export function streamScanAiExplanation(opts: {
   onError?: () => void;
 }): Promise<void> {
   opts.onStart?.();
+  const scanToken = opts.scanId ? getScanToken(opts.scanId) : '';
   return openSseStream({
     url: `${apiBase()}/scan/analyze-sse/`,
     body: {
       ...(opts.scanId ? { scan_id: opts.scanId } : {}),
+      ...(scanToken ? { scan_token: scanToken } : {}),
       scan_type: opts.scanType,
       scan_data: opts.scanData,
       raw_input: opts.rawInput,
       mask_pii: opts.maskPii,
+      consent_external_llm: !opts.maskPii,
     },
     onEvent: (ev) => {
       if (ev.type === 'delta') opts.onDelta(ev.text);
@@ -256,6 +260,7 @@ export function ScanPrivacyToggle({
     'Tự động che dữ liệu cá nhân (SĐT, STK, CCCD, email) trước khi lưu lịch sử & gửi AI';
   return (
     <div
+      data-tour="scan-privacy"
       className={`rounded-2xl border transition-all ${
         checked
           ? 'bg-safe-500/[0.06] border-safe-500/25'
@@ -274,7 +279,7 @@ export function ScanPrivacyToggle({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-black text-white">
                 <i className={`bi ${checked ? 'bi-shield-lock-fill text-safe-400' : 'bi-eye text-warn-400'} mr-1.5`}></i>
-                Che thông tin nhạy cảm (PII)
+                Che thông tin nhạy cảm
               </span>
               <span
                 className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
@@ -289,7 +294,7 @@ export function ScanPrivacyToggle({
             <p className="text-[11px] text-white/55 mt-0.5 leading-snug">
               {checked
                 ? `${hint}. Đối chiếu cục bộ (luật, Tín Nhiệm Mạng, Sandbox) vẫn chạy trên dữ liệu gốc trong RAM để giữ độ chính xác.`
-                : 'Chế độ nguyên văn: lưu lịch sử và cho phép AI phân tích đầy đủ dữ liệu theo quyền lựa chọn của bạn; nhật ký hệ thống (log) vẫn luôn tự động che PII.'}
+                : 'Chế độ nguyên văn: lưu lịch sử và cho phép AI phân tích đầy đủ dữ liệu theo quyền lựa chọn của bạn; nhật ký hệ thống vẫn luôn tự động che thông tin cá nhân.'}
             </p>
           </div>
         </label>
@@ -316,12 +321,12 @@ export function PrivacyReceiptBadge({ result }: { result: ScanResult | null | un
     >
       <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider shrink-0">
         <i className={`bi ${masked ? 'bi-shield-check text-safe-400' : 'bi-incognito text-warn-400'}`}></i>
-        <span>{masked ? 'Đã che PII trước khi lưu' : 'Chế độ nguyên văn'}</span>
+        <span>{masked ? 'Đã che thông tin nhạy cảm' : 'Chế độ nguyên văn'}</span>
       </div>
       <span className="text-[11px] text-white/65 leading-snug">
         {masked && mappedFields.length > 0
           ? `Trường đã bảo vệ: ${mappedFields.join(', ')}.`
-          : note || (masked ? 'Dữ liệu định danh đã được tối thiểu hóa trước khi lưu và gửi AI ngoài.' : 'Lưu và gửi AI theo lựa chọn nguyên văn của bạn; nhật ký hệ thống vẫn tự động che PII.')}
+          : note || (masked ? 'Dữ liệu định danh đã được tối thiểu hóa trước khi lưu và gửi AI ngoài.' : 'Lưu và gửi AI theo lựa chọn nguyên văn của bạn; nhật ký hệ thống vẫn tự động che thông tin cá nhân.')}
       </span>
     </div>
   );
@@ -428,7 +433,7 @@ export function useScanTracker(
     const pollOnce = (): void => {
       if (finished || !alive) return;
       api
-        .get<StatusPayload>(`/scan/status/${scanId}/`)
+        .get<StatusPayload>(`/scan/status/${scanId}/${scanTokenQuery(scanId)}`)
         .then((data) => {
           if (finished || !alive || !data) return;
           pollFailures = 0;
@@ -472,7 +477,7 @@ export function useScanTracker(
       if (!isReconnect) push('Đang kết nối với máy chủ...', 'init');
       let sock: WebSocket;
       try {
-        sock = new WebSocket(`${wsBase()}/ws/scan/${scanId}/`);
+        sock = new WebSocket(`${wsBase()}/ws/scan/${scanId}/${scanTokenQuery(scanId)}`);
       } catch {
         scheduleReconnect();
         return;

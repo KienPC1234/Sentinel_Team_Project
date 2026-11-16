@@ -1,6 +1,13 @@
 {
   "name": "ShieldCall VN",
   "short_name": "ShieldCall",
+  "description": "Nền tảng bảo vệ người dùng Việt Nam khỏi cuộc gọi lừa đảo và các hình thức lừa đảo số.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0d0d1f",
+  "lang": "vi",
   "icons": [
     {
       "src": "/static/web-app-manifest-192x192.png",
@@ -13,9 +20,11 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/static/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
     }
-  ],
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
-  "display": "standalone"
+  ]
 }

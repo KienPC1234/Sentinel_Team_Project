@@ -618,8 +618,8 @@ class ScanImageSerializer(serializers.Serializer):
 class ScanEventListSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScanEvent
-        fields = ['id', 'scan_type', 'normalized_input', 'risk_score',
-                  'risk_level', 'result_json', 'created_at']
+        fields = ['id', 'scan_type', 'raw_input', 'normalized_input', 'risk_score',
+                  'risk_level', 'is_public_referable', 'result_json', 'created_at']
         read_only_fields = fields
 
 

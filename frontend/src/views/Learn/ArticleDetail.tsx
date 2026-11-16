@@ -234,8 +234,8 @@ export default function ArticleDetail() {
     return (
       <div className="animate-fadein max-w-4xl mx-auto py-20 px-4 text-center space-y-6">
         <p className="text-white/55 font-black uppercase tracking-widest text-sm">Bài viết không tồn tại.</p>
-        <Link href="/learn" className="text-brand-400 text-xs font-black uppercase tracking-widest">
-          Quay lại cẩm nang
+        <Link href="/learn/news/" className="text-brand-400 text-xs font-black uppercase tracking-widest">
+          Quay lại tin tức
         </Link>
       </div>
     );
@@ -264,8 +264,8 @@ export default function ArticleDetail() {
           Trang chủ
         </Link>
         <i className="bi bi-chevron-right text-[8px]"></i>
-        <Link href="/learn" className="hover:text-brand-400 transition-colors">
-          Kiến thức
+        <Link href="/learn/news/" className="hover:text-brand-400 transition-colors">
+          Tin tức
         </Link>
         <i className="bi bi-chevron-right text-[8px]"></i>
         <span className="text-white/55">{article.title.substring(0, 30)}</span>
@@ -480,10 +480,10 @@ export default function ArticleDetail() {
 
         <div className="pt-4">
           <Link
-            href="/learn"
+            href="/learn/news/"
             className="liquid-btn py-3 px-8 text-[11px] bg-white/5 border-white/10 hover:bg-white/10 inline-flex items-center gap-2"
           >
-            <i className="bi bi-arrow-left"></i> QUAY LẠI CẨM NANG
+            <i className="bi bi-arrow-left"></i> QUAY LẠI TIN TỨC
           </Link>
         </div>
       </div>

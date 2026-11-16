@@ -265,7 +265,7 @@ export default function ScamRadar() {
         </div>
 
         {/* Quick Scan Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-tour="radar-cards">
           {QUICK_SCANS.map((s) => (
             <Link key={s.to} href={s.to} className="scan-card liquid-card p-5 text-center space-y-3 group">
               <div className={`w-12 h-12 mx-auto rounded-2xl border flex items-center justify-center transition ${s.iconBg} ${s.hoverBg}`}>
@@ -278,7 +278,7 @@ export default function ScamRadar() {
 
         {/* Filters */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex flex-wrap gap-1.5 p-1.5 bg-white/[0.03] border border-white/5 rounded-2xl">
+          <div className="flex flex-wrap gap-1.5 p-1.5 bg-white/[0.03] border border-white/5 rounded-2xl" data-tour="radar-filters">
             {FILTERS.map((f) => (
               <button
                 key={f.v}

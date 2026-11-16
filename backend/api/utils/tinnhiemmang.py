@@ -432,12 +432,34 @@ NEWS_FEED_CONFIGS: Dict[str, Dict[str, str]] = {
 
 # Nguồn báo chí: VnExpress — tag "Lừa đảo qua mạng"
 VNEXPRESS_BASE_URL = "https://vnexpress.net"
-VNEXPRESS_FEED_CONFIGS: Dict[str, Dict[str, str]] = {
+VNEXPRESS_FEED_CONFIGS: Dict[str, Dict[str, Any]] = {
     "lua_dao_qua_mang": {
         "path": "tag/lua-dao-qua-mang-27298",
         "category": "alert",
-        "label": "VnExpress — Lừa đảo qua mạng",
+        "label": "VnExpress — Lừa đảo qua mạng (Tag)",
         "url": "https://vnexpress.net/tag/lua-dao-qua-mang-27298",
+    },
+    "lua_dao_truc_tuyen": {
+        "search_query": "lừa đảo trực tuyến",
+        "category": "alert",
+        "label": "VnExpress — Tìm kiếm Lừa đảo trực tuyến",
+        "url": "https://timkiem.vnexpress.net/?q=l%E1%BB%ABa+%C4%91%E1%BA%A3o+tr%E1%BB%B1c+tuy%E1%BA%BFn&latest=on",
+        "filter_keywords": (
+            "lừa đảo", "chiếm đoạt", "giả danh", "mạo danh", "an ninh mạng",
+            "mã độc", "tống tiền", "tiền ảo", "sàn ảo", "deepfake", "phishing",
+        ),
+    },
+    "tim_kiem_lua_dao": {
+        "search_query": "lừa đảo",
+        "category": "alert",
+        "label": "VnExpress — Tìm kiếm Lừa đảo công nghệ cao",
+        "url": "https://timkiem.vnexpress.net/?q=l%E1%BB%ABa+%C4%91%E1%BA%A3o&latest=on",
+        "filter_keywords": (
+            "lừa đảo trực tuyến", "lừa đảo qua mạng", "sàn chứng khoán", "sàn ảo",
+            "tiền ảo", "mr pips", "giả danh công an", "giả công an", "mạo danh",
+            "chiếm đoạt", "deepfake", "vneid", "tài khoản ngân hàng", "mã độc",
+            "phishing", "lừa tiền", "kẻ lừa đảo", "bẫy lừa đảo",
+        ),
     },
 }
 
@@ -840,7 +862,9 @@ def parse_vnexpress_listing(html_text: str, feed_key: str = "lua_dao_qua_mang",
     """Phân tích trang tag VnExpress thành danh sách bài viết."""
     items: List[Dict[str, Any]] = []
     seen = set()
-    default_cat = VNEXPRESS_FEED_CONFIGS.get(feed_key, {}).get("category", "alert")
+    cfg = VNEXPRESS_FEED_CONFIGS.get(feed_key, {})
+    default_cat = cfg.get("category", "alert")
+    filter_kws = tuple(cfg.get("filter_keywords") or ())
     try:
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(html_text or "", "html.parser")
@@ -849,23 +873,37 @@ def parse_vnexpress_listing(html_text: str, feed_key: str = "lua_dao_qua_mang",
             if not a or not a.get("href"):
                 continue
             url = _abs_url(a["href"], base_url).split("#", 1)[0]
-            if not url.endswith(".html") or url in seen:
+            if not url.startswith("https://vnexpress.net/") or not url.endswith(".html") or url in seen:
+                continue
+            if "/podcast/" in url:
                 continue
             title = _node_text(a)
             if not title or len(title) < 10:
                 continue
-            seen.add(url)
             desc_el = card.select_one(".description")
             summary = _node_text(desc_el) if desc_el else ""
+            if filter_kws:
+                hay = f"{title} {summary}".lower()
+                if not any(kw in hay for kw in filter_kws):
+                    continue
+            seen.add(url)
             if len(summary) > 280:
                 summary = summary[:277] + "..."
             cover = _img_src(card.select_one(".thumb-art img, .thumb img, img"), base_url)
+            pub_date = None
+            raw_ts = (card.get("data-publishtime") or "").strip()
+            if raw_ts.isdigit():
+                try:
+                    pub_date = datetime.fromtimestamp(int(raw_ts)).strftime("%Y-%m-%d")
+                except Exception:
+                    pub_date = None
             items.append({
                 "title": title,
                 "url": url,
                 "slug": url.rstrip("/").split("/")[-1].replace(".html", ""),
                 "cover_image": cover or None,
                 "summary": summary,
+                "published_date": pub_date,
                 "feed_key": feed_key,
                 "category": default_cat,
             })
@@ -901,6 +939,8 @@ def parse_vnexpress_detail(html_text: str, article_url: str, feed_key: str = "lu
         date_el = soup.find("span", class_=re.compile(r"\bdate\b", re.I))
         if date_el:
             published_date = parse_vn_date(_node_text(date_el))
+        if not published_date and meta.get("published_date"):
+            published_date = meta.get("published_date")
         og = soup.find("meta", attrs={"property": "og:image"})
         if og and og.get("content"):
             cover_image = _abs_url(og["content"], base_url)
@@ -942,19 +982,27 @@ def parse_vnexpress_detail(html_text: str, article_url: str, feed_key: str = "lu
 
 
 def vnexpress_page_path(feed_key: str = "lua_dao_qua_mang", page: int = 1) -> str:
-    """Đường dẫn trang tag VnExpress (trang 1 không hậu tố; trang N là ``…-pN``)."""
+    """Đường dẫn trang tag hoặc URL tìm kiếm VnExpress."""
     cfg = VNEXPRESS_FEED_CONFIGS.get(feed_key)
     if not cfg:
         raise ValueError(f"Khóa feed VnExpress không hợp lệ: {feed_key!r}")
+    if cfg.get("search_query"):
+        params = {"q": cfg["search_query"], "latest": "on"}
+        if int(page) > 1:
+            params["page"] = int(page)
+        return "https://timkiem.vnexpress.net/?" + urlencode(params)
     base = cfg["path"].rstrip("/")
     return base if int(page) <= 1 else f"{base}-p{int(page)}"
 
 
 def vnexpress_total_pages(html_text: str, feed_key: str = "lua_dao_qua_mang") -> int:
-    """Số trang của tag VnExpress suy ra từ khối phân trang."""
+    """Số trang của tag/search VnExpress suy ra từ khối phân trang."""
     cfg = VNEXPRESS_FEED_CONFIGS.get(feed_key)
     if not cfg:
         return 1
+    if cfg.get("search_query"):
+        nums = [int(x) for x in re.findall(r'[?&]page=(\d+)', html_text or "")]
+        return min(3, max(nums)) if nums else 1
     slug = cfg["path"].rstrip("/").split("/")[-1]
     nums = [int(x) for x in re.findall(re.escape(slug) + r"-p(\d+)", html_text or "")]
     return max(nums) if nums else 1

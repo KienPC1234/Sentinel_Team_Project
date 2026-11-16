@@ -90,14 +90,27 @@ def _extract_raw_token(request) -> Optional[str]:
 
 MCP_BURST_PER_MINUTE = 120
 MCP_SESSION_TTL = 3600
+_SHARED_FACTORY = None
+
+
+def _get_request_factory():
+    global _SHARED_FACTORY
+    if _SHARED_FACTORY is None:
+        from rest_framework.test import APIRequestFactory
+        _SHARED_FACTORY = APIRequestFactory()
+    return _SHARED_FACTORY
 
 
 def _mcp_burst_ok(api_key) -> bool:
-    """Per-key burst guard (fail-open on cache outage)."""
+    """Atomic per-key per-minute burst guard (fail-open on cache outage)."""
     try:
-        key = f"mcp_burst:{api_key.id}"
-        n = int(cache.get(key, 0)) + 1
-        cache.set(key, n, timeout=60)
+        slot = timezone.now().strftime('%Y%m%d%H%M')
+        key = f"mcp_burst:{api_key.id}:{slot}"
+        try:
+            n = cache.incr(key)
+        except ValueError:
+            cache.set(key, 1, timeout=65)
+            n = 1
         return n <= MCP_BURST_PER_MINUTE
     except Exception:
         return True
@@ -119,42 +132,45 @@ def _mcp_get_session(session_id: str) -> Optional[dict]:
         return None
 
 
-def _mcp_check_quotas(api_key):
-    """Burst + daily quota enforcement + atomic usage increment. Returns error dict or None."""
-    if not _mcp_burst_ok(api_key):
-        return {
-            "error": "MCP request quá nhanh (giới hạn 120 req/phút/key).",
-            "code": "BURST_EXCEEDED",
-            "status": 429,
-        }
-
-    # Quota enforcement
+def _mcp_consume_quota(api_key) -> Optional[dict]:
+    """Daily/monthly quota check and atomic usage increment for actual tool executions."""
     today = timezone.now().date()
     last_reset = api_key.last_reset_date
     if hasattr(last_reset, 'date') and callable(last_reset.date):
         last_reset = last_reset.date()
 
-    if last_reset is None or last_reset != today:
-        api_key.requests_today = 0
-        if last_reset is None or (last_reset.month != today.month or last_reset.year != today.year):
-            api_key.requests_this_month = 0
-        api_key.last_reset_date = today
+    day_rolled = (last_reset is None or last_reset != today)
+    month_rolled = (
+        last_reset is None
+        or last_reset.month != today.month
+        or last_reset.year != today.year
+    )
+    effective_today = 0 if day_rolled else int(api_key.requests_today or 0)
+    effective_month = 0 if month_rolled else int(api_key.requests_this_month or 0)
 
-    if api_key.daily_quota > 0 and api_key.requests_today >= api_key.daily_quota:
+    if api_key.daily_quota > 0 and effective_today >= api_key.daily_quota:
         return {
             "error": f"API Key đã đạt hạn mức trong ngày ({api_key.daily_quota} req/ngày).",
             "code": "QUOTA_EXCEEDED",
             "quota": api_key.daily_quota,
-            "requests_today": api_key.requests_today,
+            "requests_today": effective_today,
             "status": 429,
         }
 
-    # Increment request usage atomically (avoids lost updates under concurrency).
+    if api_key.monthly_quota > 0 and effective_month >= api_key.monthly_quota:
+        return {
+            "error": f"API Key đã đạt hạn mức trong tháng ({api_key.monthly_quota} req/tháng).",
+            "code": "QUOTA_EXCEEDED",
+            "quota": api_key.monthly_quota,
+            "requests_this_month": effective_month,
+            "status": 429,
+        }
+
     from django.db.models import F
     from django.utils import timezone as _tz
     APIKey.objects.filter(id=api_key.id).update(
-        requests_today=F('requests_today') + 1,
-        requests_this_month=F('requests_this_month') + 1,
+        requests_today=1 if day_rolled else F('requests_today') + 1,
+        requests_this_month=1 if month_rolled else F('requests_this_month') + 1,
         total_requests=F('total_requests') + 1,
         last_used_at=_tz.now(),
         last_reset_date=today,
@@ -163,9 +179,9 @@ def _mcp_check_quotas(api_key):
     return None
 
 
-def _authenticate_mcp(request) -> Tuple[Optional[APIKey], Optional[str], Optional[dict]]:
+def _authenticate_mcp(request, *, consume_quota: bool = True) -> Tuple[Optional[APIKey], Optional[str], Optional[dict]]:
     """
-    Validates API key and enforces quotas.
+    Validates API key, enforces burst guard, and optionally consumes daily quota.
     Returns: (api_key_obj, raw_token_str, error_dict)
     """
     raw_token = _extract_raw_token(request)
@@ -205,9 +221,21 @@ def _authenticate_mcp(request) -> Tuple[Optional[APIKey], Optional[str], Optiona
             }
         )
 
-    quota_err = _mcp_check_quotas(api_key)
-    if quota_err:
-        return (None, None, quota_err)
+    if not _mcp_burst_ok(api_key):
+        return (
+            None,
+            None,
+            {
+                "error": "MCP request quá nhanh (giới hạn 120 req/phút/key).",
+                "code": "BURST_EXCEEDED",
+                "status": 429,
+            },
+        )
+
+    if consume_quota:
+        quota_err = _mcp_consume_quota(api_key)
+        if quota_err:
+            return (None, None, quota_err)
 
     return (api_key, raw_token, None)
 
@@ -232,7 +260,8 @@ class MCPConnectSSEView(View):
         return _cors_response(response)
 
     def get(self, request, *args, **kwargs):
-        api_key, raw_token, auth_err = _authenticate_mcp(request)
+        # SSE handshake only verifies identity + burst (does not consume daily scan quota)
+        api_key, raw_token, auth_err = _authenticate_mcp(request, consume_quota=False)
         if auth_err:
             status_code = auth_err.pop('status', 401)
             response = JsonResponse(auth_err, status=status_code)
@@ -279,67 +308,121 @@ class MCPConnectSSEView(View):
 
 
 class DjangoInternalShieldCallClient:
-    """Direct in-process client executing ShieldCall endpoints without HTTP loopback."""
+    """Direct in-process client executing ShieldCall endpoints without HTTP loopback or double quota billing."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, api_key_obj: Optional[APIKey] = None):
         self.api_key = api_key or ""
-        from rest_framework.test import APIRequestFactory
-        self.factory = APIRequestFactory()
+        self.api_key_obj = api_key_obj
+        self.factory = _get_request_factory()
 
-    def _headers(self) -> dict:
-        headers = {}
-        if self.api_key:
-            headers['HTTP_X_API_KEY'] = self.api_key
-            headers['HTTP_AUTHORIZATION'] = f"Bearer {self.api_key}"
-        return headers
+    def _wrap_worker(self, fn):
+        """Ensure worker threads close DB connections cleanly after parallel sub-scans."""
+        def _runner():
+            from django.db import close_old_connections
+            try:
+                return fn()
+            finally:
+                close_old_connections()
+        return _runner
+
+    def _dispatch(self, view_cls, method: str, path: str, data=None, query_params=None):
+        if method == 'GET':
+            req = self.factory.get(path, data=query_params or {})
+        else:
+            req = self.factory.post(path, data or {}, format='json')
+
+        if self.api_key_obj is not None:
+            # MCP layer already authenticated & billed this request: prevent sub-views
+            # from running APIKeyAuthentication again (which would double/6x charge quota).
+            from rest_framework.test import force_authenticate
+            force_authenticate(req, user=self.api_key_obj.user, token=self.api_key_obj)
+            req.api_key = self.api_key_obj
+            req.is_api_key_auth = True
+        elif self.api_key:
+            req.META['HTTP_X_API_KEY'] = self.api_key
+            req.META['HTTP_AUTHORIZATION'] = f"Bearer {self.api_key}"
+
+        resp = view_cls.as_view()(req)
+        payload = resp.data if hasattr(resp, 'data') else {}
+        if getattr(resp, 'status_code', 200) >= 400 and isinstance(payload, dict) and 'error' not in payload:
+            payload = {'error': payload.get('detail') or f'Request failed ({resp.status_code})', 'status_code': resp.status_code}
+        return payload
 
     def scan_phone(self, phone: str) -> dict:
         from api.core.views import ScanPhoneView
-        req = self.factory.post('/api/v1/scan/phone/', {'phone': phone}, format='json', **self._headers())
-        resp = ScanPhoneView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else {}
+        return self._dispatch(ScanPhoneView, 'POST', '/api/v1/scan/phone/', {'phone': phone})
 
     def scan_bank_account(self, bank: str, account: str) -> dict:
         from api.core.views import ScanAccountView
-        req = self.factory.post('/api/v1/scan/account/', {'bank': bank, 'account': account}, format='json', **self._headers())
-        resp = ScanAccountView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else {}
+        return self._dispatch(ScanAccountView, 'POST', '/api/v1/scan/account/', {'bank': bank, 'account': account})
 
     def scan_domain(self, url: str) -> dict:
         from api.core.views import ScanDomainView
-        req = self.factory.post('/api/v1/scan/domain/', {'url': url, 'deep_scan': False}, format='json', **self._headers())
-        resp = ScanDomainView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else {}
+        return self._dispatch(ScanDomainView, 'POST', '/api/v1/scan/domain/', {'url': url, 'deep_scan': False})
 
     def scan_message(self, message: str) -> dict:
         from api.core.views import ScanMessageView
-        req = self.factory.post('/api/v1/scan/message/', {'message': message, 'sync': True}, format='json', **self._headers())
-        resp = ScanMessageView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else {}
+        return self._dispatch(ScanMessageView, 'POST', '/api/v1/scan/message/', {'message': message, 'sync': True})
 
     def scan_email(self, email: str, content: str = "", subject: str = "") -> dict:
         from api.core.views import ScanEmailView
-        req = self.factory.post('/api/v1/scan/email/', {'email': email, 'content': content, 'subject': subject, 'sync': True}, format='json', **self._headers())
-        resp = ScanEmailView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else {}
+        return self._dispatch(
+            ScanEmailView,
+            'POST',
+            '/api/v1/scan/email/',
+            {'email': email, 'content': content, 'subject': subject, 'sync': True},
+        )
 
     def get_supported_banks(self) -> list:
         from api.core.views import ScanBanksView
-        req = self.factory.get('/api/v1/scan/banks/', **self._headers())
-        resp = ScanBanksView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else []
+        cached = cache.get('mcp_cache:supported_banks')
+        if cached is not None:
+            return cached
+        data = self._dispatch(ScanBanksView, 'GET', '/api/v1/scan/banks/')
+        if isinstance(data, list) and data:
+            cache.set('mcp_cache:supported_banks', data, timeout=3600)
+        return data if isinstance(data, list) else []
 
     def lookup_scam_db(self, query: str, entity_type: str = "all") -> dict:
         from api.core.views import ScanLookupView
-        req = self.factory.get('/api/v1/scan/lookup/', {'q': query, 'type': entity_type}, **self._headers())
-        resp = ScanLookupView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else {}
+        return self._dispatch(ScanLookupView, 'GET', '/api/v1/scan/lookup/', query_params={'q': query, 'type': entity_type})
 
     def get_scam_radar_trends(self) -> dict:
         from api.core.views import ScamRadarStatsView
-        req = self.factory.get('/api/v1/trends/radar-stats/', **self._headers())
-        resp = ScamRadarStatsView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else {}
+        cached = cache.get('mcp_cache:radar_trends')
+        if cached is not None:
+            return cached
+        data = self._dispatch(ScamRadarStatsView, 'GET', '/api/v1/trends/radar-stats/')
+        if isinstance(data, dict) and data and not data.get('error'):
+            cache.set('mcp_cache:radar_trends', data, timeout=300)
+        return data if isinstance(data, dict) else {}
+
+    def get_trust_sources(self) -> dict:
+        from api.utils.trust_guard import source_catalog, trust_policy
+        from api.utils.vn_sources import tinnhiem_dataset_stats
+        p = trust_policy()
+        return {
+            'policy': p['principle'],
+            'gray_zone': p['gray_zone'],
+            'tinnhiem_dataset': tinnhiem_dataset_stats(),
+            'sources': source_catalog(),
+        }
+
+    def get_trust_channels(self) -> dict:
+        from api.utils.vn_sources import VN_OFFICIAL_CHANNELS, VN_BANK_HOTLINES, SOURCE_VERIFIED_DATE
+        return {
+            'verified_on': SOURCE_VERIFIED_DATE,
+            'channels': VN_OFFICIAL_CHANNELS,
+            'bank_hotlines_count': len(VN_BANK_HOTLINES),
+            'bank_hotlines': VN_BANK_HOTLINES,
+        }
+
+    def get_trust_policy(self) -> dict:
+        from api.utils.trust_guard import trust_policy
+        from api.utils.privacy import privacy_notice
+        data = trust_policy()
+        data['privacy'] = privacy_notice()
+        return data
 
     def report_scam(self, target_type: str, target_value: str, scam_type: str, description: str, evidence_note: str = "") -> dict:
         from api.core.views import ReportCreateView
@@ -350,16 +433,19 @@ class DjangoInternalShieldCallClient:
             "description": description,
             "evidence_note": evidence_note,
         }
-        req = self.factory.post('/api/v1/report/', payload, format='json', **self._headers())
-        resp = ReportCreateView.as_view()(req)
-        return resp.data if hasattr(resp, 'data') else {}
+        return self._dispatch(ReportCreateView, 'POST', '/api/v1/report/', payload)
+
+
+def _payload_contains_tool_call(req_data) -> bool:
+    items = req_data if isinstance(req_data, list) else [req_data]
+    return any(isinstance(item, dict) and item.get('method') == 'tools/call' for item in items)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
 class MCPMessagesView(View):
     """
     Standard Model Context Protocol messages endpoint.
-    Receives JSON-RPC 2.0 payloads from Claude / MCP clients and delivers responses.
+    Receives JSON-RPC 2.0 payloads (single or batch) from Claude / MCP clients and delivers responses.
     """
 
     def options(self, request, *args, **kwargs):
@@ -367,7 +453,8 @@ class MCPMessagesView(View):
         return _cors_response(response)
 
     def post(self, request, *args, **kwargs):
-        api_key, raw_token, auth_err = _authenticate_mcp(request)
+        # Verify identity + burst first; only bill daily quota on actual tool execution.
+        api_key, raw_token, auth_err = _authenticate_mcp(request, consume_quota=False)
 
         session_id = request.GET.get('session_id') or request.META.get('HTTP_MCP_SESSION_ID')
         if auth_err and session_id:
@@ -379,11 +466,14 @@ class MCPMessagesView(View):
                 except APIKey.DoesNotExist:
                     bound = None
                 if bound is not None and bound.user.is_active:
-                    quota_err = _mcp_check_quotas(bound)
-                    if quota_err:
-                        auth_err = quota_err
+                    if not _mcp_burst_ok(bound):
+                        auth_err = {
+                            "error": "MCP request quá nhanh (giới hạn 120 req/phút/key).",
+                            "code": "BURST_EXCEEDED",
+                            "status": 429,
+                        }
                     else:
-                        _, raw_token, auth_err = bound, sess.get('token'), None
+                        api_key, raw_token, auth_err = bound, sess.get('token'), None
 
         if auth_err:
             status_code = auth_err.pop('status', 401) if isinstance(auth_err, dict) else 401
@@ -401,22 +491,28 @@ class MCPMessagesView(View):
                 "error": {"code": -32700, "message": f"Parse error: {str(e)}"}
             }, status=400))
 
-        # Instantiate ZeroDepMCPServer with direct in-process client
-        client = DjangoInternalShieldCallClient(api_key=raw_token)
+        if _payload_contains_tool_call(req_data) and api_key is not None:
+            quota_err = _mcp_consume_quota(api_key)
+            if quota_err:
+                status_code = quota_err.pop('status', 429)
+                return _cors_response(JsonResponse(quota_err, status=status_code))
+
+        # Instantiate ZeroDepMCPServer with direct in-process client (no double billing)
+        client = DjangoInternalShieldCallClient(api_key=raw_token, api_key_obj=api_key)
         server = create_server(client=client)
 
-        res = server.handle_request(req_data)
+        res = server.handle_payload(req_data)
 
         # If connected via SSE session, push message to SSE stream
         if session_id:
             if res is not None:
                 _deliver_to_session(session_id, res)
-            # Return HTTP 202 Accepted per MCP SSE transport specification
-            response = JsonResponse({"status": "accepted", "id": req_data.get("id")}, status=202)
+            req_id = req_data.get("id") if isinstance(req_data, dict) else None
+            response = JsonResponse({"status": "accepted", "id": req_id}, status=202)
             return _cors_response(response)
 
         # Direct RPC response (no SSE session provided)
-        response = JsonResponse(res if res is not None else {"status": "ok"}, status=200)
+        response = JsonResponse(res if res is not None else {"status": "ok"}, status=200, safe=not isinstance(res, list))
         return _cors_response(response)
 
 
@@ -446,7 +542,7 @@ class MCPDiscoveryView(View):
         data = {
             "name": "shieldcall-vn",
             "title": "ShieldCall VN Remote MCP Server",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "protocol_version": ZeroDepMCPServer.PROTOCOL_VERSION,
             "transports": {
                 "sse": {
@@ -477,6 +573,12 @@ class MCPDiscoveryView(View):
                 "emergency_advisor",
                 "scam_investigator",
             ],
+            "resources": [
+                "shieldcall://trust/sources",
+                "shieldcall://trust/channels",
+                "shieldcall://trust/policy",
+            ],
+            "batch_requests": True,
             "documentation": guide_url,
             "authentication": {
                 "type": "API Key",

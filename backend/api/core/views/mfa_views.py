@@ -201,26 +201,34 @@ class MFASetupEmailView(APIView):
             except User.DoesNotExist:
                 request.session.pop('mfa_user_id', None)
                 return Response({'error': 'Authentication required.'}, status=401)
+            # Khi dang o buoc xac thuc 2FA dang nhap, chi gui OTP cho tai khoan da kich hoat Email 2FA.
+            device = EmailDevice.objects.filter(user=user, name='default', confirmed=True).first()
+            if not device:
+                return Response({'error': 'Tài khoản này chưa kích hoạt Email 2FA.'}, status=403)
+            if device.email != user.email:
+                device.email = user.email
         else:
             user = request.user
+            device, created = EmailDevice.objects.get_or_create(
+                user=user,
+                name='default',
+                defaults={'email': user.email, 'confirmed': False},
+            )
+            if created and device.confirmed:
+                device.confirmed = False
+            if device.email != user.email:
+                device.email = user.email
 
-        device, created = EmailDevice.objects.get_or_create(user=user, name='default', defaults={'email': user.email})
-        if not created and device.email != user.email:
-            device.email = user.email
-        
-        # Instead of device.generate_challenge(), we manually send HTML email
-        from django_otp.util import random_hex
-        token = str(random_hex(3)).upper() # Generate a 6-char hex/numeric-like token
-        # Or simpler for users: 6 random digits (crypto-safe)
+        # Generate crypto-safe 6-digit OTP
         token = ''.join(secrets.choice('0123456789') for _ in range(6))
-        
-        from django.utils import timezone
+
         from datetime import timedelta
         device.token = token
         device.valid_until = timezone.now() + timedelta(minutes=2)
         device.save()
-        request.session.modified = True
-        
+        if hasattr(request, 'session'):
+            request.session.modified = True
+
         from api.utils.email_utils import send_html_otp_email
         if not send_html_otp_email(user.email, token):
             return Response({'error': 'Không gửi được email lúc này. Vui lòng thử lại sau.'}, status=502)
@@ -229,21 +237,17 @@ class MFASetupEmailView(APIView):
 
     @extend_schema(request={'application/json': {'type': 'object', 'properties': {'token': {'type': 'string'}}, 'required': ['token']}}, responses={200: serializers.DictField()})
     def post(self, request):
-        # Hỗ trợ cả luồng đăng nhập (request.user) và luồng MFA khi login (session).
-        if request.user.is_authenticated:
-            user = request.user
-        else:
-            user_id = request.session.get('mfa_user_id')
-            if not user_id:
-                return Response({'error': 'Authentication required.'}, status=401)
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                request.session.pop('mfa_user_id', None)
-                return Response({'error': 'Authentication required.'}, status=401)
-        token = request.data.get('token')
+        # Kích hoạt / chuyển sang Email 2FA bắt buộc user đã đăng nhập hoàn chỉnh.
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required.'}, status=401)
+        user = request.user
+        if otp_verify_blocked('mfa-email-setup', user.id):
+            return Response({'error': 'Nhập sai mã OTP quá nhiều lần. Vui lòng thử lại sau 10 phút.'}, status=429)
+
+        token = (request.data.get('token') or '').strip()
         device = EmailDevice.objects.filter(user=user, name='default').first()
         if device and device.verify_token(token):
+            clear_otp_verify_fails('mfa-email-setup', user.id)
             device.confirmed = True
             device.save()
             TOTPDevice.objects.filter(user=user).delete()
@@ -252,6 +256,7 @@ class MFASetupEmailView(APIView):
             profile.mfa_preferred_method = 'email'
             profile.save(update_fields=['mfa_preferred_method'])
             return Response({'message': 'Email 2FA confirmed successfully.'})
+        record_otp_verify_fail('mfa-email-setup', user.id)
         return Response({'error': 'Invalid token.'}, status=400)
 
 class MFAVerifyView(APIView):
@@ -336,16 +341,20 @@ class MFAVerifyView(APIView):
 
 class MFADeactivateView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AuthThrottle]
 
     @extend_schema(request={'application/json': {'type': 'object', 'properties': {'password': {'type': 'string'}, 'token': {'type': 'string'}, 'method': {'type': 'string'}}, 'required': ['password', 'token']}}, responses={200: serializers.DictField()})
     def post(self, request):
         user = request.user
-        password = request.data.get('password')
+        password = request.data.get('password') or ''
         otp_token = request.data.get('token')
         method = request.data.get('method')
 
-        # 1. Verify password
-        if not user.check_password(password):
+        if otp_verify_blocked('mfa-deactivate', user.id):
+            return Response({'error': 'Nhập sai mã xác nhận quá nhiều lần. Vui lòng thử lại sau 10 phút.'}, status=429)
+
+        # 1. Verify password (cho phep tai khoan OAuth chua co password bo qua check_password)
+        if user.has_usable_password() and not user.check_password(password):
             return Response({'error': 'Mật khẩu không chính xác.'}, status=400)
 
         profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -369,11 +378,15 @@ class MFADeactivateView(APIView):
                         recovery.save(update_fields=['is_used', 'used_at'])
                         verified = True
             if not verified:
+                record_otp_verify_fail('mfa-deactivate', user.id)
                 return Response({'error': 'Mã TOTP hoặc recovery code không hợp lệ.'}, status=400)
         else:
             device = EmailDevice.objects.filter(user=user, name='default').first()
             if not device or not device.verify_token(otp_token):
+                record_otp_verify_fail('mfa-deactivate', user.id)
                 return Response({'error': 'Mã OTP Email không hợp lệ hoặc đã hết hạn.'}, status=400)
+
+        clear_otp_verify_fails('mfa-deactivate', user.id)
 
         # 3. Disable all MFA methods
         TOTPDevice.objects.filter(user=user).delete()

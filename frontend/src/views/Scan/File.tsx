@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ApiError, api } from '../../lib/api';
+import { scanTokenQuery } from '../../lib/scanToken';
 
 import { renderMd } from '../../lib/chat/markdown';
 import { MarkdownView } from '../../components/ui';
@@ -160,7 +161,7 @@ export default function File() {
         return;
       }
       api
-        .get<{ status?: string; result?: ScanResult }>('/scan/status/' + sid + '/')
+        .get<{ status?: string; result?: ScanResult }>(`/scan/status/${sid}/${scanTokenQuery(sid)}`)
         .then((data) => {
           const st = asStr(data.status).toLowerCase();
           if (st === 'completed') {
@@ -282,7 +283,7 @@ export default function File() {
         </div>
 
         {!result && (
-          <div className="liquid-card p-8 sm:p-12 mb-8 relative group">
+          <div className="liquid-card p-8 sm:p-12 mb-8 relative group" data-tour="scan-form">
             <div className="relative z-10">
               {!file && (
                 <div
@@ -335,6 +336,7 @@ export default function File() {
                   <TurnstileWidget />
                   <button
                     type="button"
+                    data-tour="scan-submit"
                     onClick={startScan}
                     className="liquid-button bg-brand2-500 hover:bg-brand2-400 text-white px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-brand2-500/25 flex items-center gap-3"
                   >

@@ -1,6 +1,11 @@
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.conf import settings
+import logging
 import uuid
+
+logger = logging.getLogger(__name__)
 
 
 class ChatFolder(models.Model):
@@ -153,3 +158,13 @@ class SavedMessage(models.Model):
 
     def __str__(self):
         return f"Saved by {self.user.username}: Msg {self.message.id}"
+
+
+@receiver(post_delete, sender=ChatMessageImage)
+def _cleanup_chat_message_image_file(sender, instance, **kwargs):
+    """Xóa tệp ảnh vật lý khỏi storage khi xóa ChatMessageImage hoặc ChatSession."""
+    try:
+        if instance.image:
+            instance.image.delete(save=False)
+    except Exception as exc:
+        logger.warning("Failed to delete ChatMessageImage file on cleanup: %s", exc)

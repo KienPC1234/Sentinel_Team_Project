@@ -774,7 +774,7 @@ export default function Report() {
 
         {/* Main Form Card */}
         {!success && (
-          <div className="liquid-card p-6 sm:p-10 space-y-8">
+          <div className="liquid-card p-6 sm:p-10 space-y-8" data-tour="report-form">
             {/* STEP 1: TARGET SELECTION & SMART INPUT */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -1010,6 +1010,7 @@ export default function Report() {
               <div className="space-y-1">
                 <textarea
                   ref={descRef}
+                  data-tour="report-desc"
                   className="liquid-input w-full p-4 text-xs sm:text-sm font-medium leading-relaxed resize-none transition-all placeholder:text-white/45"
                   rows={5}
                   value={description}

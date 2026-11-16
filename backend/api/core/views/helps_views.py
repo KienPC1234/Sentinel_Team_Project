@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework import status
+from drf_spectacular.utils import extend_schema
 
 
 class HelpsDetailAPIView(APIView):
@@ -77,4 +78,16 @@ class HelpsDetailAPIView(APIView):
                 })
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class HelpsIndexView(HelpsDetailAPIView):
+    @extend_schema(operation_id='helps_index')
+    def get(self, request, slug='index'):
+        return super().get(request, slug)
+
+
+class HelpsDetailView(HelpsDetailAPIView):
+    @extend_schema(operation_id='helps_detail')
+    def get(self, request, slug):
+        return super().get(request, slug)
 

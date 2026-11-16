@@ -50,3 +50,56 @@ class ArticleCommentTurnstileTest(TestCase):
             {'content': 'Binh luan test'}, format='json')
         # Khong co token -> 400 (frontend phai gui token tu widget)
         self.assertEqual(resp.status_code, 400)
+
+
+class ArticleListOrderingTest(TestCase):
+    def test_articles_sorted_newest_first_by_published_date_then_created_at(self):
+        from datetime import date, timedelta
+        from django.utils import timezone
+        from api.core.models import Article
+
+        older_crawl_newer_pub = Article.objects.create(
+            title='Bai xuat ban moi hon',
+            slug='bai-pub-moi-hon',
+            content='a',
+            category='news',
+            source_type='tinnhiemmang',
+            published_date=date(2025, 1, 15),
+            is_published=True,
+        )
+        newer_crawl_older_pub = Article.objects.create(
+            title='Bai xuat ban cu hon nhung crawl sau',
+            slug='bai-pub-cu-hon',
+            content='b',
+            category='news',
+            source_type='tinnhiemmang',
+            published_date=date(2024, 11, 15),
+            is_published=True,
+        )
+        internal_recent = Article.objects.create(
+            title='Bai noi bo khong co published_date',
+            slug='bai-noi-bo-moi',
+            content='c',
+            category='guide',
+            source_type='internal',
+            published_date=None,
+            is_published=True,
+        )
+        # Gia lap bai cu duoc crawl sau -> created_at moi hon bai 2025-01-15
+        now = timezone.now()
+        Article.objects.filter(id=older_crawl_newer_pub.id).update(created_at=now - timedelta(days=20))
+        Article.objects.filter(id=newer_crawl_older_pub.id).update(created_at=now - timedelta(days=5))
+        Article.objects.filter(id=internal_recent.id).update(created_at=now)
+
+        client = APIClient()
+        resp = client.get('/api/v1/articles/')
+        self.assertEqual(resp.status_code, 200)
+        slugs = [item['slug'] for item in resp.data]
+        self.assertEqual(slugs, ['bai-noi-bo-moi', 'bai-pub-moi-hon', 'bai-pub-cu-hon'])
+
+        resp_oldest = client.get('/api/v1/articles/?sort=oldest')
+        self.assertEqual(resp_oldest.status_code, 200)
+        self.assertEqual(
+            [item['slug'] for item in resp_oldest.data],
+            ['bai-pub-cu-hon', 'bai-pub-moi-hon', 'bai-noi-bo-moi'],
+        )

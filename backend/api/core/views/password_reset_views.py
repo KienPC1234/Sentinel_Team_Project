@@ -9,10 +9,13 @@ với luồng allauth (ResetPasswordForm / UserTokenForm / ResetPasswordKeyForm)
 import logging
 
 from rest_framework import status
+from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.core.throttling import AuthThrottle
+from api.core.views.auth_views import _otp_send_allowed, _record_otp_send
 from api.core.views.scan_views import _verify_turnstile_or_api_key
 
 logger = logging.getLogger(__name__)
@@ -24,15 +27,24 @@ class PasswordResetRequestView(APIView):
     Luôn trả 200 để không tiết lộ email có tồn tại hay không.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
 
     def post(self, request):
         ts_err = _verify_turnstile_or_api_key(request)
         if ts_err:
             return ts_err
 
-        email = str(request.data.get('email', '') or '').strip()
+        email = str(request.data.get('email', '') or '').strip().lower()
         if not email:
             return Response({'error': 'Vui lòng nhập địa chỉ email.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        rate_key = f"pw-reset:{email}"
+        if not _otp_send_allowed(rate_key):
+            return Response(
+                {'error': 'Bạn đã yêu cầu đặt lại mật khẩu quá nhiều lần. Vui lòng thử lại sau 1 giờ.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        _record_otp_send(rate_key)
 
         try:
             from allauth.account.forms import ResetPasswordForm
@@ -92,6 +104,7 @@ class PasswordResetConfirmView(APIView):
                 )
 
             form.save()
+            Token.objects.filter(user=user).delete()
             try:
                 from allauth.account.internal.flows.password_reset import finalize_password_reset
                 finalize_password_reset(request, user)

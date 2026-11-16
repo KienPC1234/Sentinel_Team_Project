@@ -8,6 +8,7 @@ import Link from 'next/link';
 
 import { useParams } from 'next/navigation';
 import { api, ApiError } from '../../lib/api';
+import { scanTokenQuery } from '../../lib/scanToken';
 
 
 
@@ -68,7 +69,7 @@ export default function Status() {
 
     const fetchStatus = (): void => {
       api
-        .get<StatusPayload>(`/scan/status/${id}/`)
+        .get<StatusPayload>(`/scan/status/${id}/${scanTokenQuery(id)}`)
         .then((data) => {
           if (!alive) return;
           const st = asStr(data.status).toLowerCase();
@@ -115,7 +116,7 @@ export default function Status() {
 
     const connectWs = (): void => {
       try {
-        const ws = new WebSocket(`${wsBase()}/ws/scan/${id}/`);
+        const ws = new WebSocket(`${wsBase()}/ws/scan/${id}/${scanTokenQuery(id)}`);
         wsRef.current = ws;
         setWsState('connecting');
         const pingInterval = setInterval(() => {

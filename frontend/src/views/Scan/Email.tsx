@@ -285,7 +285,7 @@ export default function Email() {
           </p>
         </div>
 
-        <div className="liquid-card p-6 sm:p-8 space-y-6">
+        <div className="liquid-card p-6 sm:p-8 space-y-6" data-tour="scan-form">
           <div className="flex gap-2 p-1 rounded-2xl bg-white/5 border border-white/10 dropdown-container">
             <button
               type="button"
@@ -422,6 +422,7 @@ export default function Email() {
             <TurnstileWidget />
             <button
               type="button"
+              data-tour="scan-submit"
               className="liquid-btn w-full bg-brand-500 text-black py-5 font-black uppercase tracking-widest hover:bg-brand-400 transition-all"
               disabled={loading}
               onClick={() => submit()}

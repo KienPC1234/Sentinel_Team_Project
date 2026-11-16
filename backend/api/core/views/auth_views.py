@@ -392,17 +392,22 @@ class MeView(APIView):
     @extend_schema(responses={200: serializers.DictField()})
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
+        from api.core.models import ForumPost
         token, _ = Token.objects.get_or_create(user=request.user)
         scan_count = ScanEvent.objects.filter(user=request.user).count()
         report_count = Report.objects.filter(reporter=request.user).count()
         alert_count = UserAlert.objects.filter(user=request.user).count()
+        post_count = ForumPost.objects.filter(author=request.user).count()
+        user_data = UserSerializer(request.user, context={'request': request}).data
+        user_data['has_usable_password'] = request.user.has_usable_password()
         return Response({
-            'user': UserSerializer(request.user, context={'request': request}).data,
+            'user': user_data,
             'token': token.key,
             'stats': {
                 'total_scans': scan_count,
                 'total_reports': report_count,
                 'saved_alerts': alert_count,
+                'total_posts': post_count,
             }
         })
 
@@ -497,21 +502,22 @@ class DeleteAccountView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        request={'application/json': {'type': 'object', 'properties': {'password': {'type': 'string'}, 'confirmation_text': {'type': 'string'}}, 'required': ['password', 'confirmation_text']}},
+        request={'application/json': {'type': 'object', 'properties': {'password': {'type': 'string'}, 'confirmation_text': {'type': 'string'}}, 'required': ['confirmation_text']}},
         responses={200: serializers.DictField()}
     )
     def post(self, request):
         user = request.user
         password = (request.data.get('password') or '').strip()
         confirmation_text = (request.data.get('confirmation_text') or '').strip().upper()
-        required_text = 'XOA TAI KHOAN'
+        allowed_confirmations = {'XOA TAI KHOAN', 'XÓA TÀI KHOẢN'}
 
-        if not password:
-            return Response({'error': 'Vui lòng nhập mật khẩu hiện tại.'}, status=status.HTTP_400_BAD_REQUEST)
-        if confirmation_text != required_text:
-            return Response({'error': f'Bạn cần nhập chính xác cụm từ "{required_text}" để xác nhận.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not user.check_password(password):
-            return Response({'error': 'Mật khẩu hiện tại không chính xác.'}, status=status.HTTP_400_BAD_REQUEST)
+        if confirmation_text not in allowed_confirmations:
+            return Response({'error': 'Bạn cần nhập chính xác cụm từ "XÓA TÀI KHOẢN" để xác nhận.'}, status=status.HTTP_400_BAD_REQUEST)
+        if user.has_usable_password():
+            if not password:
+                return Response({'error': 'Vui lòng nhập mật khẩu hiện tại.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not user.check_password(password):
+                return Response({'error': 'Mật khẩu hiện tại không chính xác.'}, status=status.HTTP_400_BAD_REQUEST)
 
         user_id = user.id
         try:
@@ -520,17 +526,36 @@ class DeleteAccountView(APIView):
             except Exception:
                 pass
             auth_logout(request)
+            if hasattr(request, 'session'):
+                try:
+                    request.session.flush()
+                except Exception:
+                    pass
             user.delete()
         except Exception:
             logger.exception('Delete account failed for user_id=%s', user_id)
             return Response({'error': 'Không thể xóa tài khoản lúc này. Vui lòng thử lại sau.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({'message': 'Tài khoản đã được xóa vĩnh viễn.'}, status=status.HTTP_200_OK)
+        resp = Response({'message': 'Tài khoản đã được xóa vĩnh viễn.'}, status=status.HTTP_200_OK)
+        resp.delete_cookie(
+            settings.SESSION_COOKIE_NAME,
+            path=settings.SESSION_COOKIE_PATH,
+            domain=settings.SESSION_COOKIE_DOMAIN,
+            samesite=settings.SESSION_COOKIE_SAMESITE,
+        )
+        resp.delete_cookie(
+            settings.CSRF_COOKIE_NAME,
+            path=settings.CSRF_COOKIE_PATH,
+            domain=settings.CSRF_COOKIE_DOMAIN,
+            samesite=settings.CSRF_COOKIE_SAMESITE,
+        )
+        return resp
 
 
 class EmailChangeRequestOTPView(APIView):
     """POST /api/v1/auth/email-change/request/ — verify password and send OTP to new email"""
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AuthThrottle]
 
     @extend_schema(
         request={'application/json': {'type': 'object', 'properties': {'password': {'type': 'string'}, 'new_email': {'type': 'string'}}, 'required': ['password', 'new_email']}},
@@ -541,12 +566,13 @@ class EmailChangeRequestOTPView(APIView):
         password = (request.data.get('password') or '').strip()
         new_email = (request.data.get('new_email') or '').strip().lower()
 
-        if not password:
-            return Response({'error': 'Vui lòng nhập mật khẩu hiện tại.'}, status=status.HTTP_400_BAD_REQUEST)
+        if user.has_usable_password():
+            if not password:
+                return Response({'error': 'Vui lòng nhập mật khẩu hiện tại.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not user.check_password(password):
+                return Response({'error': 'Mật khẩu hiện tại không chính xác.'}, status=status.HTTP_400_BAD_REQUEST)
         if not new_email:
             return Response({'error': 'Vui lòng nhập email mới.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not user.check_password(password):
-            return Response({'error': 'Mật khẩu hiện tại không chính xác.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             validate_email(new_email)
@@ -642,6 +668,7 @@ class EmailChangeVerifyOTPView(APIView):
 class PasswordChangeView(APIView):
     """POST /api/v1/auth/password/change/ — change password with OTP"""
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AuthThrottle]
 
     @extend_schema(
         request={'application/json': {'type': 'object', 'properties': {'old_password': {'type': 'string'}, 'new_password': {'type': 'string'}, 'token': {'type': 'string'}}, 'required': ['old_password', 'new_password', 'token']}},
@@ -651,10 +678,14 @@ class PasswordChangeView(APIView):
         user = request.user
         old_password = request.data.get('old_password')
         new_password = request.data.get('new_password')
-        otp_token = request.data.get('token')
+        otp_token = (request.data.get('token') or '').strip()
 
-        if not old_password or not user.check_password(old_password):
-            return Response({'error': 'Mật khẩu cũ không chính xác.'}, status=400)
+        if otp_verify_blocked('password-change', user.id):
+            return Response({'error': 'Nhập sai mã OTP quá nhiều lần. Vui lòng thử lại sau 10 phút.'}, status=429)
+
+        if user.has_usable_password():
+            if not old_password or not user.check_password(old_password):
+                return Response({'error': 'Mật khẩu cũ không chính xác.'}, status=400)
 
         if not isinstance(new_password, str) or len(new_password) < 8:
             return Response({'error': 'Mật khẩu mới phải có ít nhất 8 ký tự.'}, status=400)
@@ -662,7 +693,9 @@ class PasswordChangeView(APIView):
         from django_otp.plugins.otp_email.models import EmailDevice
         device = EmailDevice.objects.filter(user=user, name='default').first()
         if not device or not device.verify_token(otp_token):
+            record_otp_verify_fail('password-change', user.id)
             return Response({'error': 'Mã OTP Email không hợp lệ hoặc đã hết hạn.'}, status=400)
+        clear_otp_verify_fails('password-change', user.id)
 
         user.set_password(new_password)
         user.save()

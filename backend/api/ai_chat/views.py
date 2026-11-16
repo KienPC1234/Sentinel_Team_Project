@@ -419,7 +419,7 @@ class ChatAIStreamView(APIView):
                         vis = None
                         try:
                             _vfut = _vloop.run_in_executor(
-                                None, _vision_fn, img_b64, user_message or "")
+                                None, lambda _b=img_b64, _h=user_message or "", _ap=allow_pii: _vision_fn(_b, _h, allow_pii=_ap))
                             _waited = 0.0
                             while not _vfut.done():
                                 await asyncio.sleep(15)

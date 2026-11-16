@@ -348,6 +348,29 @@ class VnexpressParsingTests(SimpleTestCase):
         self.assertIn("<strong>ban đầu</strong>", d.content)
         self.assertNotIn("Phú ThọNhóm", d.content)
 
+    def test_search_feed_filter_and_page_path(self):
+        html_search = """
+        <article class="item-news" data-publishtime="1794801600">
+          <h3 class="title-news"><a href="https://vnexpress.net/lam-sao-nhan-dien-bay-lua-dao-5144938.html">Làm sao nhận diện bẫy lừa đảo đầu tư như Mr Pips?</a></h3>
+          <p class="description">Cảnh báo thủ đoạn lừa đảo trực tuyến chiếm đoạt tài sản.</p>
+        </article>
+        <article class="item-news" data-publishtime="1794017899">
+          <h3 class="title-news"><a href="https://vnexpress.net/tin-quoc-te-khong-lien-quan-5141788.html">Bản tin thế giới không liên quan tới chủ đề an toàn mạng</a></h3>
+          <p class="description">Diễn biến thời sự quốc tế cuối tuần.</p>
+        </article>
+        <article class="item-news" data-publishtime="1794574925">
+          <h3 class="title-news"><a href="https://video.vnexpress.net/tin-video-5144000.html">Video lừa đảo trực tuyến</a></h3>
+        </article>
+        """
+        items = th.parse_vnexpress_listing(html_search, "tim_kiem_lua_dao")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["slug"], "lam-sao-nhan-dien-bay-lua-dao-5144938")
+        self.assertIsNotNone(items[0]["published_date"])
+        url_p1 = th.vnexpress_page_path("tim_kiem_lua_dao", 1)
+        url_p2 = th.vnexpress_page_path("tim_kiem_lua_dao", 2)
+        self.assertTrue(url_p1.startswith("https://timkiem.vnexpress.net/?"))
+        self.assertIn("page=2", url_p2)
+
 
 class EvidenceTests(SimpleTestCase):
     """Bằng chứng từ danh bạ Tín nhiệm mạng được đưa vào evidence[]."""
