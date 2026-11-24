@@ -2,7 +2,7 @@
 
 /* CKEditor factory — port từ PKV/templates/base.html sang ESM npm package
  * (ckeditor5 + @ckeditor/ckeditor5-react). Giữ nguyên toolbar/plugins/UI;
- * request gắn thêm Authorization Token cho user React.
+ * request dùng session cookie httpOnly + CSRF token.
  */
 import {
   ClassicEditor,
@@ -69,12 +69,6 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
   } catch {
     /* ignore */
   }
-  try {
-    const t = localStorage.getItem('sc_token');
-    if (t && !h['Authorization']) h['Authorization'] = 'Token ' + t;
-  } catch {
-    /* ignore */
-  }
   return h;
 }
 
@@ -96,7 +90,6 @@ class ShieldCallUploadAdapter {
           xhr.open('POST', '/api/v1/utils/upload-image/', true);
           const headers = authHeaders();
           if (headers['X-CSRFToken']) xhr.setRequestHeader('X-CSRFToken', headers['X-CSRFToken']);
-          if (headers['Authorization']) xhr.setRequestHeader('Authorization', headers['Authorization']);
           xhr.upload.onprogress = (evt) => {
             if (evt.lengthComputable) {
               this.loader.uploadTotal = evt.total;

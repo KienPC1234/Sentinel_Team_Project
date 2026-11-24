@@ -253,6 +253,11 @@ class ScanAnalyzeSSEView(APIView):
                         f"({_guard.get('label', _tier)}). Không khẳng định chắc chắn an toàn hay quy kết lừa đảo tuyệt đối; "
                         f"hãy nêu rõ giới hạn dữ liệu và khuyến nghị xác minh qua kênh chính thức.]"
                     )
+                elif _tier == 'LIKELY_SAFE':
+                    prompt += (
+                        "\n\n[LƯU Ý GUARDRAIL: Mức hiện tại là LIKELY_SAFE (có tín hiệu tin cậy, chưa ghi nhận dấu hiệu xấu). "
+                        "Hãy diễn đạt bình tĩnh, xác nhận chưa có cảnh báo rủi ro, không hù dọa hay bắt người dùng rời khỏi trang/chặn số vô căn cứ.]"
+                    )
 
                 # Giải thích kết quả quét: chỉ dùng target gốc khi caller đã xác
                 # thực; người dùng ẩn danh được redact PII trước khi gửi LLM cloud.

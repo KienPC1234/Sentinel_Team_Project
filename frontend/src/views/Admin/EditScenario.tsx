@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '../../lib/api';
+import { api, asList } from '../../lib/api';
 import { AdminShell } from './_shared';
 
 interface Step {
@@ -47,11 +47,11 @@ export default function EditScenario() {
   const [previewStep, setPreviewStep] = useState(0);
 
   useEffect(() => {
-    api.get<ArticleOption[]>('/admin/articles/')
-      .then((data) => setArticles(data || []))
+    api.get<ArticleOption[] | { results?: ArticleOption[] }>('/admin/articles/')
+      .then((data) => setArticles(asList(data)))
       .catch(() => {});
-    api.get<LessonOption[]>('/admin/learn/')
-      .then((data) => setLessons(data || []))
+    api.get<LessonOption[] | { results?: LessonOption[] }>('/admin/learn/')
+      .then((data) => setLessons(asList(data)))
       .catch(() => {});
 
     if (!scenarioId) return;

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 from api.utils.security import verify_turnstile_token
+from api.core.pagination import paginate_queryset
 
 from api.core.models import (
     LearnLesson,
@@ -287,22 +288,30 @@ class LearnLessonListView(APIView):
             scenarios_total=Count('scenarios', distinct=True),
             reactions_total=Count('reactions', distinct=True),
         )
-        data = []
-        for l in qs.order_by('-created_at')[:100]:
-            data.append({
-                'id': l.id,
-                'title': l.title,
-                'slug': l.slug,
-                'category': l.category,
-                'category_display': l.get_category_display(),
-                'summary': l.summary,
-                'cover_image': l.cover_image.url if l.cover_image else None,
-                'created_at': l.created_at.isoformat(),
-                'quizzes_count': getattr(l, 'quizzes_total', 0) or 0,
-                'scenarios_count': getattr(l, 'scenarios_total', 0) or 0,
-                'reactions_count': getattr(l, 'reactions_total', 0) or 0,
-            })
-        return Response(data)
+        def serialize(items):
+            data = []
+            for l in items:
+                data.append({
+                    'id': l.id,
+                    'title': l.title,
+                    'slug': l.slug,
+                    'category': l.category,
+                    'category_display': l.get_category_display(),
+                    'summary': l.summary,
+                    'cover_image': l.cover_image.url if l.cover_image else None,
+                    'created_at': l.created_at.isoformat(),
+                    'quizzes_count': getattr(l, 'quizzes_total', 0) or 0,
+                    'scenarios_count': getattr(l, 'scenarios_total', 0) or 0,
+                    'reactions_count': getattr(l, 'reactions_total', 0) or 0,
+                })
+            return data
+
+        return Response(paginate_queryset(
+            request,
+            qs.order_by('-created_at'),
+            serialize,
+            default_page_size=100,
+        ))
 
 
 class LearnScenarioListView(APIView):
@@ -313,24 +322,32 @@ class LearnScenarioListView(APIView):
         from api.core.models import LearnScenario
 
         qs = LearnScenario.objects.select_related('lesson', 'article').order_by('-created_at')
-        data = []
-        for sc in qs[:100]:
-            content = sc.content or {}
-            steps = content.get('steps') if isinstance(content, dict) else (content if isinstance(content, list) else [])
-            data.append({
-                'id': sc.id,
-                'title': sc.title,
-                'description': sc.description,
-                'lesson_id': sc.lesson_id,
-                'lesson_title': sc.lesson.title if sc.lesson else None,
-                'lesson_slug': sc.lesson.slug if sc.lesson else None,
-                'article_id': sc.article_id,
-                'article_title': sc.article.title if sc.article else None,
-                'steps': steps or [],
-                'steps_count': len(steps or []),
-                'created_at': sc.created_at.isoformat() if sc.created_at else '',
-            })
-        return Response(data)
+        def serialize(items):
+            data = []
+            for sc in items:
+                content = sc.content or {}
+                steps = content.get('steps') if isinstance(content, dict) else (content if isinstance(content, list) else [])
+                data.append({
+                    'id': sc.id,
+                    'title': sc.title,
+                    'description': sc.description,
+                    'lesson_id': sc.lesson_id,
+                    'lesson_title': sc.lesson.title if sc.lesson else None,
+                    'lesson_slug': sc.lesson.slug if sc.lesson else None,
+                    'article_id': sc.article_id,
+                    'article_title': sc.article.title if sc.article else None,
+                    'steps': steps or [],
+                    'steps_count': len(steps or []),
+                    'created_at': sc.created_at.isoformat() if sc.created_at else '',
+                })
+            return data
+
+        return Response(paginate_queryset(
+            request,
+            qs,
+            serialize,
+            default_page_size=100,
+        ))
 
 
 class LearnQuizListView(APIView):
@@ -341,17 +358,25 @@ class LearnQuizListView(APIView):
         from api.core.models import LearnQuiz
 
         qs = LearnQuiz.objects.select_related('lesson', 'article').order_by('-id')
-        data = []
-        for q in qs[:100]:
-            data.append({
-                'id': q.id,
-                'question': q.question,
-                'question_type': q.question_type,
-                'options': q.options if isinstance(q.options, list) else [],
-                'lesson': {'slug': q.lesson.slug, 'title': q.lesson.title} if q.lesson_id else None,
-                'article': {'slug': q.article.slug, 'title': q.article.title} if q.article_id else None,
-            })
-        return Response(data)
+        def serialize(items):
+            data = []
+            for q in items:
+                data.append({
+                    'id': q.id,
+                    'question': q.question,
+                    'question_type': q.question_type,
+                    'options': q.options if isinstance(q.options, list) else [],
+                    'lesson': {'slug': q.lesson.slug, 'title': q.lesson.title} if q.lesson_id else None,
+                    'article': {'slug': q.article.slug, 'title': q.article.title} if q.article_id else None,
+                })
+            return data
+
+        return Response(paginate_queryset(
+            request,
+            qs,
+            serialize,
+            default_page_size=100,
+        ))
 
 
 class LearnQuizCheckView(APIView):

@@ -1,115 +1,133 @@
 # BÁO CÁO CẢI TIẾN VÒNG CHUNG KẾT - SHIELDCALL VN
 
-> **Trạng thái:** hồ sơ nộp · **Cập nhật:** 2026-11-16 · **Đối tượng:** hội đồng giám khảo
+> **Trạng thái:** hồ sơ nộp · **Cập nhật:** 2026-11-24 · **Đối tượng:** hội đồng giám khảo
 
-- **Đề thi**: Đề cải tiến - Phiên bản 1 (Nộp / cập nhật bài - Chặng 1)
+- **Đề thi**: Đề cải tiến: Phiên bản 1 (Nộp / cập nhật bài - Chặng 1)
 - **Hệ thống**: ShieldCall VN (Nền tảng phòng chống lừa đảo đa kênh tại Việt Nam)
-- **Ngày cập nhật hồ sơ**: 2026-11-16
-- **Liên kết mã nguồn**: https://github.com/KienPC1234/Sentinel_Team_Project
-- **Liên kết sản phẩm chạy thử**: https://sc.fptoj.com
+- **Liên kết mã nguồn**: `https://github.com/KienPC1234/Sentinel_Team_Project`
+- **Liên kết sản phẩm chạy thử**: `https://sc.fptoj.com`
 
 ---
 
-## Tóm tắt định hướng cải tiến
+## Tóm tắt cải tiến theo 3 yêu cầu của Hội đồng
 
-Trên nền tảng kiến trúc đa vector sẵn có (tin nhắn, số điện thoại, URL/domain, QR/ảnh OCR, tệp tin trong Zero-Trust Sandbox, âm thanh Whisper, tra cứu RAG/Tín nhiệm mạng), đội phát triển đã hoàn thiện toàn diện ba trụ cột theo yêu cầu Hội đồng giám khảo:
+Thay vì ép mọi kết quả về hai cực "An toàn" hoặc "Lừa đảo", phiên bản Chung kết nâng cấp cơ chế ra quyết định theo nguyên tắc **chỉ kết luận dứt khoát khi có bằng chứng độc lập**, công khai nguồn đối chiếu kèm ngày cập nhật và bảo vệ dữ liệu nhạy cảm của người dùng ngay từ bước đầu tiên:
 
-| Yêu cầu | Trọng tâm cải tiến | Tệp triển khai chính | Minh chứng đối chứng |
+| Yêu cầu | Vấn đề trước đây | Giải pháp đã hoàn thiện | Minh chứng đo được |
 |---|---|---|---|
-| **1. Kiểm soát kết luận ảnh hưởng người dùng** | Bổ sung tầng `INSUFFICIENT`, phát hiện và từ chối kết luận quá mức khi bằng chứng mâu thuẫn (`has_contradiction`) hoặc thiếu dữ liệu; khóa cứng không bao giờ gán nhãn kết luận dứt khoát cho cá nhân/tài khoản ngân hàng/SĐT; ưu tiên hướng dẫn hành động an toàn qua kênh chính thức. | `backend/api/utils/trust_guard.py`, `backend/api/core/views/scan_views.py`, `backend/api/utils/prompts.py`, `frontend/src/components/ScanWidgets.tsx`, `frontend/src/views/Scan/Bank.tsx` | 20/20 ca kiểm thử guardrail Chung kết đạt chuẩn (`insufficient_refusal_rate = 1.0`, `contradiction_refusal_rate = 1.0`). |
-| **2. Truy xuất nguồn & đánh giá tình huống Việt Nam** | Gắn `updated_at` / `verified_on` và `citation` cho toàn bộ 16 nguồn trong `SOURCE_CATALOG`, từng phần tử `evidence[]`, danh sách `VN_OFFICIAL_CHANNELS` và báo chí chính thống; hiển thị công khai trên `/trust/` và từng kết quả quét; đánh giá định lượng trên bộ 80 tin nhắn thực tế Việt Nam (`independent_test_set_vn.jsonl`) và 20 kịch bản Chung kết (`vn_final_suite.jsonl`). | `backend/api/utils/vn_sources.py`, `backend/api/utils/trust_guard.py`, `backend/api/utils/scam_rules.py`, `frontend/src/views/Trust.tsx`, `backend/scripts/eval/evaluate_vn_final.py` | Bảng nguồn - nhận định đầy đủ 16 nguồn; tỷ lệ báo nhầm (FPR) bộ tin nhắn VN giảm xuống 2.5% (1/40 ca hợp lệ). |
-| **3. Bảo vệ dữ liệu nhạy cảm & truy vết xử lý** | Vá lỗi lộ PII khi LLM repair/retry (`allow_pii=safe_allow_pii`), đồng bộ nút gạt quyền riêng tư từng lượt quét (`ScanPrivacyToggle`, mặc định bật `mask_pii=True`) tới cả lưu trữ và Cloud LLM (`_has_external_pii_consent`) kèm quy tắc prompt chống AI từ chối trên nhãn đã che, gia cố chống prompt injection (`sanitize_delimiter_text`), che SĐT/CCCD/Email/STK/token trong log qua `PIIRedactionFilter`, phân tách xử lý cục bộ và dịch vụ ngoài qua sơ đồ luồng dữ liệu, bổ sung xuất JSON cá nhân (`export-data`) và xóa từng lượt quét/toàn bộ/theo nhóm. | `backend/api/utils/ollama_client.py`, `backend/api/utils/privacy.py`, `backend/api/core/tasks.py`, `backend/api/core/views/scan_views.py`, `backend/api/core/views/user_views.py`, `frontend/src/components/ScanWidgets.tsx`, `frontend/src/views/Dashboard.tsx`, `frontend/src/views/Auth/Profile.tsx` | Kiểm thử IDOR 403/401, log `llm_access.log` tự động che toàn bộ PII (0 SĐT/email thô), 48/48 unit test `test_trust_privacy` (gồm xuất JSON, đồng ý PII, fallback file không lưu `SAFE` & signal xóa ảnh `ChatMessageImage`). |
+| **1. Kiểm soát kết luận ảnh hưởng người dùng** | Khi thiếu dữ liệu, nguồn mâu thuẫn hoặc tin nhắn đời thường trùng từ khóa nhạy cảm, hệ thống dễ gắn nhầm mức cảnh báo hoặc lưu nhãn `SAFE`. | Tách tầng trung gian **`INSUFFICIENT`** ("Chưa đủ cơ sở xác minh"); khóa trần không bao giờ khẳng định cá nhân/STK/SĐT chắc chắn lừa đảo; kết hợp **tiền lọc Regex + AI LLM đối chứng** (`safe_context_discounted`) và fallback tự động sang `SMALL_MODEL` (`gemma4:31b-cloud`). | **20/20** ca guardrail đạt chuẩn (`100%` từ chối ca thiếu/mâu thuẫn); **18/18** ca đối kháng live LLM; **0/40** báo nhầm trên tin nhắn đời thường. |
+| **2. Truy xuất nguồn & đánh giá tình huống VN** | Người dùng khó biết kết quả dựa vào nguồn nào, độ tin cậy ra sao và dữ liệu cập nhật ngày nào; từ điển VN còn thiếu trường hợp thực tế. | Công khai **17 nguồn** trong `SOURCE_CATALOG` (gồm Tín nhiệm mạng, ScamWave 4.071 mục, RAG 297 mục, 39 ngân hàng/ví và 15 báo chí VN) kèm độ tin cậy, giới hạn và `updated_at`; khử trùng lặp regex và chữ chèn dấu (`C.ô.n.g a.n`). | Tập 80 tin nhắn VN độc lập đạt **Precision 100.00%, Recall 95.00%, F1 97.44%, FPR 0.00%**; tập holdout 40 mẫu đạt **Precision 100.00%, F1 94.74%, FP=0**; **AUC 0.959**. |
+| **3. Bảo vệ PII & quyền kiểm soát dữ liệu** | Rủi ro lộ SĐT/email ở nhánh retry LLM; người dùng chưa chủ động bật/tắt che PII theo từng lượt quét hoặc xóa từng nhóm dữ liệu riêng tư. | Nút gạt `ScanPrivacyToggle` (mặc định BẬT che PII) trên cả 8 luồng quét, giữ nguyên che PII khi repair/retry; lọc log toàn cục `PIIRedactionFilter`; tách `PROMPT_GUARD` vào `role="system"`; bổ sung **xuất JSON cá nhân** và **xóa chọn lọc theo nhóm**. | **0** SĐT/email thô trên **2.234 dòng** `llm_access.log`; kiểm thử IDOR trả `403/401`; **54/54** test `test_trust_privacy` và **312/312** test mặc định PASSED. |
 
 ---
 
 ## Phần 1. Kiểm soát kết luận có thể ảnh hưởng người dùng
 
-### 1.1. Cơ chế kiểm soát trạng thái kết luận trong `trust_guard.py`
+### 1.1. Cơ chế phân tầng 5 mức trong `trust_guard.py`
 
-Hàm `assess(result, kind)` phân tầng 5 mức kết luận với nguyên tắc bảo vệ người dùng trước rủi ro nhận định sai:
+Trước đây, người dùng chỉ thấy các nhãn đơn giản nên dễ hiểu nhầm "chưa thấy báo xấu" thành "an toàn 100%", hoặc hiểu nhầm một tài khoản bị phản ánh sơ bộ thành "chắc chắn tội phạm". Hàm `assess(result, kind)` bổ sung tầng trung gian để phản ánh đúng độ chắc chắn của bằng chứng:
 
-| Tier (`guardrail.tier`) | Nhãn hiển thị | `is_conclusive` | Điều kiện kích hoạt & ràng buộc bảo vệ |
+| Tầng (`guardrail.tier`) | Nhãn hiển thị cho người dân | Kết luận dứt khoát (`is_conclusive`) | Khi nào kích hoạt & ràng buộc bảo vệ |
 |---|---|---|---|
-| `INSUFFICIENT` | `CHƯA ĐỦ CƠ SỞ XÁC MINH` | `false` | (1) Dữ liệu đầu vào rỗng/lỗi (`insufficient_input` / `error`); (2) điểm thấp và không có bằng chứng sạch độ tin cậy cao; (3) **Bằng chứng mâu thuẫn chưa được giải quyết**: ví dụ nguồn sạch độ tin cậy cao (VirusTotal 0/N clean hoặc Tín nhiệm mạng chứng nhận tin cậy) xung đột với tín hiệu heuristic/báo cáo cộng đồng chưa xác thực, hoặc Tín nhiệm mạng báo tin cậy xung đột trực tiếp với cảnh báo kỹ thuật ngoài; (4) tài khoản ngân hàng chỉ có báo cáo cộng đồng đang `pending` (chờ kiểm duyệt, giới hạn điểm `<= 35`). |
-| `LIKELY_SAFE` | `CÓ KHẢ NĂNG AN TOÀN (không bảo đảm 100%)` | `false` | Chỉ cấp khi `risk_score < 10`, không có mâu thuẫn, và tồn tại bằng chứng sạch từ nguồn độ tin cậy cao (`tinnhiemmang` trusted hoặc `virustotal` sạch 0 engine gắn cờ). Luôn yêu cầu người dùng cảnh giác với các yêu cầu chuyển tiền/OTP bất thường. |
-| `SUSPICIOUS` | `ĐÁNG NGỜ: Cần thận trọng` | `false` | Tín hiệu mức trung bình (`risk_score` 40..69 hoặc 10..39 kèm dấu hiệu heuristic), chưa đủ xác thực độc lập. |
-| `HIGH_RISK` | `NGUY CƠ CAO` | `false` với `account`/`phone`; `true` với `message`/`url`/`file` | Dấu hiệu heuristic mạnh (`risk_score >= 70`) hoặc tài khoản/SĐT có báo cáo đã kiểm duyệt. **Riêng đối tượng cá nhân (`kind in ("account", "phone")`), hệ thống khóa cứng `tier` tối đa là `HIGH_RISK`, bắt buộc `is_conclusive = false`, `requires_verification = true`** và gắn cảnh báo không kết luận chủ tài khoản/thuê bao chắc chắn lừa đảo. |
-| `CONFIRMED_RISK` | `CẢNH BÁO RỦI RO CAO (Có nguồn đối chiếu)` | `true` (không áp dụng cho `account`/`phone`) | Chỉ kích hoạt cho `domain`/`url`/`file` khi có nguồn xác thực độc lập: danh sách lừa đảo NCSC/VNCERT (`tinnhiemmang`), chữ ký cục bộ (`clamav`/`yara`/`sandbox` mức HIGH/CRITICAL), hoặc đồng thuận đa engine VirusTotal (`>= 3` engine `malicious`), đồng thời không có mâu thuẫn trực tiếp với danh bạ tin cậy quốc gia. |
+| `INSUFFICIENT` | `CHƯA ĐỦ CƠ SỞ XÁC MINH` | `false` | Đầu vào rỗng/lỗi; điểm thấp nhưng không có nguồn sạch uy tín; **nguồn mâu thuẫn** (ví dụ Tín nhiệm mạng báo tin cậy nhưng bộ quét ngoài cảnh báo, hoặc VirusTotal `0/N` sạch nhưng heuristic cảnh báo ở mức `< 70`); tài khoản ngân hàng mới có báo cáo **chờ kiểm duyệt** (khóa trần `<= 35`). |
+| `LIKELY_SAFE` | `CÓ KHẢ NĂNG AN TOÀN (không bảo đảm 100%)` | `false` | Chỉ cấp khi điểm `< 10`, không mâu thuẫn và có nguồn sạch độ tin cậy cao (`tinnhiemmang` trusted hoặc VirusTotal 0 engine gắn cờ). Luôn nhắc cảnh giác chuyển tiền và OTP. |
+| `SUSPICIOUS` | `ĐÁNG NGỜ: Cần thận trọng` | `false` | Điểm trung bình (`40..69` hoặc `10..39` kèm dấu hiệu bất thường), chưa có xác thực độc lập. |
+| `HIGH_RISK` | `NGUY CƠ CAO` | `false` với STK/SĐT; `true` với tin/URL/tệp | Dấu hiệu mạnh (`>= 70`) hoặc STK/SĐT đã có báo cáo kiểm duyệt. **Riêng số tài khoản và SĐT bị khóa trần tối đa ở mức này**, bắt buộc giữ `is_conclusive = false` và yêu cầu xác minh qua kênh chính thức. |
+| `CONFIRMED_RISK` | `CẢNH BÁO RỦI RO CAO (Có nguồn đối chiếu)` | `true` (chỉ URL/domain/tệp) | Chỉ kích hoạt khi có nguồn độc lập xác thực: danh sách lừa đảo NCSC/VNCERT (`tinnhiemmang`), chữ ký cục bộ (`clamav`/`yara`/`sandbox`), hoặc `>= 3` engine VirusTotal `malicious`, và không mâu thuẫn với Tín nhiệm mạng. |
 
-### 1.2. Xử lý tài khoản ngân hàng & số điện thoại (`scan_views.py`, `prompts.py`)
+```mermaid
+flowchart LR
+    IN["1. Bằng chứng (Điểm rủi ro + evidence[])"] --> GATE["2. Bộ lọc Guardrail (Thiếu dữ liệu? Mâu thuẫn? STK/SĐT?)"]
+    GATE --> INSUFF["INSUFFICIENT (Rỗng / Mâu thuẫn / Chờ duyệt)"]
+    GATE --> SAFE["LIKELY_SAFE (Có nguồn sạch tin cậy)"]
+    GATE --> SUSP["SUSPICIOUS / HIGH_RISK (Khóa trần STK/SĐT tại đây)"]
+    SUSP -->|"Nguồn độc lập (trừ STK/SĐT)"| CONF["CONFIRMED_RISK (Chỉ URL/domain/tệp đa nguồn)"]
+```
 
-1. Tách biệt truy vấn trong `ScanAccountView.post`: không còn gộp báo cáo `pending` vào nhóm nâng điểm rủi ro cao (`approved_account_reports` và `pending_account_reports` được đếm riêng). Báo cáo chỉ ở trạng thái `pending` bị giới hạn mức điểm tối đa `35/100` (`min(35, pending * 15)`), nên giữ nguyên ở tầng `INSUFFICIENT` kèm ghi chú rõ `"chờ kiểm duyệt (chưa xác thực)"`.
-2. Chuẩn hóa nhãn SĐT trong `_phone_risk_score`: đổi nhãn mức đỏ từ `"NGUY HIỂM / LỪA ĐẢO"` thành `"NGUY CƠ CAO (CẦN XÁC MINH ĐỘC LẬP)"`.
-3. Cập nhật `PROMPT_GUARD` (quy tắc 6) và `SCAN_ACCOUNT_PROMPT` trong `backend/api/utils/prompts.py`: cấm mô hình khẳng định một cá nhân hay chủ tài khoản cụ thể "chắc chắn là tội phạm/lừa đảo", bắt buộc ưu tiên khuyến nghị dừng giao dịch và xác minh qua tổng đài ngân hàng hoặc cơ quan chức năng.
+### 1.2. Xử lý tài khoản ngân hàng, số điện thoại và nhánh fallback (`scan_views.py`, `tasks.py`)
 
-### 1.3. Kịch bản minh chứng demo: Bằng chứng mâu thuẫn & Thiếu dữ liệu
+1. **Tách riêng báo cáo chờ duyệt trên tài khoản ngân hàng (`ScanAccountView`)**: Đếm độc lập `approved_account_reports` và `pending_account_reports`; báo cáo chưa duyệt bị giới hạn tối đa `35/100` (`min(35, pending * 15)`) và giữ nguyên ở tầng `INSUFFICIENT` kèm ghi chú `"chờ kiểm duyệt (chưa xác thực)"`.
+2. **Loại bỏ ngôn ngữ quy kết cá nhân**: Đổi nhãn đỏ SĐT thành `"NGUY CƠ CAO (CẦN XÁC MINH ĐỘC LẬP)"`; quy tắc `PROMPT_GUARD` cấm AI khẳng định cá nhân hoặc chủ tài khoản là tội phạm, luôn kèm hướng dẫn gọi tổng đài ngân hàng hoặc cơ quan Công an.
+3. **Chặn lưu nhầm `SAFE` khi fallback**: Khi OCR rỗng, âm thanh không nhận dạng được hoặc AI gián đoạn, `tasks.py` và `media_utils.py` đều gắn `insufficient_input = True` và lưu mức kỹ thuật `RiskLevel.YELLOW` thay vì `SAFE`, bảo đảm giao diện luôn hiển thị `"CHƯA ĐỦ CƠ SỞ XÁC MINH"`.
 
-1. **Ca bằng chứng mâu thuẫn (`vn_contradiction_vt_clean_vs_heuristic`, `vn_contradiction_tinnhiem_vs_vt_multi`)**:
-    - **Tình huống A**: URL có kết quả VirusTotal sạch trên 70 engine (`malicious=0, suspicious=0`), nhưng heuristic phát hiện từ khóa rủi ro cao (`risk_score=45`). Trước cải tiến, sự có mặt của `mal_ev` đẩy kết luận lên `HIGH_RISK`. Sau cải tiến, `assess()` phát hiện `has_contradiction = True` giữa `high_benign` và `mal_ev` chưa xác thực, tự động hạ về `tier = "INSUFFICIENT"`, `is_conclusive = False`, kèm banner UI `"Phát hiện mâu thuẫn giữa các nguồn"`.
-    - **Tình huống B**: Tên miền nằm trong danh sách chứng nhận Tín nhiệm mạng (`tinnhiem.status = "trusted"`), nhưng kết quả quét ngoài ghi nhận 3 engine cảnh báo. Hệ thống từ chối kết luận `CONFIRMED_RISK`, đặt `tier = "INSUFFICIENT"`, `has_contradiction = True`, yêu cầu người dùng tự đối chiếu tại nguồn gốc.
-2. **Ca thiếu dữ liệu (`vn_missing_empty_msg`, `vn_missing_ocr_unreadable`, `vn_missing_pending_account_only`, `vn_missing_gray_zone_domain`)**:
-    - Tin nhắn rỗng, ảnh mờ không OCR được, âm thanh không có lời thoại, tên miền mới đăng ký chưa có dữ liệu độc hại (`"chưa có dữ liệu đánh giá độc hại"` không còn bị `build_evidence()` bắt nhầm chuỗi `"độc hại"`), hoặc tài khoản ngân hàng chỉ có 1 báo cáo chờ duyệt đều trả về `tier = "INSUFFICIENT"`, `is_conclusive = False`, `requires_verification = True` cùng kịch bản từ chối giao dịch lịch sự (`refusal_script`) và đường dây nóng ngân hàng/cơ quan chức năng; đồng thời các nhánh fallback lỗi AI hoặc OCR/audio rỗng trong `tasks.py` và `media_utils.py` gắn `insufficient_input = True` và không ghi `risk_level = 'SAFE'` xuống CSDL (`test_empty_ocr_and_ai_fallback_never_saved_as_safe_in_db`).
+### 1.3. Cơ chế kết hợp 2 tầng: Tiền lọc Regex + AI LLM đối chứng & chống Jailbreak
+
+Nếu chỉ dùng bộ luật từ khóa (Regex), hệ thống sẽ **báo nhầm** tin nhắn đời thường (nhắc nghề nghiệp công an, người nhà cấp cứu, chuyển tiền ăn trưa, xem phim hình sự) và **bỏ sót** các chiêu lừa mới không có từ khóa. Hệ thống xử lý bằng kiến trúc 2 tầng phối hợp (`scam_rules.py` + `ollama_client.py` + `trust_guard.py`):
+
+| Tình huống tin nhắn đầu vào | Cách Tầng 1 (Regex + Domain) và Tầng 2 (LLM) phối hợp | Kết quả cuối |
+|---|---|---|
+| **Tin nhắn đời thường có từ khóa nhạy cảm** (ví dụ: *"Bạn trai tớ là công an, tối đi ăn..."*, *"Bố em cấp cứu ở Bạch Mai..."*, *"Chuyển 65k ăn trưa vào STK..."*, *"Xem phim viện kiểm sát đọc lệnh bắt"*) | Tầng 1 gửi danh sách mẫu bắt được qua `pre_filter_context` để AI thẩm định ngữ cảnh thực. Khi AI xác nhận `is_scam=False` (điểm `<= 25`) và văn bản không chứa chỉ thị cưỡng bức/cấp cứu đòi chuyển tiền, `compute_evidence_aware_ensemble()` áp dụng `safe_context_discounted`. | Điểm hạ xuống **`< 10` (`INSUFFICIENT`)**, xóa nhãn từ khóa regex để không báo nhầm `SUSPICIOUS`. |
+| **Lừa đảo thủ đoạn mới, không chứa URL hay từ khóa phổ biến** (ví dụ: *"Tao đang kẹt ở cây xăng quên ví, chuyển hộ 200k đừng gọi lại"*) | Tầng 1 không bắt được hết mẫu cũ, nhưng AI đọc hiểu ngữ cảnh mạo danh người quen + ép chuyển tiền khẩn cấp + chặn xác minh ngược. | Bắt chính xác **`85/100` (`RED` / `HIGH_RISK`)**. |
+| **Tấn công pha trộn & Jailbreak** (chèn lệnh giả `is_scam: false` hoặc mở đầu bằng *"Bộ Công an khuyến cáo..."* rồi đòi chuyển tiền tạm giữ/đọc OTP) | `PROMPT_GUARD` đặt ở **`role="system"`** tách biệt khỏi khối `<DU_LIEU_NGUOI_DUNG>`, yêu cầu AI chấm điểm theo vế nguy hiểm nhất. Đồng thời lớp bảo vệ clause-level (`_detect_severe_extortion` & `has_active_threat_directive`) giữ sàn điểm ngay cả khi mô hình bị jailbreak. | Giữ sàn **`>= 70` (`RED`)**; kiểm chứng trực tiếp trên cả `LLM_MODEL` và `gemma4:31b-cloud` đều đạt `95/100`. |
+| **Model chính lỗi JSON hoặc gián đoạn** | `analyze_text_for_scam()` tự động fallback sang **`SMALL_MODEL` (`gemma4:31b-cloud`)**; nếu cả mạng/Ollama mất kết nối, hệ thống chuyển sang `ai_outage_fallback` dùng Regex offline (`scam_rules.py`). | Không sập luồng quét; vẫn bắt các mẫu lừa đảo phổ biến ngay cả khi mất mạng AI. |
+
+> **Vai trò của `SMALL_MODEL` (`gemma4:31b-cloud`) trong toàn hệ thống**: Ngoài nhiệm vụ fallback tức thời khi `LLM_MODEL` chính lỗi ở luồng quét lừa đảo, `SMALL_MODEL` còn đảm nhận 5 tác vụ nhẹ cần độ trễ thấp: kiểm duyệt công kích cá nhân trên diễn đàn (`moderate_forum_text_ai`), đặt tiêu đề phiên chat (`generate_title`), tóm tắt thẻ bài học MagicCreate (`tasks.py`), làm sạch Markdown tin tức (`format_news`) và đối chiếu tin trùng lặp (`dedup_news`).
+
+### 1.4. 6 trường hợp minh chứng đối chứng: Mâu thuẫn, Thiếu dữ liệu & Khóa trần cá nhân
+
+1. **Ca 1 (Mâu thuẫn VT sạch và heuristic - `vn_contradiction_vt_clean_vs_heuristic`)**: URL sạch trên 70 engine VirusTotal (`0/70`) nhưng heuristic phát hiện từ khóa rủi ro (`45/100`) -> bật `has_contradiction = True`, hạ về `INSUFFICIENT`.
+2. **Ca 2 (Mâu thuẫn Tín nhiệm mạng và cảnh báo ngoài - `vn_contradiction_tinnhiem_vs_vt_multi`)**: Tên miền có chứng nhận `tinnhiem.status = "trusted"` nhưng bị 3 engine ngoài cảnh báo -> từ chối `CONFIRMED_RISK`, hạ về `INSUFFICIENT` (`has_contradiction = True`).
+3. **Ca 3 (Tin nhắn/ảnh rỗng không đọc được - `vn_missing_empty_msg`, `vn_missing_ocr_unreadable`)**: Trả `INSUFFICIENT`, `is_conclusive = False`, kèm kịch bản từ chối giao dịch lịch sự (`refusal_script`) và hotline 113/156.
+4. **Ca 4 (Tên miền mới thiếu dữ liệu - `vn_missing_gray_zone_domain`)**: Cụm từ `"chưa có dữ liệu đánh giá độc hại"` không bị bắt nhầm từ khóa `"độc hại"`, giữ nguyên trạng thái `INSUFFICIENT`.
+5. **Ca 5 (Tài khoản chỉ có báo cáo chờ duyệt - `vn_missing_pending_account_only`)**: Điểm trần `<= 35`, giữ nguyên `INSUFFICIENT` kèm ghi chú chờ kiểm duyệt.
+6. **Ca 6 (Tài khoản có báo cáo đã duyệt nhưng khóa trần - `vn_account_approved_reports`)**: Dù đạt `risk_score = 75` (`HIGH_RISK`), hệ thống khóa cứng `is_conclusive = False`, từ chối quy kết cá nhân và đính kèm tổng đài ngân hàng phát hành.
 
 ---
 
 ## Phần 2. Truy xuất nguồn và đánh giá trên tình huống Việt Nam
 
-### 2.1. Bảng Nguồn - Nhận định - Giới hạn - Ngày cập nhật
+### 2.1. Bảng 17 nguồn dữ liệu, phạm vi nhận định, giới hạn và ngày cập nhật
 
-Dưới đây là bảng ánh xạ đầy đủ 16 nguồn dữ liệu đang vận hành trong `SOURCE_CATALOG` (`backend/api/utils/trust_guard.py`) và bộ nguồn chính thức Việt Nam (`backend/api/utils/vn_sources.py`), trích xuất trực tiếp từ `source_catalog()` và `tinnhiem_dataset_stats()`:
+Toàn bộ danh mục được trích trực tiếp từ `source_catalog()` (`backend/api/utils/trust_guard.py`), `tinnhiem_dataset_stats()`, `scamwave_dataset_stats()` và hiển thị công khai tại trang `/trust/`:
 
-| Mã nguồn (`key`) | Tên nguồn | Độ tin cậy | Phạm vi áp dụng & nhận định tương ứng | Giới hạn đã công bố | Ngày cập nhật (`updated_at`) |
+| Mã nguồn (`key`) | Tên nguồn | Độ tin cậy | Phạm vi áp dụng & nhận định tương ứng | Giới hạn đã công bố | Ngày cập nhật |
 |---|---|---|---|---|---|
-| `tinnhiemmang` | Tín nhiệm mạng (`tinnhiemmang.vn` - NCSC/VNCERT) | Cao (`high`) | Đối chiếu tên miền/tổ chức tín nhiệm (`5,873` mục) và tên miền lừa đảo (`21,293` mục) -> kích hoạt `CONFIRMED_RISK` (lừa đảo) hoặc `LIKELY_SAFE` (chứng nhận tín nhiệm). | Chỉ gồm thực thể đã đăng ký/ghi nhận; tên miền vắng mặt không đồng nghĩa an toàn; cập nhật theo đợt. | `04/11/2026` |
-| `vn_official` | Kênh chính thức VN (NCSC, Bộ Công an, VNCERT, NHNN, 20 ngân hàng) | Cao (`high`) | Sinh danh sách xác minh & trình báo thủ công (`khonggianmang.vn`, tổng đài 113, 156, hotline từng ngân hàng). | Kênh xác minh thủ công của người dùng, không tự động trả kết quả. | `2026-11-15` |
-| `virustotal` | VirusTotal (70+ engine AV) | Cao (`high`) | Quét URL/Hash; `>= 3` engine `malicious` -> bằng chứng xác thực độc hại (`CONFIRMED_RISK`); `1-2` engine -> chỉ cảnh báo `HIGH_RISK`; `0` engine -> bằng chứng sạch. | Phụ thuộc cộng đồng; URL/tệp vừa tạo có thể chưa có mẫu; giới hạn quota API miễn phí. | `2026-11-15` |
-| `clamav` | ClamAV (mã độc cục bộ) | Cao (`high`) | Quét chữ ký mã độc cục bộ đối với tệp/APK tải lên. | Chỉ nhận diện chữ ký đã biết; có thể bỏ sót mã độc zero-day. | `2026-11-15` |
-| `yara` | YARA (luật phát hiện) | Cao (`high`) | Khớp luật cấu trúc/chuỗi hành vi đáng ngờ trong tệp thực thi/tài liệu. | Phụ thuộc bộ luật biên soạn; chưa bao phủ toàn bộ biến thể mới. | `2026-11-15` |
-| `sandbox` | Zero-Trust Sandbox (cô lập, tắt mạng) | Cao (`high`) | Thực thi tĩnh/hành vi tệp trong container cô lập tắt hoàn toàn kết nối mạng. | Mẫu cần kích hoạt qua mạng hoặc kích hoạt trễ có thể chưa bộc lộ hết. | `2026-11-15` |
-| `pefile` | PEFile (giải phẫu PE) | Vừa (`medium`) | Trích xuất cấu trúc file Windows PE (import, section, packing) làm tín hiệu bổ trợ. | Chỉ áp dụng tệp PE; dấu hiệu kỹ thuật không tự kết luận độc hại. | `2026-11-15` |
-| `oletools` | OLEtools (macro Office) | Vừa (`medium`) | Kiểm tra sự hiện diện của macro VBA trong tài liệu Office. | Macro nghiệp vụ hợp lệ cũng có thể bị cảnh báo. | `2026-11-15` |
-| `network_analysis` | Phân tích kết nối/SSL (network) | Vừa (`medium`) | Kiểm tra chứng chỉ SSL, chuyển hướng URL, tuổi tên miền. | Phụ thuộc khả năng truy cập trang đích; trang chặn bot có thể thiếu dữ liệu. | `2026-11-15` |
-| `phone_numbering` | Cấu trúc kho số viễn thông VN (metadata) | Vừa (`medium`) | Kiểm tra đầu số +84/di động/cố định/VoIP theo `libphonenumber` và quy hoạch Bộ TT&TT. | Chỉ kiểm tra hợp lệ hình thức; không xác thực chủ thuê bao hay chống giả mạo Caller ID. | `2026-11-15` |
-| `tranco` | Tranco (thứ hạng phổ biến) | Vừa (`medium`) | Đánh giá mức độ phổ biến tên miền toàn cầu dùng làm ngữ cảnh phụ. | Độ phổ biến cao không đồng nghĩa hoàn toàn an toàn. | `2026-11-15` |
-| `heuristic` | Heuristic tiếng Việt (`scam_rules`) | Vừa (`medium`) | Nhận diện cụm từ mồi nhử tiếng Việt, nhận biết ngữ cảnh khuyến cáo công an & SMS OTP chuẩn ngân hàng. | Có thể báo nhầm nếu văn bản hợp pháp chứa cụm từ nhạy cảm (ví dụ chuyển khoản cá nhân). | `2026-11-15` |
-| `rag` | Kho tri thức ShieldCall (FAISS RAG) | Vừa (`medium`) | Truy xuất 279 mục kịch bản/hướng dẫn xử lý tình huống Việt Nam làm ngữ cảnh cho trợ lý AI. | Dữ liệu biên soạn tĩnh theo phiên bản; cần đối chiếu kênh chính thức với vụ việc mới. | `2026-11-16` |
-| `community` | Báo cáo cộng đồng | Vừa (`medium`) | Phản ánh do người dùng đóng góp (tách riêng `approved` và `pending`). | Chưa xác minh pháp lý; có thể sai sót hoặc bị lạm dụng; không kết luận danh tính cá nhân. | `2026-11-15` |
-| `web_search` | Tìm kiếm/OSINT web | Vừa (`medium`) | Đối chiếu thông tin doanh nghiệp (TraTenCongTy) và tin tức công khai khi người dùng đồng ý. | Nguồn mở đa dạng độ tin cậy; phải kiểm chứng lại từ nguồn gốc. | `2026-11-15` |
-| `ai_model` | Mô hình ngôn ngữ (LLM) | Thấp (`low`) | Tổng hợp giải thích tiếng Việt dễ hiểu cho người dân và gợi ý từ chối an toàn. | Có thể nhận diện sai (hallucination); chỉ là lớp diễn giải, không phải bằng chứng gốc. | `2026-11-15` |
+| `tinnhiemmang` | Tín nhiệm mạng (`tinnhiemmang.vn` - NCSC/VNCERT) | Cao (`high`) | Đối chiếu `5.873` mục tín nhiệm và `21.293` tên miền lừa đảo -> `CONFIRMED_RISK` / `LIKELY_SAFE`. | Chỉ gồm thực thể đã ghi nhận; vắng mặt chưa chắc an toàn. | `04/11/2026` |
+| `vn_official` | Kênh chính thức VN (Bộ CA, NHNN, 39 NH/ví) | Cao (`high`) | Danh bạ xác minh thủ công (`khonggianmang.vn`, 113, 156, 18 tổng đài & 21 website ngân hàng/ví). | Kênh tự kiểm chứng của người dùng, không trả API tự động. | `2026-11-24` |
+| `virustotal` | VirusTotal (70+ engine AV) | Cao (`high`) | `>= 3` engine `malicious` -> `CONFIRMED_RISK`; `1-2` engine -> `HIGH_RISK`; `0` engine -> sạch. | Phụ thuộc cộng đồng; URL/tệp mới có thể chưa có mẫu. | `2026-11-24` |
+| `clamav` | ClamAV (mã độc cục bộ) | Cao (`high`) | Quét chữ ký mã độc cục bộ cho tệp/APK tải lên. | Chỉ nhận diện chữ ký đã biết; dễ bỏ sót zero-day. | `2026-11-24` |
+| `yara` | YARA (luật phát hiện) | Cao (`high`) | Khớp luật cấu trúc và chuỗi hành vi đáng ngờ trong tệp. | Phụ thuộc bộ luật biên soạn; chưa bao phủ hết biến thể mới. | `2026-11-24` |
+| `sandbox` | Zero-Trust Sandbox (cô lập mạng) | Cao (`high`) | Phân tích tĩnh/hành vi tệp trong container tắt hoàn toàn kết nối mạng. | Mẫu kích hoạt trễ hoặc cần mạng khó bộc lộ hết hành vi. | `2026-11-24` |
+| `pefile` | PEFile (giải phẫu PE) | Vừa (`medium`) | Trích xuất import, section, packing của tệp Windows PE. | Chỉ áp dụng tệp PE; dấu hiệu kỹ thuật không tự kết luận độc hại. | `2026-11-24` |
+| `oletools` | OLEtools (macro Office) | Vừa (`medium`) | Kiểm tra macro VBA trong tài liệu Office. | Macro nghiệp vụ hợp lệ vẫn có thể kích hoạt cảnh báo. | `2026-11-24` |
+| `network_analysis` | Phân tích kết nối/SSL | Vừa (`medium`) | Kiểm tra chứng chỉ SSL, chuyển hướng URL, tuổi tên miền. | Phụ thuộc phản hồi trang đích; trang chặn bot thiếu dữ liệu. | `2026-11-24` |
+| `phone_numbering` | Kho số viễn thông VN | Vừa (`medium`) | Kiểm tra đầu số +84/di động/cố định/VoIP theo `libphonenumber` và Bộ KH&CN. | Chỉ kiểm tra định dạng; không xác thực chủ thuê bao/Caller ID. | `2026-11-24` |
+| `tranco` | Tranco (thứ hạng phổ biến) | Vừa (`medium`) | Xếp hạng độ phổ biến tên miền toàn cầu làm ngữ cảnh phụ. | Độ phổ biến cao không đồng nghĩa hoàn toàn an toàn. | `2026-11-24` |
+| `scamwave` | ScamWave (cảnh báo cộng đồng) | Vừa (`medium`) | Đối chiếu `4.071` tên miền/thực thể (`Scam`, `Doubtful`, `Ponzi`, `Closed`, `Illegal`). | Phần lớn thiếu hồ sơ bằng chứng; chỉ dùng tham khảo và đối chiếu chéo. | `2026-11-16` |
+| `heuristic` | Heuristic VN (`scam_rules`) | Vừa (`medium`) | Tiền lọc cụm từ lừa đảo tiếng Việt, chuẩn hóa chữ chèn dấu (`C.ô.n.g a.n`). | Có thể báo nhầm nếu đứng một mình; cần LLM đối chứng ngữ cảnh. | `2026-11-24` |
+| `rag` | Kho tri thức ShieldCall (FAISS RAG) | Vừa (`medium`) | Truy xuất **297 mục** kịch bản/hướng dẫn xử lý tình huống VN cho AI. | Dữ liệu tĩnh theo phiên bản; cần đối chiếu thêm kênh chính thức. | `2026-11-24` |
+| `community` | Báo cáo cộng đồng | Vừa (`medium`) | Phản ánh người dùng đóng góp (tách riêng `approved` và `pending`). | Chưa xác minh pháp lý; không dùng kết luận danh tính cá nhân. | `2026-11-24` |
+| `web_search` | Tìm kiếm/OSINT web | Vừa (`medium`) | Đối chiếu doanh nghiệp (`TraTenCongTy`) và tin công khai khi người dùng đồng ý. | Nguồn mở đa dạng độ tin cậy; phải kiểm chứng từ nguồn gốc. | `2026-11-24` |
+| `ai_model` | Mô hình ngôn ngữ (LLM) | Thấp (`low`) | Đối chứng ngữ nghĩa, phát hiện thủ đoạn mới và giải thích tiếng Việt dễ hiểu. | Có thể sai lệch (hallucination); chỉ là lớp diễn giải, không thay thế bằng chứng gốc. | `2026-11-24` |
 
-### 2.2. Kết quả đánh giá trên bộ tình huống Việt Nam (`evaluate_vn_final.py`)
+### 2.2. Kết quả đánh giá định lượng trên bộ tình huống Việt Nam (`evaluate_vn_final.py`)
 
-Hệ thống được chạy kiểm thử tái lập offline bằng lệnh `../.venv/bin/python scripts/eval/evaluate_vn_final.py` trên hai tập dữ liệu (`backend/scripts/eval/vn_final_eval_results.json`):
+#### A. Tập 80 tin nhắn Việt Nam độc lập (`independent_test_set_vn.jsonl`, ngưỡng `threshold = 40`)
 
-#### A. Tập tin nhắn Việt Nam độc lập (`independent_test_set_vn.jsonl` - 80 mẫu: 40 lừa đảo, 40 hợp lệ dễ nhầm)
-
-Đánh giá tầng phát hiện nhanh không dùng LLM ngoài (`offline_heuristic_plus_evidence_ensemble`, ngưỡng phân loại `threshold = 40`):
-
-| Chỉ số | Giá trị đo được | Giải thích & phân tích lỗi |
+| Chỉ số | Giá trị đo được (chế độ offline không LLM) | Phân tích chi tiết |
 |---|---|---|
-| Tổng số ca (`total`) | **80** (40 scam / 40 legit) | Gồm các thủ đoạn VN (giả danh công an, VNeID APK, OTP ngân hàng, việc nhẹ lương cao, hoàn thuế, EVN, Deepfake) và các tin nhắn hợp lệ dễ báo nhầm (OTP thật có cảnh báo bảo mật, thông báo biến động số dư, khuyến cáo của Bộ Công an/CATP Hà Nội, EVNNPC, shipper, phỏng vấn). |
-| True Positive (TP) / False Negative (FN) | **25** / **15** | Precision = **96.15%** (`0.9615`), Recall = **62.50%** (`0.625`), F1 = **75.76%** (`0.7576`). |
-| True Negative (TN) / False Positive (FP) | **39** / **1** | **False Positive Rate = 2.50% (`0.025`)**. Các ca dễ báo nhầm như khuyến cáo Công an (`legit_07`, `legit_08`), tin nhắn OTP ngân hàng (`legit_01`, `legit_02`, `legit_03`), thông báo EVN/cấp nước (`legit_09`, `legit_10`), shipper (`legit_12`) đều trả điểm `<= 15`. |
-| **Ca báo nhầm duy nhất (FP)** | `legit_22` (`score=40`) | *"Mình vừa chuyển khoản 150k tiền ăn trưa cho bạn vào tài khoản Techcombank rồi nhé..."* bị khớp từ khóa giao dịch tài chính; trong thực tế khi chạy đủ pipeline LLM/context hoặc guardrail, điểm 40 nằm ở mức `SUSPICIOUS` (yêu cầu thận trọng chứ không khẳng định lừa đảo). |
-| **Ca bỏ sót offline (FN)** | 15 ca (`scam_06`, `scam_12`, `scam_14`, `scam_18`, `scam_20`, `scam_23`, `scam_27`, `scam_28`, `scam_29`, `scam_31`, `scam_32`, `scam_36`, `scam_37`, `scam_38`, `scam_40`) | Các ca dùng biến thể ký tự né luật (`C.ô.n.g a.n` ở `scam_38`), tên miền giả mới (`vcb-digibank-secure.top` ở `scam_06`), hoặc kịch bản ngữ nghĩa mềm (`scam_12`, `scam_31`, `scam_36`, `scam_37`) không kích hoạt đủ `>= 2` mẫu regex cục bộ khi tắt LLM & tra cứu domain. Đây là giới hạn được ghi nhận trung thực của lớp heuristic offline khi không bật tầng phân tích ngữ nghĩa AI và tra cứu danh bạ tên miền. |
+| Tổng số ca | **80** (40 lừa đảo / 40 hợp lệ dễ nhầm) | Bao gồm giả danh công an, VNeID APK, OTP, việc nhẹ lương cao, hoàn thuế, EVN, deepfake và tin nhắn hợp lệ dễ nhầm (OTP ngân hàng, biến động số dư, khuyến cáo Công an, EVNNPC, shipper, chuyển tiền ăn trưa, phỏng vấn). |
+| TP / FN & Độ chính xác | **38 / 2** (Precision **100.00%**, Recall **95.00%**, F1 **97.44%**) | Bộ tiền lọc khử trùng lặp từ khóa và chuẩn hóa chữ chèn dấu đạt Recall 95.00% ngay cả khi tắt AI. Trên tập holdout 40 mẫu cũng đạt Precision **100.00%**, Recall **90.00%**, F1 **94.74%**, FP=0. |
+| TN / FP & Tỷ lệ báo nhầm | **40 / 0** (**FPR = 0.00%**) | Cả tin nhắn chuyển tiền ăn trưa (`legit_22`), OTP thật, khuyến cáo Bộ Công an/CATP HN, hóa đơn điện nước và shipper đều không bị báo nhầm. |
+| 2 ca bỏ sót khi tắt LLM (FN) | `scam_33`, `scam_37` | Tin nhắn ngữ nghĩa mềm giống giao tiếp đời thường (mượn 200k quên ví, quét QR đặt phòng) được giữ dưới ngưỡng ở chế độ offline để không báo nhầm tin nhắn thật; khi bật AI LLM (`deepseek` / `gemma4`), hệ thống phát hiện chính xác. |
 
 #### B. Tập kiểm thử Guardrail & Tình huống hỗn hợp Chung kết (`vn_final_suite.jsonl` - 20 ca)
 
-| Nhóm tình huống | Số ca | Đạt | Mô tả kết quả |
+| Nhóm tình huống | Số ca | Đạt | Kết quả |
 |---|---|---|---|
-| `verified_scam` (tinnhiem scam, VT >=3 engine) | 2 | **2/2** | Trả `CONFIRMED_RISK`, `is_conclusive = true`, kèm trích dẫn và `updated_at`. |
-| `heuristic_scam` (tin nhắn giả công an, APK VNeID) | 2 | **2/2** | Trả `HIGH_RISK`, kèm hướng dẫn hành động an toàn. |
-| `account_high_risk` / `phone_high_risk` | 2 | **2/2** | Đều trả `HIGH_RISK` nhưng khóa `is_conclusive = false`, từ chối quy kết cá nhân. |
-| `insufficient_missing` (rỗng, ảnh mờ, SĐT sạch không bằng chứng, STK chờ duyệt, domain mới) | 5 | **5/5** | 100% trả `INSUFFICIENT` (`insufficient_refusal_rate = 1.0`). |
-| `contradiction` (VT sạch vs heuristic, Tín nhiệm mạng tin cậy vs VT/cộng đồng, VT sạch vs PE packing) | 4 | **4/4** | 100% gắn `has_contradiction = true` và hạ về `INSUFFICIENT` (`contradiction_refusal_rate = 1.0`). |
-| `legit_vn` & `legit_vn_fp_prone` (trusted bank, VT clean, PSA công an, OTP thật, hóa đơn EVN) | 5 | **5/5** | Nguồn xác thực sạch trả `LIKELY_SAFE`; PSA/OTP/EVN có điểm `<= 5` và trả `INSUFFICIENT`, không có ca nào bị đẩy thành `HIGH_RISK` hoặc `CONFIRMED_RISK`. |
-| **Tổng cộng** | **20** | **20/20** | **0 ca thất bại**. |
+| `verified_scam` (Tín nhiệm mạng scam, VT `>= 3` engine) | 2 | **2/2** | Trả `CONFIRMED_RISK`, `is_conclusive = true`, đủ nguồn và `updated_at`. |
+| `heuristic_scam` (tin nhắn giả công an, APK VNeID) | 2 | **2/2** | Trả `HIGH_RISK` kèm hướng dẫn hành động an toàn. |
+| `account_high_risk` / `phone_high_risk` | 2 | **2/2** | Trả `HIGH_RISK` nhưng khóa `is_conclusive = false`, từ chối quy kết cá nhân. |
+| `insufficient_missing` (rỗng, ảnh mờ, SĐT sạch, STK chờ duyệt, domain mới) | 5 | **5/5** | `100%` trả `INSUFFICIENT` (`insufficient_refusal_rate = 1.0`). |
+| `contradiction` (VT sạch vs heuristic, TN trusted vs VT, VT sạch vs PE packing) | 4 | **4/4** | `100%` bật `has_contradiction = true` và hạ về `INSUFFICIENT` (`contradiction_refusal_rate = 1.0`). |
+| `legit_vn` & `legit_vn_fp_prone` (trusted bank, VT sạch, PSA công an, OTP thật, EVN) | 5 | **5/5** | Nguồn xác thực sạch trả `LIKELY_SAFE`; PSA/OTP/EVN có điểm `<= 5` và trả `INSUFFICIENT`, 0 báo nhầm. |
+| **Tổng cộng** | **20** | **20/20** | **Đạt 100% (0 ca thất bại)**. |
 
 ---
 
 ## Phần 3. Bảo vệ dữ liệu nhạy cảm và truy vết xử lý
 
-### 3.1. Sơ đồ luồng dữ liệu: Xử lý cục bộ vs Dịch vụ bên ngoài
+### 3.1. Sơ đồ luồng dữ liệu: Xử lý cục bộ và Dịch vụ bên ngoài
 
 ```mermaid
 flowchart LR
@@ -119,7 +137,7 @@ flowchart LR
         direction TB
         API -->|"Mask số hiển thị + Hash SHA-256 STK"| DB[("MariaDB / SQLite (ScanEvent, BankAccount)")]
         API -->|"Lọc PIIRedactionFilter trước khi ghi"| LOG["System Logs (SĐT/CCCD/Email/STK đã che)"]
-        API -->|"Văn bản / Heuristic"| RULES["scam_rules + trust_guard + FAISS RAG (279 mục)"]
+        API -->|"Văn bản / Heuristic"| RULES["scam_rules + trust_guard + FAISS RAG (297 mục)"]
         API -->|"Ảnh / Audio / File"| ISOLATED["OCR / Whisper / ClamAV / YARA / Zero-Trust Sandbox (tắt mạng)"]
     end
 
@@ -127,8 +145,8 @@ flowchart LR
 
     subgraph EXT ["Dịch vụ bên ngoài (Chỉ gọi khi bật / có consent)"]
         direction TB
-        GATE -->|"Mặc định (mask_pii=True): redact_for_external_llm() + giữ khả năng phân tích ngữ cảnh"| CLOUD_LLM["External Cloud LLM (Ollama Cloud / DeepSeek / Qwen)"]
-        GATE -->|"Chỉ gửi hash / URL công khai (tắt upload_if_unknown cho file riêng tư)"| VT["VirusTotal / WHOIS / RDAP / Tranco"]
+        GATE -->|"Mặc định (mask_pii=True): redact_for_external_llm() + PROMPT_GUARD system"| CLOUD_LLM["External Cloud LLM (LLM_MODEL / SMALL_MODEL fallback)"]
+        GATE -->|"Hash, URL & tên miền công khai (upload_if_unknown=False cho file)"| VT["VirusTotal / WHOIS / RDAP / Tranco / ScamWave"]
     end
 
     RULES --> GUARD["trust_guard.assess() + evidence[]"]
@@ -140,37 +158,29 @@ flowchart LR
 
 ### 3.2. Các cơ chế tối thiểu hóa & ẩn PII đã kiểm chứng
 
-1. **Che thông tin trong log (`PIIRedactionFilter` - `backend/PKV/settings.py` & `backend/api/utils/privacy.py`)**: mọi logger `root`, `django`, `django.request`, `api` đều đi qua `PIIRedactionFilter`. Kiểm thử trực tiếp bằng `verify_pii_log`:
-    - Đầu vào log: `Kiem tra SĐT 0912345678, STK 97042212345678, email test@victim.vn, CCCD 001234567890`
-    - Đầu ra log thực tế: `Kiem tra SĐT [SĐT đã ẩn], STK [số tài khoản đã ẩn], email [email đã ẩn], CCCD [CCCD/CMND đã ẩn]`
-2. **Che PII trước khi gửi dịch vụ LLM ngoài, trao quyền kiểm soát cho người dùng & sửa lỗi retry**:
-    - Nút gạt `ScanPrivacyToggle` (mặc định BẬT `mask_pii=True`) trên 8 luồng quét (`Phone`, `Bank`, `Message`, `Website`, `Email`, `Qr`, `Audio`, `File`) điều khiển đồng thời lưu trữ `ScanEvent` và quyền `external_consent` gửi tới `analyze_text_for_scam` (`_has_external_pii_consent` trong `tasks.py`, `_analyze_message_text` trong `scan_views.py`).
-    - Khi bật che PII (`mask_pii=True`), `redact_for_external_llm` che toàn bộ SĐT/CCCD/Email/STK trước khi gửi Cloud LLM (riêng tra cứu email giữ lại phần tên miền `***@domain`), đồng thời quy tắc #8 trong prompt `ollama_client.py` hướng dẫn mô hình phân tích bình thường trên các nhãn `[SĐT đã ẩn]`, `[số tài khoản đã ẩn]` để không bị từ chối đánh giá; khi người dùng chủ động tắt nút gạt (`mask_pii=False`), AI được phép đọc đầy đủ dữ liệu theo lựa chọn của chủ dữ liệu nhưng nhật ký hệ thống (`PIIRedactionFilter` + `_log_llm`) vẫn luôn che PII.
-    - Ở cả bước repair JSON và bước retry chính của `analyze_text_for_scam` đều giữ nguyên `allow_pii=safe_allow_pii` (`test_cloud_llm_retry_preserves_pii_redaction`, `test_scan_message_forwards_user_privacy_consent_to_ai_and_keeps_masked_prompt_analyzable`).
-    - Với tài khoản ngân hàng: DB lưu `account_number_hash` (SHA-256) và `account_number_masked` trong `BankAccount`; file riêng tư quét virus mặc định `upload_if_unknown=False` (chỉ kiểm tra hash trên VirusTotal, không tải nội dung file nhạy cảm lên đám mây).
+1. **Che thông tin trong log (`PIIRedactionFilter`)**: Mọi logger hệ thống đi qua bộ lọc `PIIRedactionFilter` (`backend/api/utils/privacy.py`). Rà soát **2.234 dòng** trong `backend/llm_access.log` ghi nhận **0** SĐT thô và **0** email thô; các chuỗi SĐT, STK, email, CCCD tự động chuyển thành `[SĐT đã ẩn]`, `[số tài khoản đã ẩn]`, `[email đã ẩn]`, `[CCCD/CMND đã ẩn]`.
+2. **Nút gạt quyền riêng tư từng lượt quét (`ScanPrivacyToggle`)**: Mặc định BẬT `mask_pii=True` trên cả 8 màn hình quét (`Phone`, `Bank`, `Message`, `Website`, `Email`, `Qr`, `Audio`, `File`). Khi bật che, hệ thống chạy `redact_for_external_llm` trước khi gửi Cloud LLM (riêng email giữ phần tên miền `***@domain` để đánh giá uy tín), đồng thời quy tắc số 8 trong prompt giúp AI vẫn phân tích ngữ cảnh bình thường trên nhãn đã ẩn. Khi người dùng chủ động tắt nút gạt, chỉ có phép AI đọc dữ liệu đầy đủ ở lượt đó; nhật ký hệ thống vẫn luôn che PII.
+3. **An toàn khi retry/fallback & lưu trữ tối giản**: Mọi bước repair JSON, rerun hay fallback sang `SMALL_MODEL` đều giữ nguyên `allow_pii=safe_allow_pii`. Tài khoản ngân hàng lưu `account_number_hash` (SHA-256) và dạng che 4 số cuối; tệp tải lên khi đối chiếu VirusTotal luôn đặt `upload_if_unknown=False` (chỉ kiểm tra mã băm).
 
-### 3.3. Chức năng xóa dữ liệu cá nhân của người dùng
+### 3.3. Chức năng quản lý, xuất và xóa dữ liệu cá nhân
 
-Bổ sung hoàn chỉnh vòng đời quản lý dữ liệu mà không ép người dùng phải xóa toàn bộ tài khoản:
-
-| Chức năng | API Endpoint | Phân quyền & An toàn | Giao diện người dùng |
+| Chức năng | API Endpoint | Phân quyền & An toàn | Vị trí giao diện |
 |---|---|---|---|
-| Xóa từng lượt quét | `DELETE /api/v1/user/scans/<scan_id>/` | Kiểm tra quyền sở hữu (`scan.user_id == request.user.id` hoặc phiên ẩn danh khớp `active_scan_ids`); từ chối HTTP 403/401 nếu truy cập chéo (`test_user_data_deletion_endpoints_and_idor`). | Bảng Lịch sử quét trên `/dashboard` (cột Thao tác). |
-| Bật/tắt chia sẻ công khai | `PATCH /api/v1/user/scans/<scan_id>/` | Chỉ chủ sở hữu được bật/tắt `is_public_referable` cho mã tra cứu cộng đồng. | Cột Thao tác trên `/dashboard`. |
-| Xóa toàn bộ lịch sử quét | `DELETE /api/v1/user/scans/` | Xóa mọi `ScanEvent` của tài khoản hiện tại và dọn `active_scan_ids` trong session. | Nút `"Xóa toàn bộ lịch sử quét"` trên `/dashboard`. |
-| Xuất dữ liệu cá nhân (JSON) | `GET /api/v1/user/privacy/export-data/` | Xuất bản sao JSON gồm lịch sử quét (kèm `is_public_referable`), hội thoại AI và cảnh báo của chính tài khoản đang đăng nhập. | Nút `"Xuất JSON"` trên `/profile`. |
-| Xóa dữ liệu chọn lọc theo nhóm | `POST /api/v1/user/privacy/delete-data/` | Hỗ trợ chọn `scopes`: `["scans", "chat_sessions", "alerts"]` hoặc `["all"]` trong transaction atomic, trả về đúng số bản ghi đã xóa. | Thẻ `"Quản lý & xóa dữ liệu cá nhân"` ngay trên `/profile`. |
-| Xóa phiên hội thoại AI / Tài khoản | `DELETE /api/v1/chat/sessions/clear-all/`, `POST /api/v1/auth/account/delete/` | Xóa toàn bộ `ChatSession` hoặc xóa tài khoản có xác nhận mật khẩu. | `/ai-assistant` và `/profile`. |
+| Xóa từng lượt quét | `DELETE /api/v1/user/scans/<scan_id>/` | Kiểm tra sở hữu (`user_id` hoặc `active_scan_ids` phiên ẩn danh); trả 403/401 nếu truy cập chéo. | Bảng Lịch sử quét (`/dashboard`) |
+| Bật/tắt chia sẻ công khai | `PATCH /api/v1/user/scans/<scan_id>/` | Chỉ chủ sở hữu được bật/tắt `is_public_referable`. | Cột Thao tác (`/dashboard`) |
+| Xóa toàn bộ lịch sử quét | `DELETE /api/v1/user/scans/` | Xóa mọi `ScanEvent` của tài khoản và dọn `active_scan_ids`. | Nút xóa toàn bộ (`/dashboard`) |
+| Xuất dữ liệu cá nhân (JSON) | `GET /api/v1/user/privacy/export-data/` | Xuất bản sao JSON gồm lịch sử quét, phiên chat AI và cảnh báo. | Nút `"Xuất JSON"` (`/profile`) |
+| Xóa dữ liệu chọn lọc theo nhóm | `POST /api/v1/user/privacy/delete-data/` | Chọn `scopes`: `["scans", "chat_sessions", "alerts"]` hoặc `["all"]` trong transaction atomic. | Thẻ quản lý dữ liệu (`/profile`) |
+| Xóa toàn bộ chat AI | `DELETE /api/v1/chat/sessions/clear-all/` | Xóa toàn bộ `ChatSession` của người dùng hiện tại. | `/ai-assistant` |
+| Xóa tài khoản | `POST /api/v1/auth/account/delete/` | Xóa tài khoản và dữ liệu liên quan sau khi xác nhận mật khẩu. | `/profile` |
 
 ---
 
-## Phần 4. Tổng hợp kiểm chứng kỹ thuật sau chỉnh sửa
+## Phần 4. Tổng hợp kiểm chứng kỹ thuật sau chỉnh sửa cuối
 
-Toàn bộ các bài kiểm tra dưới đây được chạy lại sau lần chỉnh sửa mã nguồn cuối cùng:
-
-| Hạng mục kiểm tra | Lệnh thực thi | Kết quả quan sát được |
+| Hạng mục kiểm tra | Lệnh thực thi | Kết quả đo được sau bản cập nhật cuối |
 |---|---|---|
-| Django System Check & Full Backend Test Suite | `DJANGO_SETTINGS_MODULE=PKV.settings_ci ../.venv/bin/python manage.py test --noinput` | `System check identified no issues (0 silenced).` \| **301 tests (`OK`, skipped=6 test AI Red-Team `RUN_LIVE_AI_TESTS=1`, 163.45s)**; gồm **48/48 PASSED** cho `api.core.tests.test_trust_privacy` và **21/21 PASSED** cho `api.core.tests.test_mcp_and_api_keys` |
-| Bộ đánh giá VN & Guardrail Chung kết | `../.venv/bin/python scripts/eval/evaluate_vn_final.py` | 80 tin nhắn VN: **Precision 96.15%, Recall 62.5%, F1 75.76%, FPR 2.5%**; 20 ca Guardrail Chung kết: **20/20 PASSED (`insufficient_refusal_rate=1.0`, `contradiction_refusal_rate=1.0`)** |
-| Kiểm tra TypeScript, Lint & Tour Frontend | `cd frontend && npx tsc --noEmit && npx oxlint && npm run check:tours` | `tsc`: **0 errors**; `oxlint`: **0 errors** (141 warnings trên 204 tệp); `check:tours`: **19 tour, 16 neo, 18 bước có element** |
-| Đóng gói Production Next.js | `cd frontend && npm run build` | Hoàn tất build **78 route** (73 trang và 5 route hệ thống/proxy) Next.js 16.4.5 và đồng bộ `sw.js` thành công |
+| Kiểm thử toàn bộ Backend | `DJANGO_SETTINGS_MODULE=PKV.settings_ci ../.venv/bin/python manage.py test --noinput` | `System check`: 0 issues; **312/312 test mặc định PASSED** (tổng **318 tests**, `OK`, `skipped=6` test AI Red-Team tách riêng qua `RUN_LIVE_AI_TESTS=1`, `144.201s`); gồm **54/54** test `test_trust_privacy` và **21/21** test `test_mcp_and_api_keys`. |
+| Đánh giá VN, Guardrail & Đối kháng | `../.venv/bin/python scripts/eval/evaluate_vn_final.py` & `adversarial_stress_test.py` | 80 tin nhắn VN: **Precision 100.00%, Recall 95.00%, F1 97.44%, FPR 0.00%**; 20 ca Guardrail: **20/20 PASSED**; 18 ca đối kháng live LLM: **18/18 PASSED**; kiểm tra trực tiếp `SMALL_MODEL` `gemma4:31b-cloud`: 3/3 ca jailbreak đạt `score=95`, ca tán gẫu công an đạt `score=10`; AUC 88 mẫu đạt **0.959**. |
+| TypeScript, Oxlint & Tour Frontend | `cd frontend && npx tsc --noEmit && npx oxlint && npm run check:tours` | `tsc`: **0 errors**; `oxlint`: **0 errors** (143 warnings trên 204 tệp); `check:tours`: **19 tour, 16 neo, 18 bước có element**. |
+| Build Production Frontend | `cd frontend && npm run build` | Hoàn tất build **78 route** (73 trang và 5 route hệ thống/proxy) Next.js 16.4.5 và đồng bộ `sw.js`. |

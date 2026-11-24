@@ -145,7 +145,7 @@ GPU is optional: set `WHISPER_DEVICE=cpu`, `VIETOCR_DEVICE=cpu`, `VECTOR_DB_USE_
 | [docs/LEGAL_AND_LICENSE.md](docs/LEGAL_AND_LICENSE.md) | AGPL compatibility and third-party license matrix |
 | [docs/BAO_CAO_CAI_TIEN_CHUNG_KET.md](docs/BAO_CAO_CAI_TIEN_CHUNG_KET.md) | Báo cáo cải tiến Vòng Chung kết (bản Markdown & PDF kèm theo) |
 | [docs/BAO_CAO_CAI_TIEN_CHUNG_KET.pdf](docs/BAO_CAO_CAI_TIEN_CHUNG_KET.pdf) | Bản PDF hoàn chỉnh nộp Chặng 1 Vòng Chung kết |
-| [docs/KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md](docs/KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md) | Bảng nộp bài Chặng 1, hướng dẫn cài đặt & khai báo AI/mã nguồn/dữ liệu |
+| `_chungket/KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md` (ngoài git) | Bảng nộp bài Chặng 1 & khai báo nội bộ (lưu cục bộ, không đưa lên git) |
 | [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) | Vietnamese feature and screen overview |
 
 Interactive API docs: `/api/docs/` (Swagger UI), `/api/redoc/` (ReDoc), `/api/schema/` (OpenAPI).

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import Article, ArticleComment, ArticleReaction, LearnReactionType
+from ..pagination import paginate_queryset
 
 
 def _article_author_name(article: Article) -> str:
@@ -63,24 +64,32 @@ class ArticleListView(APIView):
                 Q(content__icontains=search_q)
             )
 
-        data = [{
-            'id': a.id,
-            'title': a.title,
-            'slug': a.slug,
-            'category': a.category,
-            'category_display': a.get_category_display(),
-            'source_type': getattr(a, 'source_type', 'internal'),
-            'source_type_display': a.get_source_type_display() if hasattr(a, 'get_source_type_display') else 'ShieldCall VN',
-            'source_url': getattr(a, 'source_url', None),
-            'published_date': a.published_date.isoformat() if getattr(a, 'published_date', None) else None,
-            'cover_image': a.cover_image.url if a.cover_image else None,
-            'author_name': _article_author_name(a),
-            'created_at': a.created_at.isoformat(),
-            'summary': a.summary or a.content[:200],
-            'reactions_count': getattr(a, 'reactions_total', 0) or 0,
-            'comments_count': getattr(a, 'comments_total', 0) or 0,
-        } for a in articles[:limit]]
-        return Response(data)
+        def serialize(items):
+            return [{
+                'id': a.id,
+                'title': a.title,
+                'slug': a.slug,
+                'category': a.category,
+                'category_display': a.get_category_display(),
+                'source_type': getattr(a, 'source_type', 'internal'),
+                'source_type_display': a.get_source_type_display() if hasattr(a, 'get_source_type_display') else 'ShieldCall VN',
+                'source_url': getattr(a, 'source_url', None),
+                'published_date': a.published_date.isoformat() if getattr(a, 'published_date', None) else None,
+                'cover_image': a.cover_image.url if a.cover_image else None,
+                'author_name': _article_author_name(a),
+                'created_at': a.created_at.isoformat(),
+                'summary': a.summary or a.content[:200],
+                'reactions_count': getattr(a, 'reactions_total', 0) or 0,
+                'comments_count': getattr(a, 'comments_total', 0) or 0,
+            } for a in items]
+
+        return Response(paginate_queryset(
+            request,
+            articles,
+            serialize,
+            default_page_size=limit,
+            max_page_size=500,
+        ))
 
 
 class ArticleDetailView(APIView):

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useAuth } from '@/components/AuthContext';
-import { authApi, setToken } from '@/lib/api';
+import { authApi } from '@/lib/api';
 
 export default function LogoutPage() {
   const { logout } = useAuth();
@@ -22,7 +22,6 @@ export default function LogoutPage() {
           /* ignore */
         }
       } finally {
-        setToken(null);
         window.location.href = '/login/?logged_out=1';
       }
     };

@@ -50,7 +50,32 @@ Base URL: `/api/v1` (Production: `https://<your-domain>/api/v1`)
 | `/auth/register/` | `POST` | User registration with OTP validation | Public |
 | `/auth/login/` | `POST` | Credential validation and MFA challenge trigger | Public |
 | `/auth/mfa/verify/` | `POST` | Multi-Factor Authentication verification | Pre-auth Token |
-| `/auth/me/` | `GET` | Retrieve current authenticated user profile | Authenticated |
+| `/auth/me/` | `GET` | Retrieve current authenticated user profile (no token in body) | Session / API Key |
+
+## Pagination
+
+List endpoints accept `?page=<n>&page_size=<n>` (max 200) and return:
+
+```json
+{
+  "results": [],
+  "count": 0,
+  "page": 1,
+  "page_size": 50,
+  "pages": 1,
+  "next": null,
+  "previous": null
+}
+```
+
+`page_size` and `limit` are accepted where the endpoint historically used `limit`.
+
+## Authentication model
+
+- Web browser: Django session cookie (`HttpOnly`, `SameSite=Lax`) + CSRF token. The frontend no
+  longer stores a DRF token in `localStorage`, and `/auth/me/` does not return one.
+- API clients/mobile: API keys (`/user/api-keys/`) or legacy `Authorization: Token ...`.
+- Logging out one browser session does not revoke tokens belonging to other devices.
 
 ## Error envelope
 

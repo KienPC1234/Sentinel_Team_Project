@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from api.core.models import LearnLesson, ScanEvent
+from api.core.models import Article, LearnLesson, ScanEvent
 from api.core.tasks import send_bulk_lesson_email
 from api.utils.scan_token import issue_scan_token, read_scan_token
 
@@ -158,6 +158,35 @@ class ApiContractTests(TestCase):
 
         wrong = self.client.get(f'/api/v1/scan/status/{event.id}/?scan_token=bad')
         self.assertEqual(wrong.status_code, 403)
+
+    def test_article_list_uses_standard_pagination_envelope(self):
+        Article.objects.create(
+            title='Bài viết phân trang',
+            slug='bai-viet-phan-trang',
+            summary='Tóm tắt',
+            content='Nội dung',
+            is_published=True,
+        )
+        response = self.client.get('/api/v1/articles/?page=1&page_size=10')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('results', payload)
+        self.assertEqual(payload.get('page'), 1)
+        self.assertEqual(payload.get('page_size'), 10)
+        self.assertGreaterEqual(payload.get('count', 0), 1)
+        self.assertIsInstance(payload.get('results'), list)
+
+    def test_auth_me_does_not_return_js_readable_token(self):
+        user = User.objects.create_user(
+            username='session-user',
+            email='session-user@example.com',
+            password='a-strong-password-123',
+        )
+        self.client.force_authenticate(user=user)
+        response = self.client.get('/api/v1/auth/me/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('token', response.json())
+        self.assertIn('user', response.json())
 
     def test_frontend_proxy_avoids_double_gzip_encoding(self):
         import asyncio

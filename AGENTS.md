@@ -18,10 +18,10 @@ style preferences: this project analyzes malware and personal data.
 
 | Path | Contents |
 | :--- | :--- |
-| `backend/PKV/` | Django project: settings, ASGI, root URLs, Celery app, server-rendered templates/views |
+| `backend/PKV/` | Django project: settings, ASGI, root URLs, Celery app, email templates, admin/error views |
 | `backend/api/core/` | Main app: scans, auth/MFA, reports, trends, forum, trust, MCP views, models, Celery tasks |
 | `backend/api/ai_chat/` | AI assistant API and SSE streaming |
-| `backend/api/{phone_security,media_analysis,sessions_api,maintenance}/` | Legacy mobile API surface |
+| `backend/api/{phone_security,maintenance}/` | Legacy phone models still used by scan/report + maintenance feeds |
 | `backend/api/utils/` | Shared engines: `ollama_client`, `ai_agent`, `vector_db`, `sandbox_analyzer`, `trust_guard`, `privacy`, `security`, `tinnhiemmang`, `vn_sources` |
 | `backend/mcp_server/` | Standalone MCP server (stdio/SSE) and backend API client |
 | `backend/sandbox/` | Zero-trust Docker image (`analyze.py`, `server.py`, YARA rules, ClamAV) |

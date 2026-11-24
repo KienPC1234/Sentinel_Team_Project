@@ -65,39 +65,43 @@ async function fetchJson<T>(endpoint: string): Promise<T | null> {
   }
 }
 
+function listOf<T>(value: T[] | { results?: T[] } | null): T[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value : value.results || [];
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const dynamicEntries: Entry[] = [];
 
   const [articles, lessons, helps] = await Promise.all([
-    fetchJson<SlugItem[]>('/api/v1/articles/'),
-    fetchJson<SlugItem[]>('/api/v1/learn/lessons/'),
+    fetchJson<SlugItem[] | { results?: SlugItem[] }>('/api/v1/articles/'),
+    fetchJson<SlugItem[] | { results?: SlugItem[] }>('/api/v1/learn/lessons/'),
     fetchJson<HelpsResp>('/api/v1/helps/'),
   ]);
 
-  if (Array.isArray(articles)) {
-    for (const a of articles) {
-      if (a?.slug) {
-        dynamicEntries.push({
-          path: `/learn/${a.slug}/`,
-          priority: 0.85,
-          changeFrequency: 'weekly',
-          lastModified: a.updated_at || a.created_at ? new Date(a.updated_at || a.created_at!) : now,
-        });
-      }
+  const articleItems = listOf(articles);
+  const lessonItems = listOf(lessons);
+
+  for (const a of articleItems) {
+    if (a?.slug) {
+      dynamicEntries.push({
+        path: `/learn/${a.slug}/`,
+        priority: 0.85,
+        changeFrequency: 'weekly',
+        lastModified: a.updated_at || a.created_at ? new Date(a.updated_at || a.created_at!) : now,
+      });
     }
   }
 
-  if (Array.isArray(lessons)) {
-    for (const l of lessons) {
-      if (l?.slug) {
-        dynamicEntries.push({
-          path: `/learn/lesson/${l.slug}/`,
-          priority: 0.85,
-          changeFrequency: 'weekly',
-          lastModified: l.updated_at || l.created_at ? new Date(l.updated_at || l.created_at!) : now,
-        });
-      }
+  for (const l of lessonItems) {
+    if (l?.slug) {
+      dynamicEntries.push({
+        path: `/learn/lesson/${l.slug}/`,
+        priority: 0.85,
+        changeFrequency: 'weekly',
+        lastModified: l.updated_at || l.created_at ? new Date(l.updated_at || l.created_at!) : now,
+      });
     }
   }
 

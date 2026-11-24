@@ -1018,6 +1018,233 @@ class PromptInjectionHardeningUnitTest(TestCase):
         self.assertIn("[/DU_LIEU_NGUOI_DUNG]", captured[0])
         self.assertIn("Quy tắc an toàn bắt buộc", captured[0])
 
+    def test_vt_clean_uncorroborated_with_warnings_never_likely_safe_and_high_ai_stays_high_risk(self):
+        # VT=0 nhưng thiếu security headers (score=5), không có Tranco/Tín nhiệm mạng -> KHÔNG được gán LIKELY_SAFE
+        r_low = apply_guardrail({
+            'risk_score': 5,
+            'virustotal': {'available': True, 'stats': {'malicious': 0, 'suspicious': 0}, 'total_engines': 72},
+        }, kind='url')
+        self.assertEqual(r_low['guardrail']['tier'], 'INSUFFICIENT')
+
+        # VT=0 nhưng AI + nội dung chấm >= 70 trên tên miền chưa chứng nhận tin cậy -> giữ HIGH_RISK
+        r_high = apply_guardrail({
+            'risk_score': 78,
+            'ai_available': True,
+            'ai_score': 78,
+            'ai_is_scam': True,
+            'ai_insight': 'Tên miền mạo danh phần mềm chính thức.',
+            'virustotal': {'available': True, 'stats': {'malicious': 0, 'suspicious': 0}, 'total_engines': 72},
+        }, kind='url')
+        self.assertEqual(r_high['guardrail']['tier'], 'HIGH_RISK')
+
+    def test_analyze_domain_merges_impersonation_and_ai_before_guardrail(self):
+        from unittest.mock import patch, MagicMock
+        from django.core.cache import cache
+        from api.core.views import scan_views
+
+        cache.clear()
+        fake_vt = MagicMock()
+        fake_vt.__enter__.return_value = fake_vt
+        fake_vt.scan_url.return_value = {
+            'virustotal': {'available': True, 'stats': {'malicious': 0, 'suspicious': 0}, 'total_engines': 70},
+            'sources': ['VirusTotal'],
+            'malicious': 0,
+            'suspicious': 0,
+        }
+        fake_fetch = {
+            'title': 'نمایندگی رسمی اینترنت دانلود منیجر - صفحه نخست',
+            'content': 'Internet Download Manager official download ' + ('text ' * 100),
+            'final_url': 'https://downloadmanager.ir/',
+        }
+        fake_net = {
+            'ssl_valid': True,
+            'redirects': 0,
+            'final_url': 'https://downloadmanager.ir/',
+            'server': '',
+            'error': None,
+            'ip_address': '1.2.3.4',
+            'cert_issuer': "Let's Encrypt",
+            'cert_age_days': 25,
+            'cert_details': {},
+            'security_headers': {'HSTS': False, 'CSP': False, 'X-Frame-Options': False},
+        }
+        fake_ai = {
+            'is_scam': True,
+            'risk_score': 82,
+            'indicators': ['Mạo danh phần mềm IDM trên tên miền .ir'],
+            'explanation': 'Trang web mạo danh đại diện chính thức của Internet Download Manager.',
+            'scam_type': 'phishing',
+        }
+
+        with (
+            patch('api.utils.ollama_client.web_fetch_url', return_value=fake_fetch),
+            patch.object(scan_views, '_analyze_network', return_value=fake_net),
+            patch.object(scan_views, 'VTClient', return_value=fake_vt),
+            patch.object(scan_views, 'lookup_tranco', return_value=None),
+            patch.object(scan_views, '_lookup_domain_age_days', return_value=None),
+            patch.object(scan_views, 'analyze_text_for_scam', return_value=fake_ai),
+        ):
+            res = scan_views._analyze_domain('https://downloadmanager.ir')
+
+        self.assertGreaterEqual(res['risk_score'], 70)
+        self.assertEqual(res['risk_level'], 'RED')
+        self.assertEqual(res['guardrail']['tier'], 'HIGH_RISK')
+        self.assertTrue(res['ai_available'])
+
+    def test_vision_only_image_scan_runs_osint_enrichment(self):
+        import base64
+        from unittest.mock import patch
+        from api.core.models import ScanEvent, ScanStatus
+        from api.core.tasks import perform_image_scan_task
+        from api.utils import ollama_client as oc
+
+        ev = ScanEvent.objects.create(
+            scan_type='qr',
+            raw_input='image_scan',
+            normalized_input='image_scan',
+            status=ScanStatus.PENDING,
+        )
+        tiny_png_b64 = base64.b64encode(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR').decode('ascii')
+
+        fake_vision = {
+            'risk_score': 65,
+            'risk_level': 'YELLOW',
+            'explanation': 'Ảnh chụp màn hình mời tham gia nhóm đầu tư lợi nhuận cao trên Telegram.',
+            'scam_type': 'investment',
+        }
+        osint_calls = []
+
+        def fake_analyze(text, **kwargs):
+            osint_calls.append({'text': text, 'kwargs': kwargs})
+            return {
+                'risk_score': 88,
+                'risk_level': 'RED',
+                'explanation': 'Nhóm đầu tư này có dấu hiệu lừa đảo chiếm đoạt tài sản theo các cảnh báo công khai.',
+                'web_sources': ['tinnhiemmang.vn'],
+                'web_context': '### [Cảnh báo cộng đồng]\n- **Chi tiết quan trọng**: Thủ đoạn mời gọi đầu tư Telegram.',
+                'searched_urls': ['https://tinnhiemmang.vn/canh-bao'],
+                'db_sources_consulted': ['scam_reports'],
+            }
+
+        with (
+            patch.object(oc, 'LLM_VISION_ENABLED', True),
+            patch.object(oc, 'analyze_image_with_vision', return_value=fake_vision),
+            patch.object(oc, 'analyze_text_for_scam', side_effect=fake_analyze),
+        ):
+            res = perform_image_scan_task.run(ev.id, [{'content': tiny_png_b64, 'name': 'test.png'}])
+
+        self.assertEqual(len(osint_calls), 1)
+        self.assertTrue(osint_calls[0]['kwargs'].get('use_web_search'))
+        self.assertEqual(res['risk_score'], 88)
+        self.assertEqual(res['risk_level'], 'RED')
+        self.assertEqual(res['web_sources'], ['tinnhiemmang.vn'])
+        self.assertIn('Thủ đoạn mời gọi đầu tư Telegram', res['web_context'])
+        self.assertEqual(res['searched_urls'], ['https://tinnhiemmang.vn/canh-bao'])
+        ev.refresh_from_db()
+        self.assertEqual(ev.status, ScanStatus.COMPLETED)
+        self.assertEqual(ev.risk_score, 88)
+
+    def test_prefilter_feeds_llm_for_novel_scams_and_falls_back_to_small_model(self):
+        from unittest.mock import patch
+        from api.core.views import scan_views
+        from api.utils import ollama_client as oc
+
+        seen_prompts = []
+        seen_models = []
+
+        def fake_generate(prompt, model=None, **kwargs):
+            seen_prompts.append(prompt)
+            seen_models.append(model)
+            # Simulate primary model failure, then SMALL_MODEL (gemma4) succeeding on novel scam
+            if model == oc.SMALL_MODEL:
+                return (
+                    '{"is_scam": true, "risk_score": 82, '
+                    '"indicators": ["Thủ đoạn giả người quen kẹt tiền mới"], '
+                    '"explanation": "Tin nhắn dùng tình huống khẩn cấp giả danh người quen để mượn tiền nhanh.", '
+                    '"web_sources": []}'
+                )
+            return ''
+
+        novel_msg = 'Mày ơi tao đang kẹt ở cây xăng quên ví, chuyển khoản hộ tao 200k vào số tài khoản này lát về trả.'
+        with (
+            patch.object(oc, 'DEFAULT_MODEL', 'deepseek-v4.1-flash:cloud'),
+            patch.object(oc, 'SMALL_MODEL', 'gemma4:31b-cloud'),
+            patch.object(oc, 'generate_response', side_effect=fake_generate),
+            patch.object(scan_views, 'VTClient') as vt_cls,
+        ):
+            vt_cls.return_value.scan_url.return_value = None
+            res = scan_views._analyze_message_text(novel_msg, external_consent=False)
+
+        self.assertEqual(res['risk_score'], 82)
+        self.assertEqual(res['risk_level'], 'RED')
+        self.assertIn('deepseek-v4.1-flash:cloud', seen_models)
+        self.assertIn('gemma4:31b-cloud', seen_models)
+        self.assertTrue(any('Tín hiệu tiền lọc cục bộ' in p for p in seen_prompts))
+        self.assertTrue(any('Giao dịch tài chính' in p for p in seen_prompts))
+
+    def test_casual_chat_with_police_and_transfer_words_not_flagged_as_suspicious(self):
+        from unittest.mock import patch
+        from api.core.views import scan_views
+        from api.utils.scam_rules import heuristic_score
+
+        casual_1 = 'Bạn trai tớ là công an, tối nay rủ đi ăn lẩu rồi chuyển khoản chia tiền nhé.'
+        casual_2 = 'Chiều nay bạn trai mình là công an qua đón đi ăn, có gì mình nhắn zalo nhé.'
+
+        # Even offline without AI, casual kinship + eating/zalo does not reach scam threshold 40
+        self.assertLess(heuristic_score(casual_1), 40)
+        self.assertEqual(heuristic_score(casual_2), 0)
+
+        # With AI confirming casual/safe context, guardrail stays INSUFFICIENT (never SUSPICIOUS)
+        safe_ai = {
+            'is_scam': False,
+            'risk_score': 5,
+            'indicators': [],
+            'explanation': 'Đây là tin nhắn trò chuyện đời thường giữa người quen rủ đi ăn.',
+            'web_sources': [],
+        }
+        with (
+            patch.object(scan_views, 'analyze_text_for_scam', return_value=safe_ai),
+            patch.object(scan_views, 'VTClient') as vt_cls,
+        ):
+            vt_cls.return_value.scan_url.return_value = None
+            res1 = scan_views._analyze_message_text(casual_1, external_consent=False)
+            res2 = scan_views._analyze_message_text(casual_2, external_consent=False)
+
+        self.assertLess(res1['risk_score'], 10)
+        self.assertEqual(res1['guardrail']['tier'], 'INSUFFICIENT')
+        self.assertEqual(res1['patterns_found'], [])
+        self.assertLess(res2['risk_score'], 10)
+        self.assertEqual(res2['guardrail']['tier'], 'INSUFFICIENT')
+
+    def test_llm_corroboration_overrides_non_coercive_critical_regex(self):
+        """Các từ khóa nhạy cảm trong hội thoại đời thường (tai nạn, teamviewer, phim, ăn trưa) không được đè kết luận an toàn của LLM."""
+        from api.utils.trust_guard import compute_evidence_aware_ensemble
+
+        benign_cases = [
+            ('Bố em vừa bị tai nạn, đang cấp cứu ở Bạch Mai nên tối nay anh không đi ăn được.', 40),
+            ('Chuyển tiền ăn trưa 65k vào STK Techcombank 1902847562 giúp mình nhé.', 40),
+            ('Cài teamviewer sửa giúp anh máy in phòng kế toán nhé.', 20),
+            ('Tối nay xem phim hình sự có cảnh viện kiểm sát đọc lệnh bắt hay lắm.', 40),
+        ]
+        for msg, rule_sc in benign_cases:
+            res = compute_evidence_aware_ensemble(
+                text=msg,
+                ai_result={'is_scam': False, 'risk_score': 5},
+                rule_score=rule_sc,
+            )
+            self.assertLess(res['final_score'], 10, f"Failed safe discount for: {msg}")
+            self.assertEqual(res['decision_reason'], 'safe_context_discounted')
+
+        # Even if LLM gives cautious low score (28, is_scam=False), regex 40 must not bump to YELLOW (>=40)
+        cautious_res = compute_evidence_aware_ensemble(
+            text='Mình vừa chuyển khoản 150k tiền ăn trưa cho bạn vào tài khoản Techcombank rồi nhé.',
+            ai_result={'is_scam': False, 'risk_score': 28},
+            rule_score=40,
+        )
+        self.assertLess(cautious_res['final_score'], 40)
+        self.assertEqual(cautious_res['decision_reason'], 'ai_non_scam_corroborated')
+
+
 
 
 

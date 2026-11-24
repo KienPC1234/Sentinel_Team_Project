@@ -166,7 +166,8 @@ class TinnhiemMangIngestionTests(TestCase):
         resp = client.get("/api/v1/articles/?source_type=tinnhiemmang")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertTrue(all(item["source_type"] == "tinnhiemmang" for item in data))
-        self.assertTrue(any(item["slug"] == "canh-bao-tinnhiemmang" for item in data))
-        self.assertFalse(any(item["slug"] == "bai-viet-noi-bo" for item in data))
+        rows = data.get("results", []) if isinstance(data, dict) else data
+        self.assertTrue(all(item["source_type"] == "tinnhiemmang" for item in rows))
+        self.assertTrue(any(item["slug"] == "canh-bao-tinnhiemmang" for item in rows))
+        self.assertFalse(any(item["slug"] == "bai-viet-noi-bo" for item in rows))
 

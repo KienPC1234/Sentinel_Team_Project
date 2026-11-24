@@ -105,7 +105,7 @@ export default function Email() {
     const hasArr = Array.isArray(next['analysis_result']) && (next['analysis_result'] as unknown[]).length > 0;
     const hasStr = typeof next['analysis_result'] === 'string' && (next['analysis_result'] as string).trim().length > 0;
     if (!hasArr && !hasStr && next['web_context']) {
-      next['analysis_result'] = ['Đã hoàn tất phân tích chuyên sâu từ AI. Xem chi tiết theo nguồn trong mục Thông tin tình báo (OSINT).'];
+      next['analysis_result'] = ['Đã hoàn tất phân tích chuyên sâu từ AI. Xem chi tiết trong mục Thông tin đối chiếu công khai.'];
     }
     if (score !== undefined) next['risk_score'] = score;
     if (level !== undefined) next['risk_level'] = level;

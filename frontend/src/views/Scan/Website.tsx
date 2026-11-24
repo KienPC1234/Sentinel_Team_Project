@@ -75,6 +75,10 @@ export default function Website() {
   };
 
   const handleScan = (override?: string): void => {
+    if (loading && !override) {
+      showToast('Phiên quét hiện tại đang xử lý, vui lòng đợi hoàn tất.', 'info');
+      return;
+    }
     const input = (override ?? url).trim();
     if (!input) {
       showToast('Vui lòng nhập URL', 'warning');
@@ -109,7 +113,12 @@ export default function Website() {
         } else {
           setResult(data);
           setLoading(false);
-          streamAi(data, normalizedUrl, maskPii);
+          const precomputedExplanation = asStr(data['explanation']);
+          if (data['ai_available'] === true && precomputedExplanation.length >= 20) {
+            setAiText(precomputedExplanation);
+          } else {
+            streamAi(data, normalizedUrl, maskPii);
+          }
         }
       })
       .catch((e: unknown) => {

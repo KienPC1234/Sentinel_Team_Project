@@ -343,7 +343,7 @@ export default function Message() {
 
                 {hasEntities && (
                   <div className="space-y-4">
-                    <h4 className="text-xs font-black text-white/55 uppercase tracking-widest">Thực thể OSINT đã trích xuất</h4>
+                    <h4 className="text-xs font-black text-white/55 uppercase tracking-widest">Thông tin trích xuất từ nội dung</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {(entities.urls?.length || 0) > 0 && (
                         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">

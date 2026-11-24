@@ -152,6 +152,23 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "citation": "Tranco Top Sites Research List",
         "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
+    "scamwave": {
+        "name": "ScamWave (danh bạ cảnh báo cộng đồng)",
+        "reliability": _MEDIUM,
+        "kind": "external_ref",
+        "description": (
+            "Danh bạ cộng đồng tổng hợp tên miền/thực thể nghi vấn lừa đảo kèm nhãn "
+            "(Scam, Doubtful, Ponzi, Closed, Illegal) và bài viết cảnh báo từ scamwave.com."
+        ),
+        "limits": (
+            "Phần lớn bản ghi chỉ gồm tên miền và nhãn trạng thái, thường thiếu hồ sơ "
+            "bằng chứng chi tiết. Chỉ dùng làm tín hiệu tham khảo và phải đối chiếu chéo "
+            "với website nhà phát hành hoặc cơ quan chính thức."
+        ),
+        "url": "https://scamwave.com",
+        "citation": "ScamWave Scammers Directory (scamwave.com/scammers/)",
+        "updated_at": SOURCE_CATALOG_UPDATED_AT,
+    },
     "heuristic": {
         "name": "Heuristic tiếng Việt (luật nội bộ)",
         "reliability": _MEDIUM,
@@ -255,11 +272,18 @@ def source_catalog() -> List[Dict[str, Any]]:
         ds_updated = tinnhiem_dataset_stats().get("updated_at")
     except Exception:
         ds_updated = None
+    try:
+        from api.utils.scamwave import scamwave_dataset_stats
+        sw_updated = scamwave_dataset_stats().get("updated_at")
+    except Exception:
+        sw_updated = None
     out = []
     for key, meta in SOURCE_CATALOG.items():
         item = {"key": key, **meta}
         if key == "tinnhiemmang" and ds_updated:
             item["updated_at"] = ds_updated
+        elif key == "scamwave" and sw_updated:
+            item["updated_at"] = sw_updated
         out.append(item)
     return out
 
@@ -352,6 +376,34 @@ def build_evidence(result: Dict[str, Any]) -> List[Dict[str, Any]]:
         else:
             ev.append(_mk_evidence("sandbox", str(item), "MEDIUM"))
 
+    # (a2) ScamWave directory snapshot / live lookup
+    sw = result.get("scamwave") or {}
+    if isinstance(sw, dict):
+        sw_url = sw.get("query_url") or SOURCE_CATALOG["scamwave"]["url"]
+        sw_updated = sw.get("updated_at") or SOURCE_CATALOG_UPDATED_AT
+        if sw.get("matched"):
+            status_val = str(sw.get("primary_status") or "Scam").strip()
+            status_low = status_val.lower()
+            sev = "MEDIUM" if status_low in {"scam", "ponzi", "illegal"} else "LOW"
+            sup = "malicious" if status_low in {"scam", "ponzi", "illegal"} else "context"
+            ev.append(_mk_evidence(
+                "scamwave",
+                f"ScamWave (scamwave.com) gắn nhãn '{status_val}' (cần đối chiếu xác thực với nguồn chính thức).",
+                sev,
+                url=sw_url,
+                supports=sup,
+                updated_at=sw_updated,
+            ))
+        elif sw.get("checked"):
+            ev.append(_mk_evidence(
+                "scamwave",
+                "Không thấy tên miền trong danh bạ cảnh báo ScamWave (chưa có ghi nhận).",
+                "INFO",
+                url=sw_url,
+                supports="context",
+                updated_at=sw_updated,
+            ))
+
     # (c) forensic_proofs / details / network_details / reasons (URL, message, phone)
     for field, src in (("forensic_proofs", "heuristic"), ("details", "heuristic"),
                        ("network_details", "network_analysis"),
@@ -389,9 +441,34 @@ def build_evidence(result: Dict[str, Any]) -> List[Dict[str, Any]]:
                     sev = "INFO"
                     supports = "context"
                 else:
-                    sev = "MEDIUM" if any(k in low for k in ("độc hại", "malicious", "lừa đảo", "giả", "rủi ro cao")) else "INFO"
+                    sev = "MEDIUM" if any(
+                        k in low
+                        for k in (
+                            "độc hại",
+                            "malicious",
+                            "lừa đảo",
+                            "mạo danh",
+                            "giả mạo",
+                            "giả",
+                            "phishing",
+                            "rủi ro cao",
+                            "nguy cơ cao",
+                            "tên miền quá mới",
+                            "chứng chỉ ssl mới",
+                        )
+                    ) else "INFO"
                     supports = "malicious" if sev != "INFO" else "context"
                 ev.append(_mk_evidence(src_item, clean_line, sev, supports=supports))
+
+    # (d2) Đánh giá ngữ nghĩa AI (chỉ coi là tín hiệu cảnh báo khi có điểm rủi ro/cờ scam)
+    try:
+        _ai_sc = int(result.get("ai_score", 0) or 0)
+    except (TypeError, ValueError):
+        _ai_sc = 0
+    if result.get("ai_available") and (_ai_sc >= 40 or result.get("ai_is_scam")):
+        _ai_msg = str(result.get("ai_insight") or result.get("explanation") or "Phân tích ngữ nghĩa AI phát hiện dấu hiệu rủi ro.").strip()
+        _ai_sev = "HIGH" if _ai_sc >= 70 else "MEDIUM"
+        ev.append(_mk_evidence("ai_model", _ai_msg[:300], _ai_sev, supports="malicious"))
 
     # (d) patterns_found / domain_risks (message scan)
     try:
@@ -504,11 +581,19 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
             "Danh bạ Tín nhiệm mạng ghi nhận chứng nhận tin cậy nhưng có nguồn kỹ thuật cảnh báo; hệ thống từ chối kết luận tự động."
         )
     elif high_benign and mal_ev and not verified_mal:
-        # Nguồn tin cậy cao báo sạch nhưng heuristic/AI/cộng đồng chưa xác thực lại cảnh báo -> mâu thuẫn chưa giải quyết
-        tier, conf = "INSUFFICIENT", 0.25
-        contradiction_details.append(
-            "Nguồn đối chiếu tin cậy cao chưa ghi nhận vi phạm nhưng có dấu hiệu nghi ngờ chưa xác thực; chuyển sang mức CHƯA ĐỦ CĂN CỨ."
-        )
+        if not tinnhiem_benign and score >= RISK_RED_MIN:
+            # VirusTotal 0/N chỉ phản ánh chưa có mẫu AV gắn cờ; khi nội dung/hạ tầng/AI
+            # đạt ngưỡng rủi ro cao (>= 70) trên thực thể chưa chứng nhận tin cậy, vẫn cảnh báo HIGH_RISK.
+            tier, conf = "HIGH_RISK", 0.78
+            contradiction_details.append(
+                "Nguồn quét AV ngoài chưa ghi nhận cảnh báo nhưng phân tích nội dung/hạ tầng và AI phát hiện dấu hiệu rủi ro cao."
+            )
+        else:
+            # Nguồn tin cậy cao báo sạch nhưng heuristic/AI/cộng đồng chưa xác thực lại cảnh báo -> mâu thuẫn chưa giải quyết
+            tier, conf = "INSUFFICIENT", 0.25
+            contradiction_details.append(
+                "Nguồn đối chiếu tin cậy cao chưa ghi nhận vi phạm nhưng có dấu hiệu nghi ngờ chưa xác thực; chuyển sang mức CHƯA ĐỦ CĂN CỨ."
+            )
     elif verified_mal:
         # Có bằng chứng độc lập xác thực:
         # Nếu có từ 2 nguồn xác thực trở lên hoặc đồng thuận đa nguồn độc lập: conf = 0.95
@@ -518,18 +603,28 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
         else:
             conf = 0.90
         tier = "HIGH_RISK" if kind in ("account", "phone") else "CONFIRMED_RISK"
-    elif mal_ev or score >= 70:
+    elif score >= 70 or (
+        any((e.get("severity") or "").upper() in ("HIGH", "CRITICAL") for e in mal_ev)
+    ) or (len(mal_sources) >= 2 and score >= 60):
         # Heuristic hoặc tín hiệu mạnh nhưng CHƯA có nguồn xác minh độc lập
         tier = "HIGH_RISK"
-        conf = 0.80 if score >= 70 else 0.70
+        conf = 0.80 if score >= 70 else 0.72
     elif score >= 40:
         tier, conf = "SUSPICIOUS", 0.60
     elif score >= 10:
         # Vùng xám: có dấu hiệu nhưng chưa đủ kết luận
         tier, conf = ("SUSPICIOUS" if mal_ev else "INSUFFICIENT"), (0.45 if mal_ev else 0.30)
     else:
-        # Điểm thấp: chỉ coi là "có khả năng an toàn" khi CÓ bằng chứng sạch độ tin cậy cao
-        if high_benign:
+        # Điểm thấp: với url/domain chưa có Tín nhiệm mạng hay Tranco xác nhận, chỉ VirusTotal 0/N
+        # khi kèm cảnh báo kỹ thuật (score > 0 hoặc cờ AI) KHÔNG được kết luận là LIKELY_SAFE.
+        has_tranco_corroboration = any(e.get("source") == "tranco" for e in evidence)
+        vt_only_with_caution = (
+            kind in ("url", "domain")
+            and not tinnhiem_benign
+            and not has_tranco_corroboration
+            and (score > 0 or bool(result.get("ai_is_scam")))
+        )
+        if high_benign and not vt_only_with_caution:
             tier, conf = "LIKELY_SAFE", 0.70
         else:
             tier, conf = "INSUFFICIENT", 0.30
@@ -887,13 +982,31 @@ def has_active_threat_directive(text: str) -> bool:
             return True
 
     # 2. Yêu cầu chuyển/nộp tiền vào tài khoản / STK không có tiền tố phủ định trực tiếp
+    #    Loại trừ ngữ cảnh đời thường / báo đã chuyển (ăn trưa, cà phê, chia tiền...) nếu không có dấu hiệu ép buộc/mạo danh.
     transfer_match = re.search(
         r'(?:chuyển|bắn|nộp|gửi)\s+[^:;!?\n]{0,60}?(?:vào|qua|tới)\s+(?:stk|số\s*tài\s*khoản|tài\s*khoản|tài\s*khoản\s*tạm\s*giữ)',
         s
     )
     if transfer_match:
         prefix = s[max(0, transfer_match.start() - 60):transfer_match.start()].strip()
-        if not re.search(r'(?:không|tuyệt\s*đối\s*không|không\s*bao\s*giờ|không\s*có\s*việc|nghiêm\s*cấm|cấm|chớ|đừng)\s*(?:yêu\s*cầu|bắt\s*buộc)?\s*(?:người\s*dân|khách\s*hàng|ai)?\s*$', prefix):
+        is_negated = bool(re.search(
+            r'(?:không|tuyệt\s*đối\s*không|không\s*bao\s*giờ|không\s*có\s*việc|nghiêm\s*cấm|cấm|chớ|đừng)\s*'
+            r'(?:yêu\s*cầu|bắt\s*buộc)?\s*(?:người\s*dân|khách\s*hàng|ai)?\s*$',
+            prefix,
+        ))
+        has_coercive_or_official_cue = bool(re.search(
+            r'tài\s*khoản\s*(?:tạm\s*giữ|thanh\s*tra|bảo\s*lãnh|niêm\s*phong)|'
+            r'công\s*an|viện\s*kiểm\s*sát|lệnh\s*bắt|khởi\s*tố|phong\s*tỏa|khóa\s*tài\s*khoản|'
+            r'viện\s*phí|cấp\s*cứu|tai\s*nạn|mổ\s*gấp|nộp\s*phạt|phí\s*trước\s*bạ|nợ\s*xấu|'
+            r'xác\s*minh|tất\s*toán|đóng\s*cọc|gấp|khẩn|trước\s*\d+\s*h',
+            s,
+        ))
+        is_casual_or_past_transfer = bool(re.search(
+            r'(?:mình|tớ|em|anh|tao)\s*(?:vừa|mới|đã)\s*chuyển|'
+            r'(?:ăn\s*trưa|ăn\s*tối|ăn\s*sáng|cà\s*phê|cafe|trà\s*sữa|tiền\s*cơm|tiền\s*nước|chia\s*tiền|tiền\s*nhà|tiền\s*phòng)',
+            s,
+        ))
+        if not is_negated and (has_coercive_or_official_cue or not is_casual_or_past_transfer):
             return True
 
     # 3. Đe dọa tư pháp / công quyền đi kèm tài khoản tạm giữ hoặc chuyển tiền có tính chất cụ thể
@@ -1019,11 +1132,17 @@ def compute_evidence_aware_ensemble(
         and (all(is_advisory_clause(c) for c in threat_clauses) if threat_clauses else True)
     )
 
-    has_critical_threat = any(re.search(p, t) for p in CRITICAL_THREAT_PATTERNS) and not is_pure_advisory
-
     ai_available = bool(ai_result and not ai_result.get('ai_notice') and not ai_result.get('error'))
     ai_score = int(ai_result.get('risk_score', ai_result.get('score', 0)) or 0) if (ai_available and ai_result) else 0
     ai_is_scam = bool(ai_result.get('is_scam', False)) if (ai_available and ai_result) else False
+    is_ai_safe = ai_available and (ai_score <= 25) and not ai_is_scam
+    is_ai_non_scam_low = ai_available and (ai_score < RISK_YELLOW_MIN) and not ai_is_scam
+
+    # Khi AI khả dụng và đánh giá an toàn (is_scam=False), regex chỉ giữ sàn cảnh báo nếu có
+    # chỉ thị cưỡng bức/đe dọa đang hiệu lực (anti-jailbreak) hoặc tống tiền nghiêm trọng.
+    # Ngược lại (nhắc tai nạn/cấp cứu, teamviewer, phim hình sự, ăn trưa), AI làm chuẩn đối chứng.
+    has_raw_critical = any(re.search(p, t) for p in CRITICAL_THREAT_PATTERNS) and not is_pure_advisory
+    has_critical_threat = has_raw_critical and (not is_ai_non_scam_low or has_active_directive)
 
     if has_verified_threat and max_domain_score >= RISK_RED_MIN:
         final_score = max(max_domain_score, ai_score, rule_score)
@@ -1035,10 +1154,15 @@ def compute_evidence_aware_ensemble(
         final_score = max(rule_score, ai_score, max_domain_score)
         decision_reason = "critical_threat_preserved"
     elif ai_available:
-        is_ai_safe = (ai_score <= 20) and not ai_is_scam
         if is_ai_safe and max_domain_score < RISK_YELLOW_MIN:
-            final_score = max(ai_score, min(rule_score, 35))
+            # AI xác nhận ngữ cảnh bình thường và KHÔNG có chỉ thị đe dọa/chuyển tiền/domain xấu:
+            # hạ điểm về mức sạch (< 10) để các từ khóa regex đơn lẻ trong chat đời thường không gây báo nhầm SUSPICIOUS.
+            final_score = min(ai_score, 9)
             decision_reason = "safe_context_discounted"
+        elif is_ai_non_scam_low and max_domain_score < RISK_YELLOW_MIN:
+            # AI thận trọng nhẹ (< 40, is_scam=False) nhưng không thấy lừa đảo: không để regex đơn lẻ đẩy vọt lên YELLOW (>= 40).
+            final_score = ai_score
+            decision_reason = "ai_non_scam_corroborated"
         else:
             final_score = max(ai_score, rule_score, max_domain_score)
             decision_reason = "ai_rule_ensemble"

@@ -376,7 +376,11 @@ export function useScanTracker(
   cbRef.current = opts;
 
   const push = (message: string, step = ''): void => {
-    setProgress((p) => [...p, { message, step }]);
+    setProgress((p) => {
+      const last = p[p.length - 1];
+      if (last && last.message === message && last.step === step) return p;
+      return [...p, { message, step }];
+    });
   };
   const clear = (): void => {
     setProgress([]);
@@ -523,8 +527,12 @@ export function useScanTracker(
           const t = asStr(inner['transcript']);
           if (t) cbRef.current.onTranscript?.(t);
         }
-        if (step === 'completed' && inner) {
-          finishOk(inner);
+        if (step === 'completed') {
+          if (inner && (inner['result'] || inner['risk_score'] !== undefined || inner['domain'] || inner['url'])) {
+            finishOk(inner);
+          } else {
+            pollOnce();
+          }
         } else if (step === 'error') {
           finishErr(msg || 'Phân tích thất bại.');
         }
@@ -606,6 +614,24 @@ export function ProgressConsole({
   const tone = PROGRESS_ACCENT[accent] || PROGRESS_ACCENT['cyan'];
   const [box, bar, label] = tone.split(' ');
   const logRef = useRef<HTMLDivElement>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  const isTerminal =
+    wsState === 'completed' ||
+    wsState === 'failed' ||
+    progress.some((item) => item.step === 'completed' || item.step === 'error');
+
+  useEffect(() => {
+    if (progress.length === 0) {
+      setElapsedSec(0);
+      return;
+    }
+    if (isTerminal) return;
+    const timer = window.setInterval(() => {
+      setElapsedSec((prev) => prev + 1);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [progress.length, isTerminal]);
 
   useEffect(() => {
     if (logRef.current) {
@@ -613,11 +639,18 @@ export function ProgressConsole({
     }
   }, [progress]);
 
+  const elapsedLabel = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
+
   return (
     <div className={`liquid-card p-6 ${box} ${bar} animate-fadein`}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h4 className={`text-[10px] font-black ${label} uppercase tracking-widest`}>{title}</h4>
         <div className="flex items-center gap-3">
+          {progress.length > 0 && (
+            <span className="text-[10px] text-white/55 font-mono" title="Thời gian phân tích">
+              {elapsedLabel}
+            </span>
+          )}
           <span className="text-[10px] text-white/45 font-mono">{progress.length} bước</span>
           <WsBadge state={wsState} />
         </div>
@@ -685,8 +718,10 @@ function normalizeTitle(t: unknown): string {
   const idx = lowered.indexOf(marker);
   if (idx > -1 && c.endsWith("'")) c = c.slice(0, idx);
   c = c.replace(/\]\s*$/, '');
-  c = c.replace(/^Nguồn\s*:\s*/i, '').replace(/\s+/g, ' ').trim();
-  return c || 'TỔNG HỢP TÌNH BÁO';
+  c = c.replace(/^Nguồn\s*:\s*/i, '');
+  c = c.replace(/^(?:Web\s*fetch|Web\s*search|OSINT|Puppeteer|Search\s*Agent)\s*(?:[:/\-]\s*)?/i, '');
+  c = c.replace(/\s+/g, ' ').trim();
+  return c || 'Nguồn đối chiếu';
 }
 
 function isSummaryTitle(title: string): boolean {
@@ -783,7 +818,7 @@ export function OsintSection({ result }: { result: ScanResult }): ReactNode {
   if (!webContext && webSources.length === 0) return null;
 
   const parsed = parseOsintContext(webContext, webSources);
-  const visible = expanded ? parsed.sources : parsed.sources.slice(0, 6);
+  const visible = expanded ? parsed.sources : parsed.sources.slice(0, 4);
 
   return (
     <div className="p-8 border-t border-white/5 bg-white/[0.01]">
@@ -792,8 +827,8 @@ export function OsintSection({ result }: { result: ScanResult }): ReactNode {
           <i className="bi bi-search"></i>
         </div>
         <div className="flex-1">
-          <h4 className="text-sm font-black text-white uppercase tracking-wider">Thông tin tình báo (OSINT)</h4>
-          <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">Grounded Proofs &amp; Sources</p>
+          <h4 className="text-sm font-black text-white uppercase tracking-wider">Thông tin đối chiếu công khai</h4>
+          <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">Tổng hợp từ website chính thức &amp; nguồn cảnh báo</p>
         </div>
         <div className="flex items-center gap-2">
           {parsed.badges.length > 0 && (
@@ -801,43 +836,47 @@ export function OsintSection({ result }: { result: ScanResult }): ReactNode {
               <i className="bi bi-database-check mr-1"></i>{parsed.badges.length} nguồn
             </span>
           )}
-          {searchedUrls.length > 0 && (
-            <span className="px-3 py-1.5 rounded-xl bg-brand2-500/10 text-brand2-400 text-[10px] font-black border border-brand2-500/20">
-              <i className="bi bi-globe2 mr-1"></i>{searchedUrls.length} tra cứu
-            </span>
-          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {parsed.badges.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
-            {parsed.badges.map((source) => (
-              <span key={source} className="px-3 py-1 rounded-full bg-brand-500/10 text-brand-400 text-[10px] font-black border border-brand-500/20 uppercase">
-                {source}
-              </span>
-            ))}
-          </div>
-        )}
-
         {searchedUrls.length > 0 && (
-          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] mb-2">
-            <h5 className="text-[10px] font-black text-white/45 uppercase tracking-widest mb-2">
-              <i className="bi bi-globe2 me-1"></i>AI đã tra cứu
-            </h5>
-            <div className="flex flex-wrap gap-1.5">
-              {searchedUrls.map((surl, si) => (
-                <span
-                  key={si}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 text-[10px] text-white/60 font-mono border border-white/[0.06] max-w-[260px] truncate"
-                  title={surl}
-                >
-                  <i className={`${urlIcon(surl)} text-brand-500/60 flex-shrink-0`}></i>
-                  <span className="truncate">{shortUrl(surl)}</span>
-                </span>
-              ))}
+          <details className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] group">
+            <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-[11px] font-bold text-white/60 select-none">
+              <span>
+                <i className="bi bi-globe2 me-1.5 text-brand-400"></i>
+                Xem chi tiết các liên kết &amp; nguồn đã kiểm tra ({searchedUrls.length})
+              </span>
+              <span className="text-[10px] text-brand-400 group-open:hidden">Mở xem</span>
+              <span className="text-[10px] text-white/45 hidden group-open:inline">Thu gọn</span>
+            </summary>
+            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-white/5">
+              {searchedUrls.map((surl, si) =>
+                surl.startsWith('http://') || surl.startsWith('https://') ? (
+                  <a
+                    key={si}
+                    href={surl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-[10px] text-brand-300/90 hover:text-brand-200 font-mono border border-white/[0.08] max-w-[280px] truncate transition-colors"
+                    title={surl}
+                  >
+                    <i className={`${urlIcon(surl)} text-brand-400 flex-shrink-0`}></i>
+                    <span className="truncate">{shortUrl(surl)}</span>
+                  </a>
+                ) : (
+                  <span
+                    key={si}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 text-[10px] text-white/60 font-mono border border-white/[0.06] max-w-[260px] truncate"
+                    title={surl}
+                  >
+                    <i className={`${urlIcon(surl)} text-brand-500/60 flex-shrink-0`}></i>
+                    <span className="truncate">{shortUrl(surl)}</span>
+                  </span>
+                ),
+              )}
             </div>
-          </div>
+          </details>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -849,20 +888,21 @@ export function OsintSection({ result }: { result: ScanResult }): ReactNode {
                 </div>
                 <h4 className="text-xs font-black text-brand-100 uppercase tracking-wider">{item.title}</h4>
               </div>
-              <MarkdownView html={item.html} className="prose prose-invert prose-sm text-xs text-gray-400 leading-relaxed font-mono" />
-              <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-10 transition-opacity">
-                <i className="bi bi-crosshair text-4xl text-brand-500"></i>
-              </div>
+              <MarkdownView html={item.html} className="prose prose-invert prose-sm text-xs text-gray-400 leading-relaxed" />
             </div>
           ))}
           {parsed.sources.length === 0 && !webContext && (
-            <div className="col-span-full p-6 text-center border dashed border-white/10 rounded-xl">
-              <p className="text-white/45 text-xs italic">Đang chờ dữ liệu tình báo...</p>
+            <div className="col-span-full p-6 text-center border border-dashed border-white/10 rounded-xl">
+              <p className="text-white/55 text-xs">
+                {webSources.length > 0
+                  ? `Đã đối chiếu ${webSources.length} nguồn (${webSources.join(', ')}) nhưng chưa ghi nhận cảnh báo chi tiết.`
+                  : 'Chưa ghi nhận dữ liệu bổ sung cho mục tiêu này.'}
+              </p>
             </div>
           )}
         </div>
 
-        {parsed.sources.length > 6 && (
+        {parsed.sources.length > 4 && (
           <div className="flex justify-center pt-2">
             <button
               type="button"
@@ -870,7 +910,7 @@ export function OsintSection({ result }: { result: ScanResult }): ReactNode {
               className="liquid-btn py-2 px-6 text-xs bg-brand-500/10 text-brand-400 border-brand-500/20 hover:bg-brand-500/20 transition-all font-bold flex items-center gap-2"
             >
               <i className={`bi ${expanded ? 'bi-chevron-up' : 'bi-chevron-down'}`}></i>
-              <span>{expanded ? 'Thu gọn' : `Xem thêm ${parsed.sources.length - 6} nguồn`}</span>
+              <span>{expanded ? 'Thu gọn' : `Xem thêm ${parsed.sources.length - 4} nguồn`}</span>
             </button>
           </div>
         )}
@@ -927,8 +967,8 @@ interface EvidenceItem {
 
 const RELIABILITY_META: Record<string, { label: string; cls: string }> = {
   high: { label: 'Tin cậy cao', cls: 'bg-safe-500/10 text-safe-400 border-safe-500/20' },
-  medium: { label: 'Tin cậy vừa', cls: 'bg-warn-500/10 text-warn-400 border-warn-500/20' },
-  low: { label: 'Tham khảo (AI)', cls: 'bg-danger-500/10 text-danger-400 border-danger-500/20' },
+  medium: { label: 'Tham khảo thêm', cls: 'bg-warn-500/10 text-warn-400 border-warn-500/20' },
+  low: { label: 'Gợi ý từ AI', cls: 'bg-danger-500/10 text-danger-400 border-danger-500/20' },
 };
 
 const TIER_META: Record<string, { cls: string; ring: string; icon: string }> = {
@@ -947,6 +987,14 @@ const SEVERITY_CLS: Record<string, string> = {
   INFO: 'text-white/55',
 };
 
+const SEVERITY_LABELS: Record<string, string> = {
+  CRITICAL: 'Rất nghiêm trọng',
+  HIGH: 'Mức cao',
+  MEDIUM: 'Cần lưu ý',
+  LOW: 'Thấp',
+  INFO: 'Thông tin',
+};
+
 export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNode {
   const [showAll, setShowAll] = useState(false);
   const g = (result['guardrail'] || {}) as GuardrailData;
@@ -957,7 +1005,7 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
   const meta = TIER_META[tier] || TIER_META.INSUFFICIENT;
   const conf = typeof g.confidence === 'number' ? Math.round(g.confidence * 100) : null;
   const channels = g.official_channels || [];
-  const visible = showAll ? evidence : evidence.slice(0, 4);
+  const visible = showAll ? evidence : evidence.slice(0, 2);
 
   return (
     <div className="p-8 border-t border-white/5 bg-white/[0.01] space-y-6">
@@ -969,7 +1017,7 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
         <div className="flex-1">
           <h4 className="text-sm font-black text-white uppercase tracking-wider">Kết luận &amp; Bằng chứng</h4>
           <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">
-            Evidence-based verdict · {evidence.length} bằng chứng
+            Tổng hợp từ {evidence.length} dữ liệu đối chiếu
           </p>
         </div>
       </div>
@@ -982,17 +1030,11 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
           {conf !== null && (
             <span
               className="px-2.5 py-0.5 rounded-full bg-white/5 text-white/60 text-[10px] font-black border border-white/10"
-              title={
-                g.confidence_type === 'rule_heuristic'
-                  ? 'Mức tin cậy theo quy tắc heuristic, không phải xác suất thống kê chuẩn hóa'
-                  : 'Độ tin cậy được tính toán từ các nguồn bằng chứng'
-              }
+              title="Mức độ tự tin ước lượng từ các tín hiệu đã thu thập"
             >
-              {g.confidence_type === 'rule_heuristic'
-                ? `độ tin cậy quy tắc ${conf}%`
-                : g.calibrated_probability != null
-                ? `xác suất chuẩn hóa ${(g.calibrated_probability * 100).toFixed(0)}%`
-                : `điểm bằng chứng ${conf}%`}
+              {g.calibrated_probability != null
+                ? `Mức độ chắc chắn ${(g.calibrated_probability * 100).toFixed(0)}%`
+                : `Độ tin cậy đối chiếu ${conf}%`}
             </span>
           )}
           <span
@@ -1006,7 +1048,7 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
           </span>
           {g.has_contradiction && (
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black border bg-warn-500/10 text-warn-400 border-warn-500/20">
-              Bằng chứng mâu thuẫn
+              Nguồn mâu thuẫn
             </span>
           )}
         </div>
@@ -1014,7 +1056,7 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
         {g.has_contradiction && (g.contradiction_details || []).length > 0 && (
           <div className="mt-3 p-3 rounded-xl bg-warn-500/10 border border-warn-500/20 text-xs text-warn-200 space-y-1">
             <div className="font-black uppercase tracking-wider text-[10px] text-warn-400">
-              <i className="bi bi-exclamation-diamond me-1"></i>Phát hiện mâu thuẫn giữa các nguồn
+              <i className="bi bi-exclamation-diamond me-1"></i>Phát hiện thông tin trái chiều giữa các nguồn
             </div>
             {(g.contradiction_details || []).map((cd, idx) => (
               <p key={idx} className="leading-relaxed">{cd}</p>
@@ -1046,49 +1088,55 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
       {evidence.length > 0 && (
         <div className="space-y-3">
           <h5 className="text-[10px] font-black text-white/45 uppercase tracking-widest">
-            <i className="bi bi-list-check me-1"></i>Bằng chứng theo nguồn
+            <i className="bi bi-list-check me-1"></i>Bằng chứng đối chiếu ({evidence.length})
           </h5>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {visible.map((e, i) => {
               const rel = RELIABILITY_META[String(e.reliability || 'medium')] || RELIABILITY_META.medium;
+              const sevLabel = e.severity ? (SEVERITY_LABELS[e.severity] || e.severity) : null;
               return (
                 <div key={i} className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[11px] font-black text-white/80">{e.source_name || e.source}</span>
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${rel.cls}`}>{rel.label}</span>
-                    {e.severity && e.severity !== 'INFO' && (
-                      <span className={`text-[9px] font-black uppercase ${SEVERITY_CLS[e.severity] || 'text-white/55'}`}>
-                        {e.severity}
+                    {e.severity && e.severity !== 'INFO' && sevLabel && (
+                      <span className={`text-[9px] font-black ${SEVERITY_CLS[e.severity] || 'text-white/55'}`}>
+                        {sevLabel}
                       </span>
                     )}
                     {e.updated_at && (
                       <span className="text-[9px] font-bold text-white/40 ml-auto">
-                        Cập nhật: {e.updated_at}
+                        {e.updated_at}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-white/60 leading-relaxed">{e.detail}</p>
-                  {e.citation && (
-                    <p className="text-[10px] text-white/45">Trích dẫn: {e.citation}</p>
-                  )}
-                  {e.url && (
-                    <a
-                      href={e.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] font-black text-brand-400 hover:text-brand-300"
-                    >
-                      <i className="bi bi-box-arrow-up-right"></i> Nguồn tham chiếu
-                    </a>
-                  )}
-                  {e.limits && (
-                    <p className="text-[10px] text-white/45 italic">Giới hạn: {e.limits}</p>
-                  )}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {e.url && (
+                      <a
+                        href={e.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] font-black text-brand-400 hover:text-brand-300"
+                      >
+                        <i className="bi bi-box-arrow-up-right"></i> Nguồn tham chiếu
+                      </a>
+                    )}
+                    {(e.limits || e.citation) && (
+                      <details className="text-[10px] text-white/45">
+                        <summary className="cursor-pointer hover:text-white/65">Xem giới hạn &amp; trích dẫn</summary>
+                        <div className="mt-1 space-y-0.5">
+                          {e.citation && <p>Trích dẫn: {e.citation}</p>}
+                          {e.limits && <p className="italic">Giới hạn: {e.limits}</p>}
+                        </div>
+                      </details>
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
-          {evidence.length > 4 && (
+          {evidence.length > 2 && (
             <div className="flex justify-center">
               <button
                 type="button"
@@ -1096,20 +1144,25 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
                 className="liquid-btn py-2 px-6 text-xs bg-brand-500/10 text-brand-400 border-brand-500/20 hover:bg-brand-500/20 font-bold flex items-center gap-2"
               >
                 <i className={`bi ${showAll ? 'bi-chevron-up' : 'bi-chevron-down'}`}></i>
-                {showAll ? 'Thu gọn' : `Xem thêm ${evidence.length - 4} bằng chứng`}
+                {showAll ? 'Thu gọn' : `Xem thêm ${evidence.length - 2} bằng chứng`}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Official channels */}
+      {/* Official channels — collapsed by default so UI stays focused unless user expands */}
       {channels.length > 0 && (
-        <div className="space-y-3">
-          <h5 className="text-[10px] font-black text-white/45 uppercase tracking-widest">
-            <i className="bi bi-telephone-outbound me-1"></i>Kênh xác minh / trình báo chính thức
-          </h5>
-          <div className="flex flex-wrap gap-2">
+        <details className="rounded-xl bg-white/[0.02] border border-white/[0.08] p-4 group">
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-xs font-black text-white/75 select-none">
+            <span>
+              <i className="bi bi-telephone-outbound me-2 text-brand-400"></i>
+              Kênh xác minh &amp; trình báo chính thức ({channels.length})
+            </span>
+            <span className="text-[10px] font-bold text-brand-400 group-open:hidden">Nhấn để mở</span>
+            <span className="text-[10px] font-bold text-white/45 hidden group-open:inline">Thu gọn</span>
+          </summary>
+          <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/5">
             {channels.map((c, i) => (
               <span key={i} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-500/[0.06] border border-brand-500/20 text-[11px]">
                 <i className="bi bi-building-check text-brand-400"></i>
@@ -1127,7 +1180,7 @@ export function TrustGuardrailPanel({ result }: { result: ScanResult }): ReactNo
               </span>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       {/* Disclaimer + AI caveat + refusal script */}
@@ -1239,19 +1292,24 @@ export function ChatGuardrailNote({ guardrail }: { guardrail?: GuardrailData | n
       )}
 
       {channels.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
-          {channels.slice(0, 4).map((c, i) => (
-            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-brand-500/[0.06] border border-brand-500/20 text-[9px]">
-              <i className="bi bi-building-check text-brand-400"></i>
-              <span className="text-white/65 font-bold">{c.name}</span>
-              {c.phone && (
-                <a href={`tel:${String(c.phone).replace(/[^0-9+]/g, '')}`} className="text-brand-400 font-black">
-                  {c.phone}
-                </a>
-              )}
-            </span>
-          ))}
-        </div>
+        <details className="pt-1 border-t border-white/5 text-[10px]">
+          <summary className="cursor-pointer font-bold text-white/60 hover:text-white/80">
+            Kênh xác minh &amp; trình báo chính thức ({channels.length})
+          </summary>
+          <div className="flex flex-wrap gap-1.5 pt-2">
+            {channels.slice(0, 4).map((c, i) => (
+              <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-brand-500/[0.06] border border-brand-500/20 text-[9px]">
+                <i className="bi bi-building-check text-brand-400"></i>
+                <span className="text-white/65 font-bold">{c.name}</span>
+                {c.phone && (
+                  <a href={`tel:${String(c.phone).replace(/[^0-9+]/g, '')}`} className="text-brand-400 font-black">
+                    {c.phone}
+                  </a>
+                )}
+              </span>
+            ))}
+          </div>
+        </details>
       )}
 
       <p className="text-[9px] text-white/35 leading-relaxed">

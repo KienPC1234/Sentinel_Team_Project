@@ -253,7 +253,7 @@ export default function Bank() {
                   </div>
                   <div className="flex-1">
                     <h4 className="text-sm font-black text-white uppercase tracking-wider">Tra cứu Web</h4>
-                    <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">OSINT: Kiểm tra trên Internet</p>
+                    <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">Kiểm tra thông tin trên Internet</p>
                   </div>
                 </div>
                 <p className="text-white/45 text-xs mb-4 leading-relaxed">Tìm kiếm thông tin về tài khoản này trên các nguồn công khai để xác minh thêm.</p>

@@ -14,7 +14,7 @@
 | Người mới vào dự án | [`../README.md`](../README.md) → [`SETUP.md`](SETUP.md) → [`ARCHITECTURE.md`](ARCHITECTURE.md) → [`API_REFERENCE.md`](API_REFERENCE.md) |
 | Kỹ sư backend / DevOps | [`../AGENTS.md`](../AGENTS.md) → [`ARCHITECTURE.md`](ARCHITECTURE.md) → [`SETUP.md`](SETUP.md) → [`TESTING.md`](TESTING.md) |
 | Người làm đánh giá / nghiên cứu | [`EVAL_GUIDE.md`](EVAL_GUIDE.md) → [`EVAL_THRESHOLDS.md`](EVAL_THRESHOLDS.md) → các báo cáo benchmark bên dưới |
-| Hội đồng giám khảo | [`../PROJECT_OVERVIEW.md`](../PROJECT_OVERVIEW.md) → [`BAO_CAO_CAI_TIEN_CHUNG_KET.md`](BAO_CAO_CAI_TIEN_CHUNG_KET.md) → [`KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md`](KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md) → [`CHECKLIST_TINH_NANG.md`](CHECKLIST_TINH_NANG.md) → [`REBUTTAL_QA.md`](REBUTTAL_QA.md) |
+| Hội đồng giám khảo | [`../PROJECT_OVERVIEW.md`](../PROJECT_OVERVIEW.md) → [`BAO_CAO_CAI_TIEN_CHUNG_KET.md`](BAO_CAO_CAI_TIEN_CHUNG_KET.md) → [`CHECKLIST_TINH_NANG.md`](CHECKLIST_TINH_NANG.md) → [`REBUTTAL_QA.md`](REBUTTAL_QA.md) (và `_chungket/KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md` ngoài git) |
 
 ---
 
@@ -70,7 +70,7 @@
 | :--- | :--- | :--- | :--- |
 | [`BAO_CAO_CAI_TIEN_CHUNG_KET.md`](BAO_CAO_CAI_TIEN_CHUNG_KET.md) | Báo cáo cải tiến (bản Markdown nguồn) | Hồ sơ nộp · VI | 2026-11-15 |
 | [`BAO_CAO_CAI_TIEN_CHUNG_KET.pdf`](BAO_CAO_CAI_TIEN_CHUNG_KET.pdf) | Bản PDF nộp Chặng 1 | Hồ sơ nộp · VI | 2026-11-15 |
-| [`KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md`](KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md) | Biểu mẫu nộp bài, khai báo AI/mã nguồn/dữ liệu | Hồ sơ nộp · VI | 2026-11-15 |
+| `_chungket/KHAI_BAO_VA_NOP_BAI_CHUNG_KET.md` | Biểu mẫu nộp bài, khai báo AI/mã nguồn/dữ liệu (tách khỏi git) | Hồ sơ nộp ngoài git · VI | 2026-11-24 |
 | [`BAO_CAO_CAI_TIEN_CHUNG_KET.tex`](BAO_CAO_CAI_TIEN_CHUNG_KET.tex) | Mã nguồn LaTeX dựng PDF báo cáo | Nguồn dựng · VI | 2026-11-15 |
 | [`so_do_luong_du_lieu.pdf`](so_do_luong_du_lieu.pdf) | Sơ đồ luồng dữ liệu Local / Cloud | Nguồn dựng · VI | 2026-11-15 |
 

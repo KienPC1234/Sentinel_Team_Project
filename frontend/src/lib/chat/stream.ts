@@ -6,7 +6,6 @@
  *
  * Mọi consumer chỉ cần xử lý union StreamEvent ở dưới.
  */
-import { getToken } from '../api';
 
 export type StreamEvent =
   | { type: 'delta'; text: string }
@@ -81,8 +80,6 @@ export async function openSseStream(opts: SseOptions): Promise<void> {
     'X-CSRFToken': getCsrf(),
     ...(opts.headers || {}),
   };
-  const token = getToken();
-  if (token && !headers['Authorization']) headers['Authorization'] = `Token ${token}`;
 
   const response = await fetch(opts.url, {
     method: 'POST',

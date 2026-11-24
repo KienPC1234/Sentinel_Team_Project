@@ -26,6 +26,7 @@ from api.core.serializers import (
     ReportListSerializer,
     ReportModerateSerializer,
 )
+from api.core.pagination import paginate_queryset
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -494,19 +495,24 @@ class AdminScenariosView(APIView):
 
     @extend_schema(operation_id='admin_scenarios_list')
     def get(self, request):
-        scenarios = LearnScenario.objects.select_related('article', 'lesson').order_by('-created_at')[:100]
-        data = [{
-            'id': sc.id,
-            'title': sc.title,
-            'description': sc.description,
-            'article_id': sc.article_id,
-            'article_title': sc.article.title if sc.article else None,
-            'lesson_id': sc.lesson_id,
-            'lesson_title': sc.lesson.title if sc.lesson else None,
-            'steps_count': len(sc.content.get('steps', [])) if isinstance(sc.content, dict) else 0,
-            'created_at': sc.created_at.strftime('%d/%m/%Y'),
-        } for sc in scenarios]
-        return Response(data)
+        scenarios = LearnScenario.objects.select_related('article', 'lesson').order_by('-created_at')
+
+        def serialize(items):
+            return [{
+                'id': sc.id,
+                'title': sc.title,
+                'description': sc.description,
+                'article_id': sc.article_id,
+                'article_title': sc.article.title if sc.article else None,
+                'lesson_id': sc.lesson_id,
+                'lesson_title': sc.lesson.title if sc.lesson else None,
+                'steps_count': len(sc.content.get('steps', [])) if isinstance(sc.content, dict) else 0,
+                'created_at': sc.created_at.strftime('%d/%m/%Y'),
+            } for sc in items]
+
+        return Response(paginate_queryset(
+            request, scenarios, serialize, default_page_size=100,
+        ))
 
     def post(self, request):
         title = (request.data.get('title') or '').strip()
@@ -628,20 +634,25 @@ class AdminLearnView(APIView):
 
     @extend_schema(operation_id='admin_learn_list')
     def get(self, request):
-        lessons = LearnLesson.objects.prefetch_related('quizzes', 'scenarios').order_by('-created_at')[:100]
-        data = [{
-            'id': l.id,
-            'title': l.title,
-            'slug': l.slug,
-            'category': l.category,
-            'summary': l.summary,
-            'cover_image': l.cover_image.url if l.cover_image else None,
-            'is_published': l.is_published,
-            'quizzes_count': l.quizzes.count(),
-            'scenarios_count': l.scenarios.count(),
-            'created_at': l.created_at.strftime('%d/%m/%Y'),
-        } for l in lessons]
-        return Response(data)
+        lessons = LearnLesson.objects.prefetch_related('quizzes', 'scenarios').order_by('-created_at')
+
+        def serialize(items):
+            return [{
+                'id': l.id,
+                'title': l.title,
+                'slug': l.slug,
+                'category': l.category,
+                'summary': l.summary,
+                'cover_image': l.cover_image.url if l.cover_image else None,
+                'is_published': l.is_published,
+                'quizzes_count': l.quizzes.count(),
+                'scenarios_count': l.scenarios.count(),
+                'created_at': l.created_at.strftime('%d/%m/%Y'),
+            } for l in items]
+
+        return Response(paginate_queryset(
+            request, lessons, serialize, default_page_size=100,
+        ))
 
     def post(self, request):
         title = (request.data.get('title') or '').strip()
@@ -876,23 +887,28 @@ class AdminArticlesView(APIView):
 
     @extend_schema(operation_id='admin_articles_list')
     def get(self, request):
-        articles = Article.objects.all().order_by('-created_at')[:100]
-        data = [{
-            'id': a.id,
-            'title': a.title,
-            'slug': a.slug,
-            'category': a.category,
-            'category_display': a.get_category_display(),
-            'source_type': getattr(a, 'source_type', 'internal'),
-            'source_type_display': a.get_source_type_display() if hasattr(a, 'get_source_type_display') else 'ShieldCall VN',
-            'source_url': getattr(a, 'source_url', None),
-            'summary': a.summary,
-            'is_published': a.is_published,
-            'cover_image': a.cover_image.url if a.cover_image else None,
-            'author_name': a.author.username if a.author else ('Tín nhiệm mạng (NCSC)' if a.source_type == 'tinnhiemmang' else 'Admin'),
-            'created_at': a.created_at.strftime('%d/%m/%Y'),
-        } for a in articles]
-        return Response(data)
+        articles = Article.objects.all().order_by('-created_at')
+
+        def serialize(items):
+            return [{
+                'id': a.id,
+                'title': a.title,
+                'slug': a.slug,
+                'category': a.category,
+                'category_display': a.get_category_display(),
+                'source_type': getattr(a, 'source_type', 'internal'),
+                'source_type_display': a.get_source_type_display() if hasattr(a, 'get_source_type_display') else 'ShieldCall VN',
+                'source_url': getattr(a, 'source_url', None),
+                'summary': a.summary,
+                'is_published': a.is_published,
+                'cover_image': a.cover_image.url if a.cover_image else None,
+                'author_name': a.author.username if a.author else ('Tín nhiệm mạng (NCSC)' if a.source_type == 'tinnhiemmang' else 'Admin'),
+                'created_at': a.created_at.strftime('%d/%m/%Y'),
+            } for a in items]
+
+        return Response(paginate_queryset(
+            request, articles, serialize, default_page_size=100,
+        ))
 
     def post(self, request):
         title = (request.data.get('title') or '').strip()

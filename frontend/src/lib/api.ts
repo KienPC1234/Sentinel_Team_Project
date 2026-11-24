@@ -6,24 +6,6 @@
 import { rememberScanTokenFromPayload } from './scanToken';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL as string | undefined) || '/api/v1';
-const TOKEN_KEY = 'sc_token';
-
-export function getToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function setToken(token: string | null): void {
-  try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    /* private mode */
-  }
-}
 
 export class ApiError extends Error {
   status: number;
@@ -46,8 +28,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   };
   const isForm = init.body instanceof FormData;
   if (!isForm && init.body !== undefined) headers['Content-Type'] = 'application/json';
-  const token = getToken();
-  if (token) headers['Authorization'] = `Token ${token}`;
   const csrf = getCsrf();
   if (csrf && init.method && init.method !== 'GET') headers['X-CSRFToken'] = csrf;
 
@@ -215,8 +195,6 @@ export function getErrorMessage(err: unknown, fallback = 'Đã xảy ra lỗi. V
 /** POST tới endpoint Django cùng origin ngoài /api/v1 (kèm CSRF token). */
 export async function postSameOrigin<T = Record<string, unknown>>(path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const token = getToken();
-  if (token) headers['Authorization'] = `Token ${token}`;
   const csrf = getCsrf();
   if (csrf) headers['X-CSRFToken'] = csrf;
   const res = await fetch(djangoUrl(path), {

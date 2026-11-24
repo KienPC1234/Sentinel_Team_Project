@@ -840,6 +840,7 @@ class ScanEmailView(APIView):
         if not file_obj and (is_api_key or sync_requested):
             from api.core.models import ScanStatus, RiskLevel
             content_risk = 0
+            msg_analysis = None
             if content_text and len(content_text.strip()) > 10:
                 msg_analysis = _analyze_message_text(
                     content_text.strip(),
@@ -876,10 +877,13 @@ class ScanEmailView(APIView):
                     'attachment_count': len(email_data['attachments'])
                 }
             }
+            if msg_analysis:
+                res_data['ai_available'] = bool(msg_analysis.get('ai_available'))
+                res_data['ai_score'] = int(msg_analysis.get('ai_score', 0) or 0)
+                if msg_analysis.get('ai_insight'):
+                    res_data['ai_insight'] = msg_analysis['ai_insight']
+                    res_data['explanation'] = msg_analysis['ai_insight']
             apply_guardrail(res_data, kind='email')
-            if (res_data.get('guardrail') or {}).get('tier') == 'INSUFFICIENT' and level == RiskLevel.SAFE:
-                level = RiskLevel.YELLOW
-                res_data['risk_level'] = str(level)
             _, _, res_data = apply_scan_privacy(
                 'email',
                 res_data,
@@ -1005,25 +1009,13 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
         if cached_result is not None:
             return copy.deepcopy(cached_result)
 
-    # 1. AI Analysis (Ollama) — with graceful fallback
-    ai_score = 0
-    ai_explanation = ''
-    ai_available = True
-    ai_result = None
-    try:
-        # Tôn trọng lựa chọn che PII của người dùng: chỉ gửi nguyên văn khi user chủ động tắt mask_pii.
-        ai_result = analyze_text_for_scam(text, external_consent=external_consent)
-        if ai_result and not ai_result.get('ai_notice'):
-            ai_score = ai_result.get('risk_score', 0) or 0
-            ai_explanation = ai_result.get('explanation') or ai_result.get('reason') or ''
-        else:
-            ai_available = False
-            logger.warning("_analyze_message_text: AI returned fallback or notice, relying on heuristic rules.")
-    except Exception as exc:
-        ai_available = False
-        logger.warning(f"_analyze_message_text: AI error ({exc}), falling back to rule-based scoring.")
+    # 1. Local Pre-filter: Heuristic Patterns & Domain Check BEFORE AI
+    #    Dùng chung api/utils/scam_rules.py (từ điển VN + nhãn cơ sở) — bắt nhanh thủ đoạn phổ biến,
+    #    sau đó truyền kết quả tiền lọc sang AI để bổ sung phát hiện thủ đoạn mới lạ.
+    from api.utils.scam_rules import match_patterns, heuristic_score
+    patterns_found = match_patterns(text)
+    base_rule_score = heuristic_score(text)
 
-    # 2. Extract and Scan Domains
     found_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', text)
     domain_risks = []
     max_domain_score = 0
@@ -1031,9 +1023,15 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
 
     vt = VTClient()
     try:
+        from api.utils.vn_sources import tinnhiem_lookup_domain as tn_lookup
         for url in found_urls:
             domain = normalize_domain(url)
             if domain:
+                tn_info = tn_lookup(domain)
+                if tn_info and tn_info.get('status') == 'scam':
+                    max_domain_score = max(max_domain_score, 90)
+                    has_verified_threat = True
+                    domain_risks.append(f"Domain {domain} nằm trong danh sách lừa đảo NCSC")
                 vt_res = vt.scan_url(url)
                 if vt_res:
                     score = vt_res.get('risk_score', 0)
@@ -1048,15 +1046,40 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
     finally:
         vt.close()
 
-    # 3. Heuristic Patterns (supporting both accented and unaccented Vietnamese)
-    #    Dùng chung api/utils/scam_rules.py (từ điển VN + nhãn cơ sở) — một nguồn chân lý.
-    from api.utils.scam_rules import match_patterns, heuristic_score
-    patterns_found = match_patterns(text)
-
     # Rule-based score (heuristic + điểm domain nếu có)
-    rule_score = min(100, heuristic_score(text) + max_domain_score)
+    rule_score = min(100, base_rule_score + max_domain_score)
 
-    # 4. Evidence-Aware Conditional Ensemble (Dùng chung hàm chuẩn hoá từ trust_guard)
+    # 2. AI Analysis (Ollama) AFTER local pre-filter — catches novel/subtle scams & verifies context
+    ai_score = 0
+    ai_explanation = ''
+    ai_available = True
+    ai_result = None
+    pre_filter_context = {
+        'patterns_found': patterns_found,
+        'heuristic_score': base_rule_score,
+        'domain_risks': domain_risks,
+    }
+    try:
+        import inspect
+        # Tôn trọng lựa chọn che PII của người dùng: chỉ gửi nguyên văn khi user chủ động tắt mask_pii.
+        ai_kwargs = {'external_consent': external_consent}
+        try:
+            if 'pre_filter_context' in inspect.signature(analyze_text_for_scam).parameters:
+                ai_kwargs['pre_filter_context'] = pre_filter_context
+        except (TypeError, ValueError):
+            pass
+        ai_result = analyze_text_for_scam(text, **ai_kwargs)
+        if ai_result and not ai_result.get('ai_notice'):
+            ai_score = ai_result.get('risk_score', 0) or 0
+            ai_explanation = ai_result.get('explanation') or ai_result.get('reason') or ''
+        else:
+            ai_available = False
+            logger.warning("_analyze_message_text: AI returned fallback or notice, relying on heuristic rules.")
+    except Exception as exc:
+        ai_available = False
+        logger.warning(f"_analyze_message_text: AI error ({exc}), falling back to rule-based scoring.")
+
+    # 3. Evidence-Aware Conditional Ensemble (Dùng chung hàm chuẩn hoá từ trust_guard)
     from api.utils.trust_guard import compute_evidence_aware_ensemble
     domain_threat_evidence = {
         'max_domain_score': max_domain_score,
@@ -1071,18 +1094,21 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
     )
     final_score = ensemble_res['final_score']
     level = ensemble_res['risk_level']
+    # Nếu AI xác nhận ngữ cảnh đời thường/khuyến cáo an toàn (safe_context_discounted),
+    # không giữ nhãn từ khóa regex đơn lẻ thành bằng chứng nghi ngờ.
+    effective_patterns = [] if ensemble_res.get('decision_reason') == 'safe_context_discounted' else patterns_found
 
     # Determine scam type from detected patterns
     scam_type = 'other'
-    if any('công an' in p.lower() or 'cơ quan' in p.lower() for p in patterns_found):
+    if any('công an' in p.lower() or 'cơ quan' in p.lower() for p in effective_patterns):
         scam_type = 'police_impersonation'
-    elif any('OTP' in p for p in patterns_found):
+    elif any('OTP' in p for p in effective_patterns):
         scam_type = 'otp_steal'
-    elif any('tài chính' in p.lower() or 'chuyển khoản' in p.lower() for p in patterns_found):
+    elif any('tài chính' in p.lower() or 'chuyển khoản' in p.lower() for p in effective_patterns):
         scam_type = 'investment_scam'
-    elif any('trúng thưởng' in p.lower() for p in patterns_found):
+    elif any('trúng thưởng' in p.lower() for p in effective_patterns):
         scam_type = 'prize_scam'
-    elif any('tuyển dụng' in p.lower() for p in patterns_found):
+    elif any('tuyển dụng' in p.lower() for p in effective_patterns):
         scam_type = 'recruitment_scam'
     elif domain_risks:
         scam_type = 'phishing'
@@ -1102,8 +1128,8 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
     # Build explanation — prefer AI's if available, else use rule summary
     if ai_available and ai_explanation and (not ai_result or not ai_result.get('ai_notice')):
         explanation = ai_explanation
-    elif patterns_found or domain_risks:
-        explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu đáng ngờ từ nội dung tin nhắn và liên kết đính kèm.'
+    elif effective_patterns or domain_risks:
+        explanation = f'Phát hiện {len(effective_patterns + domain_risks)} dấu hiệu đáng ngờ từ nội dung tin nhắn và liên kết đính kèm.'
     else:
         explanation = 'Không phát hiện dấu hiệu lừa đảo rõ ràng.'
 
@@ -1111,7 +1137,7 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
         'risk_score': final_score,
         'risk_level': level,
         'scam_type': scam_type,
-        'patterns_found': list(set(patterns_found + domain_risks)),
+        'patterns_found': list(set(effective_patterns + domain_risks)),
         'explanation': explanation,
         'ai_insight': ai_explanation,
         'ai_available': ai_available,
@@ -1377,8 +1403,33 @@ def _get_trusted_domains() -> dict:
     return default_trusted
 
 
-def _analyze_domain(url: str) -> dict:
-    """Domain/URL Risk Engine with VirusTotal integration and Network Analysis."""
+def _lookup_domain_age_days(domain: str, timeout_s: float = 4.0):
+    """Tra cứu nhanh tuổi tên miền WHOIS với timeout ngắn; trả None nếu lỗi."""
+    try:
+        import whois
+        from concurrent.futures import ThreadPoolExecutor
+    except Exception:
+        return None
+    try:
+        ex = ThreadPoolExecutor(max_workers=1)
+        fut = ex.submit(whois.whois, domain)
+        try:
+            w = fut.result(timeout=timeout_s)
+        finally:
+            ex.shutdown(wait=False, cancel_futures=True)
+        creation_date = getattr(w, 'creation_date', None)
+        if isinstance(creation_date, list):
+            creation_date = creation_date[0]
+        if creation_date:
+            creation_dt = creation_date.date() if hasattr(creation_date, 'date') else creation_date
+            return (timezone.now().date() - creation_dt).days
+    except Exception:
+        return None
+    return None
+
+
+def _analyze_domain(url: str, *, external_consent: bool = False) -> dict:
+    """Domain/URL Risk Engine integrating network, brand/content heuristics, VT, NCSC & AI."""
     domain = normalize_domain(url)
 
     # Ensure URL has a scheme for VT scan
@@ -1387,11 +1438,11 @@ def _analyze_domain(url: str) -> dict:
     else:
         full_url = url
 
-    # Tách bạch cache: Cache theo URL đầy đủ (path + query) thay vì cấp domain,
-    # tránh việc các path khác nhau trên cùng một tên miền dùng chung kết quả đánh giá.
+    # Tách bạch cache: Cache theo URL đầy đủ + chế độ consent PII.
     url_canonical = full_url.strip()
     url_hash = hashlib.sha256(url_canonical.encode('utf-8')).hexdigest()[:24]
-    _full_cache_key = f'url_scan_result:{domain}:{url_hash}'
+    consent_flag = 1 if external_consent else 0
+    _full_cache_key = f'url_scan_result:v2:{consent_flag}:{domain}:{url_hash}'
     _cached_result = cache.get(_full_cache_key)
     if _cached_result is not None:
         import copy
@@ -1402,9 +1453,10 @@ def _analyze_domain(url: str) -> dict:
     evidence_floor = 0
     details = []
 
-    # 0. Fetch page content using requests + BeautifulSoup
+    # 0. Fetch page content using Puppeteer / requests + BeautifulSoup
     fetch_success = False
     page_title = ""
+    page_content = ""
     content_length = 0
     try:
         from api.utils.ollama_client import web_fetch_url
@@ -1412,13 +1464,14 @@ def _analyze_domain(url: str) -> dict:
         if fetch_result and fetch_result.get('content'):
             fetch_success = True
             page_title = fetch_result.get('title', '') or ''
+            page_content = str(fetch_result.get('content', '') or '')[:3500]
             content_length = len(fetch_result.get('content', ''))
     except Exception as e:
         logger.warning(f"[ScanDomain] content fetch failed for {url}: {e}")
 
     # 1. Network Analysis (SSL, Redirects, Headers) -> Tầng Heuristic
     network_info = _analyze_network(full_url, domain)
-    
+
     cert_age_days = network_info.get('cert_age_days')
     if not network_info['ssl_valid']:
         heuristic_score += 15
@@ -1426,7 +1479,7 @@ def _analyze_domain(url: str) -> dict:
     elif cert_age_days is not None and cert_age_days < 3:
         heuristic_score += 20
         details.append(f"Chứng chỉ SSL mới tạo ({cert_age_days} ngày) - Rủi ro cao")
-        
+
     issuer = str(network_info.get('cert_issuer', '')).lower()
     if 'let\'s encrypt' in issuer or 'cloudflare' in issuer:
         # Flag free certs ONLY if domain tries to look like a bank/big brand
@@ -1438,15 +1491,16 @@ def _analyze_domain(url: str) -> dict:
     if network_info.get('redirects', 0) > 2:
         heuristic_score += 15
         details.append(f"Chuyển hướng quá nhiều lần ({network_info['redirects']} lần)")
-        
+
     if network_info.get('error'):
         heuristic_score += 10
         details.append('Không thể kết nối đến trang web (có thể đã sập hoặc chặn bot)')
 
     # Check for missing security headers (only if we got a response)
     sec_headers = network_info.get('security_headers', {})
-    if network_info['ssl_valid'] and not any(sec_headers.values()):
-         heuristic_score += 5
+    if network_info['ssl_valid'] and sec_headers and not any(sec_headers.values()):
+        heuristic_score += 5
+        details.append('Thiếu các header bảo mật HTTP cơ bản (HSTS/CSP/X-Frame-Options)')
 
     # 2. Sentinel Threat Intelligence Engine -> Tầng Evidence
     vt_obj = None
@@ -1472,12 +1526,14 @@ def _analyze_domain(url: str) -> dict:
 
     # 3. Tranco Rank (Pro-active Popularity Check)
     # Độ phổ biến chỉ giảm trừ điểm heuristic, TUYỆT ĐỐI KHÔNG xóa bỏ bằng chứng độc hại (evidence_floor).
+    tranco_rank = None
     tranco_data = lookup_tranco(domain)
     if tranco_data and tranco_data.get('content') and "Popularity Rank" in tranco_data['content']:
         try:
             rank_part = tranco_data['content'].split('Popularity Rank: ')[1].split('\n')[0]
             if rank_part.isdigit():
                 rank = int(rank_part)
+                tranco_rank = rank
                 if rank < 10000:
                     heuristic_score = max(0, heuristic_score - 40)
                     details.append(f"Quy mô lớn (Tranco Top {rank}) - Giảm trừ điểm phỏng đoán")
@@ -1553,6 +1609,7 @@ def _analyze_domain(url: str) -> dict:
         tinnhiem_info = tinnhiem_lookup_domain(domain)
     except Exception as exc:  # noqa: BLE001
         logger.debug(f"[ScanDomain] tinnhiem lookup failed: {exc}")
+    is_tinnhiem_trusted = False
     if tinnhiem_info:
         rec = tinnhiem_info.get('record') or {}
         if tinnhiem_info.get('status') == 'scam':
@@ -1563,6 +1620,7 @@ def _analyze_domain(url: str) -> dict:
                 _tk_msg += f' — mạo danh {impersonated}'
             details.append(_tk_msg)
         elif tinnhiem_info.get('status') == 'trusted':
+            is_tinnhiem_trusted = True
             owner = rec.get('owner') or rec.get('name')
             _tk_msg = 'Tín nhiệm mạng (NCSC): website đã được chứng nhận TÍN NHIỆM'
             if owner:
@@ -1570,8 +1628,93 @@ def _analyze_domain(url: str) -> dict:
             details.append(_tk_msg)
             heuristic_score = max(0, heuristic_score - 20)
 
-    # Tổng hợp: điểm bằng chứng luôn là sàn tối thiểu (không thể bị xóa bởi điểm phổ biến)
-    score = min(100, max(heuristic_score, evidence_floor))
+    is_established_trusted = is_tinnhiem_trusted or (tranco_rank is not None and tranco_rank < 50000)
+
+    # 3a2. Tra cứu danh bạ ScamWave (scamwave.com) từ snapshot/cache cục bộ (< 1ms)
+    scamwave_info = None
+    try:
+        from api.utils.scamwave import lookup_scamwave
+        scamwave_raw = lookup_scamwave(domain, include_articles=False, refresh_if_empty=False)
+        if scamwave_raw:
+            scamwave_info = {
+                'checked': True,
+                'matched': bool(scamwave_raw.get('matched')),
+                'primary_status': scamwave_raw.get('primary_status'),
+                'query_url': scamwave_raw.get('query_url'),
+                'updated_at': scamwave_raw.get('updated_at'),
+                'dataset_count': scamwave_raw.get('dataset_count'),
+                'content': scamwave_raw.get('content'),
+            }
+            if scamwave_info['matched'] and not is_tinnhiem_trusted:
+                sw_status = str(scamwave_info.get('primary_status') or 'Scam').strip()
+                if sw_status.lower() in {'scam', 'ponzi', 'illegal'}:
+                    heuristic_score += 20
+                    details.append(f"ScamWave ghi nhận nhãn '{sw_status}' cho tên miền này (cần đối chiếu xác thực)")
+                else:
+                    heuristic_score += 10
+                    details.append(f"ScamWave ghi nhận nhãn lưu ý '{sw_status}' cho tên miền này")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"[ScanDomain] ScamWave lookup skipped for {domain}: {exc}")
+
+    # 3b. Chứng chỉ SSL mới (< 45 ngày) và tuổi tên miền WHOIS với domain chưa xác thực tin cậy
+    if not is_established_trusted:
+        if cert_age_days is not None and 3 <= cert_age_days < 45:
+            heuristic_score += 10
+            details.append(f"Chứng chỉ SSL mới cấp gần đây ({cert_age_days} ngày) trên tên miền chưa xác thực")
+        domain_age_days = _lookup_domain_age_days(domain, timeout_s=4.0)
+        if domain_age_days is not None:
+            network_info['domain_age_days'] = domain_age_days
+            if domain_age_days < 14:
+                heuristic_score += 40
+                details.append(f"Tên miền quá mới (đăng ký {domain_age_days} ngày trước) - Rủi ro cao")
+            elif domain_age_days < 45:
+                heuristic_score += 15
+                details.append(f"Tên miền mới đăng ký ({domain_age_days} ngày)")
+
+    # 4. Đánh giá ngữ nghĩa AI TRƯỚC khi chốt điểm và guardrail (đồng bộ nhận định AI <-> điểm số)
+    ai_available = False
+    ai_score = 0
+    ai_is_scam = False
+    ai_insight = ""
+    ai_scam_type = None
+    if evidence_floor < 85 and not (is_tinnhiem_trusted and heuristic_score < 20):
+        try:
+            from api.utils.prompts import wrap_user_data
+            wrapped_page = wrap_user_data(
+                f"Tiêu đề trang: {page_title or '(trống)'}\n\nNội dung trích xuất:\n{page_content or '(không lấy được nội dung)'}",
+                label="DU_LIEU_NGUOI_DUNG",
+                limit=3500,
+            )
+            web_ai_payload = (
+                f"Hãy đánh giá nguy cơ lừa đảo, giả mạo thương hiệu hoặc phát tán mã độc của Website/URL sau:\n"
+                f"- Domain: {domain}\n"
+                f"- URL: {full_url}\n"
+                f"- Final URL: {network_info.get('final_url', full_url)}\n"
+                f"- SSL hợp lệ: {network_info.get('ssl_valid')} | Tuổi SSL: {cert_age_days} ngày | Tuổi tên miền WHOIS: {network_info.get('domain_age_days', 'chưa rõ')} ngày\n"
+                f"- Tranco rank: {tranco_rank if tranco_rank is not None else 'không nằm trong bảng xếp hạng'}\n"
+                f"- ScamWave (scamwave.com): {(scamwave_info or {}).get('primary_status') or 'chưa có ghi nhận'}\n"
+                f"- VirusTotal: {'có cờ' if evidence_floor > 0 else '0 engine gắn cờ (không bảo đảm trang mới vô hại)'}\n"
+                f"- Tín hiệu kỹ thuật sơ bộ: {'; '.join(details) if details else 'không có'}\n\n"
+                f"{wrapped_page}"
+            )
+            ai_res = analyze_text_for_scam(
+                web_ai_payload,
+                use_web_search=False,
+                external_consent=external_consent,
+            )
+            if isinstance(ai_res, dict) and not ai_res.get('ai_notice') and not ai_res.get('error'):
+                ai_available = True
+                ai_score = int(ai_res.get('risk_score', 0) or 0)
+                ai_is_scam = bool(ai_res.get('is_scam', False))
+                ai_insight = str(ai_res.get('explanation') or ai_res.get('reason') or '').strip()
+                ai_scam_type = ai_res.get('scam_type') or ai_res.get('type')
+                if ai_is_scam and ai_score < 65:
+                    ai_score = 65
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[ScanDomain] AI evaluation failed for {domain}: {exc}")
+
+    # Tổng hợp điểm: điểm AI cảnh báo không bị thuật toán tĩnh đè mất, bằng chứng xác thực luôn là sàn tối thiểu
+    score = min(100, max(heuristic_score, evidence_floor, ai_score if (ai_available and (ai_is_scam or ai_score >= 40)) else 0))
 
     if score >= 70:
         level = RiskLevel.RED
@@ -1593,7 +1736,15 @@ def _analyze_domain(url: str) -> dict:
         'fetch_success': fetch_success,
         'page_title': page_title,
         'content_length': content_length,
+        'ai_available': ai_available,
+        'ai_score': ai_score,
+        'ai_is_scam': ai_is_scam,
     }
+    if ai_insight:
+        result['ai_insight'] = ai_insight
+        result['explanation'] = ai_insight
+    if ai_scam_type and ai_scam_type != 'other':
+        result['scam_type'] = ai_scam_type
     if vt_obj:
         result['virustotal'] = vt_obj
     if vt_sources:
@@ -1604,6 +1755,51 @@ def _analyze_domain(url: str) -> dict:
             'record': tinnhiem_info.get('record'),
             'source': 'tinnhiemmang.vn',
         }
+    osint_sections = []
+    web_sources_list = list(result.get('web_sources') or [])
+    searched_urls_list = []
+    if scamwave_info:
+        result['scamwave'] = scamwave_info
+        web_sources_list.append('ScamWave')
+        searched_urls_list.append(f"scamwave:{domain}")
+        if scamwave_info.get('query_url'):
+            searched_urls_list.append(scamwave_info['query_url'])
+        sw_status = scamwave_info.get('primary_status')
+        osint_sections.append(
+            "### [ScamWave]\n"
+            f"- **Đánh giá/Điểm số**: {f'Ghi nhận nhãn {sw_status}' if sw_status else 'Chưa có ghi nhận'}\n"
+            f"- **Chi tiết quan trọng**: {scamwave_info.get('content') or 'Không có dữ liệu.'}"
+        )
+    if tranco_rank is not None:
+        web_sources_list.append('Tranco')
+        searched_urls_list.append(f"tranco:{domain}")
+        osint_sections.append(
+            "### [Tranco]\n"
+            f"- **Đánh giá/Điểm số**: Hạng #{tranco_rank:,}\n"
+            f"- **Chi tiết quan trọng**: Tên miền xếp hạng {tranco_rank:,} trong danh sách phổ biến toàn cầu Tranco."
+        )
+    else:
+        web_sources_list.append('Tranco')
+        osint_sections.append(
+            "### [Tranco]\n"
+            "- **Đánh giá/Điểm số**: Không nằm trong Top 1M\n"
+            "- **Chi tiết quan trọng**: Không tìm thấy thứ hạng phổ biến Tranco (lưu lượng ngách hoặc mới)."
+        )
+    if tinnhiem_info and tinnhiem_info.get('status') != 'unknown':
+        web_sources_list.append('Tín nhiệm mạng (NCSC)')
+        rec_tn = tinnhiem_info.get('record') or {}
+        if rec_tn.get('url'):
+            searched_urls_list.append(rec_tn['url'])
+        tn_label = 'Danh sách lừa đảo' if tinnhiem_info.get('status') == 'scam' else 'Website tín nhiệm'
+        osint_sections.append(
+            "### [Tín nhiệm mạng NCSC]\n"
+            f"- **Đánh giá/Điểm số**: {tn_label}\n"
+            f"- **Chi tiết quan trọng**: Đối chiếu danh bạ Tín nhiệm mạng (tinnhiemmang.vn) cho {domain}."
+        )
+    if osint_sections:
+        result['web_sources'] = web_sources_list
+        result['web_context'] = "\n\n".join(osint_sections)
+        result['searched_urls'] = searched_urls_list
     # Guardrail + bằng chứng (điểm #1/#4): không kết luận an toàn khi thiếu cơ sở.
     apply_guardrail(result, kind='url')
 
@@ -1738,7 +1934,12 @@ class ScanDomainView(APIView):
             }, status=status.HTTP_202_ACCEPTED)
 
         # Standard synchronous scan
-        result = _analyze_domain(url)
+        ext_consent = bool((not mask_pii) and (request.user.is_authenticated or getattr(request, 'is_api_key_auth', False)))
+        try:
+            result = _analyze_domain(url, external_consent=ext_consent)
+        except TypeError:
+            # Tương thích các test mock `_analyze_domain(url)` với chữ ký 1 tham số
+            result = _analyze_domain(url)
         safe_raw, safe_norm, result = apply_scan_privacy(
             'domain',
             result,
@@ -2267,11 +2468,6 @@ class ScanStatusView(APIView):
                     # Lưu lại để lịch sử/lookup/MCP cũng có evidence + guardrail
                     # (trước đây chỉ sửa trong bộ nhớ -> mất khi serialize lại).
                     update_fields = ['result_json']
-                    tier = (result_payload.get('guardrail') or {}).get('tier')
-                    if tier == 'INSUFFICIENT' and event.risk_level == RiskLevel.SAFE:
-                        event.risk_level = RiskLevel.YELLOW
-                        result_payload['risk_level'] = RiskLevel.YELLOW
-                        update_fields.append('risk_level')
                     event.result_json = result_payload
                     event.save(update_fields=update_fields)
                 except Exception:

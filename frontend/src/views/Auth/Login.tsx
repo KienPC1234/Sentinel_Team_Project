@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { useAuth } from '../../components/AuthContext';
-import { api, setToken, getErrorMessage as errMsg } from '../../lib/api';
+import { api, getErrorMessage as errMsg } from '../../lib/api';
 import { TURNSTILE_SITEKEY, TurnstileWidget, getTsToken, resetTurnstile } from '../../components/TurnstileWidget';
 
 interface MfaMethods {
@@ -17,8 +17,6 @@ interface MfaMethods {
 }
 
 interface LoginResp {
-  token?: string;
-  key?: string;
   mfa_required?: boolean;
   methods?: MfaMethods;
   preferred_method?: string | null;
@@ -26,8 +24,6 @@ interface LoginResp {
 }
 
 interface MfaVerifyResp {
-  token?: string;
-  key?: string;
   error?: string;
 }
 
@@ -110,9 +106,8 @@ export default function Login() {
         token: mfaToken,
         method: activeMethod,
       });
-      const token = data.token || data.key;
-      if (!token) throw new Error('Đăng nhập thất bại: không nhận được token');
-      setToken(token);
+      // Session cookie + CSRF cookie are set by Django; no JS-readable token.
+      if (data.error) throw new Error(data.error);
       gotoNext();
     } catch (e) {
       setMfaError(errMsg(e, 'Mã xác nhận không đúng'));
@@ -153,9 +148,7 @@ export default function Login() {
         }
         setLoading(false);
       } else {
-        const token = data.token || data.key;
-        if (!token) throw new Error('Đăng nhập thất bại: không nhận được token');
-        setToken(token);
+        if (data.error) throw new Error(data.error);
         gotoNext();
       }
     } catch (err) {

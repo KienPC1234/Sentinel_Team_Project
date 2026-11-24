@@ -551,13 +551,13 @@ def _attach_guardrail(result_json, kind):
 
 
 def _resolve_synced_risk_level(result_json, base_level):
-    """Đồng bộ risk_level DB với guardrail để không lưu SAFE khi thiếu căn cứ."""
+    """Đồng bộ risk_level DB với guardrail khi guardrail nâng mức rủi ro cao (không ép 0-score thành YELLOW)."""
     from api.core.models import RiskLevel
     level = str(base_level or RiskLevel.GREEN)
     if isinstance(result_json, dict):
         tier = (result_json.get('guardrail') or {}).get('tier')
-        if tier == 'INSUFFICIENT' and level == RiskLevel.SAFE:
-            level = RiskLevel.YELLOW
+        if tier in ('CONFIRMED_RISK', 'HIGH_RISK'):
+            level = RiskLevel.RED
         result_json['risk_level'] = level
     return level
 
@@ -610,19 +610,19 @@ def _notify_scan_complete(scan_event, title_suffix=''):
         tier = (rj.get('guardrail') or {}).get('tier') if isinstance(rj, dict) else None
 
         tier_labels = {
-            'CONFIRMED_RISK': '[Nguy cơ cao] Đã đối chiếu nguồn',
-            'HIGH_RISK': '[Nguy cơ cao]',
-            'SUSPICIOUS': '[Đáng ngờ] Cần thận trọng',
-            'LIKELY_SAFE': '[Có khả năng an toàn]',
-            'INSUFFICIENT': '[Chưa đủ căn cứ] Cần xác minh',
+            'CONFIRMED_RISK': 'Nguy cơ cao (đã đối chiếu nguồn)',
+            'HIGH_RISK': 'Nguy cơ cao',
+            'SUSPICIOUS': 'Đáng ngờ - cần thận trọng',
+            'LIKELY_SAFE': 'Có khả năng an toàn',
+            'INSUFFICIENT': 'Chưa đủ căn cứ - cần xác minh',
         }
         level_labels = {
-            'RED': '[Nguy hiểm] Cao',
-            'YELLOW': '[Cảnh báo] Trung bình',
-            'GREEN': '[Rủi ro thấp] Cần đối chiếu',
-            'SAFE': '[Chưa đủ căn cứ] Cần xác minh',
+            'RED': 'Nguy hiểm cao',
+            'YELLOW': 'Cảnh báo trung bình',
+            'GREEN': 'Rủi ro thấp - cần đối chiếu',
+            'SAFE': 'Chưa đủ căn cứ - cần xác minh',
         }
-        level_text = tier_labels.get(tier) or level_labels.get(risk_level, '[Chưa đủ căn cứ] Cần xác minh')
+        level_text = tier_labels.get(tier) or level_labels.get(risk_level, 'Chưa đủ căn cứ - cần xác minh')
 
         title = f"Kết quả quét: {level_text}"
         message = f"{title_suffix} - Điểm rủi ro: {risk_score}/100"
@@ -877,7 +877,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         vision_expl = _vision_best.get('explanation', '')
 
         if not full_ocr and not all_qr_contents and vision_results:
-            # Vision-only: không có chữ/QR để chạy OCR-AI, dùng verdict vision trực tiếp.
+            # Vision-only: đối chiếu thêm nguồn công khai (OSINT) từ nhận định của model vision.
             ai_res = {
                 'risk_score': vision_score,
                 'risk_level': _vision_best.get('risk_level', 'SAFE'),
@@ -885,7 +885,48 @@ def perform_image_scan_task(self, scan_event_id, images_data):
                 'scam_type': _vision_best.get('scam_type', 'Không xác định'),
                 'vision_direct': True,
             }
-            send_progress("Model vision đã đánh giá trực tiếp (không qua OCR).", step="analyzing")
+            vision_summary_parts = []
+            for idx, v in enumerate(vision_results, 1):
+                v_type = str(v.get('scam_type') or '').strip()
+                v_expl = str(v.get('explanation') or '').strip()
+                v_lvl = str(v.get('risk_level') or 'SAFE').strip()
+                v_scr = int(v.get('risk_score') or 0)
+                if v_expl:
+                    vision_summary_parts.append(
+                        f"Ảnh {idx} (Mức {v_lvl}, {v_scr}/100, loại: {v_type or 'Không xác định'}): {v_expl}"
+                    )
+            if vision_summary_parts:
+                send_progress("Đang đối chiếu dấu hiệu hình ảnh trên nguồn công khai...", step="osint_enrichment")
+                consent_pii = _has_external_pii_consent(scan_event)
+                osint_input = (
+                    "Kết quả phân tích trực quan từ hình ảnh (hãy dùng thông tin này để tra cứu đối chiếu "
+                    "nguồn công khai, kiểm chứng thương hiệu/tên miền/thủ đoạn và tổng hợp giải thích rõ ràng):\n"
+                    + "\n".join(vision_summary_parts)
+                )
+                try:
+                    osint_res = analyze_text_for_scam(
+                        osint_input,
+                        use_web_search=True,
+                        external_consent=consent_pii,
+                    )
+                    if osint_res and osint_res.get('risk_score') is not None:
+                        osint_score = int(osint_res.get('risk_score') or 0)
+                        merged_score = max(vision_score, osint_score)
+                        ai_res['risk_score'] = merged_score
+                        ai_res['risk_level'] = _level_from_score(merged_score)
+                        ai_res['web_sources'] = osint_res.get('web_sources', [])
+                        ai_res['web_context'] = osint_res.get('web_context', '')
+                        ai_res['searched_urls'] = osint_res.get('searched_urls', [])
+                        ai_res['db_sources_consulted'] = osint_res.get('db_sources_consulted', [])
+                        ai_res['ai_notice'] = osint_res.get('ai_notice', '')
+                        ai_res['ai_retry_used'] = osint_res.get('ai_retry_used', False)
+                        ai_res['ai_retry_count'] = osint_res.get('ai_retry_count', 0)
+                        osint_expl = _sanitize_ai_explanation(osint_res.get('explanation') or '')
+                        if osint_expl:
+                            ai_res['explanation'] = osint_expl
+                except Exception as osint_err:
+                    logger.warning(f"Vision OSINT enrichment failed for event {scan_event_id}: {osint_err}")
+            send_progress("Đã hoàn tất phân tích hình ảnh và đối chiếu nguồn công khai.", step="analyzing")
         elif full_ocr or all_qr_contents:
             # Build analysis text including QR contents
             analysis_text = full_ocr
@@ -966,6 +1007,8 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             'ai_retry_count': ai_res.get('ai_retry_count', 0),
             'web_sources': ai_res.get('web_sources', []),
             'web_context': ai_res.get('web_context', ''),
+            'searched_urls': ai_res.get('searched_urls', []),
+            'db_sources_consulted': ai_res.get('db_sources_consulted', []),
             'qr_contents': list(set(all_qr_contents)),
             'vision_used': len(vision_results),
             'vision_details': [{'risk_score': v.get('risk_score'), 'risk_level': v.get('risk_level'), 'explanation': v.get('explanation'), 'scam_type': v.get('scam_type')} for v in vision_results],
@@ -1127,6 +1170,8 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             'ai_retry_count': ai_res.get('ai_retry_count', 0),
             'web_sources': ai_res.get('web_sources', []),
             'web_context': ai_res.get('web_context', ''),
+            'searched_urls': ai_res.get('searched_urls', []),
+            'db_sources_consulted': ai_res.get('db_sources_consulted', []),
         }
 
         result = _apply_task_privacy_and_guardrail(scan_event, result, 'audio')
@@ -1269,63 +1314,63 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         puppeteer_used = False
         captcha_detected = False
 
-        # --- NETWORK ANALYSIS (Deep) ---
-        send_progress("Đang kiểm tra thông tin tên miền (WHOIS, DNS)...", step="network_analysis")
+        # --- NETWORK & REPUTATION ANALYSIS (Deep) ---
+        send_progress("Đang kiểm tra thông tin tên miền...", step="network_analysis")
+        vt_obj = None
+        vt_sources = None
+        tinnhiem_obj = None
+        evidence_floor = 0
         try:
             # 1. WHOIS Age
             try:
-                send_progress("Đang tra cứu WHOIS (tuổi tên miền, chủ sở hữu)...", step="whois")
+                send_progress("Đang tra cứu lịch sử đăng ký tên miền...", step="whois")
                 w = _run_with_timeout(lambda: whois.whois(domain), timeout=15) if whois else None
                 creation_date = getattr(w, 'creation_date', None)
                 if isinstance(creation_date, list):
                     creation_date = creation_date[0]
                 
                 if creation_date:
-                    # Robust date conversion
                     if hasattr(creation_date, 'date'):
                          creation_dt = creation_date.date()
                     else:
-                         creation_dt = creation_date # Assume it's already date or compatible
+                         creation_dt = creation_date
 
                     age_days = (timezone.now().date() - creation_dt).days
                     
                     if age_days < 14:
-                        network_risk_score = max(network_risk_score, 75) # Very high risk if new
+                        network_risk_score = max(network_risk_score, 75)
                         network_details.append(f"Tên miền quá mới (đăng ký {age_days} ngày trước)")
-                        send_progress(f"⚠️ Tên miền rất mới: chỉ {age_days} ngày tuổi - dấu hiệu nghi ngờ!", step="whois_warning")
+                        send_progress(f"Cảnh báo: Tên miền rất mới, mới tạo {age_days} ngày", step="whois_warning")
                         logger.info(f"[WebScan] Event {scan_event_id}: Domain too new ({age_days} days)")
                     elif age_days < 30:
                          network_risk_score += 10
                          network_details.append(f"Tên miền mới (đăng ký {age_days} ngày trước)")
-                         send_progress(f"Tên miền khá mới: {age_days} ngày tuổi", step="whois_info")
+                         send_progress(f"Tên miền mới đăng ký ({age_days} ngày tuổi)", step="whois_info")
                          logger.info(f"[WebScan] Event {scan_event_id}: Domain new ({age_days} days)")
                     else:
-                         send_progress(f"WHOIS: Tên miền {age_days} ngày tuổi", step="whois_ok")
+                         send_progress(f"Tuổi tên miền: {age_days} ngày", step="whois_ok")
             except Exception as e:
                 logger.warning(f"[WebScan] Event {scan_event_id}: WHOIS lookup failed: {e}")
 
-            # 2. DNS Checks (Resolvers)
+            # 2. DNS Checks
             try:
-                send_progress("Đang kiểm tra DNS (MX records)...", step="dns")
-                # Check for MX records (Phishing sites often lack email setup)
+                send_progress("Đang kiểm tra cấu hình tên miền & thư điện tử...", step="dns")
                 try:
                     dns.resolver.resolve(domain, 'MX')
                     has_mx = True
                     logger.info(f"[WebScan] Event {scan_event_id}: MX records found")
                 except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
                     has_mx = False
-                    # Only penalize if it pretends to be a bank/corp
-                    network_risk_score += 5
                     logger.info(f"[WebScan] Event {scan_event_id}: No MX records found")
-                    
+
                 if not has_mx:
-                    network_risk_score += 7
+                    network_risk_score += 5
             except Exception:
                 pass
 
-            # 3. ASN / IP Reputation
+            # 3. Hosting / IP check
             try:
-                send_progress("Đang kiểm tra ASN / IP Reputation...", step="asn")
+                send_progress("Đang kiểm tra máy chủ lưu trữ...", step="asn")
                 import socket
                 ip = socket.gethostbyname(domain)
                 if not IPWhois:
@@ -1335,22 +1380,60 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                     res = _run_with_timeout(lambda: obj.lookup_rdap(depth=1), timeout=15, default={}) or {}
                     asn_desc = res.get('asn_description', '') or res.get('asn_registry', '')
                     
-                    # Check for known bad ASNs or cheap hosting
                     suspicious_keywords = ['Hetzner', 'DigitalOcean', 'Choopa', 'Namecheap', 'Vultr', 'Linode', 'Hostinger']
                     if any(k.lower() in asn_desc.lower() for k in suspicious_keywords):
-                        # Cheap hosting itself isn't bad, but phishing often uses it
                         network_risk_score += 7
-                        network_details.append(f"Hosting provider: {asn_desc}")
-                        send_progress(f"Hosting: {asn_desc} (thường dùng cho phishing)", step="asn_warning")
-                        logger.info(f"[WebScan] Event {scan_event_id}: Suspicious/Cheap hosting provider found: {asn_desc}")
-                    else:
-                        send_progress(f"IP/ASN: {asn_desc}", step="asn_ok")
+                        network_details.append(f"Nhà cung cấp máy chủ: {asn_desc}")
+                        send_progress(f"Máy chủ lưu trữ: {asn_desc} (hạ tầng thuê phổ thông, cần kiểm tra thêm)", step="asn_warning")
+                    elif asn_desc:
+                        send_progress(f"Máy chủ lưu trữ: {asn_desc}", step="asn_ok")
                 except IPDefinedError:
                      pass
             except Exception as e:
                 logger.warning(f"[WebScan] Event {scan_event_id}: ASN lookup failed: {e}")
 
-            send_progress(f"Đã hoàn tất kiểm tra mạng. Điểm rủi ro mạng: {network_risk_score}", step="network_analysis")
+            # 4. Reputation / Threat Intel & Danh bạ Tín nhiệm mạng
+            try:
+                send_progress("Đang đối chiếu hệ thống phát hiện mã độc & danh bạ tín nhiệm...", step="reputation")
+                from api.utils.vt_client import VTClient
+                target_for_vt = url if '://' in url else f"https://{domain}"
+                with VTClient() as vt:
+                    vt_res = _run_with_timeout(lambda: vt.scan_url(target_for_vt), timeout=12, default=None)
+                if isinstance(vt_res, dict):
+                    vt_obj = vt_res.get('virustotal')
+                    vt_sources = vt_res.get('sources')
+                    mal = int(vt_res.get('malicious', 0) or 0)
+                    sus = int(vt_res.get('suspicious', 0) or 0)
+                    if mal >= 3:
+                        evidence_floor = max(evidence_floor, 85)
+                        network_risk_score = max(network_risk_score, 85)
+                        network_details.append(f"Hệ thống phát hiện mã độc: {mal} nguồn cảnh báo nguy hiểm")
+                    elif mal > 0 or sus >= 2:
+                        evidence_floor = max(evidence_floor, 60)
+                        network_risk_score = max(network_risk_score, 60)
+                        network_details.append(f"Hệ thống phát hiện mã độc: {mal} nguồn gắn cờ độc hại, {sus} nguồn nghi ngờ")
+            except Exception as e:
+                logger.warning(f"[WebScan] Event {scan_event_id}: Threat Intel check failed: {e}")
+
+            try:
+                from api.utils.vn_sources import tinnhiem_lookup_domain as tn_lookup
+                tn_info = tn_lookup(domain)
+                if tn_info and tn_info.get('status') in ('scam', 'trusted'):
+                    tinnhiem_obj = {
+                        'status': tn_info['status'],
+                        'record': tn_info.get('record'),
+                        'source': 'tinnhiemmang.vn',
+                    }
+                    if tn_info['status'] == 'scam':
+                        evidence_floor = max(evidence_floor, 90)
+                        network_risk_score = max(network_risk_score, 90)
+                        network_details.append("Tín nhiệm mạng (NCSC): tên miền nằm trong danh sách lừa đảo")
+                    else:
+                        network_details.append("Tín nhiệm mạng (NCSC): website đã được chứng nhận tín nhiệm")
+            except Exception:
+                pass
+
+            send_progress("Đã hoàn tất kiểm tra hạ tầng & độ an toàn ban đầu.", step="network_analysis")
             logger.info(f"[WebScan] Event {scan_event_id}: Network scan complete. Score: {network_risk_score}")
 
         except Exception as e:
@@ -1388,7 +1471,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         try:
             from api.utils.puppeteer_host_client import fetch_with_puppeteer_host
 
-            send_progress("Đang tải nội dung bằng trình duyệt JS (Puppeteer)...", step="scraping_js")
+            send_progress("Đang truy cập và đọc nội dung trang web...", step="scraping_js")
             js_result = fetch_with_puppeteer_host(target_url, timeout_ms=20000)
 
             if js_result.get('ok') and js_result.get('content'):
@@ -1398,9 +1481,9 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                 puppeteer_used = True
                 captcha_detected = bool(js_result.get('captcha_detected'))
                 if captcha_detected:
-                    network_details.append("Trang có dấu hiệu CAPTCHA/anti-bot")
+                    network_details.append("Trang có bước xác minh truy cập tự động")
                 send_progress(
-                    f"✓ Đã tải nội dung bằng Puppeteer ({len(content)} ký tự)",
+                    f"✓ Đã đọc xong nội dung trang web ({len(content)} ký tự)",
                     step="scraping_js_ok",
                 )
                 logger.info(
@@ -1425,7 +1508,7 @@ def perform_web_scrapping_task(self, scan_event_id, url):
 
                 from bs4 import BeautifulSoup
 
-                send_progress("Đang tải nội dung bằng requests (fallback)...", step="scraping_fallback")
+                send_progress("Đang thử kết nối lại để đọc nội dung trang...", step="scraping_fallback")
 
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
@@ -1500,8 +1583,24 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             ai_timeout_seconds = 600
             keepalive_every_seconds = 10
             consent_pii = _has_external_pii_consent(scan_event)
+
+            def _run_ai_with_progress():
+                import inspect
+                try:
+                    sig = inspect.signature(analyze_text_for_scam)
+                    if 'progress_callback' in sig.parameters:
+                        return analyze_text_for_scam(
+                            ai_input,
+                            use_web_search=True,
+                            external_consent=consent_pii,
+                            progress_callback=send_progress,
+                        )
+                except (TypeError, ValueError):
+                    pass
+                return analyze_text_for_scam(ai_input, None, True, consent_pii)
+
             executor = ThreadPoolExecutor(max_workers=1)
-            future = executor.submit(analyze_text_for_scam, ai_input, None, True, consent_pii)
+            future = executor.submit(_run_ai_with_progress)
             start_time = time.time()
             last_keepalive = 0
             ai_res = None
@@ -1537,12 +1636,29 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             send_progress(ai_notice, step="ai_retry_notice")
         send_progress("AI đã hoàn tất phân tích.", step="analyzing")
 
-        final_risk_score = max(ai_res.get('risk_score', 0), network_risk_score)
+        final_risk_score = max(ai_res.get('risk_score', 0), network_risk_score, evidence_floor)
         
         # Combine networks details
         explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
         if network_details:
              explanation += f"\n\nPhát hiện từ mạng lưới: {', '.join(network_details)}"
+
+        ai_ok = bool(ai_res and not ai_res.get('ai_notice') and not ai_res.get('error'))
+        scamwave_info = None
+        try:
+            from api.utils.scamwave import lookup_scamwave
+            sw_raw = lookup_scamwave(domain, include_articles=False, refresh_if_empty=False)
+            if sw_raw:
+                scamwave_info = {
+                    'checked': True,
+                    'matched': bool(sw_raw.get('matched')),
+                    'primary_status': sw_raw.get('primary_status'),
+                    'query_url': sw_raw.get('query_url'),
+                    'updated_at': sw_raw.get('updated_at'),
+                    'dataset_count': sw_raw.get('dataset_count'),
+                }
+        except Exception:
+            scamwave_info = None
 
         result = {
             'domain': domain,
@@ -1554,6 +1670,10 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             'risk_score': final_risk_score,
             'risk_level': ai_res.get('risk_level', 'SAFE'),
             'explanation': explanation,
+            'ai_available': ai_ok,
+            'ai_score': int(ai_res.get('risk_score', 0) or 0) if ai_ok else 0,
+            'ai_is_scam': bool(ai_res.get('is_scam', False)) if ai_ok else False,
+            'ai_insight': _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '') if ai_ok else '',
             'ai_notice': ai_notice,
             'ai_retry_used': ai_res.get('ai_retry_used', False),
             'ai_retry_count': ai_res.get('ai_retry_count', 0),
@@ -1561,8 +1681,20 @@ def perform_web_scrapping_task(self, scan_event_id, url):
             'content_length': len(content) if content else 0,
             'network_details': network_details,
             'web_sources': ai_res.get('web_sources', []),
-            'web_context': ai_res.get('web_context', '')
+            'web_context': ai_res.get('web_context', ''),
+            'searched_urls': ai_res.get('searched_urls', []),
+            'db_sources_consulted': ai_res.get('db_sources_consulted', []),
         }
+        if scamwave_info:
+            result['scamwave'] = scamwave_info
+            if 'ScamWave' not in [str(s) for s in result['web_sources']]:
+                result['web_sources'] = list(result['web_sources']) + ['ScamWave']
+        if vt_obj:
+            result['virustotal'] = vt_obj
+        if vt_sources:
+            result['sources'] = vt_sources
+        if tinnhiem_obj:
+            result['tinnhiem'] = tinnhiem_obj
         
         # Adjust risk level based on network score (ngưỡng canonical 70/40/10)
         result['risk_level'] = _level_from_score(final_risk_score)
@@ -1959,11 +2091,11 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         annotated_images = []
 
         if images_b64:
-            send_progress(f"Đang xử lý {len(images_b64)} ảnh bằng OCR...", step="ocr")
+            send_progress(f"Đang đọc nội dung chữ từ {len(images_b64)} ảnh...", step="ocr")
             from api.utils.media_utils import extract_ocr_with_boxes
 
             for idx, item in enumerate(images_b64):
-                send_progress(f"Đang nhận dạng text từ ảnh {idx+1}/{len(images_b64)}...", step="ocr")
+                send_progress(f"Đang đọc chữ từ ảnh {idx+1}/{len(images_b64)}...", step="ocr")
                 try:
                     if isinstance(item, dict):
                         img_b64 = item.get('content') or item.get('base64') or item.get('data') or ''
@@ -1986,16 +2118,16 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                     ocr_result = extract_ocr_with_boxes(img_file)
                     if ocr_result.get("text"):
                         combined_ocr_text.append(ocr_result["text"])
-                        send_progress(f"Ảnh {idx+1}: Trích xuất {len(ocr_result['text'])} ký tự", step="ocr_ok")
+                        send_progress(f"Ảnh {idx+1}: Đã đọc {len(ocr_result['text'])} ký tự", step="ocr_ok")
                     else:
-                        send_progress(f"Ảnh {idx+1}: Không phát hiện text", step="ocr_ok")
+                        send_progress(f"Ảnh {idx+1}: Không thấy chữ rõ trong ảnh", step="ocr_ok")
                     if ocr_result.get("annotated_image_b64"):
                         annotated_images.append(ocr_result["annotated_image_b64"])
                 except Exception as e:
                     logger.error(f"[MsgScan] OCR Error for image {idx}: {e}")
-                    send_progress(f"Ảnh {idx+1}: Lỗi OCR - {str(e)[:50]}", step="ocr_warning")
+                    send_progress(f"Ảnh {idx+1}: Không đọc được nội dung - {str(e)[:50]}", step="ocr_warning")
 
-        # 2. Combine text
+        # 2. Combine text & normalize OCR-wrapped URLs cleanly
         full_text = message_text or ''
         if combined_ocr_text:
             full_text = (full_text + '\n' + '\n'.join(combined_ocr_text)).strip()
@@ -2007,46 +2139,57 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             scan_event.save()
             return
 
-        # 3. Pattern Analysis + Domain scan
-        send_progress("Đang phát hiện dấu hiệu scam (từ khóa, URL)...", step="pattern_analysis")
+        analysis_text = re.sub(r'(https?)\s*:\s*(?:/\s*/|[Il|]/)', r'\1://', full_text, flags=re.IGNORECASE)
+        analysis_text = re.sub(r'([a-zA-Z0-9-])-\s*\n\s*([a-zA-Z0-9-]+\.[a-z]{2,})', r'\1-\2', analysis_text)
 
-        patterns_found = []
-        scam_keywords = {
-            r'otp|mã xác': 'Yêu cầu OTP',
-            r'chuyển khoản|chuyển tiền': 'Giao dịch tài chính',
-            r'công an|viện kiểm sát': 'Mạo danh cơ quan chức năng',
-            r'trúng thưởng|quà tặng': 'Dụ dỗ trúng thưởng',
-            r'khóa tài khoản|phong tỏa': 'Đe dọa tài khoản',
-        }
-        for pattern, label in scam_keywords.items():
-            if re.search(pattern, full_text.lower()):
-                patterns_found.append(label)
+        # 3. Pattern Analysis (shared scam_rules) + Domain check
+        send_progress("Đang rà soát dấu hiệu bất thường và liên kết...", step="pattern_analysis")
 
-        found_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', full_text)
+        from api.utils.scam_rules import heuristic_score, match_patterns
+        patterns_found = match_patterns(analysis_text)
+        base_rule_score = heuristic_score(analysis_text)
+
+        found_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', analysis_text)
         domain_risks = []
         max_domain_score = 0
+        has_verified_threat = False
         vt = VTClient()
         try:
-            for url in found_urls:
+            from api.utils.scamwave import lookup_scamwave
+            from api.utils.vn_sources import tinnhiem_lookup_domain as tn_lookup
+            for url in found_urls[:5]:
                 domain = normalize_domain(url)
                 if domain:
-                    send_progress(f"Đang kiểm tra domain: {domain}...", step="domain_check")
+                    send_progress(f"Đang kiểm tra liên kết: {domain}...", step="domain_check")
+                    tn_info = tn_lookup(domain)
+                    if tn_info and tn_info.get('status') == 'scam':
+                        max_domain_score = max(max_domain_score, 90)
+                        has_verified_threat = True
+                        domain_risks.append(f"Tên miền {domain} nằm trong danh sách lừa đảo NCSC")
+                    sw_info = lookup_scamwave(domain, include_articles=False, refresh_if_empty=False)
+                    if sw_info and sw_info.get('matched'):
+                        max_domain_score = max(max_domain_score, 55)
+                        domain_risks.append(f"Tên miền {domain} có cảnh báo từ cộng đồng")
                     vt_res = vt.scan_url(url)
                     if vt_res:
                         score = vt_res.get('risk_score', 0)
                         max_domain_score = max(max_domain_score, score)
+                        vt_mal = int(vt_res.get('malicious', 0) or 0)
+                        vt_sus = int(vt_res.get('suspicious', 0) or 0)
+                        if vt_mal >= 2 or (vt_mal >= 1 and vt_sus >= 2):
+                            has_verified_threat = True
                         if score > 0:
-                            domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
+                            domain_risks.append(f"Tên miền {domain} có cảnh báo bảo mật ({score}/100)")
         finally:
             vt.close()
 
         if patterns_found or domain_risks:
-            send_progress(f"Phát hiện {len(patterns_found) + len(domain_risks)} dấu hiệu đáng ngờ", step="pattern_done")
+            send_progress(f"Phát hiện {len(patterns_found) + len(domain_risks)} dấu hiệu cần lưu ý", step="pattern_done")
         else:
-            send_progress("Không phát hiện dấu hiệu rõ ràng, đang chuyển sang AI...", step="pattern_done")
+            send_progress("Chưa thấy dấu hiệu rõ ràng theo từ khóa, đang chuyển sang AI...", step="pattern_done")
 
         # 4. AI Analysis
-        send_progress("AI đang phân tích nội dung + OSINT web search...", step="ai_analysis")
+        send_progress("Đang phân tích nội dung và đối chiếu nguồn công khai...", step="ai_analysis")
         ai_score = 0
         ai_explanation = ''
         ai_available = True
@@ -2054,10 +2197,10 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         try:
             import time
             from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
-            ai_timeout_seconds = 90
-            keepalive_every_seconds = 8
+            ai_timeout_seconds = 210
+            keepalive_every_seconds = 10
             executor = ThreadPoolExecutor(max_workers=1)
-            osint_entities = _extract_osint_entities(full_text)
+            osint_entities = _extract_osint_entities(analysis_text)
             osint_summary_lines = [
                 f"- URLs: {', '.join(osint_entities['urls']) if osint_entities['urls'] else 'không có'}",
                 f"- SĐT: {', '.join(osint_entities['phones']) if osint_entities['phones'] else 'không có'}",
@@ -2070,16 +2213,39 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                 "phishing, quishing QR, giả danh ngân hàng/cơ quan chức năng, job scam, đầu tư crypto, deepfake/social engineering.\n\n"
                 "YÊU CẦU:\n"
                 "1) Ưu tiên kiểm chứng thực thể (URL, số điện thoại, tài khoản, email) bằng nguồn web công khai.\n"
-                "2) Chỉ kết luận theo bằng chứng quan sát được trong tin nhắn/OSINT.\n"
+                "2) Chỉ kết luận theo bằng chứng quan sát được trong tin nhắn và nguồn đối chiếu.\n"
                 "3) Trả về đánh giá rủi ro rõ ràng, ngắn gọn, hành động khuyến nghị cụ thể cho người dùng.\n\n"
                 f"Nội dung cần phân tích:\n{full_text[:6000]}\n\n"
-                "Thực thể trích xuất để OSINT:\n"
+                "Thông tin trích xuất để kiểm chứng:\n"
                 + "\n".join(osint_summary_lines)
             )
+            ai_input = ai_input.replace(full_text[:6000], analysis_text[:6000])
 
             consent_pii = _has_external_pii_consent(scan_event)
-            send_progress("Đang đối chiếu thực thể với nguồn web/OSINT...", step="osint_enrichment")
-            future = executor.submit(analyze_text_for_scam, ai_input, None, True, consent_pii)
+            pre_filter_ctx = {
+                'patterns_found': patterns_found,
+                'heuristic_score': base_rule_score,
+                'domain_risks': domain_risks,
+            }
+            send_progress("Đang đối chiếu thông tin liên hệ trên nguồn công khai...", step="osint_enrichment")
+            def _run_msg_ai(with_web: bool = True):
+                import inspect
+                try:
+                    params = inspect.signature(analyze_text_for_scam).parameters
+                    if 'progress_callback' in params:
+                        kw = {
+                            'use_web_search': with_web,
+                            'external_consent': consent_pii,
+                            'progress_callback': send_progress if with_web else None,
+                        }
+                        if 'pre_filter_context' in params:
+                            kw['pre_filter_context'] = pre_filter_ctx
+                        return analyze_text_for_scam(ai_input, **kw)
+                except (TypeError, ValueError):
+                    pass
+                return analyze_text_for_scam(ai_input, None, with_web, consent_pii)
+
+            future = executor.submit(_run_msg_ai, True)
             start_time = time.time()
             last_keepalive = 0
             ai_result_data = None
@@ -2094,9 +2260,14 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                         send_progress("AI đang phân tích...", step="ping")
                         last_keepalive = elapsed
                     if elapsed >= ai_timeout_seconds:
-                        ai_result_data = None
-                        ai_available = False
                         future.cancel()
+                        send_progress("Đang chuyển sang phân tích AI trực tiếp...", step="ai_fallback")
+                        try:
+                            ai_result_data = _run_msg_ai(False)
+                            ai_available = bool(ai_result_data)
+                        except Exception:
+                            ai_result_data = None
+                            ai_available = False
                         break
             executor.shutdown(wait=False, cancel_futures=True)
 
@@ -2114,34 +2285,40 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                 send_progress("AI đã hoàn tất phân tích.", step="ai_done")
             else:
                 ai_available = False
-                send_progress("AI không khả dụng, sử dụng phân tích quy tắc.", step="ai_warning")
+                send_progress("AI tạm gián đoạn, sử dụng phân tích theo dấu hiệu.", step="ai_warning")
         except Exception as exc:
             ai_available = False
             logger.warning(f"[MsgScan] AI error: {exc}")
-            send_progress("AI gặp lỗi, sử dụng phân tích quy tắc.", step="ai_warning")
+            send_progress("AI gặp lỗi, sử dụng phân tích theo dấu hiệu.", step="ai_warning")
 
-        # 5. Final scoring
+        # 5. Final scoring (Evidence-Aware Conditional Ensemble đồng nhất với luồng đồng bộ)
         send_progress("Đang tổng hợp kết quả...", step="finalizing")
-        rule_score = min(100, len(patterns_found) * 15 + max_domain_score)
-        # Luôn lấy tối đa giữa AI và luật nội bộ (đồng nhất với luồng đồng bộ).
-        final_score = max(ai_score, rule_score, max_domain_score) if ai_available else rule_score
-        final_score = max(0, min(100, final_score))
-
-        if final_score >= 70:
-            level = 'RED'
-        elif final_score >= 40:
-            level = 'YELLOW'
-        elif final_score >= 10:
-            level = 'GREEN'
-        else:
-            level = 'SAFE'
+        rule_score = min(100, max(base_rule_score + max_domain_score, max_domain_score, len(patterns_found) * 18))
+        from api.utils.trust_guard import compute_evidence_aware_ensemble
+        ensemble_res = compute_evidence_aware_ensemble(
+            text=analysis_text,
+            ai_result=ai_result_data if ai_available else None,
+            rule_score=rule_score,
+            domain_threat_evidence={
+                'max_domain_score': max_domain_score,
+                'has_verified_threat': has_verified_threat,
+                'domain_risks': domain_risks,
+            },
+        )
+        final_score = max(0, min(100, int(ensemble_res['final_score'])))
+        level = str(ensemble_res['risk_level'])
+        if ensemble_res.get('decision_reason') == 'safe_context_discounted':
+            patterns_found = []
 
         scam_type = 'other'
-        if any('công an' in p for p in patterns_found):
+        joined_patterns = ' '.join(patterns_found).lower()
+        if any('công an' in p.lower() for p in patterns_found):
             scam_type = 'police_impersonation'
-        elif any('OTP' in p for p in patterns_found):
+        elif any('otp' in p.lower() for p in patterns_found):
             scam_type = 'otp_steal'
-        elif any('chuyển khoản' in p for p in patterns_found):
+        elif 'tuyển dụng' in joined_patterns or 'hoa hồng' in joined_patterns:
+            scam_type = 'recruitment_scam'
+        elif any('chuyển khoản' in p.lower() or 'tài chính' in p.lower() or 'nộp phí' in p.lower() for p in patterns_found):
             scam_type = 'investment_scam'
         elif domain_risks:
             scam_type = 'phishing'
@@ -2149,7 +2326,7 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         if ai_available and ai_explanation:
             explanation = ai_explanation
         elif patterns_found or domain_risks:
-            explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu đáng ngờ (phân tích quy tắc).'
+            explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu bất thường trong nội dung.'
         else:
             explanation = 'Không phát hiện dấu hiệu lừa đảo rõ ràng.'
 
@@ -2161,12 +2338,14 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             'explanation': explanation,
             'ai_insight': ai_explanation,
             'ai_available': ai_available,
-            'osint_entities': _extract_osint_entities(full_text),
+            'osint_entities': _extract_osint_entities(analysis_text),
             'ocr_text': '\n'.join(combined_ocr_text) if combined_ocr_text else '',
             'annotated_images': annotated_images,
             'annotated_image': annotated_images[0] if annotated_images else '',
             'web_sources': (ai_result_data or {}).get('web_sources', []),
             'web_context': (ai_result_data or {}).get('web_context', ''),
+            'searched_urls': (ai_result_data or {}).get('searched_urls', []),
+            'db_sources_consulted': (ai_result_data or {}).get('db_sources_consulted', []),
         }
 
         # Gắn guardrail + che PII NGAY trên `result` (để payload WS cũng đồng nhất), rồi lưu DB
@@ -2341,11 +2520,17 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             if not is_basic_mode:
                 send_progress("Đang tra cứu cơ sở dữ liệu lừa đảo + tìm kiếm web...", step="web_search")
             consent_pii = _has_external_pii_consent(scan_event)
-            analysis = analyze_text_for_scam(
-                analysis_input,
-                use_web_search=(not is_basic_mode),
-                external_consent=consent_pii,
-            )
+            import inspect
+            _email_kwargs = {
+                'use_web_search': (not is_basic_mode),
+                'external_consent': consent_pii,
+            }
+            try:
+                if not is_basic_mode and 'progress_callback' in inspect.signature(analyze_text_for_scam).parameters:
+                    _email_kwargs['progress_callback'] = send_progress
+            except (TypeError, ValueError):
+                pass
+            analysis = analyze_text_for_scam(analysis_input, **_email_kwargs)
             # Không log toàn bộ payload AI (có thể chứa subject/body) — chỉ log cờ tổng hợp.
             logger.info(
                 f"[EmailScan] Event {scan_event_id}: AI done "
@@ -2368,23 +2553,35 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
                 analysis
                 and (analysis.get('insufficient_input') or analysis.get('ai_notice'))
             )
+            ai_score_val = 0
+            ai_is_scam = False
+            ai_ok = False
             if analysis and not ai_fallback:
-                if analysis.get('is_scam'):
-                    ai_bonus = min(35, int((analysis.get('risk_score', 0) or 0) * 0.45))
+                ai_ok = True
+                ai_score_val = int(analysis.get('risk_score', 0) or 0)
+                ai_is_scam = bool(analysis.get('is_scam'))
+                if ai_is_scam:
+                    ai_bonus = min(35, int(ai_score_val * 0.45))
                 else:
-                    ai_bonus = -10 if int(analysis.get('risk_score', 0) or 0) <= 20 else 0
+                    ai_bonus = -10 if ai_score_val <= 20 else 0
                 analysis_indicators = [str(x).strip() for x in (analysis.get('indicators', []) or []) if str(x).strip()]
                 details.extend(analysis_indicators)
                 ai_explain = str(analysis.get('explanation', '') or '').strip()
                 ai_explain = re.sub(r'^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+', '', ai_explain).strip()
         else:
+            ai_score_val = 0
+            ai_is_scam = False
+            ai_ok = False
             logger.info(f"[EmailScan] Event {scan_event_id}: Body text too short, skipping AI")
             send_progress("Nội dung email quá ngắn, bỏ qua phân tích AI.", step="ai_skipped")
 
-        # 3) Finalize - combine preliminary score, weighted EML score, and AI adjustment
+        # 3) Finalize - combine preliminary score, weighted EML score, and AI detection
         send_progress("Đang tổng hợp kết quả phân tích...", step="finalizing")
         combined_base = max(current_score, eml_score)
-        final_score = max(0, min(100, combined_base + ai_bonus))
+        if ai_ok and (ai_is_scam or ai_score_val >= 40):
+            final_score = max(0, min(100, max(combined_base + ai_bonus, ai_score_val)))
+        else:
+            final_score = max(0, min(100, combined_base + ai_bonus))
         logger.info(f"[EmailScan] Event {scan_event_id}: Final Score: {final_score}")
         send_progress(f"Điểm tổng kết: {final_score}/100 (base={combined_base}, AI adj={ai_bonus:+d})", step="score_final")
 
@@ -2425,6 +2622,11 @@ def perform_email_deep_scan(scan_event_id: int, email_data: dict):
             ai_clean_exp = str(analysis.get('explanation', '') or '').strip()
             ai_clean_exp = re.sub(r'^(?:[⏳\s]*AI cần thêm (?:chút )?thời gian[^.]*\.\s*)+', '', ai_clean_exp).strip()
             result_json['explanation'] = ai_clean_exp
+            result_json['ai_available'] = ai_ok
+            result_json['ai_score'] = ai_score_val
+            result_json['ai_is_scam'] = ai_is_scam
+            if ai_ok and ai_clean_exp:
+                result_json['ai_insight'] = ai_clean_exp
             result_json['indicators'] = [str(x).strip() for x in (analysis.get('indicators', []) or []) if str(x).strip()]
             if analysis.get('prevention_measures'):
                 result_json['prevention_measures'] = analysis['prevention_measures']

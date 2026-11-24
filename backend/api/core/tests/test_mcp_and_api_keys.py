@@ -198,7 +198,9 @@ class MCPIntegrationTest(TestCase):
         # Khi Next.js không chạy (Django CI thuần), gateway suy giảm an toàn thành 502.
         page_resp = client.get('/mcp/')
         if page_resp.status_code == 502:
-            self.assertIn(b'Frontend unavailable', page_resp.content)
+            html = page_resp.content.decode('utf-8', 'ignore')
+            self.assertIn('502 - Cổng giao diện tạm thời không khả dụng', html)
+            self.assertIn('Giao diện đang khởi động lại', html)
         else:
             self.assertIn(page_resp.status_code, (200, 301, 302, 307, 308))
 

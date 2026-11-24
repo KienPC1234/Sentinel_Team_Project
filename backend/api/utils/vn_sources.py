@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-SOURCE_VERIFIED_DATE = "2026-11-15"
+SOURCE_VERIFIED_DATE = "2026-11-24"
 
 # ---------------------------------------------------------------------------
 # Kênh chính thức (để guardrail khuyến nghị khi chưa đủ cơ sở / khi rủi ro cao)
@@ -155,29 +155,22 @@ VN_BANK_HOTLINES: List[Dict[str, Any]] = [
 # Từ điển dấu hiệu lừa đảo tiếng Việt (hỗ trợ có dấu & không dấu)
 # ---------------------------------------------------------------------------
 VN_SCAM_PATTERNS: Dict[str, str] = {
-    r"otp|mã xác|ma xac|mã otp|mã bảo mật": "Yêu cầu OTP / mã xác thực",
-    r"chuyển khoản|chuyen khoan|chuyển tiền|chuyen tien|nộp phí|nop phi|đặt cọc|dat coc": "Yêu cầu chuyển tiền/nộp phí",
-    r"công an|cong an|viện kiểm sát|vien kiem sat|cơ quan điều tra|co quan dieu tra|tòa án|toa an": "Mạo danh cơ quan chức năng",
-    r"trúng thưởng|trung thuong|quà tặng|qua tang|nhận thưởng|nhan thuong|trúng xe|trúng giải": "Dụ dỗ trúng thưởng",
-    r"khóa tài khoản|khoa tai khoan|phong tỏa|phong toa|tạm giữ|tam giu|khóa thẻ": "Đe dọa khóa/phong tỏa tài khoản",
-    r"việc nhẹ lương cao|viec nhe luong cao|tuyển dụng|tuyen dung|ctv|cộng tác viên|làm thêm|chốt đơn": "Tuyển dụng lừa đảo",
-    r"đầu tư|dau tu|lợi nhuận|loi nhuan|chứng khoán|chung khoan|forex|tiền ảo|tien ao|crypto|usdt|sàn giao dịch": "Đầu tư / tiền ảo rủi ro",
-    r"cài app|cai app|tải app|tai app|apk|đăng nhập lại|dang nhap lai|ultraviewer|anydesk|teamviewer|điều khiển từ xa": "Dụ cài app / chiếm quyền điều khiển",
-    r"link lạ|link la|bấm vào|bam vao|truy cập|truy cap|xác minh danh tính|xac minh danh tinh": "Dụ bấm link / xác minh danh tính",
-    r"vay tiền|vay tien|lãi suất|lai suat|giải ngân|giai ngan|hồ sơ vay|app vay|tín dụng đen": "Vay tiền lừa đảo / tín dụng đen",
-    r"chuyển phát|chuyen phat|bưu phẩm|buu pham|ship|shipper|đơn hàng|don hang|giao hàng": "Giả mạo giao hàng/bưu phẩm",
-    r"nạp thẻ|nap the|game|nạp tiền|nap tien|thẻ cào": "Lừa đảo nạp thẻ/game",
-    r"zalo|telegram|whatsapp|kết bạn|ket ban|nhóm kín|nhom kin": "Kênh liên hệ không chính thức",
+    r"cài app|cai app|tải app|tai app|apk|đăng nhập lại|dang nhap lai|ultraviewer|anydesk|teamviewer|điều khiển từ xa|dieu khien tu xa|quyền trợ năng|quyen tro nang": "Dụ cài app / chiếm quyền điều khiển",
+    r"link lạ|link la|bấm vào|bam vao|nhấp vào|nhap vao|truy cập|truy cap|xác minh danh tính|xac minh danh tinh": "Dụ bấm link / xác minh danh tính",
+    r"vay tiền|vay tien|lãi suất|lai suat|giải ngân|giai ngan|hồ sơ vay|ho so vay|app vay|tín dụng đen|tin dung den|khoản vay|khoan vay|nợ xấu|no xau": "Vay tiền lừa đảo / tín dụng đen",
+    r"chuyển phát|chuyen phat|bưu phẩm|buu pham|ship|shipper|đơn hàng|don hang|giao hàng|giao hang": "Giả mạo giao hàng/bưu phẩm",
+    r"nạp thẻ|nap the|game|nạp tiền|nap tien|thẻ cào|the cao": "Lừa đảo nạp thẻ/game",
+    r"(?:ib|liên hệ|lien he|kết bạn|ket ban|nhắn|nhan)\s*(?:qua\s*)?zalo\s*(?:\d|giải ngân|giai ngan|nhận|nhan|xác minh|xac minh|nộp|nop)|zalo\s*[:\d]|telegram|whatsapp|nhóm kín|nhom kin": "Kênh liên hệ không chính thức",
     r"cơ hội vàng|co hoi|duy nhất hôm nay|duy nhat hom nay|gấp|gap|khẩn cấp|khan cap": "Tạo áp lực thời gian",
     r"deepfake|giả giọng|giong noi gia|nhân bản giọng|video call|lộ mặt": "Deepfake / giả mạo giọng nói-hình ảnh",
-    r"vneid|dịch vụ công|dich vu cong|định danh điện tử|dinh danh dien tu|căn cước|can cuoc": "Giả mạo VNeID / dịch vụ công",
+    r"vneid|dịch vụ công|dich vu cong|định danh điện tử|dinh danh dien tu|căn cước|can cuoc|cccd": "Giả mạo VNeID / dịch vụ công",
     r"hoàn thuế|hoan thue|thuế|thue|thông quan|thong quan|hải quan|hai quan": "Giả mạo hoàn thuế/hải quan",
     r"bảo hiểm xã hội|bao hiem xa hoi|sổ bhxh|so bhxh|lương hưu|luong huu|trợ cấp|tro cap": "Giả mạo bảo hiểm xã hội",
     r"đăng kiểm|dang kiem|kiểm định xe|kiem dinh xe|phí đường bộ|phi duong bo|phạt nguội|phat nguoi": "Giả mạo đăng kiểm/phí đường bộ",
     r"tình cảm|tinh cam|người yêu|nguoi yeu|kết hôn|ket hon|người nước ngoài|quà từ nước ngoài": "Lừa đảo tình cảm (romance)",
-    r"con bị tai nạn|tai nạn|tai nan|cấp cứu|cap cuu|bệnh viện|benh vien|nhập viện": "Giả mạo tai nạn/cấp cứu",
-    r"hack nick|chiếm tài khoản|chiem tai khoan|mượn tiền|muon tien|bạn bè|facebook bị khóa": "Chiếm tài khoản mạng xã hội",
-    r"từ thiện|tu thien|quyên góp|quyen gop|ủng hộ|ung ho|giải cứu": "Lừa đảo từ thiện",
+    r"con bị tai nạn|tai nạn|tai nan|cấp cứu|cap cuu|nhập viện|nhap vien|viện phí|vien phi|phẫu thuật|phau thuat|nguy kịch|nguy kich|truyền máu|truyen mau": "Giả mạo tai nạn/cấp cứu",
+    r"hack nick|chiếm tài khoản|chiem tai khoan|mượn tiền|muon tien|facebook bị khóa": "Chiếm tài khoản mạng xã hội",
+    r"từ thiện|tu thien|quyên góp|quyen gop|giải cứu": "Lừa đảo từ thiện",
     r"đặt cọc thuê nhà|thuê nhà|thue nha|mua bán xe|mua ban xe|đặt cọc mua": "Lừa đảo đặt cọc/ mua bán",
     r"xuất khẩu lao động|xuat khau lao dong|visa|đi nước ngoài|đưa người đi làm": "Lừa đảo xuất khẩu lao động",
     r"hoàn tiền|hoan tien|đơn hàng lỗi|don hang loi|hỗ trợ khách hàng|sàn thương mại": "Giả mạo hoàn tiền/CSKH",
@@ -186,6 +179,15 @@ VN_SCAM_PATTERNS: Dict[str, str] = {
     r"sim|số chính chủ|so chinh chu|định danh sim|dinh danh sim": "Mạo danh định danh SIM/số điện thoại",
     r"mã độc|ma doc|malware|trojan|đánh cắp thông tin|danh cap thong tin": "Nguy cơ mã độc / đánh cắp dữ liệu",
     r"chuyển nhầm|chuyen nham|chuyển khoản nhầm|đòi lại tiền": "Chiêu 'chuyển nhầm tiền' rồi đòi lại",
+    r"đầu tư|dau tu|lợi nhuận|loi nhuan|chứng khoán|chung khoan|forex|tiền ảo|tien ao|crypto|usdt|sàn giao dịch|san giao dich|sàn bo|san bo|cổ phiếu nội bộ|co phieu noi bo|tài khoản ủy thác|tai khoan uy thac|nhân\s*\d+\s*tài sản": "Đầu tư / tiền ảo rủi ro",
+    r"nộp phí|nop phi|đặt cọc|dat coc|đóng trước|dong truoc|nộp trước|nop truoc|chuyển trước|chuyen truoc|phí bảo hiểm|phi bao hiem|phí đồng phục|phi dong phuc|nộp phạt|nop phat|đóng phạt|dong phat|phí kiểm định|phi kiem dinh|thuế trước bạ|thue truoc ba|tài khoản cá nhân|tai khoan ca nhan|tài khoản thu ngân|tai khoan thu ngan|tài khoản chỉ định|tai khoan chi dinh|tài khoản tạm giữ|tai khoan tam giu|bảo lãnh|bao lanh|hoàn trả sau|hoan tra sau|hoàn lại sau|hoan lai sau": "Yêu cầu nộp phí / đặt cọc trước",
+    r"đọc\s*(?:lại|giúp[^\n,.;:]{0,18})?\s*mã\s*otp|doc\s*(?:lai|giup[^\n,.;:]{0,18})?\s*ma\s*otp|nhập\s*mã\s*otp\s*để\s*hủy|nhap\s*ma\s*otp\s*de\s*huy|đồng\s*bộ\s*sinh\s*trắc|dong\s*bo\s*sinh\s*trac|quyết\s*định\s*2345|quyet\s*dinh\s*2345": "Chiếm đoạt OTP / giả hỗ trợ sinh trắc học",
+    r"https?://[^\s]+\.(?:top|vip|xyz|club|cc|click|loan|buzz|cfd|icu|tk|ml|ga|cf)(?:[/\s?#]|$)|(?:vcb|vietinbank|agribank|bidv|mb|techcombank|viettel|vnpt|mobifone|shopee|lazada|gdt|thuedientu|vneid|vetc|phatnguoi|chuanhoathuebao|dienluc|baohiemxahoi|fb-security|google-security)[a-z0-9-]*-[a-z0-9-]*\.[a-z]{2,}": "Liên kết / tên miền có dấu hiệu giả mạo",
+    r"đăng nhập bất thường|dang nhap bat thuong|thiết bị lạ|thiet bi la|vi phạm tiêu chuẩn|vi pham tieu chuan|xác thực bảo mật|xac thuc bao mat|thu hồi số|thu hoi so|ngừng cấp điện|ngung cap dien|đóng mã số thuế|dong ma so thue|hủy danh sách|huy danh sach|lỗi phí qua trạm|loi phi qua tram|tránh bị khóa|tranh bi khoa": "Cảnh báo giả mạo khóa / bảo mật tài khoản",
+    r"bảo hiểm vốn|bao hiem von|cam kết lợi nhuận|cam ket loi nhuan|cam kết lãi|cam ket lai|rút ngay|rut ngay|thu nhập\s+\d|thu nhap\s+\d|khách hàng may mắn|khach hang may man|may mắn thứ|may man thu|xả vé|xa ve|lãi\s*\d+%|lai\s*\d+%": "Cam kết lợi nhuận / thu nhập / ưu đãi bất thường",
+    r"tổng cục thuế|tong cuc thue|chi cục thuế|chi cuc thue|mã số thuế|ma so thue|kiểm định công tơ|kiem dinh cong to|vetc|epass": "Mạo danh cơ quan thuế / điện nước / giao thông",
+    r"mượn tài khoản|muon tai khoan|app ngân hàng bị lỗi|lỗi chuyển tiền|loi chuyen tien|bắn hộ|ban ho|chuyển hộ|chuyen ho|chuyển giúp|chuyen giup|trả bác ngay|ty minh tra|quét mã qr|quet ma qr|chuyển nhanh 24/7|nộp tiền gấp|nop tien gap": "Vay mượn khẩn cấp / yêu cầu quét QR thanh toán",
+    r"1900xxxx|cước\s*\d+[.,\d]*\s*đ/phút|bị tịch thu|bi tich thu|khởi tố|khoi to|lệnh bắt|lenh bat|trắng án|trang an|rửa tiền|rua tien|triệu tập|trieu tap": "Đe dọa pháp lý / cước viễn thông bất thường",
 }
 
 # ---------------------------------------------------------------------------

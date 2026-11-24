@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { authApi, setToken } from '../lib/api';
+import { authApi } from '../lib/api';
 import type { Me } from '../lib/api';
 
 interface AuthCtx {
@@ -18,33 +18,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    /* Luôn hỏi /auth/me/ (kể cả không có token): đăng nhập Google/OAuth dùng
-     * session cookie, không có DRF token ban đầu trong localStorage. */
+    // Web auth is the httpOnly session cookie set by Django. Remove the old
+    // localStorage DRF token so an XSS cannot steal a long-lived credential.
+    try {
+      localStorage.removeItem('sc_token');
+    } catch {
+      /* private mode */
+    }
     authApi
       .me()
-      .then((d) => {
-        if (d.token) {
-          setToken(d.token);
-        }
-        setUser(d.user);
-      })
-      .catch(() => {
-        setToken(null);
-        setUser(null);
-      })
+      .then((d) => setUser(d.user))
+      .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (username: string, password: string) => {
-    const data = await authApi.login(username, password);
-    const token = data.token || data.key;
-    if (!token) throw new Error('Đăng nhập thất bại: không nhận được token');
-    setToken(token);
+    await authApi.login(username, password);
     const meData = await authApi.me();
     setUser(meData.user);
-    if (meData.token) {
-      setToken(meData.token);
-    }
   };
 
   const logout = async () => {
@@ -53,7 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     } finally {
-      setToken(null);
       setUser(null);
     }
   };

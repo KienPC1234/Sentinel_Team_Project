@@ -9,6 +9,11 @@ from api.core.models import LearnLesson
 User = get_user_model()
 
 
+def _rows(resp):
+    data = resp.data
+    return data.get('results', []) if isinstance(data, dict) else data
+
+
 class LearnLessonVisibilityTest(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -32,7 +37,7 @@ class LearnLessonVisibilityTest(TestCase):
     def test_lesson_list_counts(self):
         resp = self.client.get('/api/v1/learn/lessons/')
         self.assertEqual(resp.status_code, 200)
-        row = next(r for r in resp.data if r['slug'] == 'bai-public-test')
+        row = next(r for r in _rows(resp) if r['slug'] == 'bai-public-test')
         self.assertIn('quizzes_count', row)
         self.assertIn('scenarios_count', row)
 
@@ -94,12 +99,12 @@ class ArticleListOrderingTest(TestCase):
         client = APIClient()
         resp = client.get('/api/v1/articles/')
         self.assertEqual(resp.status_code, 200)
-        slugs = [item['slug'] for item in resp.data]
+        slugs = [item['slug'] for item in _rows(resp)]
         self.assertEqual(slugs, ['bai-noi-bo-moi', 'bai-pub-moi-hon', 'bai-pub-cu-hon'])
 
         resp_oldest = client.get('/api/v1/articles/?sort=oldest')
         self.assertEqual(resp_oldest.status_code, 200)
         self.assertEqual(
-            [item['slug'] for item in resp_oldest.data],
+            [item['slug'] for item in _rows(resp_oldest)],
             ['bai-pub-cu-hon', 'bai-pub-moi-hon', 'bai-noi-bo-moi'],
         )

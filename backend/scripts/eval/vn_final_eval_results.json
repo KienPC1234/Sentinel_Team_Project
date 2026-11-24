@@ -4,131 +4,31 @@
     "mode": "offline_heuristic_plus_evidence_ensemble",
     "threshold": 40,
     "total": 80,
-    "tp": 25,
-    "fp": 1,
-    "tn": 39,
-    "fn": 15,
-    "precision": 0.9615,
-    "recall": 0.625,
-    "f1": 0.7576,
-    "false_positive_rate": 0.025,
-    "false_negative_rate": 0.375,
-    "fp_cases": [
-      {
-        "id": "legit_22",
-        "category": "personal_money_transfer_chat",
-        "score": 40,
-        "patterns": [
-          "Yêu cầu chuyển tiền/nộp phí",
-          "Giao dịch tài chính"
-        ]
-      }
-    ],
+    "tp": 38,
+    "fp": 0,
+    "tn": 40,
+    "fn": 2,
+    "precision": 1.0,
+    "recall": 0.95,
+    "f1": 0.9744,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": 0.05,
+    "fp_cases": [],
     "fn_cases": [
       {
-        "id": "scam_06",
-        "category": "banking_otp_phishing",
-        "score": 0,
-        "patterns": []
-      },
-      {
-        "id": "scam_12",
-        "category": "recruitment_ctv_task",
-        "score": 0,
-        "patterns": []
-      },
-      {
-        "id": "scam_14",
-        "category": "investment_crypto_forex",
-        "score": 20,
-        "patterns": [
-          "Đầu tư / tiền ảo rủi ro"
-        ]
-      },
-      {
-        "id": "scam_18",
-        "category": "fake_loan_black_credit",
-        "score": 20,
-        "patterns": [
-          "Vay tiền lừa đảo / tín dụng đen"
-        ]
-      },
-      {
-        "id": "scam_20",
-        "category": "delivery_customs_fee",
-        "score": 20,
-        "patterns": [
-          "Giả mạo hoàn thuế/hải quan"
-        ]
-      },
-      {
-        "id": "scam_23",
-        "category": "prize_lottery_telecom",
-        "score": 0,
-        "patterns": []
-      },
-      {
-        "id": "scam_27",
-        "category": "sim_block_telecom",
-        "score": 20,
-        "patterns": [
-          "Mạo danh định danh SIM/số điện thoại"
-        ]
-      },
-      {
-        "id": "scam_28",
-        "category": "tax_refund_fraud",
-        "score": 20,
-        "patterns": [
-          "Giả mạo hoàn thuế/hải quan"
-        ]
-      },
-      {
-        "id": "scam_29",
-        "category": "tax_refund_fraud",
-        "score": 20,
-        "patterns": [
-          "Giả mạo hoàn thuế/hải quan"
-        ]
-      },
-      {
-        "id": "scam_31",
-        "category": "utility_impersonation",
-        "score": 0,
-        "patterns": []
-      },
-      {
-        "id": "scam_32",
+        "id": "scam_33",
         "category": "fake_friend_urgent_loan",
         "score": 20,
         "patterns": [
-          "Tạo áp lực thời gian"
+          "Giao dịch tài chính"
         ]
-      },
-      {
-        "id": "scam_36",
-        "category": "hacked_account_loan",
-        "score": 0,
-        "patterns": []
       },
       {
         "id": "scam_37",
         "category": "fake_qr_code_payment",
-        "score": 0,
-        "patterns": []
-      },
-      {
-        "id": "scam_38",
-        "category": "teen_code_obfuscated_scam",
-        "score": 0,
-        "patterns": []
-      },
-      {
-        "id": "scam_40",
-        "category": "fake_travel_ticket_booking",
         "score": 20,
         "patterns": [
-          "Yêu cầu chuyển tiền/nộp phí"
+          "Vay mượn khẩn cấp / yêu cầu quét QR thanh toán"
         ]
       }
     ]
@@ -344,7 +244,7 @@
         "group": "legit_vn_fp_prone",
         "passed": true,
         "actual": {
-          "score": 5,
+          "score": 0,
           "tier": "INSUFFICIENT",
           "is_conclusive": false
         }

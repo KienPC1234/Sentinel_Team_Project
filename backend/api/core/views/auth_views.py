@@ -338,11 +338,9 @@ class LogoutView(APIView):
     permission_classes = [AllowAny]
 
     def _do_logout(self, request):
-        if request.user and request.user.is_authenticated:
-            try:
-                request.user.auth_token.delete()
-            except Exception:
-                pass
+        # Web logout is session-scoped (httpOnly cookie). Only revoke a legacy
+        # DRF token when the caller explicitly sends it, so logging out on one
+        # device does not invalidate tokens on other devices.
         auth_header = request.headers.get('Authorization', '')
         if auth_header.startswith('Token '):
             key = auth_header.split(' ', 1)[1].strip()
@@ -393,7 +391,6 @@ class MeView(APIView):
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
         from api.core.models import ForumPost
-        token, _ = Token.objects.get_or_create(user=request.user)
         scan_count = ScanEvent.objects.filter(user=request.user).count()
         report_count = Report.objects.filter(reporter=request.user).count()
         alert_count = UserAlert.objects.filter(user=request.user).count()
@@ -402,7 +399,6 @@ class MeView(APIView):
         user_data['has_usable_password'] = request.user.has_usable_password()
         return Response({
             'user': user_data,
-            'token': token.key,
             'stats': {
                 'total_scans': scan_count,
                 'total_reports': report_count,

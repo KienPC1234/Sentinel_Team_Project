@@ -13,6 +13,7 @@ import asyncio
 import threading
 
 from .models import ChatFolder, ChatSession, ChatMessage, ChatbotConfig, SavedMessage
+from api.core.pagination import paginate_queryset
 from .serializers import (
     ChatAIRequestSerializer,
     ChatFolderSerializer,
@@ -80,15 +81,18 @@ class ChatSessionListView(APIView):
                 request.session['guest_chat_sessions'] = []
                 request.session.modified = True
             sessions = ChatSession.objects.filter(user=request.user).order_by('-updated_at')
-            serializer = ChatSessionSerializer(sessions, many=True)
-            return Response(serializer.data)
-
-        guest_ids = request.session.get('guest_chat_sessions', [])
-        if guest_ids:
-            sessions = ChatSession.objects.filter(id__in=guest_ids, user__isnull=True).order_by('-updated_at')
-            serializer = ChatSessionSerializer(sessions, many=True)
-            return Response(serializer.data)
-        return Response([])
+        else:
+            guest_ids = request.session.get('guest_chat_sessions', [])
+            sessions = (
+                ChatSession.objects.filter(id__in=guest_ids, user__isnull=True).order_by('-updated_at')
+                if guest_ids else ChatSession.objects.none()
+            )
+        return Response(paginate_queryset(
+            request,
+            sessions,
+            lambda items: ChatSessionSerializer(items, many=True).data,
+            default_page_size=50,
+        ))
 
     @extend_schema(request={'application/json': {'type': 'object', 'properties': {'folder_id': {'type': 'string'}}}}, responses={201: serializers.DictField()})
     def post(self, request):

@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
 from api.utils.trust_guard import verdict_tone, verdict_display
+from api.core.pagination import paginate_queryset
 
 from api.core.models import (
     Report,
@@ -457,8 +458,13 @@ class UserAlertsView(APIView):
 
     @extend_schema(responses={200: UserAlertSerializer(many=True)})
     def get(self, request):
-        alerts = UserAlert.objects.filter(user=request.user)
-        return Response(UserAlertSerializer(alerts, many=True).data)
+        alerts = UserAlert.objects.filter(user=request.user).order_by('-created_at')
+        return Response(paginate_queryset(
+            request,
+            alerts,
+            lambda items: UserAlertSerializer(items, many=True, context={'request': request}).data,
+            default_page_size=100,
+        ))
 
     @extend_schema(request=UserAlertSerializer, responses={201: UserAlertSerializer})
     def post(self, request):

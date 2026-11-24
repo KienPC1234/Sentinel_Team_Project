@@ -211,7 +211,15 @@ export function useAdminGet<T>(path: string | null) {
     api
       .get<T>(path)
       .then((d) => {
-        if (alive) setData(d);
+        if (!alive) return;
+        // List endpoints use the standard pagination envelope; keep old array
+        // consumers working without each page handling both shapes.
+        const maybePaged = d as unknown as { results?: T };
+        if (maybePaged && typeof maybePaged === 'object' && 'results' in maybePaged) {
+          setData((maybePaged.results ?? []) as T);
+        } else {
+          setData(d);
+        }
       })
       .catch((e: Error) => {
         if (alive) setError(e.message);
