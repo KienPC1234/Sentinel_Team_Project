@@ -5,7 +5,7 @@
 \setsansfont{Noto Sans}
 \setmonofont{Noto Sans Mono}[Scale=0.84]
 
-\usepackage[a4paper,top=18mm,bottom=18mm,left=19mm,right=19mm]{geometry}
+\usepackage[a4paper,top=17mm,bottom=17mm,left=19mm,right=19mm]{geometry}
 \usepackage{microtype}
 \usepackage{setspace}
 \setstretch{1.18}
@@ -109,7 +109,7 @@ Không phát hiện SĐT, email, số tài khoản, CCCD hoặc khóa bí mật 
 
 \subsection{Cơ chế phân tầng năm mức trong \codenobreak{trust\_guard.py}}
 
-Hàm đánh giá rào chắn (\code{assess(result, kind)}) bổ sung tầng trung gian \codenobreak{INSUFFICIENT} nhằm phản ánh đúng độ chắc chắn của bằng chứng (Bảng~2 và Hình~1), giới hạn mức độ kết luận đối với số điện thoại và tài khoản ngân hàng, tránh quy kết cá nhân khi chưa có bằng chứng xác thực từ cơ quan chức năng.
+Hàm kiểm soát mức độ kết luận (\code{assess(result, kind)}) bổ sung tầng trung gian \codenobreak{INSUFFICIENT} nhằm phản ánh đúng độ chắc chắn của bằng chứng (Bảng~2 và Hình~1), giới hạn mức độ kết luận đối với số điện thoại và tài khoản ngân hàng, tránh quy kết cá nhân khi chưa có bằng chứng xác thực từ cơ quan chức năng.
 
 \begin{table}[ht]
 \centering
@@ -194,6 +194,7 @@ Duy trì hoạt động phân tích cơ bản bằng bộ lọc quy tắc khi d�
 \end{tabularx}
 \end{table}
 
+\newpage
 \subsection{Kiểm chứng cơ chế Guardrail trên ba tình huống thử nghiệm}
 
 Bảng~4 tổng hợp kết quả kiểm thử chức năng \code{apply\_guardrail()} trên ba tình huống thử nghiệm cốt lõi (lưu đầy đủ tại \code{docs/minh\_chung/01\_demo\_mau\_thuan\_va\_thieu\_du\_lieu.json}), kèm trích đoạn JSON đầu ra thực tế ngay bên dưới thể hiện \code{tier}, \code{is\_conclusive}, \code{evidence[]} và hướng dẫn hành động an toàn.
@@ -242,6 +243,7 @@ Toàn bộ 17 nguồn tri thức từ \code{source\_catalog()} được công kh
 \begin{center}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.08}
 \begin{longtable}{@{}L{2.55cm} L{2.65cm} L{0.85cm} L{4.0cm} L{3.3cm} L{2.25cm}@{}}
 \caption{Danh mục 17 nguồn tri thức, phạm vi nhận định, giới hạn và thời điểm cập nhật.} \\
 \toprule
@@ -280,9 +282,10 @@ Toàn bộ 17 nguồn tri thức từ \code{source\_catalog()} được công kh
 
 \textbf{Ví dụ ánh xạ từng nhận định tới nguồn:} Trong tình huống kiểm tra tên miền ở Mục~1.4, cảnh báo cuối cùng truy xuất rõ hai nhận định trong \code{evidence[]}: (1) \code{virustotal} (độ tin cậy \code{high}, kiểm tra \code{2026-11-24}) báo 3 engine \code{malicious} kèm giới hạn phụ thuộc mẫu cộng đồng; (2) \code{tinnhiemmang} (độ tin cậy \code{high}, dữ liệu \code{04/11/2026}) báo tên miền thuộc danh bạ tin cậy kèm giới hạn chỉ bao phủ thực thể đã ghi nhận. Nhờ đối chiếu song song nguồn và giới hạn, hệ thống giữ trạng thái \codenobreak{INSUFFICIENT} thay vì khẳng định một chiều.
 
+\newpage
 \subsection{Nguồn gốc tập dữ liệu và kết quả đánh giá trên tình huống Việt Nam}
 
-\textbf{Nguồn gốc dữ liệu và phạm vi phép đo ngoại tuyến:} Các tập \codenobreak{independent\_test\_set\_vn.jsonl} (80 tin nhắn: 40 lừa đảo và 40 hợp lệ), \codenobreak{holdout\_test\_set\_b.jsonl} (40 mẫu) và \codenobreak{vn\_final\_suite.jsonl} (20 kịch bản) là \textbf{bộ tình huống chuẩn hóa nội bộ do nhóm tác giả tự biên soạn và gán nhãn thủ công} (\code{label=0/1}) mô phỏng các kịch bản phổ biến tại Việt Nam (không sử dụng dữ liệu người dùng thật và chưa qua bên thứ ba độc lập thẩm định). Nhóm cũng cập nhật bộ lọc cho các ca nhầm điển hình phát hiện qua các vòng thử nội bộ (như \codenobreak{legit\_22}, chữ chèn dấu \textit{C.ô.n.g a.n}). Ngoài ra, kịch bản \codenobreak{evaluate\_vn\_final.py} đánh giá ở \textbf{chế độ ngoại tuyến không gọi mô hình ngôn ngữ} (\code{ai\_result=None}), trong đó \textit{Precision} là độ chính xác của cảnh báo, \textit{Recall} là tỷ lệ phát hiện đúng trường hợp lừa đảo, \textit{F1} là trung bình điều hòa và \textit{FPR} là tỷ lệ báo nhầm. Vì vậy Bảng~6 đo năng lực của tầng bộ lọc quy tắc và rào chắn khi tắt AI; hiệu năng khi có mô hình ngôn ngữ thực được kiểm chứng riêng qua 12 ca thực trong \codenobreak{adversarial\_stress\_test.py} và \codenobreak{BENCHMARK\_MESSAGES\_HOLDOUT\_B.md}.
+\textbf{Nguồn gốc dữ liệu và phạm vi phép đo ngoại tuyến:} Các tập \codenobreak{independent\_test\_set\_vn.jsonl} (80 tin nhắn: 40 lừa đảo và 40 hợp lệ), \codenobreak{holdout\_test\_set\_b.jsonl} (40 mẫu) và \codenobreak{vn\_final\_suite.jsonl} (20 kịch bản) là \textbf{bộ tình huống chuẩn hóa nội bộ do nhóm tác giả tự biên soạn và gán nhãn thủ công} (\code{label=0/1}) mô phỏng các kịch bản phổ biến tại Việt Nam (không sử dụng dữ liệu người dùng thật và chưa qua bên thứ ba độc lập thẩm định). Nhóm cũng cập nhật bộ lọc cho các ca nhầm điển hình phát hiện qua các vòng thử nội bộ (như \codenobreak{legit\_22}, chữ chèn dấu \textit{C.ô.n.g a.n}). Ngoài ra, kịch bản \codenobreak{evaluate\_vn\_final.py} đánh giá ở \textbf{chế độ ngoại tuyến không gọi mô hình ngôn ngữ} (\code{ai\_result=None}), trong đó \textit{Precision} là tỷ lệ dự đoán đúng trong số các trường hợp được hệ thống cảnh báo là lừa đảo, \textit{Recall} là tỷ lệ phát hiện đúng trường hợp lừa đảo, \textit{F1} là trung bình điều hòa và \textit{FPR} là tỷ lệ báo nhầm. Vì vậy Bảng~6 đo năng lực của tầng bộ lọc quy tắc và kiểm soát kết luận khi tắt AI; hiệu năng khi có mô hình ngôn ngữ thực được kiểm chứng riêng qua 12 ca thực trong \codenobreak{adversarial\_stress\_test.py} và \codenobreak{BENCHMARK\_MESSAGES\_HOLDOUT\_B.md}.
 
 \begin{table}[ht]
 \centering

@@ -33,7 +33,7 @@ Các cải tiến được kiểm chứng thông qua 20 kịch bản kiểm soá
 
 ### 1.1. Cơ chế phân tầng 5 mức trong `trust_guard.py`
 
-Hàm đánh giá rào chắn (`assess(result, kind)`) bổ sung tầng trung gian `INSUFFICIENT` nhằm phản ánh đúng độ chắc chắn của bằng chứng, giới hạn mức độ kết luận đối với số điện thoại và tài khoản ngân hàng, tránh quy kết cá nhân khi chưa có bằng chứng xác thực từ cơ quan chức năng:
+Hàm kiểm soát mức độ kết luận (`assess(result, kind)`) bổ sung tầng trung gian `INSUFFICIENT` nhằm phản ánh đúng độ chắc chắn của bằng chứng, giới hạn mức độ kết luận đối với số điện thoại và tài khoản ngân hàng, tránh quy kết cá nhân khi chưa có bằng chứng xác thực từ cơ quan chức năng:
 
 | Tầng (`guardrail.tier`) | Nhãn hiển thị cho người dân | Kết luận dứt khoát (`is_conclusive`) | Điều kiện kích hoạt & ràng buộc bảo vệ |
 |---|---|---|---|
@@ -149,7 +149,7 @@ Trong tình huống kiểm tra tên miền ở Mục 1.4, cảnh báo cuối cù
 #### A. Nguồn gốc và phạm vi phép đo ngoại tuyến
 
 1. **Cách xây dựng tập dữ liệu**: Bộ `independent_test_set_vn.jsonl` (80 tin nhắn: 40 lừa đảo, 40 hợp lệ dễ nhầm), `holdout_test_set_b.jsonl` (40 mẫu: 20 lừa đảo, 20 hợp lệ) và `vn_final_suite.jsonl` (20 kịch bản) là **bộ tình huống chuẩn hóa nội bộ do nhóm phát triển tự biên soạn và gán nhãn thủ công** (`label = 0/1`) mô phỏng các kịch bản phổ biến tại Việt Nam (không sử dụng dữ liệu người dùng thật và chưa qua bên thứ ba độc lập thẩm định). Nhóm cũng cập nhật bộ lọc cho các ca nhầm điển hình phát hiện qua các vòng thử nội bộ (`legit_22`, chữ chèn dấu `C.ô.n.g a.n`).
-2. **Phạm vi phép đo ngoại tuyến (`evaluate_vn_final.py`)**: Script chạy đánh giá ở **chế độ ngoại tuyến không gọi mô hình ngôn ngữ** (`ai_result = None`) ở ngưỡng `threshold = 40`, trong đó *Precision* là độ chính xác của cảnh báo, *Recall* là tỷ lệ phát hiện đúng trường hợp lừa đảo, *F1* là trung bình điều hòa và *FPR* là tỷ lệ báo nhầm. Các số liệu ở Bảng dưới đo năng lực của tầng bộ lọc quy tắc và rào chắn khi tắt AI; hiệu năng khi có mô hình ngôn ngữ thực được kiểm chứng riêng qua 12 ca thực trong `adversarial_stress_test.py` và `BENCHMARK_MESSAGES_HOLDOUT_B.md`.
+2. **Phạm vi phép đo ngoại tuyến (`evaluate_vn_final.py`)**: Script chạy đánh giá ở **chế độ ngoại tuyến không gọi mô hình ngôn ngữ** (`ai_result = None`) ở ngưỡng `threshold = 40`, trong đó *Precision* là tỷ lệ dự đoán đúng trong số các trường hợp được hệ thống cảnh báo là lừa đảo, *Recall* là tỷ lệ phát hiện đúng trường hợp lừa đảo, *F1* là trung bình điều hòa và *FPR* là tỷ lệ báo nhầm. Các số liệu ở Bảng dưới đo năng lực của tầng bộ lọc quy tắc và kiểm soát kết luận khi tắt AI; hiệu năng khi có mô hình ngôn ngữ thực được kiểm chứng riêng qua 12 ca thực trong `adversarial_stress_test.py` và `BENCHMARK_MESSAGES_HOLDOUT_B.md`.
 
 #### B. Kết quả đánh giá ngoại tuyến trên 80 kịch bản tin nhắn VN (`vn_final_eval_results.json`, `threshold = 40`)
 
