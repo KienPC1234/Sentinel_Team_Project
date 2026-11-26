@@ -279,11 +279,18 @@ def source_catalog() -> List[Dict[str, Any]]:
         sw_updated = None
     out = []
     for key, meta in SOURCE_CATALOG.items():
-        item = {"key": key, **meta}
+        item = {"key": key, **meta, "catalog_verified_at": SOURCE_CATALOG_UPDATED_AT}
+        kind = meta.get("kind")
         if key == "tinnhiemmang" and ds_updated:
             item["updated_at"] = ds_updated
+            item["freshness_scope"] = "dataset_snapshot"
         elif key == "scamwave" and sw_updated:
             item["updated_at"] = sw_updated
+            item["freshness_scope"] = "dataset_snapshot"
+        elif kind in ("external_cloud", "external_osint"):
+            item["freshness_scope"] = "realtime_query"
+        else:
+            item["freshness_scope"] = "catalog_verified"
         out.append(item)
     return out
 
@@ -349,20 +356,24 @@ def build_evidence(result: Dict[str, Any]) -> List[Dict[str, Any]]:
     tk = result.get("tinnhiem")
     if isinstance(tk, dict) and tk.get("status") in ("scam", "trusted"):
         rec = tk.get("record") or {}
+        try:
+            tn_updated = rec.get("updated_at") or tinnhiem_dataset_stats().get("updated_at") or SOURCE_CATALOG_UPDATED_AT
+        except Exception:
+            tn_updated = SOURCE_CATALOG_UPDATED_AT
         if tk.get("status") == "scam":
             imp = rec.get("impersonated") or rec.get("owner")
             detail = "Tên miền nằm trong DANH SÁCH LỪA ĐẢO do NCSC/VNCERT công bố"
             if imp:
                 detail += f" (mạo danh: {imp})"
             ev.append(_mk_evidence("tinnhiemmang", detail, "CRITICAL",
-                                   url=rec.get("url"), supports="malicious"))
+                                   url=rec.get("url"), supports="malicious", updated_at=tn_updated))
         else:
             owner = rec.get("owner") or rec.get("name")
             detail = "Website đã được chứng nhận TÍN NHIỆM" + (f" — {owner}" if owner else "")
             if rec.get("badge"):
                 detail += f" ({rec['badge']})"
             ev.append(_mk_evidence("tinnhiemmang", detail, "INFO",
-                                   url=rec.get("url"), supports="benign"))
+                                   url=rec.get("url"), supports="benign", updated_at=tn_updated))
 
     # (b) forensic_evidence (file scan) — list dict hoặc list str
     for item in (result.get("forensic_evidence") or []):

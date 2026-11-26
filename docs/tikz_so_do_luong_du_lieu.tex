@@ -1,54 +1,58 @@
 \begin{tikzpicture}[
-  font=\sffamily\footnotesize,
+  font=\sffamily\small,
   >=Stealth,
-  box/.style={draw=black, rounded corners=2pt, fill=white, align=center, inner sep=6pt, line width=0.65pt, text=black},
-  userbox/.style={box, text width=2.8cm, minimum height=1.75cm},
-  apibox/.style={box, text width=3.2cm, minimum height=1.75cm},
-  localitem/.style={box, draw=black!75, text width=7.8cm, minimum height=0.72cm, font=\sffamily\scriptsize},
-  localnote/.style={box, draw=black, fill=black!5, text width=7.8cm, minimum height=0.65cm, font=\sffamily\scriptsize\bfseries},
-  extitem/.style={box, draw=black!75, text width=7.8cm, minimum height=0.72cm, font=\sffamily\scriptsize},
-  guardbox/.style={box, text width=3.4cm, minimum height=1.9cm},
-  zone/.style={draw=black!80, dashed, rounded corners=3pt, line width=0.75pt, inner sep=10pt, fill=black!2},
-  flow/.style={->, line width=0.75pt, draw=black},
-  extflow/.style={->, dashed, line width=0.75pt, draw=black!85}
+  box/.style={draw=black, rounded corners=2.5pt, fill=white, align=center, inner sep=5.5pt, line width=0.7pt, text=black},
+  userbox/.style={box, text width=2.6cm, minimum height=1.85cm},
+  apibox/.style={box, text width=2.9cm, minimum height=1.85cm},
+  localitem/.style={box, draw=black!80, text width=7.0cm, minimum height=0.74cm, font=\sffamily\footnotesize},
+  localnote/.style={box, draw=black, fill=black!6, text width=7.0cm, minimum height=0.68cm, font=\sffamily\footnotesize\bfseries},
+  extitem/.style={box, draw=black!80, text width=7.0cm, minimum height=0.78cm, font=\sffamily\footnotesize},
+  guardbox/.style={box, text width=3.1cm, minimum height=2.05cm},
+  zone/.style={draw=black!85, dashed, rounded corners=3pt, line width=0.8pt, inner sep=8pt, fill=black!2},
+  flow/.style={->, line width=0.8pt, draw=black},
+  extflow/.style={->, dashed, line width=0.8pt, draw=black!85}
 ]
 
 % Cot 1 & 2: Nguoi dung va API Gateway
-\node[userbox] (user) at (0, 0.35) {\textbf{Người dùng}\\{\scriptsize (Web / API)}\\[3pt]{\tiny \texttt{mask\_pii} mặc định BẬT}};
-\node[apibox] (api) at (5.3, 0.35) {\textbf{Django API Gateway}\\{\scriptsize Điều phối \& kiểm quyền}\\[3pt]{\tiny Áp dụng cấu hình riêng tư}};
+\node[userbox] (user) at (0, 0.0) {\textbf{Người dùng}\\{\footnotesize (Web / API)}\\[3pt]{\footnotesize \texttt{mask\_pii} BẬT sẵn}};
+\node[apibox] (api) at (4.4, 0.0) {\textbf{Django API}\\{\footnotesize Điều phối \& quyền}\\[3pt]{\footnotesize Giữ cấu hình riêng tư}};
 
-% Cot 3 tren: Xu ly cuc bo (co gian doc thoang giua cac o)
-\node[localitem] (loc1) at (13.0, 2.95) {Lưu trữ an toàn (Che hiển thị + SHA-256 STK) \& Log lọc PII};
-\node[localitem] (loc2) at (13.0, 1.90) {Luật ngữ nghĩa VN (\texttt{scam\_rules}) + Guardrail + RAG (297 mục)};
-\node[localitem] (loc3) at (13.0, 0.85) {VietOCR $\cdot$ Faster-Whisper $\cdot$ \mbox{ClamAV} $\cdot$ YARA $\cdot$ Sandbox (tắt mạng)};
-\node[localnote] (loc4) at (13.0, -0.20) {Tệp thô và bằng chứng nhạy cảm không rời máy chủ};
+% Cot 3 tren: Xu ly cuc bo (tam tai x=11.4 -> mep trai ~7.42, mep phai ~15.38)
+\node[localitem] (loc1) at (11.4, 3.00) {Che hiển thị + Hash SHA-256 STK + Log lọc PII};
+\node[localitem] (loc2) at (11.4, 2.00) {Luật VN (\texttt{scam\_rules}) + Guardrail + RAG (299 mục)};
+\node[localitem] (loc3) at (11.4, 1.00) {VietOCR $\cdot$ Faster-Whisper $\cdot$ ClamAV $\cdot$ YARA $\cdot$ Sandbox};
+\node[localnote] (loc4) at (11.4, 0.00) {Tệp thô, ảnh, âm thanh chỉ xử lý cục bộ trên máy chủ};
 
 \begin{scope}[on background layer]
   \node[zone, fit=(loc1)(loc2)(loc3)(loc4),
-        label={[font=\sffamily\scriptsize\bfseries, yshift=4pt]above:XỬ LÝ CỤC BỘ (LOCAL / SANDBOX CÔ LẬP MẠNG)}] (localzone) {};
+        label={[font=\sffamily\footnotesize\bfseries, yshift=4pt]above:XỬ LÝ CỤC BỘ / SANDBOX CÔ LẬP MẠNG}] (localzone) {};
 \end{scope}
 
 % Cot 3 duoi: Dich vu ben ngoai
-\node[extitem] (ext1) at (13.0, -2.90) {Cloud LLM: che PII mặc định, chỉ mở nguyên văn khi tắt \texttt{mask\_pii}};
-\node[extitem] (ext2) at (13.0, -3.95) {VirusTotal $\cdot$ WHOIS $\cdot$ RDAP $\cdot$ Tranco $\cdot$ ScamWave:\\hash, URL và tên miền công khai};
+\node[extitem] (ext1) at (11.4, -2.55) {\textbf{Cloud LLM:} mặc định che PII;\\[-1pt]chỉ mở nguyên văn khi người dùng tắt \texttt{mask\_pii}};
+\node[extitem] (ext2) at (11.4, -3.70) {\textbf{OSINT / AV:} VirusTotal $\cdot$ WHOIS $\cdot$ RDAP $\cdot$ Tranco $\cdot$ ScamWave\\[-1pt](chỉ gửi hash, URL và tên miền công khai)};
 
 \begin{scope}[on background layer]
-  \node[zone, fill=black!4, fit=(ext1)(ext2),
-        label={[font=\sffamily\scriptsize\bfseries, yshift=4pt]above:DỊCH VỤ BÊN NGOÀI (CHỈ KHI BẬT / CÓ CONSENT)}] (extzone) {};
+  \node[zone, fill=black!5, fit=(ext1)(ext2),
+        label={[font=\sffamily\footnotesize\bfseries, yshift=4pt]above:DỊCH VỤ BÊN NGOÀI (THEO CẤU HÌNH / CONSENT)}] (extzone) {};
 \end{scope}
 
-% Cot 4: Guardrail & Ket qua
-\node[guardbox] (guard) at (20.7, 0.35) {\textbf{Guardrail \& Kết quả}\\[2pt]{\scriptsize 5 tầng kết luận (\texttt{INSUFFICIENT} khi thiếu/mâu thuẫn)}\\[3pt]{\tiny Nguồn, \mbox{\texttt{updated\_at}} \& xóa dữ liệu}};
+% Cot 4: Guardrail & Ket qua (tam tai x=18.4 -> mep trai ~16.65)
+\node[guardbox] (guard) at (18.4, 0.0) {\textbf{Guardrail \& Kết quả}\\[2pt]{\footnotesize 5 tầng (\texttt{INSUFFICIENT} khi thiếu/mâu thuẫn)}\\[3pt]{\footnotesize Nguồn, \texttt{updated\_at} \& xóa dữ liệu}};
 
-% Mui ten luong du lieu (duong truc vuong goc bo goc, khoang trong rong rai)
-\draw[flow] (user.east) -- node[above=2pt, font=\sffamily\scriptsize] {Dữ liệu quét} (api.west);
-\draw[flow, rounded corners=5pt] ([yshift=2mm]api.east) -- ++(0.65, 0) |- ([yshift=-1mm]localzone.west);
-\draw[extflow, rounded corners=5pt] ([yshift=-2mm]api.east) -- ++(0.65, 0) |- (extzone.west);
-\node[font=\sffamily\scriptsize, align=right] at (7.05, -2.55) {Kiểm tra\\[-1pt]consent};
+% Mui ten luong du lieu (duong truc vuong goc sach, khong ngoat nguoc)
+\draw[flow] (user.east) -- node[above=3pt, font=\sffamily\scriptsize] {Đầu vào} (api.west);
 
-\draw[flow, rounded corners=5pt] ([yshift=-1mm]localzone.east) -- ++(0.65, 0) |- ([yshift=3.5mm]guard.west);
-\draw[extflow, rounded corners=5pt] (extzone.east) -- ++(0.65, 0) |- ([yshift=-3.5mm]guard.west);
+% Nhanh vao vung cuc bo va dich vu ngoai qua truc dung x=6.73 (giua 6.05 va 7.42)
+\draw[flow, rounded corners=4pt] ([yshift=2.5mm]api.east) -| (6.73, 1.50) -- (localzone.west |- 0, 1.50);
+\draw[extflow, rounded corners=4pt] ([yshift=-2.5mm]api.east) -| (6.73, -3.12) -- (extzone.west |- 0, -3.12);
+\node[font=\sffamily\scriptsize, align=right, anchor=east] at (6.58, -1.85) {Kiểm\\[-1pt]consent};
 
-\draw[extflow, rounded corners=6pt] (guard.north) |- (10.35, 5.10) node[above=3pt, font=\sffamily\scriptsize] {Khuyến nghị an toàn, nguồn trích dẫn và nút xóa dữ liệu} -| (user.north);
+% Nhanh ra Guardrail qua truc dung x=16.02 (giua 15.38 va 16.65)
+\draw[flow, rounded corners=4pt] (localzone.east |- 0, 1.50) -- (16.02, 1.50) |- ([yshift=3.5mm]guard.west);
+\draw[extflow, rounded corners=4pt] (extzone.east |- 0, -3.12) -- (16.02, -3.12) |- ([yshift=-3.5mm]guard.west);
+
+% Vong phan hoi tren cung
+\draw[extflow, rounded corners=6pt] (guard.north) |- (9.20, 4.75) node[above=3pt, font=\sffamily\footnotesize] {Khuyến nghị an toàn, nguồn trích dẫn và nút xóa dữ liệu} -| (user.north);
 
 \end{tikzpicture}

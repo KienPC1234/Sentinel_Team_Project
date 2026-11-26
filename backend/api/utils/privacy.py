@@ -134,6 +134,9 @@ def redact_for_external_llm(text: str) -> str:
     return redact_pii(text)
 
 
+_EXC_FORMATTER = logging.Formatter()
+
+
 class PIIRedactionFilter(logging.Filter):
     """Filter gắn vào logging handler để làm sạch PII mọi bản ghi log."""
 
@@ -148,9 +151,12 @@ class PIIRedactionFilter(logging.Filter):
                     record.args = tuple(
                         redact_pii(a) if isinstance(a, str) else a for a in record.args
                     )
-            # Nếu ai đó set record.__dict__ extra
+            if record.exc_info and not record.exc_text:
+                record.exc_text = _EXC_FORMATTER.formatException(record.exc_info)
             if record.exc_text:
                 record.exc_text = redact_pii(record.exc_text)
+            if isinstance(record.stack_info, str) and record.stack_info:
+                record.stack_info = redact_pii(record.stack_info)
         except Exception:  # tuyệt đối không được làm vỡ logging
             pass
         return True

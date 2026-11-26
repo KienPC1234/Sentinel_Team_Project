@@ -1,0 +1,786 @@
+{
+  "1_contradiction_vt_clean_vs_heuristic": {
+    "risk_score": 45,
+    "virustotal": {
+      "available": true,
+      "stats": {
+        "malicious": 0,
+        "suspicious": 0
+      },
+      "total_engines": 70,
+      "permalink": "https://www.virustotal.com/clean"
+    },
+    "reasons": [
+      "Phát hiện từ khóa rủi ro cao trên trang"
+    ],
+    "evidence": [
+      {
+        "source": "virustotal",
+        "source_name": "VirusTotal (70+ engine AV)",
+        "reliability": "high",
+        "severity": "INFO",
+        "detail": "Sạch trên 70 engine antivirus.",
+        "supports": "benign",
+        "url": "https://www.virustotal.com/clean",
+        "limits": "Phụ thuộc dữ liệu cộng đồng; tệp/URL mới có thể chưa có báo cáo; bản miễn phí giới hạn số lượt/phút.",
+        "citation": "VirusTotal API v3 multi-engine reputation",
+        "updated_at": "2026-11-24"
+      },
+      {
+        "source": "heuristic",
+        "source_name": "Heuristic tiếng Việt (luật nội bộ)",
+        "reliability": "medium",
+        "severity": "MEDIUM",
+        "detail": "Phát hiện từ khóa rủi ro cao trên trang",
+        "supports": "malicious",
+        "url": null,
+        "limits": "Có thể dương tính giả nếu nội dung hợp pháp trùng từ khoá; không thay thế phân tích chuyên sâu.",
+        "citation": "ShieldCall VN scam_rules heuristic ruleset",
+        "updated_at": "2026-11-24"
+      }
+    ],
+    "guardrail": {
+      "tier": "INSUFFICIENT",
+      "label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+      "confidence": 0.25,
+      "confidence_type": "rule_heuristic",
+      "rule_confidence": 0.25,
+      "calibrated_probability": null,
+      "is_conclusive": false,
+      "requires_verification": true,
+      "has_contradiction": true,
+      "contradiction_details": [
+        "Tín hiệu cảnh báo (heuristic) mâu thuẫn với tín hiệu sạch/tin cậy (virustotal).",
+        "Nguồn đối chiếu tin cậy cao chưa ghi nhận vi phạm nhưng có dấu hiệu nghi ngờ chưa xác thực; chuyển sang mức CHƯA ĐỦ CĂN CỨ."
+      ],
+      "cautions": [
+        "Tín hiệu cảnh báo (heuristic) mâu thuẫn với tín hiệu sạch/tin cậy (virustotal).",
+        "Hệ thống chưa thu thập đủ bằng chứng nhất quán để kết luận. KHÔNG xem đây là 'an toàn' hay 'chắc chắn lừa đảo', hãy xác minh qua kênh chính thức trước khi giao dịch hoặc chia sẻ thông tin."
+      ],
+      "disclaimer": "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định, không thay thế kết luận của cơ quan chức năng. Hãy luôn xác minh qua kênh chính thức.",
+      "official_channels": [
+        {
+          "name": "Đầu số 156 — phản ánh tin nhắn/cuộc gọi rác, dấu hiệu lừa đảo",
+          "phone": "156",
+          "url": "https://mic.gov.vn/bo-tttt-trien-khai-tong-dai-156-tiep-nhan-phan-anh-tin-nhan-rac-cuoc-goi-rac-cuoc-goi-co-dau-hieu-lua-dao-197155742.htm",
+          "description": "Tiếp nhận phản ánh tin nhắn hoặc cuộc gọi có dấu hiệu lừa đảo. Không phải kênh xác nhận an toàn cho mọi giao dịch, URL hay tài khoản.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng cảnh báo an toàn thông tin (NCSC)",
+          "phone": null,
+          "url": "https://canhbao.ncsc.gov.vn",
+          "description": "Tham khảo cảnh báo an toàn thông tin; đối chiếu thời điểm công bố và từng đối tượng được nêu trong cảnh báo.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tín nhiệm mạng (NCSC) — Hệ sinh thái Tín nhiệm & Giám sát an toàn không gian mạng",
+          "phone": null,
+          "url": "https://tinnhiemmang.vn",
+          "description": "Cổng thông tin thuộc Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC) - Cục An toàn thông tin; cung cấp cảnh báo lừa đảo trực tuyến, nhận diện tổ chức, website và thiết bị tin cậy.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cảnh sát 113 — tình huống khẩn cấp",
+          "phone": "113",
+          "url": "https://bocongan.gov.vn",
+          "description": "Chỉ gọi khi cần trợ giúp khẩn cấp. Vụ việc không khẩn cấp: liên hệ Công an địa phương hoặc kênh tiếp nhận tố giác thích hợp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tổng đài Quốc gia Bảo vệ Trẻ em — 111",
+          "phone": "111",
+          "url": "https://tongdai111.vn",
+          "description": "Hỗ trợ, bảo vệ trẻ em (kể cả bị lừa đảo/xâm hại trên mạng).",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "VNCERT/CC — Ứng cứu sự cố an ninh mạng",
+          "phone": "0869 100 001",
+          "url": "https://vncert.vn",
+          "description": "Báo cáo sự cố tấn công mạng, mã độc.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bảo hiểm xã hội Việt Nam",
+          "phone": "1900 9068",
+          "url": "https://bhxh.gov.vn",
+          "description": "Xác minh thông tin BHXH/BHYT; cảnh giác cuộc gọi giả danh 'cập nhật sổ BHXH'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Ngân hàng Nhà nước Việt Nam",
+          "phone": null,
+          "url": "https://sbv.gov.vn",
+          "description": "Cơ quan quản lý tiền tệ/ngân hàng; tra cứu cảnh báo tín dụng đen, tổ chức tín dụng hợp pháp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng Dịch vụ công Quốc gia",
+          "phone": null,
+          "url": "https://dichvucong.gov.vn",
+          "description": "Xác minh dịch vụ công trực tuyến chính thức; cảnh giác dịch vụ công 'giả'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bộ Thông tin và Truyền thông",
+          "phone": null,
+          "url": "https://mic.gov.vn",
+          "description": "Quản lý viễn thông, báo chí, không gian mạng.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "refusal_script": "Cảm ơn, nhưng tôi chưa đủ cơ sở để xác nhận điều này. Bạn vui lòng cho tôi thời gian kiểm tra qua kênh chính thức; tôi sẽ không thực hiện giao dịch hay cung cấp thông tin cho đến khi xác minh xong.",
+      "evidence_count": 2,
+      "sources_used": [
+        "heuristic",
+        "virustotal"
+      ],
+      "kind": "url"
+    },
+    "verdict_label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+    "verdict_conclusive": false
+  },
+  "2_contradiction_tinnhiem_vs_vt_multi": {
+    "risk_score": 75,
+    "tinnhiem": {
+      "status": "trusted",
+      "url": "https://tinnhiemmang.vn/trusted",
+      "record": {
+        "owner": "Ngân hàng TMCP Ví dụ",
+        "url": "https://tinnhiemmang.vn/trusted"
+      }
+    },
+    "virustotal": {
+      "available": true,
+      "stats": {
+        "malicious": 3,
+        "suspicious": 1
+      },
+      "total_engines": 70,
+      "permalink": "https://www.virustotal.com/conflict"
+    },
+    "evidence": [
+      {
+        "source": "virustotal",
+        "source_name": "VirusTotal (70+ engine AV)",
+        "reliability": "high",
+        "severity": "CRITICAL",
+        "detail": "3 engine gắn cờ ĐỘC HẠI, 1 engine NGHI NGỜ trên 70 engine.",
+        "supports": "malicious",
+        "url": "https://www.virustotal.com/conflict",
+        "limits": "Phụ thuộc dữ liệu cộng đồng; tệp/URL mới có thể chưa có báo cáo; bản miễn phí giới hạn số lượt/phút.",
+        "citation": "VirusTotal API v3 multi-engine reputation",
+        "updated_at": "2026-11-24"
+      },
+      {
+        "source": "tinnhiemmang",
+        "source_name": "Tín nhiệm mạng (tinnhiemmang.vn - NCSC/VNCERT)",
+        "reliability": "high",
+        "severity": "INFO",
+        "detail": "Website đã được chứng nhận TÍN NHIỆM — Ngân hàng TMCP Ví dụ",
+        "supports": "benign",
+        "url": "https://tinnhiemmang.vn/trusted",
+        "limits": "Chỉ gồm thực thể đã đăng ký/chứng nhận hoặc đã bị ghi nhận - KHÔNG có nghĩa mọi tên miền vắng mặt đều an toàn. Dữ liệu cập nhật theo từng đợt; luôn đối chiếu trang gốc khi trích dẫn.",
+        "citation": "NCSC/VNCERT tinnhiemmang.vn snapshot",
+        "updated_at": "04/11/2026"
+      }
+    ],
+    "guardrail": {
+      "tier": "INSUFFICIENT",
+      "label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+      "confidence": 0.35,
+      "confidence_type": "rule_heuristic",
+      "rule_confidence": 0.35,
+      "calibrated_probability": null,
+      "is_conclusive": false,
+      "requires_verification": true,
+      "has_contradiction": true,
+      "contradiction_details": [
+        "Tín hiệu cảnh báo (virustotal) mâu thuẫn với tín hiệu sạch/tin cậy (tinnhiemmang).",
+        "Danh bạ Tín nhiệm mạng ghi nhận chứng nhận tin cậy nhưng có nguồn kỹ thuật cảnh báo; hệ thống từ chối kết luận tự động."
+      ],
+      "cautions": [
+        "Tín hiệu cảnh báo (virustotal) mâu thuẫn với tín hiệu sạch/tin cậy (tinnhiemmang).",
+        "Hệ thống chưa thu thập đủ bằng chứng nhất quán để kết luận. KHÔNG xem đây là 'an toàn' hay 'chắc chắn lừa đảo', hãy xác minh qua kênh chính thức trước khi giao dịch hoặc chia sẻ thông tin."
+      ],
+      "disclaimer": "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định, không thay thế kết luận của cơ quan chức năng. Hãy luôn xác minh qua kênh chính thức.",
+      "official_channels": [
+        {
+          "name": "Đầu số 156 — phản ánh tin nhắn/cuộc gọi rác, dấu hiệu lừa đảo",
+          "phone": "156",
+          "url": "https://mic.gov.vn/bo-tttt-trien-khai-tong-dai-156-tiep-nhan-phan-anh-tin-nhan-rac-cuoc-goi-rac-cuoc-goi-co-dau-hieu-lua-dao-197155742.htm",
+          "description": "Tiếp nhận phản ánh tin nhắn hoặc cuộc gọi có dấu hiệu lừa đảo. Không phải kênh xác nhận an toàn cho mọi giao dịch, URL hay tài khoản.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng cảnh báo an toàn thông tin (NCSC)",
+          "phone": null,
+          "url": "https://canhbao.ncsc.gov.vn",
+          "description": "Tham khảo cảnh báo an toàn thông tin; đối chiếu thời điểm công bố và từng đối tượng được nêu trong cảnh báo.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tín nhiệm mạng (NCSC) — Hệ sinh thái Tín nhiệm & Giám sát an toàn không gian mạng",
+          "phone": null,
+          "url": "https://tinnhiemmang.vn",
+          "description": "Cổng thông tin thuộc Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC) - Cục An toàn thông tin; cung cấp cảnh báo lừa đảo trực tuyến, nhận diện tổ chức, website và thiết bị tin cậy.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cảnh sát 113 — tình huống khẩn cấp",
+          "phone": "113",
+          "url": "https://bocongan.gov.vn",
+          "description": "Chỉ gọi khi cần trợ giúp khẩn cấp. Vụ việc không khẩn cấp: liên hệ Công an địa phương hoặc kênh tiếp nhận tố giác thích hợp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tổng đài Quốc gia Bảo vệ Trẻ em — 111",
+          "phone": "111",
+          "url": "https://tongdai111.vn",
+          "description": "Hỗ trợ, bảo vệ trẻ em (kể cả bị lừa đảo/xâm hại trên mạng).",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "VNCERT/CC — Ứng cứu sự cố an ninh mạng",
+          "phone": "0869 100 001",
+          "url": "https://vncert.vn",
+          "description": "Báo cáo sự cố tấn công mạng, mã độc.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bảo hiểm xã hội Việt Nam",
+          "phone": "1900 9068",
+          "url": "https://bhxh.gov.vn",
+          "description": "Xác minh thông tin BHXH/BHYT; cảnh giác cuộc gọi giả danh 'cập nhật sổ BHXH'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Ngân hàng Nhà nước Việt Nam",
+          "phone": null,
+          "url": "https://sbv.gov.vn",
+          "description": "Cơ quan quản lý tiền tệ/ngân hàng; tra cứu cảnh báo tín dụng đen, tổ chức tín dụng hợp pháp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng Dịch vụ công Quốc gia",
+          "phone": null,
+          "url": "https://dichvucong.gov.vn",
+          "description": "Xác minh dịch vụ công trực tuyến chính thức; cảnh giác dịch vụ công 'giả'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bộ Thông tin và Truyền thông",
+          "phone": null,
+          "url": "https://mic.gov.vn",
+          "description": "Quản lý viễn thông, báo chí, không gian mạng.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "refusal_script": "Cảm ơn, nhưng tôi chưa đủ cơ sở để xác nhận điều này. Bạn vui lòng cho tôi thời gian kiểm tra qua kênh chính thức; tôi sẽ không thực hiện giao dịch hay cung cấp thông tin cho đến khi xác minh xong.",
+      "evidence_count": 2,
+      "sources_used": [
+        "tinnhiemmang",
+        "virustotal"
+      ],
+      "kind": "domain"
+    },
+    "verdict_label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+    "verdict_conclusive": false
+  },
+  "3_missing_empty_ocr": {
+    "risk_score": 0,
+    "insufficient_input": true,
+    "evidence": [],
+    "guardrail": {
+      "tier": "INSUFFICIENT",
+      "label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+      "confidence": 0.1,
+      "confidence_type": "rule_heuristic",
+      "rule_confidence": 0.1,
+      "calibrated_probability": null,
+      "is_conclusive": false,
+      "requires_verification": true,
+      "has_contradiction": false,
+      "contradiction_details": [],
+      "cautions": [
+        "Hệ thống chưa thu thập đủ bằng chứng nhất quán để kết luận. KHÔNG xem đây là 'an toàn' hay 'chắc chắn lừa đảo', hãy xác minh qua kênh chính thức trước khi giao dịch hoặc chia sẻ thông tin.",
+        "Không có bằng chứng nào được ghi nhận cho nội dung này."
+      ],
+      "disclaimer": "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định, không thay thế kết luận của cơ quan chức năng. Hãy luôn xác minh qua kênh chính thức.",
+      "official_channels": [
+        {
+          "name": "Đầu số 156 — phản ánh tin nhắn/cuộc gọi rác, dấu hiệu lừa đảo",
+          "phone": "156",
+          "url": "https://mic.gov.vn/bo-tttt-trien-khai-tong-dai-156-tiep-nhan-phan-anh-tin-nhan-rac-cuoc-goi-rac-cuoc-goi-co-dau-hieu-lua-dao-197155742.htm",
+          "description": "Tiếp nhận phản ánh tin nhắn hoặc cuộc gọi có dấu hiệu lừa đảo. Không phải kênh xác nhận an toàn cho mọi giao dịch, URL hay tài khoản.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng cảnh báo an toàn thông tin (NCSC)",
+          "phone": null,
+          "url": "https://canhbao.ncsc.gov.vn",
+          "description": "Tham khảo cảnh báo an toàn thông tin; đối chiếu thời điểm công bố và từng đối tượng được nêu trong cảnh báo.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tín nhiệm mạng (NCSC) — Hệ sinh thái Tín nhiệm & Giám sát an toàn không gian mạng",
+          "phone": null,
+          "url": "https://tinnhiemmang.vn",
+          "description": "Cổng thông tin thuộc Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC) - Cục An toàn thông tin; cung cấp cảnh báo lừa đảo trực tuyến, nhận diện tổ chức, website và thiết bị tin cậy.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cảnh sát 113 — tình huống khẩn cấp",
+          "phone": "113",
+          "url": "https://bocongan.gov.vn",
+          "description": "Chỉ gọi khi cần trợ giúp khẩn cấp. Vụ việc không khẩn cấp: liên hệ Công an địa phương hoặc kênh tiếp nhận tố giác thích hợp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tổng đài Quốc gia Bảo vệ Trẻ em — 111",
+          "phone": "111",
+          "url": "https://tongdai111.vn",
+          "description": "Hỗ trợ, bảo vệ trẻ em (kể cả bị lừa đảo/xâm hại trên mạng).",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "VNCERT/CC — Ứng cứu sự cố an ninh mạng",
+          "phone": "0869 100 001",
+          "url": "https://vncert.vn",
+          "description": "Báo cáo sự cố tấn công mạng, mã độc.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bảo hiểm xã hội Việt Nam",
+          "phone": "1900 9068",
+          "url": "https://bhxh.gov.vn",
+          "description": "Xác minh thông tin BHXH/BHYT; cảnh giác cuộc gọi giả danh 'cập nhật sổ BHXH'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Ngân hàng Nhà nước Việt Nam",
+          "phone": null,
+          "url": "https://sbv.gov.vn",
+          "description": "Cơ quan quản lý tiền tệ/ngân hàng; tra cứu cảnh báo tín dụng đen, tổ chức tín dụng hợp pháp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng Dịch vụ công Quốc gia",
+          "phone": null,
+          "url": "https://dichvucong.gov.vn",
+          "description": "Xác minh dịch vụ công trực tuyến chính thức; cảnh giác dịch vụ công 'giả'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bộ Thông tin và Truyền thông",
+          "phone": null,
+          "url": "https://mic.gov.vn",
+          "description": "Quản lý viễn thông, báo chí, không gian mạng.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "refusal_script": "Cảm ơn, nhưng tôi chưa đủ cơ sở để xác nhận điều này. Bạn vui lòng cho tôi thời gian kiểm tra qua kênh chính thức; tôi sẽ không thực hiện giao dịch hay cung cấp thông tin cho đến khi xác minh xong.",
+      "evidence_count": 0,
+      "sources_used": [],
+      "kind": "message"
+    },
+    "verdict_label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+    "verdict_conclusive": false
+  },
+  "4_missing_gray_zone_domain": {
+    "risk_score": 20,
+    "reasons": [
+      "Tên miền mới chưa có dữ liệu đánh giá độc hại"
+    ],
+    "evidence": [
+      {
+        "source": "heuristic",
+        "source_name": "Heuristic tiếng Việt (luật nội bộ)",
+        "reliability": "medium",
+        "severity": "INFO",
+        "detail": "Tên miền mới chưa có dữ liệu đánh giá độc hại",
+        "supports": "context",
+        "url": null,
+        "limits": "Có thể dương tính giả nếu nội dung hợp pháp trùng từ khoá; không thay thế phân tích chuyên sâu.",
+        "citation": "ShieldCall VN scam_rules heuristic ruleset",
+        "updated_at": "2026-11-24"
+      }
+    ],
+    "guardrail": {
+      "tier": "INSUFFICIENT",
+      "label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+      "confidence": 0.3,
+      "confidence_type": "rule_heuristic",
+      "rule_confidence": 0.3,
+      "calibrated_probability": null,
+      "is_conclusive": false,
+      "requires_verification": true,
+      "has_contradiction": false,
+      "contradiction_details": [],
+      "cautions": [
+        "Hệ thống chưa thu thập đủ bằng chứng nhất quán để kết luận. KHÔNG xem đây là 'an toàn' hay 'chắc chắn lừa đảo', hãy xác minh qua kênh chính thức trước khi giao dịch hoặc chia sẻ thông tin."
+      ],
+      "disclaimer": "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định, không thay thế kết luận của cơ quan chức năng. Hãy luôn xác minh qua kênh chính thức.",
+      "official_channels": [
+        {
+          "name": "Đầu số 156 — phản ánh tin nhắn/cuộc gọi rác, dấu hiệu lừa đảo",
+          "phone": "156",
+          "url": "https://mic.gov.vn/bo-tttt-trien-khai-tong-dai-156-tiep-nhan-phan-anh-tin-nhan-rac-cuoc-goi-rac-cuoc-goi-co-dau-hieu-lua-dao-197155742.htm",
+          "description": "Tiếp nhận phản ánh tin nhắn hoặc cuộc gọi có dấu hiệu lừa đảo. Không phải kênh xác nhận an toàn cho mọi giao dịch, URL hay tài khoản.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng cảnh báo an toàn thông tin (NCSC)",
+          "phone": null,
+          "url": "https://canhbao.ncsc.gov.vn",
+          "description": "Tham khảo cảnh báo an toàn thông tin; đối chiếu thời điểm công bố và từng đối tượng được nêu trong cảnh báo.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tín nhiệm mạng (NCSC) — Hệ sinh thái Tín nhiệm & Giám sát an toàn không gian mạng",
+          "phone": null,
+          "url": "https://tinnhiemmang.vn",
+          "description": "Cổng thông tin thuộc Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC) - Cục An toàn thông tin; cung cấp cảnh báo lừa đảo trực tuyến, nhận diện tổ chức, website và thiết bị tin cậy.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cảnh sát 113 — tình huống khẩn cấp",
+          "phone": "113",
+          "url": "https://bocongan.gov.vn",
+          "description": "Chỉ gọi khi cần trợ giúp khẩn cấp. Vụ việc không khẩn cấp: liên hệ Công an địa phương hoặc kênh tiếp nhận tố giác thích hợp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tổng đài Quốc gia Bảo vệ Trẻ em — 111",
+          "phone": "111",
+          "url": "https://tongdai111.vn",
+          "description": "Hỗ trợ, bảo vệ trẻ em (kể cả bị lừa đảo/xâm hại trên mạng).",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "VNCERT/CC — Ứng cứu sự cố an ninh mạng",
+          "phone": "0869 100 001",
+          "url": "https://vncert.vn",
+          "description": "Báo cáo sự cố tấn công mạng, mã độc.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bảo hiểm xã hội Việt Nam",
+          "phone": "1900 9068",
+          "url": "https://bhxh.gov.vn",
+          "description": "Xác minh thông tin BHXH/BHYT; cảnh giác cuộc gọi giả danh 'cập nhật sổ BHXH'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Ngân hàng Nhà nước Việt Nam",
+          "phone": null,
+          "url": "https://sbv.gov.vn",
+          "description": "Cơ quan quản lý tiền tệ/ngân hàng; tra cứu cảnh báo tín dụng đen, tổ chức tín dụng hợp pháp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng Dịch vụ công Quốc gia",
+          "phone": null,
+          "url": "https://dichvucong.gov.vn",
+          "description": "Xác minh dịch vụ công trực tuyến chính thức; cảnh giác dịch vụ công 'giả'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bộ Thông tin và Truyền thông",
+          "phone": null,
+          "url": "https://mic.gov.vn",
+          "description": "Quản lý viễn thông, báo chí, không gian mạng.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "refusal_script": "Cảm ơn, nhưng tôi chưa đủ cơ sở để xác nhận điều này. Bạn vui lòng cho tôi thời gian kiểm tra qua kênh chính thức; tôi sẽ không thực hiện giao dịch hay cung cấp thông tin cho đến khi xác minh xong.",
+      "evidence_count": 1,
+      "sources_used": [
+        "heuristic"
+      ],
+      "kind": "url"
+    },
+    "verdict_label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+    "verdict_conclusive": false
+  },
+  "5_account_pending_only": {
+    "risk_score": 15,
+    "pending_reports_count": 1,
+    "reports_count": 0,
+    "bank_name": "MB",
+    "evidence": [],
+    "guardrail": {
+      "tier": "INSUFFICIENT",
+      "label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+      "confidence": 0.3,
+      "confidence_type": "rule_heuristic",
+      "rule_confidence": 0.3,
+      "calibrated_probability": null,
+      "is_conclusive": false,
+      "requires_verification": true,
+      "has_contradiction": false,
+      "contradiction_details": [],
+      "cautions": [
+        "Hệ thống chưa thu thập đủ bằng chứng nhất quán để kết luận. KHÔNG xem đây là 'an toàn' hay 'chắc chắn lừa đảo', hãy xác minh qua kênh chính thức trước khi giao dịch hoặc chia sẻ thông tin.",
+        "Hệ thống không khẳng định một cá nhân hay chủ tài khoản/số điện thoại chắc chắn lừa đảo; chỉ cảnh báo dấu hiệu rủi ro để bạn đối chiếu qua ngân hàng hoặc cơ quan chức năng.",
+        "Không có bằng chứng nào được ghi nhận cho nội dung này."
+      ],
+      "disclaimer": "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định, không thay thế kết luận của cơ quan chức năng. Hãy luôn xác minh qua kênh chính thức.",
+      "official_channels": [
+        {
+          "name": "Tổng đài MBBank (khoá thẻ/xác minh giao dịch)",
+          "phone": "1900 545426",
+          "url": "https://www.mbbank.com.vn",
+          "description": "Liên hệ ngân hàng phát hành để khoá thẻ/tra soát giao dịch.",
+          "reliability": "official"
+        },
+        {
+          "name": "Đầu số 156 — phản ánh tin nhắn/cuộc gọi rác, dấu hiệu lừa đảo",
+          "phone": "156",
+          "url": "https://mic.gov.vn/bo-tttt-trien-khai-tong-dai-156-tiep-nhan-phan-anh-tin-nhan-rac-cuoc-goi-rac-cuoc-goi-co-dau-hieu-lua-dao-197155742.htm",
+          "description": "Tiếp nhận phản ánh tin nhắn hoặc cuộc gọi có dấu hiệu lừa đảo. Không phải kênh xác nhận an toàn cho mọi giao dịch, URL hay tài khoản.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng cảnh báo an toàn thông tin (NCSC)",
+          "phone": null,
+          "url": "https://canhbao.ncsc.gov.vn",
+          "description": "Tham khảo cảnh báo an toàn thông tin; đối chiếu thời điểm công bố và từng đối tượng được nêu trong cảnh báo.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tín nhiệm mạng (NCSC) — Hệ sinh thái Tín nhiệm & Giám sát an toàn không gian mạng",
+          "phone": null,
+          "url": "https://tinnhiemmang.vn",
+          "description": "Cổng thông tin thuộc Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC) - Cục An toàn thông tin; cung cấp cảnh báo lừa đảo trực tuyến, nhận diện tổ chức, website và thiết bị tin cậy.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cảnh sát 113 — tình huống khẩn cấp",
+          "phone": "113",
+          "url": "https://bocongan.gov.vn",
+          "description": "Chỉ gọi khi cần trợ giúp khẩn cấp. Vụ việc không khẩn cấp: liên hệ Công an địa phương hoặc kênh tiếp nhận tố giác thích hợp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tổng đài Quốc gia Bảo vệ Trẻ em — 111",
+          "phone": "111",
+          "url": "https://tongdai111.vn",
+          "description": "Hỗ trợ, bảo vệ trẻ em (kể cả bị lừa đảo/xâm hại trên mạng).",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "VNCERT/CC — Ứng cứu sự cố an ninh mạng",
+          "phone": "0869 100 001",
+          "url": "https://vncert.vn",
+          "description": "Báo cáo sự cố tấn công mạng, mã độc.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bảo hiểm xã hội Việt Nam",
+          "phone": "1900 9068",
+          "url": "https://bhxh.gov.vn",
+          "description": "Xác minh thông tin BHXH/BHYT; cảnh giác cuộc gọi giả danh 'cập nhật sổ BHXH'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Ngân hàng Nhà nước Việt Nam",
+          "phone": null,
+          "url": "https://sbv.gov.vn",
+          "description": "Cơ quan quản lý tiền tệ/ngân hàng; tra cứu cảnh báo tín dụng đen, tổ chức tín dụng hợp pháp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng Dịch vụ công Quốc gia",
+          "phone": null,
+          "url": "https://dichvucong.gov.vn",
+          "description": "Xác minh dịch vụ công trực tuyến chính thức; cảnh giác dịch vụ công 'giả'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bộ Thông tin và Truyền thông",
+          "phone": null,
+          "url": "https://mic.gov.vn",
+          "description": "Quản lý viễn thông, báo chí, không gian mạng.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "refusal_script": "Cảm ơn, nhưng tôi chưa đủ cơ sở để xác nhận điều này. Bạn vui lòng cho tôi thời gian kiểm tra qua kênh chính thức; tôi sẽ không thực hiện giao dịch hay cung cấp thông tin cho đến khi xác minh xong.",
+      "evidence_count": 0,
+      "sources_used": [],
+      "kind": "account"
+    },
+    "verdict_label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+    "verdict_conclusive": false
+  },
+  "6_account_approved_capped": {
+    "risk_score": 75,
+    "reports_count": 3,
+    "bank_name": "Techcombank",
+    "evidence": [],
+    "guardrail": {
+      "tier": "HIGH_RISK",
+      "label": "NGUY CƠ CAO",
+      "confidence": 0.8,
+      "confidence_type": "rule_heuristic",
+      "rule_confidence": 0.8,
+      "calibrated_probability": null,
+      "is_conclusive": false,
+      "requires_verification": true,
+      "has_contradiction": false,
+      "contradiction_details": [],
+      "cautions": [
+        "Hệ thống không khẳng định một cá nhân hay chủ tài khoản/số điện thoại chắc chắn lừa đảo; chỉ cảnh báo dấu hiệu rủi ro để bạn đối chiếu qua ngân hàng hoặc cơ quan chức năng.",
+        "Không chuyển tiền, không cung cấp OTP/mật khẩu, không cài ứng dụng lạ.",
+        "Không có bằng chứng nào được ghi nhận cho nội dung này."
+      ],
+      "disclaimer": "Kết quả phân tích tự động chỉ mang tính tham khảo, hỗ trợ ra quyết định, không thay thế kết luận của cơ quan chức năng. Hãy luôn xác minh qua kênh chính thức.",
+      "official_channels": [
+        {
+          "name": "Tổng đài Techcombank (khoá thẻ/xác minh giao dịch)",
+          "phone": "1800 588822",
+          "url": "https://www.techcombank.com.vn",
+          "description": "Liên hệ ngân hàng phát hành để khoá thẻ/tra soát giao dịch.",
+          "reliability": "official"
+        },
+        {
+          "name": "Đầu số 156 — phản ánh tin nhắn/cuộc gọi rác, dấu hiệu lừa đảo",
+          "phone": "156",
+          "url": "https://mic.gov.vn/bo-tttt-trien-khai-tong-dai-156-tiep-nhan-phan-anh-tin-nhan-rac-cuoc-goi-rac-cuoc-goi-co-dau-hieu-lua-dao-197155742.htm",
+          "description": "Tiếp nhận phản ánh tin nhắn hoặc cuộc gọi có dấu hiệu lừa đảo. Không phải kênh xác nhận an toàn cho mọi giao dịch, URL hay tài khoản.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng cảnh báo an toàn thông tin (NCSC)",
+          "phone": null,
+          "url": "https://canhbao.ncsc.gov.vn",
+          "description": "Tham khảo cảnh báo an toàn thông tin; đối chiếu thời điểm công bố và từng đối tượng được nêu trong cảnh báo.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tín nhiệm mạng (NCSC) — Hệ sinh thái Tín nhiệm & Giám sát an toàn không gian mạng",
+          "phone": null,
+          "url": "https://tinnhiemmang.vn",
+          "description": "Cổng thông tin thuộc Trung tâm Giám sát an toàn không gian mạng quốc gia (NCSC) - Cục An toàn thông tin; cung cấp cảnh báo lừa đảo trực tuyến, nhận diện tổ chức, website và thiết bị tin cậy.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cảnh sát 113 — tình huống khẩn cấp",
+          "phone": "113",
+          "url": "https://bocongan.gov.vn",
+          "description": "Chỉ gọi khi cần trợ giúp khẩn cấp. Vụ việc không khẩn cấp: liên hệ Công an địa phương hoặc kênh tiếp nhận tố giác thích hợp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Tổng đài Quốc gia Bảo vệ Trẻ em — 111",
+          "phone": "111",
+          "url": "https://tongdai111.vn",
+          "description": "Hỗ trợ, bảo vệ trẻ em (kể cả bị lừa đảo/xâm hại trên mạng).",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "VNCERT/CC — Ứng cứu sự cố an ninh mạng",
+          "phone": "0869 100 001",
+          "url": "https://vncert.vn",
+          "description": "Báo cáo sự cố tấn công mạng, mã độc.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bảo hiểm xã hội Việt Nam",
+          "phone": "1900 9068",
+          "url": "https://bhxh.gov.vn",
+          "description": "Xác minh thông tin BHXH/BHYT; cảnh giác cuộc gọi giả danh 'cập nhật sổ BHXH'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Ngân hàng Nhà nước Việt Nam",
+          "phone": null,
+          "url": "https://sbv.gov.vn",
+          "description": "Cơ quan quản lý tiền tệ/ngân hàng; tra cứu cảnh báo tín dụng đen, tổ chức tín dụng hợp pháp.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Cổng Dịch vụ công Quốc gia",
+          "phone": null,
+          "url": "https://dichvucong.gov.vn",
+          "description": "Xác minh dịch vụ công trực tuyến chính thức; cảnh giác dịch vụ công 'giả'.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        },
+        {
+          "name": "Bộ Thông tin và Truyền thông",
+          "phone": null,
+          "url": "https://mic.gov.vn",
+          "description": "Quản lý viễn thông, báo chí, không gian mạng.",
+          "reliability": "official",
+          "verified_on": "2026-11-24"
+        }
+      ],
+      "refusal_script": "Cảm ơn, nhưng tôi chưa đủ cơ sở để xác nhận điều này. Bạn vui lòng cho tôi thời gian kiểm tra qua kênh chính thức; tôi sẽ không thực hiện giao dịch hay cung cấp thông tin cho đến khi xác minh xong.",
+      "evidence_count": 0,
+      "sources_used": [],
+      "kind": "account"
+    },
+    "verdict_label": "NGUY CƠ CAO",
+    "verdict_conclusive": false
+  }
+}

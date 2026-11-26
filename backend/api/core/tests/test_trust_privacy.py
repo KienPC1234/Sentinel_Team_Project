@@ -1244,6 +1244,38 @@ class PromptInjectionHardeningUnitTest(TestCase):
         self.assertLess(cautious_res['final_score'], 40)
         self.assertEqual(cautious_res['decision_reason'], 'ai_non_scam_corroborated')
 
+    def test_pii_redaction_filter_masks_messages_and_exception_tracebacks(self):
+        """PIIRedactionFilter phải che SĐT, STK, CCCD, email, secret cả trong message lẫn traceback exception."""
+        import io
+        import logging
+        from api.utils.privacy import PIIRedactionFilter
+
+        buf = io.StringIO()
+        handler = logging.StreamHandler(buf)
+        handler.addFilter(PIIRedactionFilter())
+        test_logger = logging.getLogger('test.pii_exception_audit')
+        test_logger.handlers = [handler]
+        test_logger.setLevel(logging.INFO)
+        test_logger.propagate = False
+
+        test_logger.info(
+            'Quet SDT 0912345678 STK 19034567890123 CCCD 001099012345 email user@example.com key sk-abc1234567890xyz'
+        )
+        try:
+            raise RuntimeError('Loi goi API voi SDT 0987654321 va STK 102938475612')
+        except Exception:
+            test_logger.exception('Exception khi xu ly CCCD 079200012345')
+
+        logged = buf.getvalue()
+        for sensitive in ('0912345678', '19034567890123', '001099012345', 'user@example.com', 'sk-abc1234567890xyz', '0987654321', '102938475612', '079200012345'):
+            self.assertNotIn(sensitive, logged)
+        self.assertIn('[SĐT đã ẩn]', logged)
+        self.assertIn('[số tài khoản đã ẩn]', logged)
+        self.assertIn('[CCCD/CMND đã ẩn]', logged)
+        self.assertIn('[email đã ẩn]', logged)
+        self.assertIn('[khoá/bí mật đã ẩn]', logged)
+        self.assertIn('RuntimeError:', logged)
+
 
 
 

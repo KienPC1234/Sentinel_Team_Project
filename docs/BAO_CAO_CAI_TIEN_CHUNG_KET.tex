@@ -3,12 +3,12 @@
 \usepackage{fontspec}
 \setmainfont{Noto Sans}
 \setsansfont{Noto Sans}
-\setmonofont{Noto Sans Mono}[Scale=0.88]
+\setmonofont{Noto Sans Mono}[Scale=0.84]
 
 \usepackage[a4paper,top=18mm,bottom=18mm,left=19mm,right=19mm]{geometry}
 \usepackage{microtype}
 \usepackage{setspace}
-\setstretch{1.20}
+\setstretch{1.18}
 
 \usepackage{graphicx}
 \usepackage{xcolor}
@@ -21,6 +21,7 @@
 \usepackage{titlesec}
 \usepackage{float}
 \usepackage{placeins}
+\usepackage{fancyvrb}
 \usepackage[font=small,labelfont=bf,skip=5pt]{caption}
 \captionsetup[table]{name=Bảng}
 \captionsetup[figure]{name=Hình}
@@ -31,7 +32,7 @@
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4.5pt}
-\renewcommand{\arraystretch}{1.28}
+\renewcommand{\arraystretch}{1.26}
 \setlength{\tabcolsep}{5pt}
 \emergencystretch=3em
 \raggedbottom
@@ -43,14 +44,14 @@
 \setlength{\headheight}{15pt}
 \fancyhf{}
 \fancyhead[L]{\small ShieldCall VN - Báo cáo cải tiến Chung kết (Chặng 1)}
-\fancyhead[R]{\small 24/11/2026}
+\fancyhead[R]{\small 25/11/2026}
 \fancyfoot[C]{\small \thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
 \titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
 \titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.5em}{}
-\titlespacing*{\section}{0pt}{14pt}{5pt}
-\titlespacing*{\subsection}{0pt}{10pt}{3pt}
+\titlespacing*{\section}{0pt}{13pt}{5pt}
+\titlespacing*{\subsection}{0pt}{9pt}{3pt}
 
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
@@ -60,38 +61,38 @@
 \begin{center}
   {\Large\bfseries BÁO CÁO CẢI TIẾN KỸ THUẬT VÒNG CHUNG KẾT}\\[4pt]
   {\large\bfseries Hệ thống ShieldCall VN: Kiểm soát kết luận, Truy xuất nguồn Việt Nam và Bảo vệ dữ liệu nhạy cảm}\\[8pt]
-  {\small Đề cải tiến: Phiên bản 1 (Nộp / cập nhật bài - Chặng 1) \quad|\quad Ngày cập nhật: 24/11/2026}\\[3pt]
+  {\small Đề cải tiến: Phiên bản 1 (Nộp / cập nhật bài - Chặng 1) \quad|\quad Ngày cập nhật: 25/11/2026}\\[3pt]
   {\small Mã nguồn: \url{https://github.com/KienPC1234/Sentinel_Team_Project} \quad|\quad Demo: \url{https://sc.fptoj.com}}
 \end{center}
 \vspace{2pt}
 \noindent\rule{\textwidth}{0.6pt}
 
 \begin{abstract}
-\noindent Báo cáo trình bày ba nhóm cải tiến trọng tâm cho ShieldCall VN theo góp ý của Hội đồng giám khảo: (1) bổ sung tầng trung gian \codenobreak{INSUFFICIENT} khi thiếu hoặc mâu thuẫn bằng chứng, khóa trần không bao giờ khẳng định cá nhân/STK/SĐT chắc chắn lừa đảo, đồng thời kết hợp tiền lọc Regex với AI LLM làm lớp đối chứng ngữ nghĩa và chống jailbreak (kèm fallback sang \codenobreak{SMALL\_MODEL} \codenobreak{gemma4:31b-cloud}); (2) chuẩn hóa 17 nguồn tri thức (gồm Tín nhiệm mạng, ScamWave 4.071 mục, RAG 297 mục, 39 ngân hàng/ví và 15 báo chí VN) kèm ngày cập nhật, giới hạn công bố và kiểm nghiệm thực nghiệm (80 tin nhắn VN đạt Precision 100.00\%, Recall 95.00\%, F1 97.44\%, FPR 0.00\%; 20 kịch bản guardrail đạt 20/20; 18 ca đối kháng đạt 18/18); (3) che PII toàn cục trong nhật ký (0 SĐT/email thô trên 2.234 dòng \codenobreak{llm\_access.log}), đồng bộ nút gạt che PII trên 8 luồng quét tới cả Cloud LLM, tách chỉ thị hệ thống chống prompt injection và hoàn thiện API xuất/xóa dữ liệu cá nhân (54/54 test \codenobreak{test\_trust\_privacy}; toàn bộ backend đạt 312/312 test mặc định, tổng 318 test).
+\noindent Báo cáo trình bày ba nhóm cải tiến trọng tâm cho ShieldCall VN theo góp ý của Hội đồng giám khảo: (1) bổ sung tầng trung gian \codenobreak{INSUFFICIENT} khi thiếu hoặc mâu thuẫn bằng chứng, khóa trần không bao giờ khẳng định cá nhân/STK/SĐT chắc chắn lừa đảo, đồng thời kết hợp tiền lọc Regex với AI LLM đối chứng ngữ nghĩa và chống jailbreak (kèm fallback sang \codenobreak{SMALL\_MODEL} \codenobreak{gemma4:31b-cloud}); (2) chuẩn hóa 17 nguồn tri thức (Tín nhiệm mạng \code{04/11/2026}, ScamWave 4.071 mục \code{2026-11-16}, RAG 299 mục, 39 ngân hàng/ví, 15 báo chí VN), phân tách rạch ròi ngày dữ liệu ngoài và ngày đối soát danh mục nội bộ (\code{24/11/2026}), công bố kết quả đánh giá offline trên 80 kịch bản VN nội bộ (Precision 100.00\%, Recall 95.00\%, F1 97.44\%, FPR 0.00\%), 20 kịch bản guardrail (20/20) và 18 ca kiểm thử đối kháng (12 ca LLM thực và 6 ca mô phỏng lỗi/bypass đạt 18/18); (3) mở rộng \codenobreak{PIIRedactionFilter} che cả exception traceback (0 SĐT/email/STK/CCCD/secret thô trên 2.266 dòng \codenobreak{llm\_access.log}), làm rõ cảnh báo gửi AI ngoài trên \codenobreak{ScanPrivacyToggle} khi tắt che PII, và kiểm chứng API xuất/xóa dữ liệu cá nhân trước-sau (55/55 test \codenobreak{test\_trust\_privacy}; 313/313 test mặc định, tổng 319 test).
 \end{abstract}
 
 \begin{table}[ht]
 \centering
 \caption{Tổng hợp vấn đề trước cải tiến, giải pháp triển khai và minh chứng đối chứng.}
 \small
-\begin{tabularx}{\textwidth}{@{}L{3.0cm} L{4.2cm} L{4.4cm} Y@{}}
+\begin{tabularx}{\textwidth}{@{}L{2.8cm} L{4.0cm} L{4.6cm} Y@{}}
 \toprule
 \textbf{Yêu cầu} & \textbf{Vấn đề cần khắc phục} & \textbf{Giải pháp đã hoàn thiện} & \textbf{Minh chứng đo được} \\
 \midrule
 1. Kiểm soát kết luận ảnh hưởng người dùng &
 Dễ gắn nhãn quá mức khi thiếu dữ liệu, mâu thuẫn nguồn hoặc tin nhắn đời thường trùng từ khóa nhạy cảm. &
 Tầng \codenobreak{INSUFFICIENT}; khóa trần STK/SĐT; tiền lọc Regex kết hợp LLM đối chứng ngữ nghĩa và fallback \codenobreak{gemma4:31b-cloud}; chặn lưu \codenobreak{SAFE} khi fallback. &
-20/20 ca guardrail (tỷ lệ từ chối thiếu/mâu thuẫn = 1.0); 18/18 ca đối kháng; 0/40 báo nhầm tin đời thường. \\
+20/20 ca guardrail (tỷ lệ từ chối thiếu/mâu thuẫn = 1.0); 18/18 ca đối kháng (12 ca LLM thực + 6 ca mô phỏng); 0/40 báo nhầm tin đời thường. \\
 \midrule
 2. Truy xuất nguồn \& tình huống VN &
-Chưa rõ nguồn, độ tin cậy, giới hạn và ngày cập nhật; regex còn sót biến thể chèn dấu. &
-Công khai 17 nguồn có \codenobreak{updated\_at} tại \codenobreak{/trust/} và \codenobreak{evidence[]}; chuẩn hóa chữ chèn dấu (\textit{C.ô.n.g a.n}); đánh giá chuẩn hóa trên dữ liệu VN. &
-80 tin nhắn VN: Precision 100.00\%, Recall 95.00\%, F1 97.44\%, FPR 0.00\%; holdout 40 mẫu F1 94.74\% (FP=0); AUC 0.959. \\
+Chưa tách bạch ngày dữ liệu bên ngoài với ngày đối soát nội bộ; thiếu minh họa truy xuất nguồn theo từng nhận định. &
+Công khai 17 nguồn kèm \codenobreak{updated\_at}, \codenobreak{catalog\_verified\_at} và \codenobreak{freshness\_scope} tại \codenobreak{/trust/} và \codenobreak{evidence[]}; chuẩn hóa chữ chèn dấu (\textit{C.ô.n.g a.n}). &
+Đánh giá offline 80 kịch bản VN nội bộ: Precision 100.00\%, Recall 95.00\%, F1 97.44\%, FPR 0.00\%; holdout nội bộ 40 mẫu F1 94.74\% (FP=0); AUC 0.959. \\
 \midrule
 3. Bảo vệ PII \& quyền xóa dữ liệu &
-Rủi ro lộ PII khi AI retry; thiếu cơ chế xuất/xóa chọn lọc theo nhóm dữ liệu riêng tư. &
-\codenobreak{PIIRedactionFilter} toàn cục; đồng bộ \codenobreak{ScanPrivacyToggle} trên 8 luồng quét; tách \codenobreak{PROMPT\_GUARD} vào \code{role="system"}; API xuất JSON và xóa theo nhóm. &
-0 SĐT/email thô trên 2.234 dòng \codenobreak{llm\_access.log}; IDOR trả 403/401; 54/54 test \codenobreak{test\_trust\_privacy}; 312/312 test mặc định. \\
+Rủi ro lộ PII khi AI retry hoặc phát sinh exception; mô tả chế độ nguyên văn chưa nhấn mạnh gửi AI ngoài; thiếu demo xóa trước-sau. &
+\codenobreak{PIIRedactionFilter} che cả message lẫn exception traceback; cảnh báo gửi AI ngoài trên \codenobreak{ScanPrivacyToggle}; tách \codenobreak{PROMPT\_GUARD} vào \code{role="system"}; API xuất JSON và xóa theo nhóm. &
+0 SĐT/email/STK/CCCD/secret thô trên 2.266 dòng \codenobreak{llm\_access.log}; demo log exception \& demo xóa dữ liệu từ 1 phần tử về mảng rỗng; IDOR trả 403/401; 55/55 test \codenobreak{test\_trust\_privacy}; 313/313 test mặc định. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -100,7 +101,7 @@ Rủi ro lộ PII khi AI retry; thiếu cơ chế xuất/xóa chọn lọc theo 
 
 \subsection{Cơ chế phân tầng năm mức trong \codenobreak{trust\_guard.py}}
 
-Trước đây, hệ thống dễ ép kết quả về hai cực an toàn hoặc lừa đảo dù bằng chứng còn thiếu. Hàm \code{assess(result, kind)} bổ sung tầng trung gian \codenobreak{INSUFFICIENT} để phản ánh đúng mức độ xác thực (Bảng~2 và Hình~1), bảo đảm không bao giờ quy kết cá nhân hoặc chủ tài khoản là tội phạm khi chưa có kết luận cơ quan chức năng.
+Hàm \code{assess(result, kind)} bổ sung tầng trung gian \codenobreak{INSUFFICIENT} để phản ánh đúng độ chắc chắn của bằng chứng (Bảng~2 và Hình~1), bảo đảm không bao giờ quy kết cá nhân hoặc chủ tài khoản là tội phạm khi chưa có kết luận của cơ quan chức năng.
 
 \begin{table}[ht]
 \centering
@@ -123,24 +124,24 @@ Trước đây, hệ thống dễ ép kết quả về hai cực an toàn hoặc
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-  font=\sffamily\scriptsize,
+  font=\sffamily\footnotesize,
   >=Stealth,
-  stepbox/.style={draw=black, rounded corners=2pt, fill=white, align=center, inner sep=6pt, minimum height=0.95cm, line width=0.65pt},
+  stepbox/.style={draw=black, rounded corners=2pt, fill=white, align=center, inner sep=5.5pt, minimum height=0.95cm, line width=0.65pt},
   tierbox/.style={draw=black!85, rounded corners=2pt, fill=white, align=center, inner sep=5pt, text width=3.3cm, minimum height=0.95cm, line width=0.65pt},
   arr/.style={->, line width=0.7pt, draw=black}
 ]
-  \node[stepbox, text width=2.7cm] (in) at (0,0) {\textbf{1. Bằng chứng}\\{\tiny Điểm rủi ro + \texttt{evidence[]}}};
-  \node[stepbox, text width=3.9cm] (gate) at (4.5,0) {\textbf{2. Bộ lọc Guardrail}\\{\tiny Thiếu dữ liệu? Mâu thuẫn? STK/SĐT?}};
-  \node[tierbox] (insuff) at (10.3, 1.55) {\textbf{\texttt{INSUFFICIENT}}\\{\tiny Rỗng / Mâu thuẫn / Pending}};
-  \node[tierbox] (safe) at (10.3, 0.0) {\textbf{\texttt{LIKELY\_SAFE}}\\{\tiny Có nguồn sạch tin cậy}};
-  \node[tierbox] (susp) at (10.3, -1.55) {\textbf{\texttt{SUSPICIOUS} / \texttt{HIGH\_RISK}}\\{\tiny Khóa trần STK/SĐT tại đây}};
-  \node[tierbox, fill=black!4, text width=3.5cm] (conf) at (16.7, -1.55) {\textbf{\texttt{CONFIRMED\_RISK}}\\{\tiny Chỉ URL/domain/tệp đa nguồn}};
+  \node[stepbox, text width=2.7cm] (in) at (0,0) {\textbf{1. Bằng chứng}\\{\scriptsize Điểm rủi ro + \texttt{evidence[]}}};
+  \node[stepbox, text width=3.9cm] (gate) at (4.5,0) {\textbf{2. Bộ lọc Guardrail}\\{\scriptsize Thiếu? Mâu thuẫn? STK/SĐT?}};
+  \node[tierbox] (insuff) at (10.3, 1.55) {\textbf{\texttt{INSUFFICIENT}}\\{\scriptsize Rỗng / Mâu thuẫn / Pending}};
+  \node[tierbox] (safe) at (10.3, 0.0) {\textbf{\texttt{LIKELY\_SAFE}}\\{\scriptsize Có nguồn sạch tin cậy}};
+  \node[tierbox] (susp) at (10.3, -1.55) {\textbf{\texttt{SUSPICIOUS} / \texttt{HIGH\_RISK}}\\{\scriptsize Khóa trần STK/SĐT tại đây}};
+  \node[tierbox, fill=black!4, text width=3.5cm] (conf) at (16.7, -1.55) {\textbf{\texttt{CONFIRMED\_RISK}}\\{\scriptsize Chỉ URL/domain/tệp đa nguồn}};
 
   \draw[arr] (in) -- (gate);
   \draw[arr, rounded corners=4pt] (gate.east) -- ++(0.55, 0) |- (insuff.west);
   \draw[arr] (gate.east) -- (safe.west);
   \draw[arr, rounded corners=4pt] (gate.east) -- ++(0.55, 0) |- (susp.west);
-  \draw[arr] (susp.east) -- node[above=2pt, align=center, font=\sffamily\tiny] {Nguồn độc lập\\[-1pt](trừ STK/SĐT)} (conf.west);
+  \draw[arr] (susp.east) -- node[above=2pt, align=center, font=\sffamily\scriptsize] {Nguồn độc lập\\[-1pt](trừ STK/SĐT)} (conf.west);
 \end{tikzpicture}%
 }
 \caption{Cơ chế kiểm soát và phân tầng kết luận trong hàm \codenobreak{trust\_guard.assess()}.}
@@ -185,35 +186,63 @@ Giữ liên tục dịch vụ quét. Ngoài fallback, \codenobreak{SMALL\_MODEL}
 \end{tabularx}
 \end{table}
 
-\subsection{6 trường hợp minh chứng đối chứng: Mâu thuẫn, Thiếu dữ liệu và Khóa trần cá nhân}
+\subsection{Minh chứng chạy thực tế Guardrail (3 ca tiêu biểu và JSON phản hồi)}
 
-\begin{enumerate}[leftmargin=1.6em, itemsep=2pt]
-  \item \textbf{Ca 1 (Mâu thuẫn VT sạch và heuristic - \codenobreak{vn\_contradiction\_vt\_clean\_vs\_heuristic}):} URL sạch trên 70 engine VirusTotal nhưng heuristic báo \code{risk\_score=45} $\rightarrow$ bật \codenobreak{has\_contradiction = True}, hạ về \codenobreak{INSUFFICIENT} (\codenobreak{is\_conclusive = False}).
-  \item \textbf{Ca 2 (Mâu thuẫn Tín nhiệm mạng và cảnh báo ngoài - \codenobreak{vn\_contradiction\_tinnhiem\_vs\_vt\_multi}):} Tên miền có chứng nhận \code{tinnhiem.status="trusted"} nhưng bị 3 engine ngoài cảnh báo $\rightarrow$ từ chối \codenobreak{CONFIRMED\_RISK}, hạ về \codenobreak{INSUFFICIENT} (\codenobreak{has\_contradiction = True}).
-  \item \textbf{Ca 3 (Tin nhắn/ảnh rỗng không đọc được - \codenobreak{vn\_missing\_empty\_msg}, \codenobreak{vn\_missing\_ocr\_unreadable}):} Trả về \codenobreak{INSUFFICIENT}, \codenobreak{requires\_verification = True}, kèm kịch bản từ chối giao dịch lịch sự (\codenobreak{refusal\_script}) và hotline 113/156.
-  \item \textbf{Ca 4 (Tên miền mới thiếu dữ liệu - \codenobreak{vn\_missing\_gray\_zone\_domain}):} Chuỗi \textit{"chưa có dữ liệu đánh giá độc hại"} không bị bắt nhầm thành dấu hiệu độc hại; trả về \codenobreak{INSUFFICIENT}.
-  \item \textbf{Ca 5 (Tài khoản chỉ có báo cáo chờ duyệt - \codenobreak{vn\_missing\_pending\_account\_only}):} Điểm trần $\le 35$, giữ nguyên \codenobreak{INSUFFICIENT} kèm ghi chú chờ kiểm duyệt.
-  \item \textbf{Ca 6 (Tài khoản có báo cáo đã duyệt nhưng khóa trần - \codenobreak{vn\_account\_approved\_reports}):} Dù \code{risk\_score=75} (\codenobreak{HIGH\_RISK}), hệ thống khóa cứng \codenobreak{is\_conclusive = False}, không quy kết cá nhân lừa đảo và chèn tổng đài ngân hàng tương ứng.
-\end{enumerate}
+Bảng~4 tóm tắt kết quả chạy trực tiếp hàm \code{apply\_guardrail()} trên ba ca đối chứng cốt lõi (lưu đầy đủ trong repo tại \code{docs/minh\_chung/01\_demo\_mau\_thuan\_va\_thieu\_du\_lieu.json}), kèm trích đoạn JSON đầu ra thực tế ngay bên dưới cho thấy \code{tier}, \code{is\_conclusive}, \code{evidence[]} và hướng dẫn hành động an toàn.
+
+\begin{table}[ht]
+\centering
+\caption{Kết quả đầu ra thực tế của \codenobreak{apply\_guardrail()} trên ba ca thử tiêu biểu.}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}L{2.8cm} L{4.6cm} Y@{}}
+\toprule
+\textbf{Ca thử} & \textbf{Bằng chứng đầu vào} & \textbf{Kết quả thực tế từ hệ thống} \\
+\midrule
+Nguồn mâu thuẫn (\code{domain}) & \code{tinnhiem.status="trusted"} và VirusTotal \code{3} engine \code{malicious}, \code{risk\_score=75} & \codenobreak{INSUFFICIENT}, \code{is\_conclusive=false}, \code{has\_contradiction=true}, đính kèm cả hai \code{evidence[]} đối lập và từ chối kết luận chắc chắn. \\
+Thiếu dữ liệu (\code{message}) & \code{insufficient\_input=true} (ảnh mờ/rỗng), \code{risk\_score=0} & \codenobreak{INSUFFICIENT}, \code{is\_conclusive=false}, \code{requires\_verification=true}, đính kèm \code{refusal\_script} và danh bạ 113/156. \\
+STK có báo cáo đã duyệt (\code{account}) & \code{reports\_count=3}, Techcombank, \code{risk\_score=75} & \codenobreak{HIGH\_RISK}, khóa cứng \code{is\_conclusive=false}, không quy kết cá nhân, đính kèm tổng đài Techcombank 1800 588822. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{Verbatim}[samepage=true,frame=single,framerule=0.5pt,rulecolor=\color{black!35},framesep=6pt,fontsize=\scriptsize]
+// Trích đoạn JSON thực tế từ apply_guardrail() (ca mâu thuẫn & ca STK có báo cáo đã duyệt)
+"contradiction": {
+  "risk_score": 75, "tier": "INSUFFICIENT", "label": "CHƯA ĐỦ CƠ SỞ XÁC MINH",
+  "is_conclusive": false, "has_contradiction": true,
+  "evidence": [
+    { "source": "virustotal", "supports": "malicious", "updated_at": "2026-11-24",
+      "limits": "Phụ thuộc dữ liệu cộng đồng; tệp/URL mới có thể chưa có báo cáo..." },
+    { "source": "tinnhiemmang", "supports": "benign", "updated_at": "04/11/2026",
+      "limits": "Chỉ gồm thực thể đã đăng ký/chứng nhận hoặc đã bị ghi nhận..." }
+  ],
+  "cautions": ["Tín hiệu cảnh báo (virustotal) mâu thuẫn với tín hiệu sạch (tinnhiemmang)."]
+},
+"account_capped": {
+  "risk_score": 75, "tier": "HIGH_RISK", "label": "NGUY CƠ CAO",
+  "is_conclusive": false, "has_contradiction": false,
+  "cautions": ["Không khẳng định cá nhân hay chủ tài khoản/SĐT chắc chắn lừa đảo..."]
+}
+\end{Verbatim}
 
 \section{Truy xuất nguồn và đánh giá trên tình huống Việt Nam}
 
-\subsection{Bảng 17 nguồn dữ liệu, phạm vi nhận định, giới hạn và ngày cập nhật}
+\subsection{Bảng 17 nguồn dữ liệu, giới hạn và tách bạch ngày cập nhật}
 
-Toàn bộ 17 nguồn tri thức từ \code{source\_catalog()} được công bố công khai trên \codenobreak{/trust/} và gắn vào từng phần tử \code{evidence[]} của kết quả quét (Bảng~4).
+Toàn bộ 17 nguồn tri thức từ \code{source\_catalog()} được công bố tại \code{/trust/} và gắn vào từng phần tử \code{evidence[]} của kết quả quét (Bảng~5). Trong mã nguồn (\codenobreak{trust\_guard.py}), hệ thống tách bạch rõ: (i) ngày cập nhật dữ liệu snapshot bên thứ ba (\code{tinnhiemmang}: \code{04/11/2026}; \code{scamwave}: \code{2026-11-16}), (ii) dịch vụ truy vấn trực tiếp theo thời gian thực (\code{virustotal}, \code{network\_analysis}, \code{tranco}, \code{web\_search}), và (iii) ngày nhóm đối soát danh mục/bộ luật nội bộ (\codenobreak{catalog\_verified\_at = 24/11/2026}).
 
 \begin{center}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{longtable}{@{}L{2.75cm} L{2.75cm} L{0.9cm} L{4.0cm} L{3.6cm} L{1.55cm}@{}}
-\caption{Danh mục 17 nguồn tri thức, phạm vi nhận định, giới hạn công bố và ngày cập nhật.} \\
+\begin{longtable}{@{}L{2.55cm} L{2.65cm} L{0.85cm} L{3.9cm} L{3.4cm} L{2.25cm}@{}}
+\caption{Danh mục 17 nguồn tri thức, phạm vi nhận định, giới hạn và phân loại ngày cập nhật.} \\
 \toprule
-\textbf{Mã nguồn} & \textbf{Tên nguồn} & \textbf{Tin cậy} & \textbf{Phạm vi \& nhận định} & \textbf{Giới hạn đã công bố} & \textbf{Cập nhật} \\
+\textbf{Mã nguồn} & \textbf{Tên nguồn} & \textbf{Tin cậy} & \textbf{Phạm vi \& nhận định} & \textbf{Giới hạn đã công bố} & \textbf{Dữ liệu / Đối soát} \\
 \midrule
 \endfirsthead
 \caption[]{Danh mục 17 nguồn tri thức (tiếp theo).} \\
 \toprule
-\textbf{Mã nguồn} & \textbf{Tên nguồn} & \textbf{Tin cậy} & \textbf{Phạm vi \& nhận định} & \textbf{Giới hạn đã công bố} & \textbf{Cập nhật} \\
+\textbf{Mã nguồn} & \textbf{Tên nguồn} & \textbf{Tin cậy} & \textbf{Phạm vi \& nhận định} & \textbf{Giới hạn đã công bố} & \textbf{Dữ liệu / Đối soát} \\
 \midrule
 \endhead
 \midrule
@@ -221,50 +250,51 @@ Toàn bộ 17 nguồn tri thức từ \code{source\_catalog()} được công b�
 \endfoot
 \bottomrule
 \endlastfoot
-\codenobreak{tinnhiemmang} & Tín nhiệm mạng (NCSC/VNCERT) & Cao & Đối chiếu 5.873 mục tín nhiệm \& 21.293 mục lừa đảo $\rightarrow$ \codenobreak{CONFIRMED\_RISK} / \codenobreak{LIKELY\_SAFE}. & Chỉ gồm thực thể đã ghi nhận; vắng mặt chưa chắc an toàn. & 04/11/2026 \\
-\codenobreak{vn\_official} & Kênh chính thức VN (Bộ CA, NHNN, 39 NH/ví) & Cao & Danh bạ xác minh thủ công (\code{khonggianmang.vn}, 113, 156, 18 tổng đài \& 21 website ngân hàng/ví). & Kênh đối chiếu thủ công, không tự động trả kết quả. & 24/11/2026 \\
-\codenobreak{virustotal} & VirusTotal (70+ engine) & Cao & $\ge 3$ engine $\rightarrow$ \codenobreak{CONFIRMED\_RISK}; 1--2 engine $\rightarrow$ \codenobreak{HIGH\_RISK}; 0 engine $\rightarrow$ sạch. & Phụ thuộc cộng đồng; URL/tệp mới có thể chưa có mẫu. & 24/11/2026 \\
-\codenobreak{clamav} & ClamAV (cục bộ) & Cao & Quét chữ ký mã độc cục bộ cho tệp/APK tải lên. & Chỉ nhận diện chữ ký đã biết; có thể sót zero-day. & 24/11/2026 \\
-\codenobreak{yara} & YARA (luật phát hiện) & Cao & Khớp mẫu cấu trúc/chuỗi hành vi đáng ngờ trong tệp. & Phụ thuộc bộ luật biên soạn; có thể sót biến thể mới. & 24/11/2026 \\
-\codenobreak{sandbox} & Zero-Trust Sandbox (tắt mạng) & Cao & Thực thi tĩnh/hành vi tệp trong container cô lập hoàn toàn mạng. & Mẫu kích hoạt trễ hoặc cần kết nối mạng khó bộc lộ hết. & 24/11/2026 \\
-\codenobreak{pefile} & PEFile (giải phẫu PE) & Vừa & Trích xuất import, section, packing tệp Windows PE. & Chỉ áp dụng tệp PE; tín hiệu kỹ thuật chưa đủ kết luận độc hại. & 24/11/2026 \\
-\codenobreak{oletools} & OLEtools (macro Office) & Vừa & Kiểm tra macro VBA trong tài liệu Office. & Macro nghiệp vụ hợp lệ vẫn có thể bị gắn cờ. & 24/11/2026 \\
-\codenobreak{network\_analysis} & Phân tích kết nối/SSL & Vừa & Kiểm tra SSL, chuyển hướng URL, tuổi tên miền. & Phụ thuộc phản hồi trang đích; trang chặn bot thiếu dữ liệu. & 24/11/2026 \\
-\codenobreak{phone\_numbering} & Kho số viễn thông VN & Vừa & Đối chiếu +84/di động/cố định/VoIP theo \code{libphonenumber} \& Bộ KH\&CN. & Chỉ kiểm tra cấu trúc; không xác thực chủ thuê bao/Caller ID. & 24/11/2026 \\
-\codenobreak{tranco} & Tranco (phổ biến toàn cầu) & Vừa & Xếp hạng độ phổ biến tên miền làm ngữ cảnh phụ. & Phổ biến cao không đồng nghĩa hoàn toàn an toàn. & 24/11/2026 \\
-\codenobreak{scamwave} & ScamWave (cộng đồng) & Vừa & Đối chiếu 4.071 tên miền/thực thể cảnh báo (\code{Scam}, \code{Ponzi}, \code{Doubtful}, \code{Closed}, \code{Illegal}). & Phần lớn thiếu hồ sơ bằng chứng chi tiết; chỉ dùng tham khảo và đối chiếu chéo. & 16/11/2026 \\
-\codenobreak{heuristic} & Heuristic VN (\codenobreak{scam\_rules}) & Vừa & Tiền lọc cụm từ mồi nhử, chuẩn hóa chữ chèn dấu (\textit{C.ô.n.g a.n}). & Có thể báo nhầm nếu đứng độc lập; cần LLM đối chứng ngữ cảnh. & 24/11/2026 \\
-\codenobreak{rag} & Kho tri thức ShieldCall (FAISS) & Vừa & Truy xuất 297 mục kịch bản xử lý tình huống VN cho AI. & Dữ liệu tĩnh theo phiên bản; cần đối chiếu thêm kênh chính thức. & 24/11/2026 \\
-\codenobreak{community} & Báo cáo cộng đồng & Vừa & Phản ánh người dùng đóng góp (tách riêng \code{approved} và \code{pending}). & Chưa xác minh pháp lý; không dùng kết luận danh tính cá nhân. & 24/11/2026 \\
-\codenobreak{web\_search} & Tìm kiếm / OSINT web & Vừa & Tra cứu doanh nghiệp (TraTenCongTy) và tin công khai khi có consent. & Nguồn mở đa dạng độ tin cậy; phải kiểm chứng từ nguồn gốc. & 24/11/2026 \\
-\codenobreak{ai\_model} & Mô hình ngôn ngữ (LLM) & Thấp & Đối chứng ngữ nghĩa, bắt thủ đoạn mới và giải thích tiếng Việt dễ hiểu. & Có thể nhận định sai; chỉ là lớp diễn giải, không thay thế bằng chứng gốc. & 24/11/2026 \\
+\codenobreak{tinnhiemmang} & Tín nhiệm mạng (NCSC) & Cao & Đối chiếu 5.873 mục tín nhiệm \& 21.293 mục lừa đảo $\rightarrow$ \codenobreak{CONFIRMED\_RISK} / \codenobreak{LIKELY\_SAFE}. & Chỉ gồm thực thể đã ghi nhận; vắng mặt chưa chắc an toàn. & Snapshot 04/11/2026 (rà soát 24/11/2026) \\
+\codenobreak{scamwave} & ScamWave (cộng đồng) & Vừa & Đối chiếu 4.071 thực thể cảnh báo (\code{Scam}, \code{Ponzi}, \code{Doubtful}, \code{Closed}, \code{Illegal}). & Phần lớn thiếu hồ sơ bằng chứng; chỉ dùng đối chiếu chéo. & Snapshot 16/11/2026 (rà soát 24/11/2026) \\
+\codenobreak{vn\_official} & Kênh chính thức VN (Bộ CA, NHNN, 39 NH/ví) & Cao & Danh bạ xác minh thủ công (\code{khonggianmang.vn}, 113, 156, 18 hotline \& 21 web NH/ví). & Kênh đối chiếu thủ công, không tự động trả API. & Danh bạ rà soát 24/11/2026 \\
+\codenobreak{virustotal} & VirusTotal (70+ engine) & Cao & $\ge 3$ engine $\rightarrow$ \codenobreak{CONFIRMED\_RISK}; 1--2 $\rightarrow$ \codenobreak{HIGH\_RISK}; 0 $\rightarrow$ sạch. & Phụ thuộc cộng đồng; URL/tệp mới có thể chưa có mẫu. & Truy vấn live (kiểm tra 24/11/2026) \\
+\codenobreak{network\_analysis} & Phân tích kết nối/SSL & Vừa & Kiểm tra SSL, chuyển hướng URL, tuổi tên miền. & Phụ thuộc phản hồi trang đích; trang chặn bot thiếu dữ liệu. & Truy vấn live (kiểm tra 24/11/2026) \\
+\codenobreak{tranco} & Tranco (phổ biến) & Vừa & Xếp hạng độ phổ biến tên miền toàn cầu làm ngữ cảnh phụ. & Phổ biến cao không đồng nghĩa hoàn toàn an toàn. & Truy vấn live (kiểm tra 24/11/2026) \\
+\codenobreak{web\_search} & Tìm kiếm / OSINT web & Vừa & Tra cứu doanh nghiệp (TraTenCongTy) và tin công khai khi có consent. & Nguồn mở đa dạng độ tin cậy; phải kiểm chứng từ nguồn gốc. & Truy vấn live (kiểm tra 24/11/2026) \\
+\codenobreak{clamav} & ClamAV (cục bộ) & Cao & Quét chữ ký mã độc cục bộ cho tệp/APK tải lên. & Chỉ nhận diện chữ ký đã biết; có thể sót zero-day. & Đối soát 24/11/2026 \\
+\codenobreak{yara} & YARA (luật phát hiện) & Cao & Khớp mẫu cấu trúc/chuỗi hành vi đáng ngờ trong tệp. & Phụ thuộc bộ luật biên soạn; có thể sót biến thể mới. & Đối soát 24/11/2026 \\
+\codenobreak{sandbox} & Zero-Trust Sandbox & Cao & Thực thi tĩnh/hành vi tệp trong container cô lập hoàn toàn mạng. & Mẫu kích hoạt trễ hoặc cần kết nối mạng khó bộc lộ hết. & Đối soát 24/11/2026 \\
+\codenobreak{pefile} & PEFile (giải phẫu PE) & Vừa & Trích xuất import, section, packing tệp Windows PE. & Chỉ áp dụng tệp PE; tín hiệu kỹ thuật chưa đủ kết luận độc hại. & Đối soát 24/11/2026 \\
+\codenobreak{oletools} & OLEtools (macro Office) & Vừa & Kiểm tra macro VBA trong tài liệu Office. & Macro nghiệp vụ hợp lệ vẫn có thể bị gắn cờ. & Đối soát 24/11/2026 \\
+\codenobreak{phone\_numbering} & Kho số viễn thông VN & Vừa & Đối chiếu +84/di động/cố định/VoIP theo \code{libphonenumber} \& Bộ KH\&CN. & Chỉ kiểm tra cấu trúc; không xác thực chủ thuê bao/Caller ID. & Đối soát 24/11/2026 \\
+\codenobreak{heuristic} & Heuristic VN (\codenobreak{scam\_rules}) & Vừa & Tiền lọc cụm từ mồi nhử, chuẩn hóa chữ chèn dấu (\textit{C.ô.n.g a.n}). & Có thể báo nhầm nếu đứng độc lập; cần LLM đối chứng ngữ cảnh. & Đối soát 24/11/2026 \\
+\codenobreak{rag} & Kho tri thức (FAISS) & Vừa & Truy xuất 299 mục kịch bản xử lý tình huống VN cho AI. & Dữ liệu tĩnh theo phiên bản; cần đối chiếu thêm kênh chính thức. & Chỉ mục 24/11/2026 \\
+\codenobreak{community} & Báo cáo cộng đồng & Vừa & Phản ánh người dùng đóng góp (tách riêng \code{approved} và \code{pending}). & Chưa xác minh pháp lý; không dùng kết luận danh tính cá nhân. & Theo CSDL (rà soát 24/11/2026) \\
+\codenobreak{ai\_model} & Mô hình ngôn ngữ (LLM) & Thấp & Đối chứng ngữ nghĩa, bắt thủ đoạn mới và giải thích tiếng Việt. & Có thể nhận định sai; chỉ là lớp diễn giải, không thay thế bằng chứng gốc. & Cấu hình 24/11/2026 \\
 \end{longtable}
 \end{center}
 
-\subsection{Kết quả đánh giá định lượng trên bộ tình huống Việt Nam}
+\textbf{Ví dụ ánh xạ từng nhận định tới nguồn:} Trong ca kiểm tra URL ở Mục~1.4, cảnh báo cuối cùng truy xuất rõ hai nhận định trong \code{evidence[]}: (1) \code{virustotal} (độ tin cậy \code{high}, cập nhật \code{2026-11-24}) báo 3 engine \code{malicious} kèm giới hạn phụ thuộc mẫu cộng đồng; (2) \code{tinnhiemmang} (độ tin cậy \code{high}, snapshot \code{04/11/2026}) báo tên miền thuộc danh bạ tin cậy kèm giới hạn chỉ bao phủ thực thể đã ghi nhận. Nhờ đối chiếu song song nguồn và giới hạn, hệ thống giữ tầng \codenobreak{INSUFFICIENT} thay vì khẳng định một chiều.
 
-Thực nghiệm offline tái lập qua \code{scripts/eval/evaluate\_vn\_final.py} (\code{vn\_final\_eval\_results.json}) trên 80 tin nhắn Việt Nam độc lập (Bảng~5) và 20 kịch bản Guardrail Chung kết (Bảng~6).
+\subsection{Nguồn gốc tập dữ liệu và kết quả đánh giá định lượng trên tình huống Việt Nam}
+
+\textbf{Nguồn gốc dữ liệu và phạm vi phép đo offline:} Các tập \codenobreak{independent\_test\_set\_vn.jsonl} (80 tin nhắn: 40 lừa đảo / 40 hợp lệ), \codenobreak{holdout\_test\_set\_b.jsonl} (40 mẫu) và \codenobreak{vn\_final\_suite.jsonl} (20 kịch bản) là \textbf{tập tình huống chuẩn hóa nội bộ do nhóm tác giả tự biên soạn và gán nhãn thủ công} (\code{label=0/1}) dựa trên các kịch bản phổ biến tại Việt Nam (không sử dụng dữ liệu người dùng thật và chưa qua bên thứ ba độc lập kiểm định). Nhóm cũng cập nhật bộ luật cho các ca nhầm điển hình phát hiện qua các vòng thử nội bộ (như \codenobreak{legit\_22}, chữ chèn dấu \textit{C.ô.n.g a.n}). Ngoài ra, script \codenobreak{evaluate\_vn\_final.py} đánh giá ở \textbf{chế độ offline không LLM} (\code{ai\_result=None}), nên các số liệu tại Bảng~6 đo năng lực của tầng Heuristic + Guardrail, không đại diện trực tiếp cho độ chính xác end-to-end khi bật LLM; hiệu năng có LLM thực được kiểm chứng riêng qua 12 ca LLM thực trong \codenobreak{adversarial\_stress\_test.py} và các vòng thử \codenobreak{BENCHMARK\_MESSAGES\_HOLDOUT\_B.md}.
 
 \begin{table}[ht]
 \centering
-\caption{Kết quả đánh giá trên tập 80 tin nhắn Việt Nam độc lập (\code{independent\_test\_set\_vn.jsonl}, threshold = 40).}
+\caption{Kết quả đánh giá offline (\code{ai\_result=None}) trên 80 kịch bản tin nhắn VN (\codenobreak{threshold=40}).}
 \footnotesize
-\begin{tabularx}{\textwidth}{@{}L{3.5cm} L{3.6cm} Y@{}}
+\begin{tabularx}{\textwidth}{@{}L{3.5cm} L{3.7cm} Y@{}}
 \toprule
-\textbf{Chỉ số} & \textbf{Giá trị đo được} & \textbf{Giải thích và phân tích lỗi} \\
+\textbf{Chỉ số} & \textbf{Giá trị đo (chế độ offline)} & \textbf{Giải thích và phân tích lỗi} \\
 \midrule
 Tổng số ca (\code{total}) & \textbf{80} (40 scam / 40 legit) & Gồm giả danh công an, VNeID APK, OTP, việc nhẹ lương cao, hoàn thuế, EVN, Deepfake và các ca hợp lệ dễ nhầm (OTP thật, biến động số dư, khuyến cáo Công an, EVNNPC, shipper, chuyển tiền ăn trưa, phỏng vấn). \\
-TP / FN \& Độ chính xác & \textbf{38 / 2} \newline P = \textbf{100.00\%}, R = \textbf{95.00\%} \newline \mbox{\textbf{F1 = 97.44\%}} & Lớp tiền lọc hợp nhất (khử trùng lặp từ khóa, khử chèn dấu \textit{C.ô.n.g a.n}, nhận diện TLD nghi vấn và sinh trắc học OTP) đạt Recall 95.00\% ngay cả khi tắt LLM. \\
+TP / FN \& Độ chính xác & \textbf{38 / 2} \newline P = \textbf{100.00\%}, R = \textbf{95.00\%} \newline \mbox{\textbf{F1 = 97.44\%}} & Lớp tiền lọc hợp nhất (khử trùng lặp từ khóa, khử chèn dấu \textit{C.ô.n.g a.n}, nhận diện TLD nghi vấn và sinh trắc học OTP) đạt Recall 95.00\% ngay cả khi tắt LLM. Trên holdout nội bộ 40 mẫu đạt F1 = 94.74\% (FP=0); AUC 88 mẫu = \textbf{0.959}. \\
 TN / FP \& Báo nhầm (FPR) & \textbf{40 / 0} \newline FPR = \textbf{0.00\%} & Không còn ca báo nhầm nào; cả \codenobreak{legit\_22} (chuyển tiền ăn trưa) lẫn toàn bộ khuyến cáo Bộ CA/CATP HN, OTP ngân hàng, EVN và shipper đều không vượt ngưỡng cảnh báo. \\
-Ca báo nhầm (FP) & \textbf{0 ca} & Trên tập holdout độc lập (\codenobreak{holdout\_test\_set\_b.jsonl}, 40 mẫu) cũng đạt FP = 0, Precision = 100.00\%, Recall = 90.00\%, F1 = 94.74\%. \\
-Ca bỏ sót offline (FN) & 2 ca (\codenobreak{scam\_33}, \codenobreak{scam\_37}) & Các ca ngữ nghĩa mềm giống giao tiếp đời thường (mượn 200k quên ví, quét QR đặt phòng) được giữ dưới ngưỡng khi tắt LLM để tránh báo nhầm tin nhắn thật; khi bật AI LLM (\codenobreak{deepseek} / \codenobreak{gemma4:31b-cloud}), hệ thống bắt chính xác. \\
+Ca bỏ sót offline (FN) & 2 ca (\codenobreak{scam\_33}, \codenobreak{scam\_37}) & Các ca ngữ nghĩa mềm giống giao tiếp đời thường (mượn 200k quên ví, quét QR đặt phòng) được giữ dưới ngưỡng khi tắt LLM để tránh báo nhầm tin nhắn thật. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 \begin{table}[ht]
 \centering
-\caption{Kết quả đánh giá bộ 20 kịch bản Guardrail Chung kết (\code{vn\_final\_suite.jsonl}).}
+\caption{Kết quả đánh giá bộ 20 kịch bản Guardrail Chung kết (\codenobreak{vn\_final\_suite.jsonl}).}
 \footnotesize
 \begin{tabularx}{\textwidth}{@{}L{5.6cm} L{1.2cm} L{1.2cm} Y@{}}
 \toprule
@@ -282,6 +312,7 @@ Ca bỏ sót offline (FN) & 2 ca (\codenobreak{scam\_33}, \codenobreak{scam\_37}
 \end{tabularx}
 \end{table}
 
+\clearpage
 \section{Bảo vệ dữ liệu nhạy cảm và truy vết xử lý}
 
 \subsection{Sơ đồ luồng dữ liệu: Xử lý cục bộ và Dịch vụ bên ngoài}
@@ -294,15 +325,25 @@ Hình~2 minh họa ranh giới xử lý cục bộ (OCR, giọng nói, sandbox c
 \caption{Kiến trúc luồng dữ liệu ShieldCall VN: phân tách ranh giới cục bộ, sandbox và dịch vụ ngoài.}
 \end{figure}
 
-\subsection{Cơ chế tối thiểu hóa dữ liệu và quyền kiểm soát của người dùng}
+\subsection{Cơ chế che PII trong log (cả exception) và cảnh báo nút gạt giao diện}
 
 \begin{enumerate}[leftmargin=1.6em, itemsep=2pt]
-  \item \textbf{Che PII trong nhật ký (\codenobreak{PIIRedactionFilter}):} Áp dụng cho mọi logger hệ thống và \codenobreak{llm\_access.log}. Rà soát trực tiếp 2.234 dòng tại \codenobreak{backend/llm\_access.log} ghi nhận 0 SĐT thô và 0 email thô; các chuỗi SĐT, STK, email, CCCD được thay tự động thành \code{[SĐT đã ẩn]}, \code{[số tài khoản đã ẩn]}, \code{[email đã ẩn]}, \code{[CCCD/CMND đã ẩn]}.
-  \item \textbf{Kiểm soát PII từng lượt quét (\codenobreak{ScanPrivacyToggle}):} Nút gạt trên cả 8 luồng quét (mặc định bật \code{mask\_pii=True}) điều khiển đồng bộ lưu trữ \codenobreak{ScanEvent} và tham số \codenobreak{external\_consent} tới Cloud LLM. Khi bật che, hệ thống giữ lại phần tên miền email (\code{***@domain}), chạy \codenobreak{redact\_for\_external\_llm} và áp dụng quy tắc prompt số 8 để AI vẫn phân tích bình thường trên nhãn đã ẩn.
-  \item \textbf{An toàn retry, băm tài khoản và quét tệp:} Mọi nhánh sửa JSON, rerun và fallback sang \codenobreak{SMALL\_MODEL} đều giữ nguyên trạng thái \code{allow\_pii=\allowbreak safe\_allow\_pii}; \codenobreak{BankAccount} chỉ lưu \codenobreak{account\_number\_hash} (SHA-256) và dạng che 4 số cuối; kiểm tra tệp VirusTotal đặt \code{upload\_if\_unknown=False} (chỉ tra mã băm).
+  \item \textbf{Che PII toàn cục kể cả exception traceback (\codenobreak{PIIRedactionFilter}):} Đã bổ sung cơ chế định dạng và lọc ngay \code{record.exc\_text} / \code{stack\_info} bên trong \codenobreak{PIIRedactionFilter.filter()} (\codenobreak{privacy.py}) khi có ngoại lệ, kiểm chứng qua unit test mới \codenobreak{test\_pii\_redaction\_filter\_masks\_messages\_and\_exception\_tracebacks}. Rà soát \textbf{2.266 dòng} tại \codenobreak{backend/llm\_access.log} ghi nhận 0 SĐT thô, 0 email thô, 0 STK có tiền tố, 0 CCCD 12 số và 0 API secret thô.
+  \item \textbf{Kiểm soát PII từng lượt quét (\codenobreak{ScanPrivacyToggle}):} Nút gạt trên cả 8 luồng quét mặc định BẬT (\code{mask\_pii=True}), giữ lại phần tên miền email (\code{***@domain}) và chạy \codenobreak{redact\_for\_external\_llm}. Khi người dùng chuyển sang chế độ nguyên văn, giao diện (\codenobreak{ScanWidgets.tsx}) hiển thị cảnh báo rõ \textbf{dữ liệu có thể được gửi tới dịch vụ AI bên ngoài để phân tích đầy đủ}; nhật ký hệ thống vẫn luôn che PII.
+  \item \textbf{An toàn retry, băm tài khoản và quét tệp:} Mọi nhánh sửa JSON, rerun và fallback sang \codenobreak{SMALL\_MODEL} đều giữ nguyên \code{allow\_pii=safe\_allow\_pii}; \codenobreak{BankAccount} chỉ lưu \codenobreak{account\_number\_hash} (SHA-256) và 4 số cuối; VirusTotal đặt \code{upload\_if\_unknown=False}.
 \end{enumerate}
 
-\subsection{Chức năng quản lý, xuất và xóa dữ liệu cá nhân}
+\begin{Verbatim}[samepage=true,frame=single,framerule=0.5pt,rulecolor=\color{black!35},framesep=6pt,fontsize=\scriptsize]
+// Mẫu log giả lập qua PIIRedactionFilter (gồm SĐT, STK, CCCD, email, secret và exception)
+INFO Quet SMS: Chuyen 5tr vao STK [số tài khoản đã ẩn], goi [SĐT đã ẩn],
+     CCCD [CCCD/CMND đã ẩn], email [email đã ẩn], token [khoá/bí mật đã ẩn]
+ERROR Loi worker khi xu ly CCCD [CCCD/CMND đã ẩn]
+Traceback (most recent call last):
+  File "<string>", line 28, in <module>
+RuntimeError: Timeout ket noi khi gui SĐT [SĐT đã ẩn] va STK [số tài khoản đã ẩn]
+\end{Verbatim}
+
+\subsection{Chức năng quản lý, xuất và xóa dữ liệu cá nhân (kèm demo trước - sau)}
 
 \begin{table}[H]
 \centering
@@ -314,8 +355,8 @@ Hình~2 minh họa ranh giới xử lý cục bộ (OCR, giọng nói, sandbox c
 \midrule
 Xóa từng lượt quét & \code{DELETE /api/v1/\allowbreak user/scans/\allowbreak <scan\_id>/} & Kiểm tra quyền sở hữu hoặc phiên ẩn danh \codenobreak{active\_scan\_ids}; trả 403/401 nếu truy cập chéo. & Cột Thao tác (\code{/dashboard}) \\
 Bật/tắt chia sẻ công khai & \code{PATCH /api/v1/\allowbreak user/scans/\allowbreak <scan\_id>/} & Chỉ chủ sở hữu được bật/tắt \codenobreak{is\_public\_referable} cho mã tra cứu cộng đồng. & Cột Thao tác (\code{/dashboard}) \\
-Xóa toàn bộ lịch sử & \code{DELETE /api/v1/\allowbreak user/scans/} & Xóa mọi \codenobreak{ScanEvent} của tài khoản hiện tại và dọn \codenobreak{active\_scan\_ids} trong session. & Nút xóa toàn bộ (\code{/dashboard}) \\
-Xuất dữ liệu cá nhân & \code{GET /api/v1/\allowbreak user/privacy/\allowbreak export-data/} & Xuất bản sao JSON gồm lịch sử quét (kèm \codenobreak{is\_public\_referable}), hội thoại AI và cảnh báo. & Nút Xuất JSON (\code{/profile}) \\
+Xóa toàn bộ lịch sử & \code{DELETE /api/v1/\allowbreak user/scans/} & Xóa mọi \codenobreak{ScanEvent} của tài khoản hiện tại và dọn \codenobreak{active\_scan\_ids}. & Nút xóa toàn bộ (\code{/dashboard}) \\
+Xuất dữ liệu cá nhân & \code{GET /api/v1/\allowbreak user/privacy/\allowbreak export-data/} & Xuất bản sao JSON gồm lịch sử quét, hội thoại AI và cảnh báo. & Nút Xuất JSON (\code{/profile}) \\
 Xóa theo nhóm & \code{POST /api/v1/\allowbreak user/privacy/\allowbreak delete-data/} & Chọn \code{scopes} (\code{scans}, \codenobreak{chat\_sessions}, \code{alerts} hoặc \code{all}) trong transaction atomic. & Thẻ quản lý dữ liệu (\code{/profile}) \\
 Xóa toàn bộ chat AI & \code{DELETE /api/v1/\allowbreak chat/sessions/\allowbreak clear-all/} & Xóa toàn bộ \codenobreak{ChatSession} thuộc người dùng hiện tại. & \code{/ai-assistant} \\
 Xóa tài khoản & \code{POST /api/v1/\allowbreak auth/account/\allowbreak delete/} & Xóa tài khoản và dữ liệu liên quan sau khi xác nhận mật khẩu. & \code{/profile} \\
@@ -323,20 +364,33 @@ Xóa tài khoản & \code{POST /api/v1/\allowbreak auth/account/\allowbreak dele
 \end{tabularx}
 \end{table}
 
+\begin{Verbatim}[samepage=true,frame=single,framerule=0.5pt,rulecolor=\color{black!35},framesep=6pt,fontsize=\scriptsize]
+// Kiểm chứng xóa dữ liệu trước-sau (lưu đầy đủ tại docs/minh_chung/06_demo_xoa_du_lieu_truoc_sau.txt)
+// Lưu ý: GET /export-data/ trả các mảng JSON (scans[], chat_sessions[], alerts[], reports[])
+1) Trước khi xóa: GET /api/v1/user/privacy/export-data/
+   -> số phần tử trích từ các mảng JSON trả về: len(scans)=1, len(chat_sessions)=1, len(alerts)=1
+2) Gửi xóa chọn lọc: POST /api/v1/user/privacy/delete-data/
+   Body: {"scopes": ["scans", "chat_sessions", "alerts"]}
+   -> HTTP 200 {"deleted": {"scans": 1, "chat_sessions": 1, "alerts": 1},
+                "scopes": ["alerts", "chat_sessions", "scans"]}
+3) Truy vấn lại sau khi xóa: GET /api/v1/user/privacy/export-data/
+   -> các mảng dữ liệu đều rỗng: {"scans": [], "chat_sessions": [], "alerts": []} (tổng = 0)
+\end{Verbatim}
+
 \section{Tổng hợp kiểm chứng kỹ thuật sau chỉnh sửa cuối}
 
 \begin{table}[H]
 \centering
-\caption{Kết quả kiểm thử kỹ thuật toàn hệ thống sau khi hoàn thiện bản Chung kết.}
+\caption{Kết quả kiểm thử kỹ thuật toàn hệ thống sau khi hoàn thiện bản Chung kết (25/11/2026).}
 \footnotesize
-\begin{tabularx}{\textwidth}{@{}L{3.8cm} L{5.4cm} Y@{}}
+\begin{tabularx}{\textwidth}{@{}L{3.8cm} L{5.3cm} Y@{}}
 \toprule
 \textbf{Hạng mục kiểm tra} & \textbf{Lệnh thực thi} & \textbf{Kết quả quan sát được} \\
 \midrule
-Kiểm thử Backend đầy đủ \& Guardrail & \code{DJANGO\_SETTINGS\_MODULE=\allowbreak PKV.settings\_ci ../.venv/bin/python manage.py test --noinput} & \code{System check}: 0 issues; \textbf{312/312 test mặc định PASSED} (tổng \textbf{318 tests}, \code{OK}, \code{skipped=6} test AI Red-Team \codenobreak{RUN\_LIVE\_AI\_TESTS=1}, 144.201s); gồm \textbf{54/54} test \codenobreak{test\_trust\_privacy} và \textbf{21/21} test \codenobreak{test\_mcp\_and\_api\_keys}. \\
-Đánh giá VN, Guardrail \& Đối kháng & \code{../.venv/bin/python scripts/\allowbreak eval/evaluate\_vn\_final.py} \newline \code{../.venv/bin/python scripts/\allowbreak eval/adversarial\_stress\_test.py} & 80 tin nhắn VN: \textbf{Precision 100.00\%, Recall 95.00\%, F1 97.44\%, FPR 0.00\%}; 20 ca Guardrail: \textbf{20/20 PASSED}; 18 ca đối kháng live LLM: \textbf{18/18 PASSED}; kiểm tra trực tiếp \codenobreak{gemma4:31b-cloud} đạt 3/3 ca jailbreak (\code{score=95}); AUC 88 mẫu đạt \textbf{0.959}. \\
+Kiểm thử Backend đầy đủ \& Guardrail & \code{DJANGO\_SETTINGS\_MODULE=\allowbreak PKV.settings\_ci ../.venv/bin/python manage.py test --noinput} & \code{System check}: 0 issues; \textbf{313/313 test mặc định PASSED} (tổng \textbf{319 tests}, \code{OK}, \code{skipped=6} test AI Red-Team \codenobreak{RUN\_LIVE\_AI\_TESTS=1}, 152.834s); gồm \textbf{55/55} test \codenobreak{test\_trust\_privacy} và \textbf{21/21} test \codenobreak{test\_mcp\_and\_api\_keys}. \\
+Đánh giá offline VN, Guardrail \& Đối kháng & \code{../.venv/bin/python scripts/\allowbreak eval/evaluate\_vn\_final.py} \newline \code{../.venv/bin/python scripts/\allowbreak eval/adversarial\_stress\_test.py} & 80 tin nhắn kịch bản VN (offline \code{ai\_result=None}): \textbf{Precision 100.00\%, Recall 95.00\%, F1 97.44\%, FPR 0.00\%}; 20 ca Guardrail: \textbf{20/20 PASSED}; \textbf{18/18 ca kiểm thử đối kháng đạt yêu cầu} (gồm \textbf{12 ca LLM thực} và \textbf{6 ca mô phỏng} lỗi mạng/503 hoặc bypass); \codenobreak{gemma4:31b-cloud} đạt 3/3 jailbreak (\code{score=95}); AUC 88 mẫu = \textbf{0.959}. \\
 TypeScript, Oxlint \& Tour & \code{cd frontend \&\& npx tsc --noEmit \&\& npx oxlint \&\& npm run check:tours} & \code{tsc}: \textbf{0 errors}; \code{oxlint}: \textbf{0 errors} (143 warnings trên 204 tệp); \code{check:tours}: \textbf{19 tour, 16 neo, 18 bước có element}. \\
-Build Production Frontend & \code{cd frontend \&\& npm run build} & Hoàn tất build \textbf{78 route} (73 trang và 5 route hệ thống/proxy) Next.js 16.4.5 và đồng bộ \code{sw.js}. \\
+Build Production Frontend & \code{cd frontend \&\& npm run build} & Hoàn tất build \textbf{78 route} (62 static pages cùng các dynamic route) Next.js 16.4.5 và đồng bộ \code{sw.js}. \\
 \bottomrule
 \end{tabularx}
 \end{table}

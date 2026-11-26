@@ -294,7 +294,7 @@ export function ScanPrivacyToggle({
             <p className="text-[11px] text-white/55 mt-0.5 leading-snug">
               {checked
                 ? `${hint}. Đối chiếu cục bộ (luật, Tín Nhiệm Mạng, Sandbox) vẫn chạy trên dữ liệu gốc trong RAM để giữ độ chính xác.`
-                : 'Chế độ nguyên văn: lưu lịch sử và cho phép AI phân tích đầy đủ dữ liệu theo quyền lựa chọn của bạn; nhật ký hệ thống vẫn luôn tự động che thông tin cá nhân.'}
+                : 'Chế độ nguyên văn: lưu lịch sử gốc và dữ liệu có thể được gửi tới dịch vụ AI bên ngoài để phân tích đầy đủ theo lựa chọn của bạn; nhật ký hệ thống vẫn luôn tự động che thông tin cá nhân.'}
             </p>
           </div>
         </label>
