@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import sys
 import threading
 import time
 from collections import Counter
@@ -82,13 +84,25 @@ def _looks_like_domain(value: str) -> bool:
     return bool(re.fullmatch(r"(?:[a-z0-9-]+\.)+[a-z]{2,}", (value or "").lower()))
 
 
+_MULTIPART_TLD_SUFFIXES = {
+    "com.vn", "net.vn", "org.vn", "edu.vn", "gov.vn", "int.vn",
+    "ac.vn", "biz.vn", "info.vn", "pro.vn", "health.vn", "name.vn",
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au",
+    "co.jp", "com.sg", "com.my", "co.kr", "com.tw", "com.hk",
+}
+
+
 def _domain_lookup_candidates(host: str) -> List[str]:
     clean = _clean_host_candidate(host)
     if not clean:
         return []
     candidates = [clean]
     parts = [p for p in clean.split(".") if p]
-    if len(parts) > 2:
+    if len(parts) >= 3 and ".".join(parts[-2:]) in _MULTIPART_TLD_SUFFIXES:
+        apex = ".".join(parts[-3:])
+        if len(parts) > 3 and apex not in candidates:
+            candidates.append(apex)
+    elif len(parts) > 2:
         apex = ".".join(parts[-2:])
         if apex not in candidates:
             candidates.append(apex)
@@ -187,6 +201,33 @@ def sync_scamwave(timeout: int = 25) -> Dict[str, Any]:
     return meta
 
 
+_STALE_SECONDS = int(os.getenv("SCAMWAVE_STALE_SECONDS", str(6 * 3600)))
+_REFRESH_ATTEMPT_LOCK = threading.Lock()
+_LAST_BACKGROUND_REFRESH = 0.0
+
+
+def _maybe_refresh_stale_in_background(file_mtime: float) -> None:
+    """Trigger a non-blocking refresh when the local snapshot is stale."""
+    global _LAST_BACKGROUND_REFRESH
+    if "test" in sys.argv or "pytest" in sys.modules:
+        return
+    now = time.time()
+    if file_mtime and (now - file_mtime) < _STALE_SECONDS:
+        return
+    with _REFRESH_ATTEMPT_LOCK:
+        if (now - _LAST_BACKGROUND_REFRESH) < 300:
+            return
+        _LAST_BACKGROUND_REFRESH = now
+
+    def _worker() -> None:
+        try:
+            sync_scamwave(timeout=20)
+        except Exception as exc:
+            logger.debug("scamwave background refresh failed: %s", exc)
+
+    threading.Thread(target=_worker, name="scamwave-refresh", daemon=True).start()
+
+
 def _load_index(refresh_if_empty: bool = False) -> Tuple[Dict[str, List[Dict[str, str]]], List[Dict[str, str]], Dict[str, Any]]:
     with _INDEX_LOCK:
         file_mtime = RECORDS_PATH.stat().st_mtime if RECORDS_PATH.exists() else 0.0
@@ -196,6 +237,7 @@ def _load_index(refresh_if_empty: bool = False) -> Tuple[Dict[str, List[Dict[str
             and _INDEX_CACHE["file_mtime"] == file_mtime
             and (now - _INDEX_CACHE["loaded_at"]) < 3600
         ):
+            _maybe_refresh_stale_in_background(file_mtime)
             return _INDEX_CACHE["exact_map"], _INDEX_CACHE["rows"], _INDEX_CACHE["meta"]
 
     if not RECORDS_PATH.exists() and refresh_if_empty:

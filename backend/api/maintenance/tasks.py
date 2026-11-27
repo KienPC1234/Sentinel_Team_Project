@@ -251,3 +251,21 @@ def sync_vnexpress_news(self, feed_keys=None, limit_per_feed=15, download_images
     except Exception as exc:
         logger.error(f"[VNEXPRESS-TASK] Thất bại: {exc}", exc_info=True)
         return {"status": "FAILED", "error": str(exc)}
+
+
+@shared_task(name="api.maintenance.tasks.sync_scamwave_directory", bind=True)
+def sync_scamwave_directory(self, timeout=25):
+    """Celery task: đồng bộ danh bạ cảnh báo ScamWave (scamwave.com/scammers/)."""
+    logger.info(f"[SCAMWAVE-TASK] Bắt đầu đồng bộ (task_id={getattr(self.request, 'id', 'sync')})")
+    try:
+        from api.utils.scamwave import sync_scamwave
+        meta = sync_scamwave(timeout=int(timeout))
+        logger.info(
+            "[SCAMWAVE-TASK] Hoàn tất: %s mục (cập nhật %s)",
+            meta.get("count", 0),
+            meta.get("updated_at"),
+        )
+        return {"status": "SUCCESS", **meta}
+    except Exception as exc:
+        logger.error(f"[SCAMWAVE-TASK] Thất bại: {exc}", exc_info=True)
+        return {"status": "FAILED", "error": str(exc)}

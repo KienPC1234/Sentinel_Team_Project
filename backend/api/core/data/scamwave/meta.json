@@ -2,14 +2,14 @@
   "source": "scamwave",
   "source_name": "ScamWave (scamwave.com)",
   "source_url": "https://scamwave.com/scammers/",
-  "count": 4071,
+  "count": 4077,
   "status_counts": {
-    "Scam": 3030,
-    "Doubtful": 510,
+    "Scam": 3035,
+    "Doubtful": 511,
     "Illegal": 17,
     "Closed": 143,
     "Ponzi": 371
   },
-  "updated_at": "2026-11-16",
-  "synced_at": "2026-11-16T14:28:11.807602+00:00"
+  "updated_at": "2026-11-27",
+  "synced_at": "2026-11-27T15:45:07.900998+00:00"
 }

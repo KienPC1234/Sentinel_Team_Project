@@ -59,6 +59,16 @@ class ScamWaveIntegrationTests(SimpleTestCase):
             self.assertFalse(miss['matched'])
             self.assertIsNone(miss['primary_status'])
 
+    def test_multipart_tld_candidates_never_fall_back_to_bare_suffix(self):
+        self.assertEqual(
+            scamwave._domain_lookup_candidates('login.example.com.vn'),
+            ['login.example.com.vn', 'example.com.vn'],
+        )
+        self.assertEqual(
+            scamwave._domain_lookup_candidates('example.com.vn'),
+            ['example.com.vn'],
+        )
+
 
 class OsintPipelineRegressionTests(TestCase):
     def test_sanitize_web_context_preserves_unstructured_real_findings(self):
