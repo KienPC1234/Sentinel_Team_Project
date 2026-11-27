@@ -347,27 +347,29 @@ class WebPushSubscribeView(APIView):
 
             from api.core.models import WebPushSubscription
             caller_uid = request.user.id if request.user.is_authenticated else None
-            existing = WebPushSubscription.objects.filter(endpoint=endpoint).first()
-            target_uid = caller_uid if caller_uid else (existing.user_id if existing else None)
+            # R80: endpoint URLs are not authentication. A guest or another
+            # logged-in user MUST NOT overwrite a user-bound subscription.
+            # Lock and validate ownership in the same transaction as mutation.
+            from django.db import transaction
+            with transaction.atomic():
+                existing = (WebPushSubscription.objects.select_for_update()
+                            .filter(endpoint=endpoint).first())
+                if existing is not None and existing.user_id is not None and existing.user_id != caller_uid:
+                    return Response({'status': 'error', 'message': 'Subscription is not owned by this user'}, status=403)
 
-            sub, _created = WebPushSubscription.objects.update_or_create(
-                endpoint=endpoint,
-                defaults={
-                    'user_id': target_uid,
-                    'p256dh': p256dh,
-                    'auth': auth,
-                    'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
-                    'is_active': True,
-                    'fail_count': 0,
-                    'last_error': '',
-                },
-            )
-            if caller_uid and sub.user_id != caller_uid:
-                sub.user_id = caller_uid
-                sub.is_active = True
-                sub.fail_count = 0
-                sub.last_error = ''
-                sub.save(update_fields=['user_id', 'is_active', 'fail_count', 'last_error', 'updated_at'])
+                target_uid = caller_uid if caller_uid else None
+                sub, _created = WebPushSubscription.objects.update_or_create(
+                    endpoint=endpoint,
+                    defaults={
+                        'user_id': target_uid,
+                        'p256dh': p256dh,
+                        'auth': auth,
+                        'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
+                        'is_active': True,
+                        'fail_count': 0,
+                        'last_error': '',
+                    },
+                )
 
             return Response({'status': 'success', 'subscription_id': sub.id})
         except Exception as e:
@@ -394,9 +396,13 @@ class WebPushUnsubscribeView(APIView):
             if not endpoint and not request.user.is_authenticated:
                 return Response({'status': 'error', 'message': 'endpoint is required'}, status=400)
 
+            # Anonymous clients may disable only guest/unbound endpoints.
+            # Knowledge of a user-bound opaque endpoint is never ownership.
             qs = WebPushSubscription.objects.all()
             if request.user.is_authenticated:
                 qs = qs.filter(user=request.user)
+            else:
+                qs = qs.filter(user__isnull=True)
             if endpoint:
                 qs = qs.filter(endpoint=endpoint)
             updated = qs.update(is_active=False)
