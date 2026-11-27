@@ -146,7 +146,8 @@ class ScamIQSubmitView(APIView):
                     'question_id': qid,
                     'question': q.get('question', ''),
                     'category': q.get('category', ''),
-                    'difficulty': q.get('difficulty_label') or q.get('difficulty', ''),
+                    'difficulty': str(q.get('difficulty') or 'medium').lower(),
+                    'difficulty_label': q.get('difficulty_label') or q.get('difficulty', ''),
                     'type': q_type,
                     'free_text': free_text,
                     'simulation': q.get('simulation', {}),
@@ -201,13 +202,9 @@ class ScamIQSubmitView(APIView):
 
             is_correct = False
             if q_type in {'simulation_sms', 'simulation_email', 'incident_response'}:
-                sim = q.get('simulation') or {}
-                expected_keywords = [str(x).strip().lower() for x in (sim.get('expected_keywords') or []) if str(x).strip()]
-                if expected_keywords:
-                    hits = sum(1 for kw in expected_keywords if kw in free_text)
-                    is_correct = (hits / max(len(expected_keywords), 1)) >= 0.6
-                else:
-                    is_correct = bool(free_text)
+                # Câu tự luận sẽ được score_scamiq_responses_task chấm và cộng vào
+                # breakdown[diff]['correct'] sau; không cộng trước để tránh đếm trùng (2/1).
+                is_correct = False
             else:
                 is_correct = selected == expected
 

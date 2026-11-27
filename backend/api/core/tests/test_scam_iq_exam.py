@@ -95,3 +95,55 @@ class ScamIQScoringBreakdownTest(TestCase):
                 breakdown[diff]['correct'] += 1
         self.assertEqual(breakdown['easy']['total'], 6)
         self.assertEqual(breakdown['easy']['correct'], 5)
+
+    def test_submit_and_ai_scoring_task_updates_hard_extreme_breakdown(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from api.core.tasks import score_scamiq_responses_task
+
+        user = User.objects.create_user(username='scamiq_sim_u', password='x')
+        client = APIClient()
+        client.force_authenticate(user=user)
+        questions = [
+            {
+                'id': 'Q1', 'type': 'simulation_sms', 'difficulty': 'hard', 'difficulty_label': 'Khó',
+                'question': 'SMS la?', 'category': 'sms', 'options': [], 'correct_option_ids': [],
+                'simulation': {'expected_keywords': ['khong bam link']}, 'explanation': 'giai thich',
+            },
+            {
+                'id': 'Q2', 'type': 'incident_response', 'difficulty': 'extreme', 'difficulty_label': 'Cực khó',
+                'question': 'Su co?', 'category': 'apt', 'options': [], 'correct_option_ids': [],
+                'simulation': {'expected_keywords': ['co lap']}, 'explanation': 'giai thich',
+            },
+        ]
+        cache.set('scam_iq_exam:sim_exam_1', {
+            'exam_id': 'sim_exam_1',
+            'user_id': user.id,
+            'exam_title': 'De test sim',
+            'max_score': 300,
+            'questions': questions,
+            'public_questions': [],
+        }, timeout=3600)
+
+        with patch(
+            'api.core.views.scam_iq_views.score_scamiq_responses_task.delay',
+            return_value=SimpleNamespace(id='mock-ai-task-1'),
+        ):
+            resp = client.post('/api/v1/scam-iq/submit/', {
+                'exam_id': 'sim_exam_1',
+                'answers': {
+                    'Q1': {'selected': [], 'text': 'Khong bam link, xac minh qua kenh chinh thuc'},
+                    'Q2': {'selected': [], 'text': 'Co lap may chu va doi mat khau'},
+                },
+            }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        attempt_id = resp.data['attempt_id']
+
+        with patch('api.utils.ollama_client.generate_response', return_value='{"score": 9, "comment": "Tot"}'):
+            score_scamiq_responses_task.run(attempt_id)
+
+        attempt = ScamIQAttempt.objects.get(id=attempt_id)
+        self.assertTrue(attempt.is_ai_scored)
+        self.assertEqual(attempt.score, 18)
+        self.assertEqual(attempt.difficulty_breakdown['hard']['correct'], 1)
+        self.assertEqual(attempt.difficulty_breakdown['extreme']['correct'], 1)

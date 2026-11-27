@@ -546,12 +546,12 @@ export default function ScamIQ() {
   const percentile = !result
     ? ''
     : result.score >= 270
-      ? 'Top 5% người dùng có năng lực tự vệ số cao nhất'
+      ? 'Mức xuất sắc: năng lực phòng vệ và phản ứng sự cố rất vững'
       : result.score >= 210
-        ? 'Top 20% người dùng có kiến thức an ninh mạng tốt'
+        ? 'Mức tốt: nhận diện vững phần lớn kịch bản lừa đảo'
         : result.score >= 150
-          ? 'Top 45% người dùng mức độ cảnh giác trung bình'
-          : 'Cần trang bị thêm kiến thức phòng chống lừa đảo trực tuyến';
+          ? 'Mức trung bình: cần chú ý thêm các tình huống nâng cao'
+          : 'Mức cơ bản: nên ôn luyện thêm các dấu hiệu nhận diện lừa đảo';
 
   const bands: Band[] = useMemo(() => {
     const bd = result?.difficulty_breakdown || {};

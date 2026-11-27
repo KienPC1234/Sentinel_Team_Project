@@ -3935,20 +3935,29 @@ def score_scamiq_responses_task(self, attempt_id):
             # R87 privacy: no external PII opt-in exists in the ScamIQ submit flow.
             # Keep the original answer in our user's attempt history, but redact
             # personal data in the prompt before Gemma cloud inference.
-            res = generate_response(prompt, tools=[], skip_filter=True, allow_pii=False)
+            res = generate_response(prompt, tools=[], skip_filter=True, allow_pii=False, format_schema={
+                'type': 'object',
+                'properties': {
+                    'score': {'type': 'integer'},
+                    'comment': {'type': 'string'},
+                },
+                'required': ['score', 'comment'],
+            })
             parsed = {}
             try:
-                # Basic JSON extraction if not pure
-                match = re.search(r'\{.*\}', res, re.DOTALL)
+                match = re.search(r'\{[\s\S]*\}', res or '')
                 if match:
                     parsed = json.loads(match.group())
-                else:
+                elif res:
                     parsed = json.loads(res)
-            except:
+            except Exception:
                 logger.warning(f"[ScamIQ Scoring] Failed to parse AI response: {res}")
                 parsed = {"score": 5 if user_ans else 0, "comment": "Bản chấm điểm đang được xử lý hoặc có lỗi định dạng."}
-            
-            q_score = parsed.get('score', 0)
+
+            try:
+                q_score = max(0, min(10, int(round(float(parsed.get('score', 0))))))
+            except (TypeError, ValueError, OverflowError):
+                q_score = 5 if user_ans else 0
             additional_score += q_score
             
             final_feedback.append({
@@ -3973,9 +3982,16 @@ def score_scamiq_responses_task(self, attempt_id):
         # Cap nhat breakdown: submit view da dem 'total' cho moi cau (ke ca cau
         # tu luan) nen o day chi cong 'correct', khong cong 'total' nua. Truoc
         # day cong ca total lam tong so cau vuot 30 (vd 38/30).
+        diff_alias = {
+            'dễ': 'easy',
+            'trung bình': 'medium',
+            'khó': 'hard',
+            'cực khó': 'extreme',
+        }
         breakdown = attempt.difficulty_breakdown or {}
         for f in final_feedback:
-            diff = str(f.get('difficulty') or 'medium').lower()
+            raw_diff = str(f.get('difficulty') or 'medium').strip().lower()
+            diff = diff_alias.get(raw_diff, raw_diff)
             if diff in breakdown and f['is_correct']:
                 breakdown[diff]['correct'] += 1
         attempt.difficulty_breakdown = breakdown
