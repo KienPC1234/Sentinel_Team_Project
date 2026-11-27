@@ -2258,17 +2258,10 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                 f"- Handle MXH: {', '.join(osint_entities['handles']) if osint_entities['handles'] else 'không có'}",
             ]
             ai_input = (
-                "Bạn là chuyên gia chống lừa đảo tin nhắn. Hãy phân tích cực kỳ nghiêm ngặt theo các dấu hiệu mới nhất: "
-                "phishing, quishing QR, giả danh ngân hàng/cơ quan chức năng, job scam, đầu tư crypto, deepfake/social engineering.\n\n"
-                "YÊU CẦU:\n"
-                "1) Ưu tiên kiểm chứng thực thể (URL, số điện thoại, tài khoản, email) bằng nguồn web công khai.\n"
-                "2) Chỉ kết luận theo bằng chứng quan sát được trong tin nhắn và nguồn đối chiếu.\n"
-                "3) Trả về đánh giá rủi ro rõ ràng, ngắn gọn, hành động khuyến nghị cụ thể cho người dùng.\n\n"
-                f"Nội dung cần phân tích:\n{full_text[:6000]}\n\n"
-                "Thông tin trích xuất để kiểm chứng:\n"
+                f"{analysis_text[:6000]}\n\n"
+                "Thực thể trích xuất từ tin nhắn:\n"
                 + "\n".join(osint_summary_lines)
             )
-            ai_input = ai_input.replace(full_text[:6000], analysis_text[:6000])
 
             consent_pii = _has_external_pii_consent(scan_event)
             pre_filter_ctx = {

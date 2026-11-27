@@ -154,11 +154,26 @@ class ScanAnalyzeSSEView(APIView):
                 raw_input=raw_input,
             )
 
+        def _compact_scan_payload(data):
+            if not isinstance(data, dict):
+                return data
+            omitted = {'rendered_preview', 'html', 'raw_html', 'page_content', 'url_agent_v3_shadow'}
+            cleaned = {}
+            for k, v in data.items():
+                if k in omitted:
+                    continue
+                if isinstance(v, str) and len(v) > 2500:
+                    cleaned[k] = v[:2500] + '...'
+                else:
+                    cleaned[k] = v
+            return cleaned
+
         def event_stream():
             try:
                 # Flush headers early so proxies do not hold the response while
                 # the LLM prompt is being prepared.
                 yield ": ping\n\n"
+                compact_data = _compact_scan_payload(scan_data)
                 if scan_type == 'file':
                     proofs = scan_data.get('forensic_evidence', [])
                     proofs_str = '\n'.join([
@@ -206,7 +221,7 @@ class ScanAnalyzeSSEView(APIView):
                 elif scan_type == 'phone':
                     prompt = SCAN_PHONE_PROMPT.format(
                         phone=raw_input,
-                        scan_data=json.dumps(scan_data, ensure_ascii=False)
+                        scan_data=json.dumps(compact_data, ensure_ascii=False)
                     )
                 elif scan_type == 'message':
                     from api.utils.prompts import sanitize_delimiter_text
@@ -228,7 +243,7 @@ class ScanAnalyzeSSEView(APIView):
                 elif scan_type == 'domain':
                     prompt = SCAN_DOMAIN_PROMPT.format(
                         url=raw_input,
-                        scan_data=json.dumps(scan_data, ensure_ascii=False)
+                        scan_data=json.dumps(compact_data, ensure_ascii=False)
                     )
                 elif scan_type == 'account':
                     if ' - ' in raw_input:
@@ -240,10 +255,10 @@ class ScanAnalyzeSSEView(APIView):
                     prompt = SCAN_ACCOUNT_PROMPT.format(
                         bank=bank.strip() or 'N/A',
                         account=acc.strip(),
-                        scan_data=json.dumps(scan_data, ensure_ascii=False)
+                        scan_data=json.dumps(compact_data, ensure_ascii=False)
                     )
                 else:
-                    prompt = f"Hãy phân tích rủi ro an ninh mạng cho {scan_type} sau bằng tiếng Việt: {raw_input}. Dữ liệu kèm theo: {json.dumps(scan_data, ensure_ascii=False)}"
+                    prompt = f"Hãy phân tích rủi ro an ninh mạng cho {scan_type} sau bằng tiếng Việt: {raw_input}. Dữ liệu kèm theo: {json.dumps(compact_data, ensure_ascii=False)}"
 
                 _guard = (scan_data.get('guardrail') or {}) if isinstance(scan_data, dict) else {}
                 _tier = _guard.get('tier')

@@ -177,6 +177,63 @@ class StreamChatAILoopTest(TestCase):
         search_ev = ev_of(chunks, 'metadata')[0]
         self.assertIn('https://example.com/warn', json.dumps(search_ev.get('metadata')))
 
+    @patch('api.utils.vector_db.vector_db.search', return_value=[])
+    @patch('api.utils.ai_agent.AIAgent.generate_title', return_value='Kiểm tra tên miền')
+    @patch('api.utils.ai_agent.stream_chat_ai')
+    def test_agent_persists_executed_tools_and_thinking_in_metadata(self, mock_stream_ai, mock_title, mock_vdb):
+        """Executed tool calls and thinking trace must be stored in ChatMessage.metadata for reload."""
+        from api.utils.ai_agent import AIAgent
+
+        mock_stream_ai.return_value = iter([
+            {'type': 'thinking', 'text': 'Kiểm tra tên miền facebook.com.vn trước khi kết luận.'},
+            {
+                'type': 'tool_calls',
+                'calls': [{'function': {'name': 'scan_url', 'arguments': {'url': 'facebook.com.vn'}}}],
+            },
+            {
+                'type': 'tool_result',
+                'tool': 'scan_url',
+                'status': 'done',
+                'args': {'url': 'facebook.com.vn'},
+                'result': {
+                    'url': 'https://facebook.com.vn',
+                    'domain': 'facebook.com.vn',
+                    'apex_domain': 'facebook.com.vn',
+                    'is_scam': False,
+                    'risk_score': 0,
+                    'summary': 'Không thể kết nối tới máy chủ của tên miền này.',
+                    'rendered_preview': 'x' * 2000,
+                },
+            },
+            {'type': 'delta', 'text': 'Tên miền facebook.com.vn hiện không hoạt động.'},
+        ])
+
+        agent = AIAgent()
+        list(agent.chat_stream('facebook.com.vn có phải trang real không'))
+        assistant_msg = ChatMessage.objects.get(session=agent.session, role='assistant')
+        meta = assistant_msg.metadata or {}
+        self.assertIn('tools', meta)
+        self.assertEqual(len(meta['tools']), 1)
+        self.assertEqual(meta['tools'][0]['tool'], 'scan_url')
+        self.assertTrue(meta['tools'][0]['done'])
+        self.assertNotIn('rendered_preview', meta['tools'][0]['result'])
+        self.assertIn('facebook.com.vn', meta.get('thinking', ''))
+
+    @patch('api.utils.puppeteer_host_client.fetch_with_puppeteer_host', return_value={'ok': False})
+    @patch('api.utils.ollama_client.lookup_tranco', return_value=None)
+    @patch('api.utils.ollama_client.lookup_scamadviser', return_value=None)
+    @patch('api.utils.ollama_client._tool_lookup_trustpilot', return_value=None)
+    @patch('api.utils.ollama_client.web_search_query', return_value=[])
+    def test_assistant_scan_url_preserves_multipart_vn_apex_and_summary(
+        self, mock_ws, mock_tp, mock_sa, mock_tr, mock_pup
+    ):
+        from api.utils.ollama_client import _assistant_scan_url
+
+        res = _assistant_scan_url('facebook.com.vn')
+        self.assertEqual(res['apex_domain'], 'facebook.com.vn')
+        self.assertNotEqual(res['summary'], 'Đang phân tích độ an toàn trang web')
+        self.assertIn('Không thể kết nối', res['summary'])
+
 
 class ChatAIStreamViewEndpointTest(TransactionTestCase):
     """

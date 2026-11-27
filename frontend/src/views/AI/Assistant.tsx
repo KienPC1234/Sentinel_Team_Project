@@ -66,7 +66,13 @@ import {
 interface ChatSession { id: string; title?: string; folder?: number | null; }
 interface ChatFolder { id: number; name: string; }
 interface SrcItem { title?: string; url?: string; text?: string; }
-interface MsgMeta { internal_knowledge?: SrcItem[]; web_search?: SrcItem[]; guardrail?: GuardrailData; }
+interface MsgMeta {
+  internal_knowledge?: SrcItem[];
+  web_search?: SrcItem[];
+  guardrail?: GuardrailData;
+  tools?: Array<{ tool: string; args?: Record<string, unknown>; result?: unknown; done?: boolean; label?: string }>;
+  thinking?: string;
+}
 interface ChatMsg { id?: number; role: string; message: string; images?: string[]; metadata?: MsgMeta | null; rating?: number; created_at?: string; }
 interface ToolCall { tool: string; args?: Record<string, unknown>; result?: unknown; done: boolean; label: string; }
 interface SavedMsg { id: number; message_role: string; message_text: string; session_title?: string; session_id?: string; }
@@ -155,6 +161,8 @@ const TOOL_META: Record<string, { label: string }> = {
   scan_bank_account: { label: 'Tra cứu tài khoản ngân hàng' },
   stealth_browse: { label: 'Trình duyệt Stealth quét mã độc' },
   query_threat_database: { label: 'Tra cứu CSDL cảnh báo lừa đảo' },
+  search_custom_reports: { label: 'Tra cứu báo cáo chuyên sâu' },
+  scan_file_threat: { label: 'Phân tích mối đe dọa tệp tin' },
   lookup_company: { label: 'Tra cứu pháp lý doanh nghiệp' },
   get_latest_threat_trends: { label: 'Cập nhật xu hướng lừa đảo' },
   web_search: { label: 'Tìm kiếm mạng diện rộng' },
@@ -163,7 +171,7 @@ const TOOL_META: Record<string, { label: string }> = {
 
 const RESULT_LABELS: Record<string, string> = {
   summary: 'Tóm tắt an ninh',
-  is_scam: 'Dấu hiệu lừa đảo',
+  is_scam: 'Cảnh báo lừa đảo',
   risk_level: 'Mức độ rủi ro',
   risk_score: 'Điểm rủi ro (0-100)',
   target_phone: 'Số điện thoại',
@@ -173,6 +181,10 @@ const RESULT_LABELS: Record<string, string> = {
   url: 'Địa chỉ URL',
   domain: 'Tên miền',
   apex_domain: 'Tên miền gốc',
+  redirected_to_official: 'Chuyển hướng tới nền tảng gốc',
+  tinnhiem: 'Tín nhiệm mạng (NCSC)',
+  approved_reports_count: 'Báo cáo đã kiểm duyệt',
+  confidence: 'Độ tin cậy dữ liệu',
   query: 'Từ khóa tra cứu',
   found: 'Trạng thái tìm thấy',
   internal_database: 'Cơ sở dữ liệu nội bộ',
@@ -619,7 +631,26 @@ export default function Assistant() {
     try {
       const d = await api.get<{ title?: string; messages?: ChatMsg[] }>(`/chat/sessions/${nid}/`);
       setTitle(d.title || 'Cuộc trò chuyện mới');
-      setMessages((d.messages || []).map((m) => ({ ...m })));
+      setMessages((d.messages || []).map((m) => {
+        const savedTools = Array.isArray(m.metadata?.tools)
+          ? m.metadata.tools.map((t) => ({
+              tool: t.tool,
+              args: t.args,
+              result: t.result,
+              done: t.done ?? true,
+              label: t.label || (TOOL_META[t.tool] || { label: t.tool }).label,
+            }))
+          : undefined;
+        const savedThinking = typeof m.metadata?.thinking === 'string' && m.metadata.thinking
+          ? m.metadata.thinking
+          : undefined;
+        return {
+          ...m,
+          tools: savedTools,
+          thinking: savedThinking,
+          showThinking: savedThinking ? false : undefined,
+        };
+      }));
       setUrl(`/ai-assistant/${nid}/`);
     } catch {
       notify('Không thể mở hội thoại (đã xóa hoặc không có quyền)', 'warning');
@@ -2114,13 +2145,13 @@ function UserMessageContent({ text }: { text: string }) {
 
 function ToolCard({ t }: { t: ToolCall }) {
   const meta = TOOL_META[t.tool] || { label: t.label || t.tool };
-  const [open, setOpen] = useState(false);
-  useEffect(() => { if (t.done) setOpen(true); }, [t.done]);
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const open = userOpen !== null ? userOpen : Boolean(t.done);
   const args = argsSummary(t.args);
   return (
     <div className="my-2 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
       <div
-        onClick={() => t.done && setOpen((o) => !o)}
+        onClick={() => t.done && setUserOpen(!open)}
         className={cn('flex items-center gap-2.5 px-3 py-2', t.done && 'cursor-pointer hover:bg-white/[0.04]')}
       >
         <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-lg', t.done ? 'bg-[var(--gpt-accent-soft)] text-[var(--gpt-accent)]' : 'bg-white/5 text-[var(--gpt-muted)]')}>
@@ -2189,7 +2220,7 @@ function ToolResultEntry({ name, val }: { name: string; val: unknown }) {
   if (name === 'is_scam') {
     return (
       <ToolRow label={label}>
-        <Badge variant={val ? 'destructive' : 'secondary'}>{val ? 'CẢNH BÁO LỪA ĐẢO' : 'AN TOÀN'}</Badge>
+        <Badge variant={val ? 'destructive' : 'secondary'}>{val ? 'CẢNH BÁO RỦI RO' : 'CHƯA GHI NHẬN TỐ CÁO'}</Badge>
       </ToolRow>
     );
   }
