@@ -206,116 +206,117 @@ export default function Bank() {
                 <PrivacyReceiptBadge result={result} />
               </div>
 
-              <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="p-5 rounded-3xl bg-white/[0.03] border border-white/5 space-y-2">
-                  <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Tên Ngân hàng</div>
-                  <div className="text-xl font-bold text-white/90">{asStr(result['bank']) || bank}</div>
+              <div className="p-6 sm:p-8 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 space-y-1.5">
+                    <div className="text-xs font-bold text-white/45">Tên Ngân hàng</div>
+                    <div className="text-lg font-bold text-white/90">{asStr(result['bank']) || bank}</div>
+                  </div>
+                  <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 space-y-1.5">
+                    <div className="text-xs font-bold text-white/45">Số tài khoản</div>
+                    <div className="text-lg font-bold text-white/90 tracking-wider font-mono">{asStr(result['account_display']) || asStr(result['account_masked']) || account}</div>
+                  </div>
                 </div>
-                <div className="p-5 rounded-3xl bg-white/[0.03] border border-white/5 space-y-2">
-                  <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Số tài khoản</div>
-                  <div className="text-xl font-bold text-white/90 tracking-widest">{asStr(result['account_display']) || asStr(result['account_masked']) || account}</div>
+
+                <div className={`p-6 rounded-2xl border border-white/10 ${aiEnabled ? 'bg-brand-500/[0.04]' : 'bg-white/[0.02]'}`}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${aiEnabled ? 'bg-brand-500/20 text-brand-400' : 'bg-white/10 text-white/45'}`}>
+                      <i className="bi bi-robot"></i>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-black text-white">Phân tích rủi ro tài khoản (AI)</h4>
+                      <p className="text-xs text-white/55">Kiểm tra dấu hiệu giao dịch bất thường</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer ml-auto">
+                      <input type="checkbox" checked={aiEnabled} onChange={toggleAi} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/20 after:border-white/10 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500/50"></div>
+                    </label>
+                    {aiLoading && <div className="spinner w-4 h-4 text-brand-400"></div>}
+                  </div>
+
+                  {!aiEnabled && !aiText && (
+                    <p className="text-white/45 text-xs italic">Bật công tắc để AI phân tích chuyên sâu tài khoản này.</p>
+                  )}
+                  {(aiEnabled || aiText) && (
+                    <div>
+                      <MarkdownView html={renderMd(aiText)} className={`text-white/75 text-sm leading-relaxed ${aiLoading ? 'ai-streaming' : ''}`} />
+                      {!aiText && !aiLoading && aiEnabled && (
+                        <p className="text-white/45 text-xs italic">Đang phân tích các thông tin liên quan...</p>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/10">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center text-brand-400 border border-brand-500/20 shrink-0">
+                      <i className="bi bi-search"></i>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-black text-white">Tra cứu chéo trên Internet</h4>
+                      <p className="text-xs text-white/55">Đối chiếu thông tin tài khoản từ các nguồn công khai</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <a
+                      href={`https://www.google.com/search?q=${encodeURIComponent(`${asStr(result['bank']) || bank} ${asStr(result['account']) || account} lừa đảo`)}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-brand-500/20 transition-all group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-brand-400 shrink-0"><i className="bi bi-google"></i></div>
+                      <div className="min-w-0">
+                        <div className="text-white/85 text-xs font-bold group-hover:text-brand-400 transition-colors">Tìm trên Google</div>
+                        <div className="text-white/45 text-[11px] truncate">Tìm cảnh báo lừa đảo</div>
+                      </div>
+                      <i className="bi bi-box-arrow-up-right text-white/20 ml-auto shrink-0"></i>
+                    </a>
+                    <a
+                      href={`https://checkscam.vn/search?q=${encodeURIComponent(asStr(result['account']) || account)}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-brand-500/20 transition-all group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-danger-500/10 flex items-center justify-center text-danger-400 shrink-0"><i className="bi bi-shield-exclamation"></i></div>
+                      <div className="min-w-0">
+                        <div className="text-white/85 text-xs font-bold group-hover:text-brand-400 transition-colors">CheckScam.vn</div>
+                        <div className="text-white/45 text-[11px] truncate">Kho dữ liệu lừa đảo VN</div>
+                      </div>
+                      <i className="bi bi-box-arrow-up-right text-white/20 ml-auto shrink-0"></i>
+                    </a>
+                    <a
+                      href={`https://www.google.com/search?q=${encodeURIComponent(`site:facebook.com ${asStr(result['account']) || account} lừa đảo`)}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-brand-500/20 transition-all group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-brand-400 shrink-0"><i className="bi bi-facebook"></i></div>
+                      <div className="min-w-0">
+                        <div className="text-white/85 text-xs font-bold group-hover:text-brand-400 transition-colors">Facebook</div>
+                        <div className="text-white/45 text-[11px] truncate">Tìm bài đăng tố cáo</div>
+                      </div>
+                      <i className="bi bi-box-arrow-up-right text-white/20 ml-auto shrink-0"></i>
+                    </a>
+                    <a
+                      href={`https://www.google.com/search?q=${encodeURIComponent(`${asStr(result['bank']) || bank} ${asStr(result['account']) || account} scam report`)}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-brand-500/20 transition-all group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-warn-500/10 flex items-center justify-center text-warn-400 shrink-0"><i className="bi bi-globe2"></i></div>
+                      <div className="min-w-0">
+                        <div className="text-white/85 text-xs font-bold group-hover:text-brand-400 transition-colors">Tìm kiếm quốc tế</div>
+                        <div className="text-white/45 text-[11px] truncate">Báo cáo lừa đảo quốc tế</div>
+                      </div>
+                      <i className="bi bi-box-arrow-up-right text-white/20 ml-auto shrink-0"></i>
+                    </a>
+                  </div>
+                </div>
+
+                <TrustGuardrailPanel result={result} />
               </div>
 
-              <div className={`m-8 p-6 liquid-glass border-white/5 ${aiEnabled ? 'bg-brand-500/[0.04]' : 'bg-white/[0.01]'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${aiEnabled ? 'bg-brand-500/20 text-brand-400' : 'bg-white/10 text-white/45'}`}>
-                    <i className="bi bi-robot"></i>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-black text-white uppercase tracking-wider">AI Financial Auditor</h4>
-                    <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">Anti-Money Laundering Check</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer ml-auto">
-                    <input type="checkbox" checked={aiEnabled} onChange={toggleAi} className="sr-only peer" />
-                    <div className="w-11 h-6 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/20 after:border-white/10 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500/50"></div>
-                  </label>
-                  {aiLoading && <div className="spinner w-4 h-4 text-brand-400"></div>}
-                </div>
-
-                {!aiEnabled && !aiText && (
-                  <p className="text-white/35 text-xs italic">Bật toggle để AI phân tích chuyên sâu tài khoản này.</p>
-                )}
-                {(aiEnabled || aiText) && (
-                  <div>
-                    <MarkdownView html={renderMd(aiText)} className={`text-white/70 text-sm leading-relaxed ${aiLoading ? 'ai-streaming' : ''}`} />
-                    {!aiText && !aiLoading && aiEnabled && (
-                      <p className="text-white/35 text-xs italic">Đang phân tích các giao dịch liên quan...</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="m-8 p-6 rounded-2xl bg-white/[0.01] border border-white/5">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center text-brand-400 border border-brand-500/20">
-                    <i className="bi bi-search"></i>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-black text-white uppercase tracking-wider">Tra cứu Web</h4>
-                    <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">Kiểm tra thông tin trên Internet</p>
-                  </div>
-                </div>
-                <p className="text-white/45 text-xs mb-4 leading-relaxed">Tìm kiếm thông tin về tài khoản này trên các nguồn công khai để xác minh thêm.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <a
-                    href={`https://www.google.com/search?q=${encodeURIComponent(`${asStr(result['bank']) || bank} ${asStr(result['account']) || account} lừa đảo`)}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-brand-500/20 transition-all group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-brand-400 shrink-0"><i className="bi bi-google"></i></div>
-                    <div className="min-w-0">
-                      <div className="text-white/80 text-xs font-black group-hover:text-brand-400 transition-colors">Google Search</div>
-                      <div className="text-white/35 text-[10px] truncate">Tìm cảnh báo lừa đảo</div>
-                    </div>
-                    <i className="bi bi-box-arrow-up-right text-white/20 ml-auto shrink-0"></i>
-                  </a>
-                  <a
-                    href={`https://checkscam.vn/search?q=${encodeURIComponent(asStr(result['account']) || account)}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-brand-500/20 transition-all group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-danger-500/10 flex items-center justify-center text-danger-400 shrink-0"><i className="bi bi-shield-exclamation"></i></div>
-                    <div className="min-w-0">
-                      <div className="text-white/80 text-xs font-black group-hover:text-brand-400 transition-colors">CheckScam.vn</div>
-                      <div className="text-white/35 text-[10px] truncate">Database CSDL lừa đảo VN</div>
-                    </div>
-                    <i className="bi bi-box-arrow-up-right text-white/20 ml-auto shrink-0"></i>
-                  </a>
-                  <a
-                    href={`https://www.google.com/search?q=${encodeURIComponent(`site:facebook.com ${asStr(result['account']) || account} lừa đảo`)}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-brand-500/20 transition-all group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-brand-400 shrink-0"><i className="bi bi-facebook"></i></div>
-                    <div className="min-w-0">
-                      <div className="text-white/80 text-xs font-black group-hover:text-brand-400 transition-colors">Facebook</div>
-                      <div className="text-white/35 text-[10px] truncate">Tìm bài đăng tố cáo</div>
-                    </div>
-                    <i className="bi bi-box-arrow-up-right text-white/20 ml-auto shrink-0"></i>
-                  </a>
-                  <a
-                    href={`https://www.google.com/search?q=${encodeURIComponent(`${asStr(result['bank']) || bank} ${asStr(result['account']) || account} scam report`)}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-brand-500/20 transition-all group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-warn-500/10 flex items-center justify-center text-warn-400 shrink-0"><i className="bi bi-globe2"></i></div>
-                    <div className="min-w-0">
-                      <div className="text-white/80 text-xs font-black group-hover:text-brand-400 transition-colors">Global Search</div>
-                      <div className="text-white/35 text-[10px] truncate">Scam report quốc tế</div>
-                    </div>
-                    <i className="bi bi-box-arrow-up-right text-white/20 ml-auto shrink-0"></i>
-                  </a>
-                </div>
-              </div>
-
-              <TrustGuardrailPanel result={result} />
-
-              <div className="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
+              <div className="p-6 sm:p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
                 <div className="flex gap-3">
                   <Button
                     type="button"
@@ -324,7 +325,7 @@ export default function Bank() {
                     className="rounded-xl border-white/10 bg-white/5 text-white/70 hover:text-white"
                     onClick={() => showToast('Tính năng lưu đang được phát triển.', 'info')}
                   >
-                    <i className="bi bi-safe mr-1.5"></i> Archive
+                    <i className="bi bi-safe mr-1.5"></i> Lưu trữ
                   </Button>
                   <Button
                     type="button"

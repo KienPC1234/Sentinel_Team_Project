@@ -351,7 +351,7 @@ export default function Status() {
               )}
               {asStr(result['domain']) && (
                 <div className="p-4 rounded-2xl bg-white/[0.03] space-y-1">
-                  <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Domain</div>
+                  <div className="text-xs font-bold text-white/45">Tên miền</div>
                   <div className="text-sm font-bold text-white/80 truncate">{asStr(result['domain'])}</div>
                 </div>
               )}

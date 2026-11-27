@@ -461,8 +461,8 @@ export default function Email() {
                   {verdictLabel}
                 </div>
                 <div className="text-5xl font-black text-white mb-2">{score}/100</div>
-                <div className="text-[10px] text-white/45 font-black tracking-widest uppercase mb-4">
-                  Chỉ số rủi ro Email (Weighted EML + AI Signals)
+                <div className="text-xs text-white/55 font-bold tracking-wider uppercase mb-4">
+                  Chỉ số rủi ro Email
                 </div>
 
                 {deepProcessing && (
@@ -491,21 +491,21 @@ export default function Email() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-brand-300 uppercase tracking-widest mb-1">Người gửi (From)</span>
+                      <span className="text-xs font-bold text-brand-300 mb-1">Người gửi</span>
                       <p className="text-white text-xs font-mono font-bold truncate" title={displayEmail}>
                         {displayEmail || 'Chưa xác định'}
                       </p>
                     </div>
 
                     <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-brand-300 uppercase tracking-widest mb-1">Tiêu đề (Subject)</span>
+                      <span className="text-xs font-bold text-brand-300 mb-1">Tiêu đề</span>
                       <p className="text-white text-xs font-medium truncate" title={extracted?.subject || 'Không có tiêu đề'}>
                         {extracted?.subject || 'Không có tiêu đề'}
                       </p>
                     </div>
 
                     <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-brand-300 uppercase tracking-widest mb-1">Liên kết nhúng (URLs)</span>
+                      <span className="text-xs font-bold text-brand-300 mb-1">Liên kết trong email</span>
                       <div className="flex items-center gap-2">
                         <i className={`bi bi-link-45deg text-sm ${(extracted?.url_count || 0) > 0 ? 'text-warn-400' : 'text-white/40'}`}></i>
                         <span className="text-white text-xs font-bold">{extracted?.url_count || 0} liên kết</span>
@@ -513,7 +513,7 @@ export default function Email() {
                     </div>
 
                     <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-brand-300 uppercase tracking-widest mb-1">Tệp đính kèm</span>
+                      <span className="text-xs font-bold text-brand-300 mb-1">Tệp đính kèm</span>
                       <div className="flex items-center gap-2">
                         <i className={`bi bi-paperclip text-sm ${(extracted?.attachment_count || 0) > 0 ? 'text-warn-400' : 'text-white/40'}`}></i>
                         <span className="text-white text-xs font-bold">{extracted?.attachment_count || 0} tệp</span>
@@ -530,9 +530,9 @@ export default function Email() {
                         <i className="bi bi-robot text-lg"></i>
                       </div>
                       <div>
-                        <h4 className="text-sm font-black text-white uppercase tracking-wider">AI Nhận định chuyên sâu</h4>
-                        <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">
-                          {deepCompleted ? 'Phân tích ngữ nghĩa & Hành vi tống tiền' : 'Báo cáo kiểm tra sơ bộ'}
+                        <h4 className="text-sm font-black text-white">Phân tích chuyên sâu (AI)</h4>
+                        <p className="text-xs text-white/55">
+                          {deepCompleted ? 'Đánh giá nội dung, ngữ nghĩa & hành vi lừa đảo' : 'Báo cáo kiểm tra sơ bộ'}
                         </p>
                       </div>
                     </div>
@@ -562,11 +562,10 @@ export default function Email() {
                 {indicators.length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-[11px] font-black text-danger-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <h4 className="text-xs font-black text-danger-400 uppercase tracking-wider flex items-center gap-2">
                         <i className="bi bi-exclamation-octagon-fill"></i>
                         Dấu hiệu cảnh báo nguy hiểm ({indicators.length})
                       </h4>
-                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">AI Fraud Flags</span>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -587,11 +586,10 @@ export default function Email() {
                 {securityChecks.length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-[11px] font-black text-white/45 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <h4 className="text-xs font-black text-white/60 uppercase tracking-wider flex items-center gap-2">
                         <i className="bi bi-shield-check text-brand-400"></i>
-                        Xác thực giao thức & Bản ghi kỹ thuật (DNS/SPF/DMARC)
+                        Xác thực tên miền &amp; máy chủ gửi (SPF / DKIM / DMARC)
                       </h4>
-                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Header & Domain Auth</span>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

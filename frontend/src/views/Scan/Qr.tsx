@@ -300,16 +300,16 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
                           </div>
                         ))
                       ) : (
-                        <div className="rounded-3xl overflow-hidden border border-white/5 shadow-2xl bg-black/30 flex items-center justify-center p-4 max-h-[400px] overflow-auto custom-scrollbar cursor-pointer" onClick={() => setPreviewImage(annotatedImage)}>
-                          <img src={annotatedImage} className="max-w-full max-h-[360px] object-contain rounded-xl" alt="Analyzed Image" />
+                        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-xl bg-black/30 flex items-center justify-center p-4 max-h-[400px] overflow-auto custom-scrollbar cursor-pointer" onClick={() => setPreviewImage(annotatedImage)}>
+                          <img src={annotatedImage} className="max-w-full max-h-[360px] object-contain rounded-xl" alt="Ảnh đã phân tích" />
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 text-[10px] text-white/45 font-bold">
-                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 rounded bg-safe-400"></span> Text (high conf)</span>
-                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 rounded bg-warn-400"></span> Text (medium)</span>
-                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 rounded bg-danger-400"></span> Text (low)</span>
-                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 rounded bg-brand-400"></span> QR Code</span>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-white/55 font-medium">
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1 rounded bg-safe-400"></span> Chữ rõ nét</span>
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1 rounded bg-warn-400"></span> Chữ trung bình</span>
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1 rounded bg-danger-400"></span> Chữ mờ</span>
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1 rounded bg-brand-400"></span> Mã QR</span>
                     </div>
                   </div>
                 )}
@@ -394,7 +394,7 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
                       )}
                       {(entities.urls?.length || 0) > 0 && (
                         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
-                          <div className="text-[9px] font-black text-white/35 uppercase tracking-widest mb-3">Liên kết (Links)</div>
+                          <div className="text-xs font-bold text-white/50 mb-3">Liên kết phát hiện</div>
                           <div className="flex flex-wrap gap-2">
                             {(entities.urls || []).map((u) => (
                               <Link key={u} href={`/scan/website/?url=${encodeURIComponent(u)}`} className="px-3 py-1 rounded bg-brand2-500/10 text-brand2-400 text-[10px] font-bold border border-brand2-500/20 hover:bg-brand2-500/20 transition-all truncate max-w-[200px]">
@@ -465,8 +465,8 @@ export default function Qr({ mode = 'qr' }: { mode?: 'qr' | 'image' } = {}) {
                   <h4 className="text-xs font-black text-brand-400 uppercase tracking-widest flex items-center gap-2">
                     <i className="bi bi-robot"></i> Nhận định của trí tuệ nhân tạo
                   </h4>
-                  <div className="p-6 rounded-[2.5rem] bg-brand-500/[0.03] border border-brand-500/10 shadow-inner">
-                    <MarkdownView html={renderMd(explanation)} className="prose prose-invert prose-cyan max-w-none text-white/70 text-sm leading-relaxed" />
+                  <div className="p-6 rounded-2xl bg-brand-500/[0.03] border border-brand-500/15 shadow-inner">
+                    <MarkdownView html={renderMd(explanation)} className="prose prose-invert prose-cyan max-w-none text-white/75 text-sm leading-relaxed" />
                     {!explanation && <p className="text-white/35 text-xs italic">Đang chờ phản hồi từ AI...</p>}
                   </div>
                 </div>

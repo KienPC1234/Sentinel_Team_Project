@@ -211,7 +211,7 @@ export default function Website() {
                   className="sr-only peer"
                 />
                 <div className="w-11 h-6 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/20 after:border-white/10 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500/50"></div>
-                <span className="ms-3 text-xs font-black text-white/55 uppercase tracking-widest">Chế độ Quét Sâu (Deep AI Analysis)</span>
+                <span className="ms-3 text-xs font-black text-white/60 uppercase tracking-wider">Chế độ Quét Sâu (AI Phân tích chuyên sâu)</span>
               </label>
             </div>
           </form>
@@ -243,83 +243,85 @@ export default function Website() {
                 <PrivacyReceiptBadge result={result} />
               </div>
 
-              <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-white/5">
-                <div className="p-4 rounded-2xl bg-white/[0.03] space-y-1">
-                  <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Tên miền / URL</div>
-                  <div className="text-sm font-bold text-white/80 truncate">{domain}</div>
+              <div className="p-6 sm:p-8 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-1">
+                    <div className="text-xs font-bold text-white/45">Tên miền / URL</div>
+                    <div className="text-sm font-bold text-white/90 truncate" title={domain}>{domain}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-1">
+                    <div className="text-xs font-bold text-white/45">Loại hình</div>
+                    <div className="text-sm font-bold text-white/90">{asStr(result['scam_type']) || 'Chưa xác định'}</div>
+                  </div>
+                  {asStr(result['page_title']) && (
+                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-1">
+                      <div className="text-xs font-bold text-white/45">Tiêu đề trang</div>
+                      <div className="text-sm font-bold text-white/90 truncate" title={asStr(result['page_title'])}>{asStr(result['page_title'])}</div>
+                    </div>
+                  )}
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-1">
+                    <div className="text-xs font-bold text-white/45">Nội dung trang</div>
+                    <div className={`text-sm font-bold ${result['fetch_success'] ? 'text-safe-400' : 'text-danger-400'}`}>
+                      {result['fetch_success'] ? `${asNum(result['content_length'])} ký tự` : 'Không truy cập được'}
+                    </div>
+                  </div>
                 </div>
-                <div className="p-4 rounded-2xl bg-white/[0.03] space-y-1">
-                  <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Loại hình</div>
-                  <div className="text-sm font-bold text-white/80">{asStr(result['scam_type']) || 'Chưa xác định'}</div>
-                </div>
-                {asStr(result['page_title']) && (
-                  <div className="p-4 rounded-2xl bg-white/[0.03] space-y-1">
-                    <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Tiêu đề trang</div>
-                    <div className="text-sm font-bold text-white/80 truncate">{asStr(result['page_title'])}</div>
+
+                {similarityWarning && (
+                  <div className="p-4 rounded-2xl bg-warn-500/10 border border-warn-500/20 flex items-center gap-3">
+                    <i className="bi bi-exclamation-triangle-fill text-warn-400 text-lg flex-shrink-0"></i>
+                    <span className="text-xs font-bold text-warn-300">{similarityWarning}</span>
                   </div>
                 )}
-                <div className="p-4 rounded-2xl bg-white/[0.03] space-y-1">
-                  <div className="text-[10px] font-black text-white/35 uppercase tracking-widest">Nội dung</div>
-                  <div className={`text-sm font-bold ${result['fetch_success'] ? 'text-safe-400' : 'text-danger-400'}`}>
-                    {result['fetch_success'] ? `${asNum(result['content_length'])} ký tự` : 'Không truy cập được'}
+
+                {networkDetails.length > 0 && (
+                  <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                    <h4 className="text-xs font-black text-white/60 uppercase tracking-wider mb-3">Phát hiện từ mạng lưới</h4>
+                    <ul className="space-y-2">
+                      {networkDetails.map((detail, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs text-white/70">
+                          <i className="bi bi-hdd-network text-brand-400 mt-0.5 flex-shrink-0"></i>
+                          <span>{detail}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
+                )}
+
+                <div className="p-6 rounded-2xl border border-brand-500/15 bg-brand-500/[0.03]">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-brand-500/20 flex items-center justify-center text-brand-400 shrink-0">
+                      <i className="bi bi-shield-lock"></i>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-white">Phân tích An ninh mạng (AI)</h4>
+                      <p className="text-xs text-white/55">Đánh giá chuyên sâu theo ngữ cảnh trang web</p>
+                    </div>
+                    {aiLoading && <div className="ml-auto spinner w-4 h-4 text-brand-400"></div>}
+                  </div>
+
+                  <MarkdownView html={renderMd(aiText)} className={`text-white/75 text-sm leading-relaxed ${aiLoading ? 'ai-streaming' : ''}`} />
+                  {!aiText && !aiLoading && <p className="text-white/35 text-xs italic">Đang chờ phản hồi từ AI...</p>}
                 </div>
+
+                <TrustGuardrailPanel result={result} />
+                <OsintSection result={result} />
               </div>
 
-              {similarityWarning && (
-                <div className="mx-8 mt-6 p-4 rounded-2xl bg-warn-500/10 border border-warn-500/20 flex items-center gap-3">
-                  <i className="bi bi-exclamation-triangle-fill text-warn-400 text-lg flex-shrink-0"></i>
-                  <span className="text-xs font-bold text-warn-300">{similarityWarning}</span>
-                </div>
-              )}
-
-              {networkDetails.length > 0 && (
-                <div className="mx-8 mt-6 p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
-                  <h4 className="text-[10px] font-black text-white/45 uppercase tracking-widest mb-3">Phát hiện từ mạng lưới</h4>
-                  <ul className="space-y-2">
-                    {networkDetails.map((detail, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-white/60">
-                        <i className="bi bi-hdd-network text-brand-400 mt-0.5 flex-shrink-0"></i>
-                        <span>{detail}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="p-8 bg-brand-500/[0.02]">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-brand-500/20 flex items-center justify-center text-brand-400">
-                    <i className="bi bi-shield-lock"></i>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-white uppercase tracking-wider">Phân tích An ninh mạng</h4>
-                    <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">Deep Web Analysis</p>
-                  </div>
-                  {aiLoading && <div className="ml-auto spinner w-4 h-4 text-brand-400"></div>}
-                </div>
-
-                <MarkdownView html={renderMd(aiText)} className={`text-white/70 text-sm leading-relaxed ${aiLoading ? 'ai-streaming' : ''}`} />
-                {!aiText && !aiLoading && <p className="text-white/35 text-xs italic">Đang chờ phản hồi từ AI...</p>}
-              </div>
-
-              <TrustGuardrailPanel result={result} />
-              <OsintSection result={result} />
-
-              <div className="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
+              <div className="p-6 sm:p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
                 <div className="flex gap-4">
                   <button
                     type="button"
                     className="liquid-btn py-2 px-6 text-xs bg-white/5 text-white/60 border-white/10 hover:text-white"
                     onClick={() => {
                       try {
-                        void navigator.clipboard.writeText(asStr(result['url']) || url).then(() => showToast('Đã copy URL!', 'success'));
+                        void navigator.clipboard.writeText(asStr(result['url']) || url).then(() => showToast('Đã sao chép liên kết!', 'success'));
                       } catch {
                         showToast('Không thể sao chép.', 'error');
                       }
                     }}
                   >
-                    <i className="bi bi-link-45deg"></i> Copy Link
+                    <i className="bi bi-link-45deg"></i> Sao chép liên kết
                   </button>
                   <button
                     type="button"

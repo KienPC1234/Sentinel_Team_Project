@@ -235,8 +235,8 @@ export default function Message() {
                   <i className="bi bi-clipboard-plus"></i> DÁN TỪ CLIPBOARD
                 </button>
 
-                <div className="absolute bottom-4 right-4 text-[10px] font-black text-white/35 uppercase tracking-widest pointer-events-none">
-                  Text Content Analyzer
+                <div className="absolute bottom-4 right-4 text-[11px] font-bold text-white/35 uppercase tracking-wider pointer-events-none">
+                  Phân tích nội dung văn bản
                 </div>
               </div>
               <p className="text-[11px] text-white/45 font-medium leading-relaxed -mt-3">
@@ -327,13 +327,13 @@ export default function Message() {
                 <PrivacyReceiptBadge result={result} />
               </div>
 
-              <div className="p-8 space-y-8">
+              <div className="p-6 sm:p-8 space-y-6">
                 {patterns.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="text-xs font-black text-white/55 uppercase tracking-widest">Dấu hiệu phát hiện</h4>
+                    <h4 className="text-xs font-black text-white/60 uppercase tracking-wider">Dấu hiệu phát hiện</h4>
                     <div className="flex flex-wrap gap-2">
                       {patterns.map((p, i) => (
-                        <span key={i} className="px-4 py-2 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-xs font-bold">
+                        <span key={i} className="px-3.5 py-2 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-xs font-bold">
                           {patternLabel(p)}
                         </span>
                       ))}
@@ -341,49 +341,66 @@ export default function Message() {
                   </div>
                 )}
 
+                <div className="p-6 rounded-2xl border border-brand-500/15 bg-brand-500/[0.03]">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-brand-500/20 flex items-center justify-center text-brand-400 shrink-0">
+                      <i className="bi bi-robot"></i>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-white">Phân tích dấu hiệu lừa đảo (AI)</h4>
+                      <p className="text-xs text-white/55">Đánh giá ngữ nghĩa &amp; hành vi dụ dỗ</p>
+                    </div>
+                  </div>
+
+                  <MarkdownView html={renderMd(asStr(result['explanation']) || asStr(result['ai_insight']))} className="text-white/75 text-sm leading-relaxed" />
+                  {!result['explanation'] && !result['ai_insight'] && (
+                    <p className="text-white/35 text-xs italic">Không có phân tích AI.</p>
+                  )}
+                </div>
+
                 {hasEntities && (
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-black text-white/55 uppercase tracking-widest">Thông tin trích xuất từ nội dung</h4>
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-black text-white/60 uppercase tracking-wider">Thông tin trích xuất từ nội dung</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {(entities.urls?.length || 0) > 0 && (
                         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">
-                          <p className="text-[10px] font-black text-brand-300 uppercase tracking-widest mb-2">URLs</p>
+                          <p className="text-xs font-bold text-brand-300 mb-2">Liên kết (URL)</p>
                           <div className="flex flex-wrap gap-2">
                             {(entities.urls || []).map((u) => (
-                              <span key={u} className="px-2 py-1 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-200 text-[11px] font-mono">{u}</span>
+                              <span key={u} className="px-2.5 py-1 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-200 text-xs font-mono break-all">{u}</span>
                             ))}
                           </div>
                         </div>
                       )}
                       {(entities.phones?.length || 0) > 0 && (
                         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">
-                          <p className="text-[10px] font-black text-brand-300 uppercase tracking-widest mb-2">Số điện thoại</p>
+                          <p className="text-xs font-bold text-brand-300 mb-2">Số điện thoại</p>
                           <div className="flex flex-wrap gap-2">
                             {(entities.phones || []).map((p) => (
-                              <span key={p} className="px-2 py-1 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-200 text-[11px] font-mono">{p}</span>
+                              <span key={p} className="px-2.5 py-1 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-200 text-xs font-mono">{p}</span>
                             ))}
                           </div>
                         </div>
                       )}
                       {(entities.bank_accounts?.length || 0) > 0 && (
                         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">
-                          <p className="text-[10px] font-black text-warn-300 uppercase tracking-widest mb-2">Tài khoản nghi ngờ</p>
+                          <p className="text-xs font-bold text-warn-300 mb-2">Tài khoản nghi ngờ</p>
                           <div className="flex flex-wrap gap-2">
                             {(entities.bank_accounts || []).map((a) => (
-                              <span key={a} className="px-2 py-1 rounded-lg bg-warn-500/10 border border-warn-500/20 text-warn-200 text-[11px] font-mono">{a}</span>
+                              <span key={a} className="px-2.5 py-1 rounded-lg bg-warn-500/10 border border-warn-500/20 text-warn-200 text-xs font-mono">{a}</span>
                             ))}
                           </div>
                         </div>
                       )}
                       {((entities.emails?.length || 0) > 0 || (entities.handles?.length || 0) > 0) && (
                         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">
-                          <p className="text-[10px] font-black text-safe-300 uppercase tracking-widest mb-2">Email / Handle</p>
+                          <p className="text-xs font-bold text-safe-300 mb-2">Email / Tài khoản</p>
                           <div className="flex flex-wrap gap-2">
                             {(entities.emails || []).map((e) => (
-                              <span key={e} className="px-2 py-1 rounded-lg bg-safe-500/10 border border-safe-500/20 text-safe-200 text-[11px] font-mono">{e}</span>
+                              <span key={e} className="px-2.5 py-1 rounded-lg bg-safe-500/10 border border-safe-500/20 text-safe-200 text-xs font-mono break-all">{e}</span>
                             ))}
                             {(entities.handles || []).map((h) => (
-                              <span key={h} className="px-2 py-1 rounded-lg bg-safe-500/10 border border-safe-500/20 text-safe-200 text-[11px] font-mono">{h}</span>
+                              <span key={h} className="px-2.5 py-1 rounded-lg bg-safe-500/10 border border-safe-500/20 text-safe-200 text-xs font-mono">{h}</span>
                             ))}
                           </div>
                         </div>
@@ -393,46 +410,29 @@ export default function Message() {
                 )}
 
                 {(annotatedImages.length > 0 || annotatedImage) && (
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-black text-white/55 uppercase tracking-widest">Phân tích vùng text từ ảnh</h4>
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-black text-white/60 uppercase tracking-wider">Phân tích vùng chữ từ ảnh</h4>
                     <div className={`grid gap-4 ${annotatedImages.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                       {annotatedImages.length > 0 ? (
                         annotatedImages.map((img, idx) => (
-                          <div key={idx} className="rounded-3xl overflow-hidden border border-white/5 shadow-2xl bg-black/30 flex items-center justify-center p-4 max-h-[400px] overflow-auto custom-scrollbar cursor-pointer" onClick={() => setPreviewImage(img)}>
+                          <div key={idx} className="rounded-2xl overflow-hidden border border-white/10 shadow-xl bg-black/30 flex items-center justify-center p-4 max-h-[400px] overflow-auto custom-scrollbar cursor-pointer" onClick={() => setPreviewImage(img)}>
                             <img src={img} className="max-w-full max-h-[360px] object-contain rounded-xl" alt={`Ảnh phân tích ${idx + 1}`} />
                           </div>
                         ))
                       ) : (
-                        <div className="rounded-3xl overflow-hidden border border-white/5 shadow-2xl bg-black/30 flex items-center justify-center p-4 max-h-[400px] overflow-auto custom-scrollbar cursor-pointer" onClick={() => setPreviewImage(annotatedImage)}>
-                          <img src={annotatedImage} className="max-w-full max-h-[360px] object-contain rounded-xl" alt="Analyzed Message" />
+                        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-xl bg-black/30 flex items-center justify-center p-4 max-h-[400px] overflow-auto custom-scrollbar cursor-pointer" onClick={() => setPreviewImage(annotatedImage)}>
+                          <img src={annotatedImage} className="max-w-full max-h-[360px] object-contain rounded-xl" alt="Ảnh tin nhắn đã phân tích" />
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                <div className="p-6 liquid-glass border-white/5 bg-brand-500/[0.02]">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-brand-500/20 flex items-center justify-center text-brand-400">
-                      <i className="bi bi-robot"></i>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-black text-white uppercase tracking-wider">AI Fraud Detection</h4>
-                      <p className="text-[10px] text-white/55 font-bold uppercase tracking-widest">Behavioral & Semantic Analysis</p>
-                    </div>
-                  </div>
-
-                  <MarkdownView html={renderMd(asStr(result['explanation']) || asStr(result['ai_insight']))} className="text-white/70 text-sm leading-relaxed" />
-                  {!result['explanation'] && !result['ai_insight'] && (
-                    <p className="text-white/35 text-xs italic">Không có phân tích AI.</p>
-                  )}
-                </div>
-
                 <TrustGuardrailPanel result={result} />
                 <OsintSection result={result} />
               </div>
 
-              <div className="p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
+              <div className="p-6 sm:p-8 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
                 <div className="flex gap-3">
                   <Button
                     type="button"
@@ -441,7 +441,7 @@ export default function Message() {
                     className="rounded-xl border-white/10 bg-white/5 text-white/70 hover:text-white"
                     onClick={() => showToast('Tính năng lưu đang được phát triển.', 'info')}
                   >
-                    <i className="bi bi-bell mr-1.5"></i> Watchlist
+                    <i className="bi bi-bell mr-1.5"></i> Theo dõi
                   </Button>
                   <Button
                     type="button"
