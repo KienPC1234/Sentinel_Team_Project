@@ -69,6 +69,10 @@ REDIS_CACHE_URL=redis://127.0.0.1:6379/1
 OLLAMA_BASE_URL=http://localhost:11434
 LLM_MODEL=deepseek-v4.1-flash:cloud
 SMALL_MODEL=gemma4:31b-cloud
+SHIELDCALL_R78_GEMMA_PRIMARY_ONLY=0 # 1 locks analyze_text_for_scam to gemma4:31b-cloud
+SHIELDCALL_URL_AGENT_V2_SHADOW=0 # 1 enables shadow-only R95 URL evidence agent
+SHIELDCALL_URL_AGENT_PREFETCH=0 # 1 enables fixed-stage seed search in URL shadow agent
+TTS_ALLOW_HF_METADATA=false # keep HuggingFace offline by default during TTS initialization
 
 # OCR engine: VietOCR runs in the shared AI service (or .venv-ocr bridge as fallback)
 OCR_ENGINE=vietocr # vietocr | tesseract

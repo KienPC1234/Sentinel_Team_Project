@@ -131,6 +131,33 @@ Nguyên tắc bắt buộc:
 """
 
 
+def _parse_moderation_ai_result_or_abstain(raw_result):
+    # R89: invalid/unavailable AI is NOT a finding of no violation.
+    # Reject non-finite confidence before JSONField persistence.
+    import json
+    import math
+    try:
+        value = json.loads(raw_result) if isinstance(raw_result, str) else None
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(value, dict) or type(value.get('violation')) is not bool:
+        return None
+    confidence = value.get('confidence')
+    if isinstance(confidence, bool):
+        return None
+    try:
+        confidence = float(confidence)
+    except (ValueError, TypeError, OverflowError):
+        return None
+    if not math.isfinite(confidence):
+        return None
+    if not isinstance(value.get('reason'), str):
+        return None
+    # Preserve the current moderation threshold semantics (0.55).
+    value['confidence'] = max(0.0, min(1.0, confidence))
+    return value
+
+
 def _sanitize_prompt_input(value: str, limit: int = 2200) -> str:
     text = str(value or '')
     text = text.replace('```', ' ').replace('\x00', ' ')
@@ -1707,6 +1734,13 @@ def perform_web_scrapping_task(self, scan_event_id, url):
         scan_event.status = ScanStatus.COMPLETED
         scan_event.save()
 
+        # R95 optional shadow-only: no verdict mutation, no user-visible delay.
+        if os.getenv("SHIELDCALL_URL_AGENT_V2_SHADOW", "0") == "1":
+            try:
+                perform_url_agent_v2_shadow.apply_async(args=(scan_event_id,), countdown=2)
+            except Exception:
+                logger.exception("R95 URL agent shadow enqueue failed")
+
         send_progress("Hoàn tất quét website!", step="completed", data=result)
         _notify_scan_complete(scan_event, f"Quét website '{scan_event.raw_input or url}' hoàn tất")
         return result
@@ -1769,16 +1803,23 @@ def process_forum_report(report_id):
             prompt,
             format_schema=format_schema,
             system_prompt=MODERATION_SYSTEM_PROMPT,
-            # Kiem duyet can noi dung goc de thay bang chung -> allow_pii + audit.
-            allow_pii=True,
+            # R88: community reports have no independent cloud-PII opt-in.
+            # Preserve original content in our forum DB, but redact it
+            # before external Gemma moderation.
+            allow_pii=False,
         )
         
-        # Parse the JSON result
-        try:
-            analysis_res = _json.loads(raw_result) if isinstance(raw_result, str) else {}
-        except (_json.JSONDecodeError, TypeError):
-            analysis_res = {'violation': False, 'confidence': 0, 'reason': 'Không thể phân tích (lỗi format)'}
-        
+        analysis_res = _parse_moderation_ai_result_or_abstain(raw_result)
+        if analysis_res is None:
+            report.ai_analysis = {
+                'error_code': 'ai_moderation_unavailable',
+                'manual_review_required': True,
+            }
+            report.status = ForumPostReport.ReportStatus.PENDING
+            report.is_resolved = False
+            report.save(update_fields=['ai_analysis', 'status', 'is_resolved'])
+            return
+
         report.ai_analysis = analysis_res
 
         from api.utils.email_utils import send_report_outcome_email
@@ -1890,15 +1931,23 @@ def process_forum_comment_report(report_id):
             prompt,
             format_schema=format_schema,
             system_prompt=MODERATION_SYSTEM_PROMPT,
-            # Kiem duyet can noi dung goc de thay bang chung -> allow_pii + audit.
-            allow_pii=True,
+            # R88: community reports have no independent cloud-PII opt-in.
+            # Preserve original content in our forum DB, but redact it
+            # before external Gemma moderation.
+            allow_pii=False,
         )
         
-        try:
-            analysis_res = _json.loads(raw_result) if isinstance(raw_result, str) else {}
-        except (_json.JSONDecodeError, TypeError):
-            analysis_res = {'violation': False, 'confidence': 0, 'reason': 'Không thể phân tích (lỗi format)'}
-        
+        analysis_res = _parse_moderation_ai_result_or_abstain(raw_result)
+        if analysis_res is None:
+            report.ai_analysis = {
+                'error_code': 'ai_moderation_unavailable',
+                'manual_review_required': True,
+            }
+            report.status = ForumPostReport.ReportStatus.PENDING
+            report.is_resolved = False
+            report.save(update_fields=['ai_analysis', 'status', 'is_resolved'])
+            return
+
         report.ai_analysis = analysis_res
 
         from api.utils.push_service import PushNotificationService
@@ -3890,8 +3939,10 @@ def score_scamiq_responses_task(self, attempt_id):
                 f"3. Trả về JSON THUẦN: {{\"score\": int, \"comment\": \"string\"}}\n"
             )
             
-            # Cham can cau tra loi goc cua thi sinh -> allow_pii + audit log.
-            res = generate_response(prompt, tools=[], skip_filter=True, allow_pii=True)
+            # R87 privacy: no external PII opt-in exists in the ScamIQ submit flow.
+            # Keep the original answer in our user's attempt history, but redact
+            # personal data in the prompt before Gemma cloud inference.
+            res = generate_response(prompt, tools=[], skip_filter=True, allow_pii=False)
             parsed = {}
             try:
                 # Basic JSON extraction if not pure
@@ -4131,3 +4182,68 @@ def generate_scam_iq_exam_task(self, user_id=None):
             'total_questions': len(public_questions),
             'max_score': 300,
         }
+
+@shared_task(name="core.perform_url_agent_v2_shadow", bind=True, max_retries=0,
+             soft_time_limit=180, time_limit=205)
+def perform_url_agent_v2_shadow(self, scan_event_id: int):
+    """Independent Gemma 31B, multi-turn investigation; does not alter risk score."""
+    import json as _json
+    from django.db import transaction
+    from api.core.models import ScanEvent, ScanStatus
+    from api.utils.url_agent_v3 import investigate, safe_display_url
+    from api.utils.ollama_client import _ollama_chat_with_retry, web_search_query
+
+    scan = ScanEvent.objects.filter(pk=scan_event_id).first()
+    if not scan or scan.scan_type != 'domain' or scan.status != ScanStatus.COMPLETED:
+        return {'status': 'skipped'}
+    existing = scan.result_json if isinstance(scan.result_json, dict) else {}
+    if existing.get('url_agent_v3_shadow') is not None:
+        return {'status': 'already_present'}
+    try:
+        display, domain = safe_display_url(str(existing.get('url', '')))
+    except ValueError:
+        return {'status': 'invalid_url'}
+    observation = _json.dumps({
+        'page_title': existing.get('page_title', ''),
+        'fetch_success': existing.get('fetch_success'),
+        'network_details': (existing.get('network_details') or [])[:15],
+        'web_sources': (existing.get('web_sources') or [])[:12],
+        'captcha_detected': existing.get('captcha_detected', False),
+    }, ensure_ascii=False, default=str)
+
+    def read_only_reputation(fixed_domain):
+        if fixed_domain != domain:
+            return None
+        return {k: existing.get(k) for k in ('virustotal', 'tinnhiem', 'scamwave')
+                if isinstance(existing.get(k), dict)}
+
+    try:
+        outcome = investigate(
+            display, observation, model='gemma4:31b-cloud',
+            chat=lambda **kw: _ollama_chat_with_retry(max_retries=1, **kw),
+            search=lambda q, n: web_search_query(q, max_results=n),
+            reputation=read_only_reputation, max_turns=6, max_calls=10,
+            max_searches=4, wall_budget=130,
+            # Disable mandatory search during provider outage; Gemma can still
+            # request bounded research through tools.
+            seed_search=(os.getenv('SHIELDCALL_URL_AGENT_PREFETCH', '0') == '1'),
+        )
+    except Exception as exc:
+        logger.warning("R95 shadow investigation failed: %s", type(exc).__name__)
+        return {'status': 'agent_unavailable', 'error_type': type(exc).__name__}
+    # Model results are recorded for research only. The legacy score is immutable.
+    summary = {k: outcome[k] for k in (
+        'schema_version', 'mode', 'model', 'target_domain',
+        'recommended_class', 'model_proposed_class',
+        'evidence_count', 'verified_evidence_count', 'invalid_citations',
+        'tool_calls', 'searches', 'denied_tools', 'turns',
+        'elapsed_seconds', 'score_authority', 'seed_searches', 'denial_reasons', 'cached_tool_reuses', 'invalid_json_retries', 'reputation_lookups', 'indexed_source_groups', 'benign_assessment_verified', 'empty_search_calls', 'search_evidence_available'
+    )}
+    with transaction.atomic():
+        current = ScanEvent.objects.select_for_update().get(pk=scan_event_id)
+        data = current.result_json if isinstance(current.result_json, dict) else {}
+        if data.get('url_agent_v3_shadow') is None:
+            data['url_agent_v3_shadow'] = summary
+            current.result_json = data
+            current.save(update_fields=['result_json'])
+    return {'status': 'shadow_recorded', 'turns': outcome['turns']}

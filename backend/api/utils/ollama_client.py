@@ -3967,6 +3967,11 @@ def analyze_text_for_scam(
     """
     Analyze text for scam indicators, optionally enriching with OSINT DB lookups + web search.
     """
+    # R79: owner-selected Gemma is the only main scam-analysis model.
+    # Ignore legacy model= overrides; do not change other AI adapters.
+    if os.environ.get('SHIELDCALL_R78_GEMMA_PRIMARY_ONLY') == '1':
+        model = 'gemma4:31b-cloud'
+
     def _emit(msg: str, step: str) -> None:
         if progress_callback:
             try:
@@ -4185,7 +4190,13 @@ def analyze_text_for_scam(
     # Bảo vệ dữ liệu cá nhân (Golden Rule #2 & Audit Item #5):
     # Luôn ẩn PII trước khi gửi tới mô hình Cloud trừ khi có sự đồng ý rõ ràng.
     target_model = model or DEFAULT_MODEL
-    is_cloud_target = bool(OLLAMA_API_KEY) or (':cloud' in str(target_model)) or ('api.ollama.com' in str(_effective_base_url))
+    # Cloud model tags include gemma4:31b-cloud as well as :cloud.
+    # Avoid uploading personal data without the user's explicit consent.
+    is_cloud_target = (
+        bool(OLLAMA_API_KEY)
+        or bool(re.search(r'(?i)(?:[:_-]cloud)(?:\b|$)', str(target_model)))
+        or 'api.ollama.com' in str(_effective_base_url).casefold()
+    )
     safe_allow_pii = not is_cloud_target or external_consent
 
     _system_guard = (

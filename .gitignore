@@ -246,7 +246,9 @@ puppeteer_host/dist/
 frontend/node_modules/
 frontend/dist/
 frontend/.next/
+frontend/.next_pre_*/
 frontend/out/
+.release_staging/
 *.zip
 
 # Malware Sandbox downloaded databases & precompiled indexes

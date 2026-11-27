@@ -91,6 +91,7 @@ interface ReportRow {
   comment_content?: string;
   reason: string;
   status: string;
+  manual_review_required: boolean;
   ai_status: 'analyzing' | 'none' | 'done';
   ai_violation: boolean | null;
   ai_confidence: string | number | null;
@@ -123,6 +124,8 @@ interface ApiPostReport {
   reason: string;
   status: string;
   is_resolved: boolean;
+  manual_review_required?: boolean;
+  ai_error_code?: 'ai_moderation_unavailable' | null;
   created_at: string;
 }
 interface ApiCommentReport {
@@ -136,6 +139,8 @@ interface ApiCommentReport {
   reason: string;
   status: string;
   is_resolved: boolean;
+  manual_review_required?: boolean;
+  ai_error_code?: 'ai_moderation_unavailable' | null;
   created_at: string;
 }
 interface ApiBan {
@@ -158,6 +163,8 @@ function mapPostReport(r: ApiPostReport): ReportRow {
     post_title: r.post_title,
     reason: r.reason,
     status: r.status,
+    manual_review_required: r.status === 'pending' &&
+      r.manual_review_required === true && r.ai_error_code === 'ai_moderation_unavailable',
     ai_status: 'none',
     ai_violation: null,
     ai_confidence: null,
@@ -172,6 +179,8 @@ function mapCommentReport(r: ApiCommentReport): ReportRow {
     post_title: r.post_title,
     reason: r.reason,
     status: r.status,
+    manual_review_required: r.status === 'pending' &&
+      r.manual_review_required === true && r.ai_error_code === 'ai_moderation_unavailable',
     ai_status: 'none',
     ai_violation: null,
     ai_confidence: null,
@@ -533,7 +542,11 @@ export default function ForumMgmt() {
         showToast(data.message || 'Thành công', 'success');
         if (action === 'approve' || action === 'reject') {
           const status = action === 'approve' ? 'approved' : 'rejected';
-          setList((prev) => prev.map((r) => (r.id === reportId ? { ...r, status } : r)));
+          // R91: a confirmed manual decision resolves an AI-abstention
+          // warning immediately; never leave a stale pending-only badge.
+          setList((prev) => prev.map((r) => (
+            r.id === reportId ? { ...r, status, manual_review_required: false } : r
+          )));
         } else {
           const v = data.ai?.verdict;
           setList((prev) =>
@@ -989,12 +1002,23 @@ export default function ForumMgmt() {
                         {r.ai_violation === false && (
                           <span className="text-safe-500 text-[10px] font-black"><i className="bi bi-shield-check"></i> An toàn</span>
                         )}
-                        {r.ai_status === 'none' && (
+                        {r.manual_review_required ? (
+                          <span className="text-amber-300 text-[10px] font-semibold"
+                            title="AI chưa trả kết quả đủ tin cậy; báo cáo đang chờ quản trị viên xác minh.">
+                            AI không khả dụng — cần duyệt thủ công
+                          </span>
+                        ) : r.ai_status === 'none' && (
                           <span className="text-white/35 text-[10px]"><i className="bi bi-dash-circle"></i> Chưa quét</span>
                         )}
                       </td>
                       <td className="px-5 py-4">
                         <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${statusBadgeClass(r.status)}`}>{statusLabel(r.status)}</span>
+                        {r.manual_review_required && (
+                          <div className="mt-1 text-[10px] font-semibold text-amber-300"
+                            title="Không kết luận vi phạm hay an toàn khi AI không có kết quả hợp lệ.">
+                            Cần xác minh thủ công
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <div className={`flex justify-end gap-1.5 ${canReviewReport(r) ? '' : 'opacity-30 pointer-events-none'}`}>
@@ -1047,6 +1071,12 @@ export default function ForumMgmt() {
                       </td>
                       <td className="px-5 py-4">
                         <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${statusBadgeClass(r.status)}`}>{statusLabel(r.status)}</span>
+                        {r.manual_review_required && (
+                          <div className="mt-1 text-[10px] font-semibold text-amber-300"
+                            title="Không kết luận vi phạm hay an toàn khi AI không có kết quả hợp lệ.">
+                            Cần xác minh thủ công
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <div className={`flex justify-end gap-1.5 ${canReviewReport(r) ? '' : 'opacity-30 pointer-events-none'}`}>

@@ -306,6 +306,7 @@ TTS_VOICE_MODEL = os.getenv(
 TTS_USE_CUDA = os.getenv('TTS_USE_CUDA', 'False').lower() in ('true', '1', 'yes')
 TTS_MAX_CHARS = int(os.getenv('TTS_MAX_CHARS', '1200'))
 TTS_CACHE_DIR = Path(os.getenv('TTS_CACHE_DIR', str(MEDIA_ROOT / 'tts')))
+TTS_ALLOW_HF_METADATA = os.getenv('TTS_ALLOW_HF_METADATA', 'False').lower() in ('true', '1', 'yes')
 
 # ───────────────────────────────────────────────────────────────────────────
 # Object storage (S3-compatible) — dùng cho MEDIA & STATIC (an toàn, dễ mở rộng).

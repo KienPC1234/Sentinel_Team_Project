@@ -59,6 +59,18 @@ def _user_brief(user):
     }
 
 
+def _manual_review_hint(r):
+    # R90: only a safe, fixed classification code is exposed to the
+    # staff-only admin report queue, never raw provider errors or prompts.
+    details = r.ai_analysis if isinstance(r.ai_analysis, dict) else {}
+    requires_review = (
+        r.status == ForumPostReport.ReportStatus.PENDING
+        and details.get('manual_review_required') is True
+        and details.get('error_code') == 'ai_moderation_unavailable'
+    )
+    return bool(requires_review)
+
+
 def _post_report_row(r):
     return {
         'id': r.id,
@@ -69,6 +81,8 @@ def _post_report_row(r):
         'reason': r.reason,
         'status': r.status,
         'is_resolved': r.is_resolved,
+        'manual_review_required': _manual_review_hint(r),
+        'ai_error_code': 'ai_moderation_unavailable' if _manual_review_hint(r) else None,
         'created_at': r.created_at.strftime('%d/%m/%Y %H:%M'),
     }
 
@@ -85,6 +99,8 @@ def _comment_report_row(r):
         'reason': r.reason,
         'status': r.status,
         'is_resolved': r.is_resolved,
+        'manual_review_required': _manual_review_hint(r),
+        'ai_error_code': 'ai_moderation_unavailable' if _manual_review_hint(r) else None,
         'created_at': r.created_at.strftime('%d/%m/%Y %H:%M'),
     }
 

@@ -148,6 +148,8 @@ def engine() -> str:
         _engine_cache = want
         return _engine_cache
     try:
+        # VieNeu import may itself initialize model providers.
+        _force_hf_no_symlinks()
         import vieneu  # noqa: F401
         _engine_cache = 'vieneu'
     except Exception:
@@ -244,6 +246,7 @@ def is_available() -> bool:
     eng = engine()
     if eng == 'vieneu':
         try:
+            _force_hf_no_symlinks()
             import vieneu  # noqa: F401
             return True
         except Exception:
@@ -266,17 +269,27 @@ def _force_hf_no_symlinks() -> None:
     Đặt biến môi trường KHÔNG đủ nếu ``huggingface_hub`` đã được import (nó đọc env
     lúc import), nên phải ghi thẳng vào hằng số đã nạp.
     """
+    # Model metadata access defaults to OFF. An explicit operator setting
+    # TTS_ALLOW_HF_METADATA=true is required to permit online model lookup.
+    # Cache miss means TtsUnavailable / browser fallback, never a silent download.
+    offline_only = _cfg('TTS_ALLOW_HF_METADATA', 'false').lower() not in _TRUTHY
+    if offline_only:
+        os.environ['HF_HUB_OFFLINE'] = '1'
+        os.environ['TRANSFORMERS_OFFLINE'] = '1'
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     try:
         import huggingface_hub.constants as hf_constants
         hf_constants.HF_HUB_DISABLE_SYMLINKS = True
+        if offline_only:
+            # Handles a hub module imported before Django AppConfig.ready().
+            hf_constants.HF_HUB_OFFLINE = True
     except Exception:  # pragma: no cover - không cài huggingface_hub
         pass
 
 
-# Áp dụng càng sớm càng tốt, trước mọi lần tải model từ HuggingFace.
-_force_hf_no_symlinks()
+# Configure HF only when TTS is explicitly used; module import is network-neutral.
+# _load_vieneu(), engine() and is_available() each install the offline guard.
 
 
 def _preload_cuda_libs() -> None:
