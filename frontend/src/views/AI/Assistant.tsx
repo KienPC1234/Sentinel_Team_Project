@@ -1059,8 +1059,8 @@ export default function Assistant() {
             case 'delta': {
               if (!ev.text) break;
               setStatus('AI đang trả lời...');
-              if (hadToolExecution && full.trim()) {
-                if (!full.endsWith('\n\n')) {
+              if (hadToolExecution) {
+                if (full.trim() && !full.endsWith('\n\n')) {
                   if (full.endsWith('\n') || ev.text.startsWith('\n')) {
                     if (!full.endsWith('\n') && !ev.text.startsWith('\n\n')) {
                       full += '\n';
@@ -1130,7 +1130,7 @@ export default function Assistant() {
               break;
             case 'tool_result': {
               if (!ev.tool) break;
-              hadToolExecution = true;
+              if (full.trim()) hadToolExecution = true;
               const tool = ev.tool;
               patchBot((m) => {
                 const tools = [...(m.tools || [])];
