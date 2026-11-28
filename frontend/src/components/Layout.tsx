@@ -471,10 +471,11 @@ export function Navbar() {
 }
 
 const FOOT_SCAN = [
-  { to: '/scan/phone/', label: 'Scan Số điện thoại' },
-  { to: '/scan/message/', label: 'Scan Văn bản / Tin nhắn' },
-  { to: '/scan/website/', label: 'Scan Website' },
-  { to: '/scan/bank/', label: 'Scan Tài khoản' },
+  { to: '/scan/phone/', label: 'Kiểm tra Số điện thoại' },
+  { to: '/scan/message/', label: 'Kiểm tra Tin nhắn' },
+  { to: '/scan/website/', label: 'Kiểm tra Website / URL' },
+  { to: '/scan/bank/', label: 'Kiểm tra Tài khoản' },
+  { to: '/scan/audio/', label: 'Kiểm tra Âm thanh' },
 ];
 
 const FOOT_HELP = [
@@ -484,6 +485,113 @@ const FOOT_HELP = [
   { to: '/report/', label: 'Báo cáo lừa đảo' },
   { to: '/learn/', label: 'Kiến thức phòng tránh', spa: true },
   { to: '/emergency/', label: 'Hỗ trợ khẩn cấp' },
+];
+
+interface IntegratedSource {
+  name: string;
+  role: string;
+  href: string;
+  accentCls: string;
+  svg: ReactNode;
+}
+
+const INTEGRATED_SOURCES: IntegratedSource[] = [
+  {
+    name: 'Tín nhiệm mạng',
+    role: 'Danh bạ NCSC Quốc gia',
+    href: 'https://tinnhiemmang.vn',
+    accentCls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25 group-hover:border-emerald-400/50',
+    svg: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2.5 4.5 5.8v5.7c0 5 3.2 9.4 7.5 10.9 4.3-1.5 7.5-5.9 7.5-10.9V5.8L12 2.5Z" />
+        <path d="m9 12.2 2.1 2.1 4.1-4.3" />
+      </svg>
+    ),
+  },
+  {
+    name: 'VirusTotal',
+    role: 'Đối chiếu đa bộ máy quét',
+    href: 'https://www.virustotal.com',
+    accentCls: 'text-sky-400 bg-sky-500/10 border-sky-500/25 group-hover:border-sky-400/50',
+    svg: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <polygon points="3.5,4.5 20.5,4.5 20.5,19.5 3.5,19.5 9.8,12" />
+        <path d="M13 9.5h4.2M13 14.5h4.2" />
+      </svg>
+    ),
+  },
+  {
+    name: 'ScamWave',
+    role: 'Cảnh báo lừa đảo cộng đồng',
+    href: 'https://scamwave.com',
+    accentCls: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/25 group-hover:border-cyan-400/50',
+    svg: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M4.5 13c2-2.6 4.2-2.6 6.2 0s4.2 2.6 6.2 0 2.2-1.8 2.6-2" />
+        <circle cx="12" cy="8" r="1.2" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  {
+    name: 'Tranco List',
+    role: 'Xếp hạng uy tín tên miền',
+    href: 'https://tranco-list.eu',
+    accentCls: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/25 group-hover:border-indigo-400/50',
+    svg: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 19h16M6.5 16V10M12 16V5M17.5 16v-8" />
+      </svg>
+    ),
+  },
+  {
+    name: 'ClamAV & YARA',
+    role: 'Phân tích mã độc hộp cát',
+    href: 'https://www.clamav.net',
+    accentCls: 'text-rose-400 bg-rose-500/10 border-rose-500/25 group-hover:border-rose-400/50',
+    svg: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
+  {
+    name: 'VietQR',
+    role: 'Đối soát danh bạ ngân hàng',
+    href: 'https://vietqr.io',
+    accentCls: 'text-teal-400 bg-teal-500/10 border-teal-500/25 group-hover:border-teal-400/50',
+    svg: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1" />
+        <rect x="14" y="3.5" width="6.5" height="6.5" rx="1" />
+        <rect x="3.5" y="14" width="6.5" height="6.5" rx="1" />
+        <path d="M14 14h3v3h-3zM18.5 18.5h2v2h-2zM18.5 14h2" />
+      </svg>
+    ),
+  },
+  {
+    name: 'Trustpilot & OSINT',
+    role: 'Đánh giá tín nhiệm công khai',
+    href: 'https://www.trustpilot.com',
+    accentCls: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25 group-hover:border-emerald-300/50',
+    svg: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <polygon points="12,3 14.8,8.8 21.2,9.7 16.5,14.2 17.6,20.5 12,17.5 6.4,20.5 7.5,14.2 2.8,9.7 9.2,8.8" />
+      </svg>
+    ),
+  },
+  {
+    name: 'Cloudflare Turnstile',
+    role: 'Chống lạm dụng tự động',
+    href: 'https://www.cloudflare.com/products/turnstile/',
+    accentCls: 'text-amber-400 bg-amber-500/10 border-amber-500/25 group-hover:border-amber-400/50',
+    svg: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M6.5 17.5h11a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.4 8.1 3.8 3.8 0 0 0 6.5 17.5Z" />
+      </svg>
+    ),
+  },
 ];
 
 export function Footer() {
@@ -502,11 +610,11 @@ export function Footer() {
               <span className="font-extrabold text-xl glow-text">{SITE_CONFIG.name}</span>
             </div>
             <p className="text-sm text-white/60 leading-relaxed">
-              Bảo vệ người dùng Việt Nam khỏi các hình thức lừa đảo số bằng công nghệ AI tiên tiến.
+              Bảo vệ người dùng Việt Nam khỏi các hình thức lừa đảo số bằng hệ thống kiểm chứng bằng chứng đa nguồn và AI.
             </p>
           </div>
           <div>
-            <h4 className="font-semibold mb-3 text-sm text-white/70">Scan</h4>
+            <h4 className="font-semibold mb-3 text-sm text-white/70">Công cụ kiểm tra</h4>
             <div className="flex flex-col gap-1.5 text-sm">
               {FOOT_SCAN.map((l) => (
                 <Link key={l.to} href={l.to} className="text-white/60 hover:text-cyan-400 transition-colors">
@@ -535,6 +643,45 @@ export function Footer() {
             <div id="google_translate_element" className="hidden"></div>
           </div>
         </div>
+
+        <div className="border-t border-white/10 pt-8 pb-8">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-white/45">
+              Nguồn dữ liệu đối chiếu & Công nghệ bảo mật tích hợp
+            </span>
+            <Link
+              href="/trust/"
+              className="text-xs font-semibold text-cyan-400/85 hover:text-cyan-300 transition-colors inline-flex items-center gap-1"
+            >
+              <span>Xem chính sách độ tin cậy nguồn</span>
+              <i className="bi bi-arrow-right text-[11px]"></i>
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {INTEGRATED_SOURCES.map((src) => (
+              <a
+                key={src.name}
+                href={src.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/[0.025] hover:bg-white/[0.055] border border-white/[0.07] hover:border-white/15 transition-all no-underline"
+              >
+                <span className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${src.accentCls}`}>
+                  {src.svg}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-bold text-slate-200 group-hover:text-white truncate leading-tight">
+                    {src.name}
+                  </span>
+                  <span className="block text-[10.5px] text-white/45 group-hover:text-white/65 truncate mt-0.5">
+                    {src.role}
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+
         <div className="border-t border-white/10 pt-6 flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs text-white/40">© {year} {SITE_CONFIG.name}. Bảo vệ cộng đồng bằng công nghệ.</p>
           <div className="flex items-center gap-6 text-xs text-white/40">
