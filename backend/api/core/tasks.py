@@ -1165,34 +1165,81 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
         else:
             send_progress("Không nhận diện được giọng nói trong file âm thanh.", step="transcribed")
 
-        # ── Step 2: AI Scam Analysis on transcript ──
+        # ── Step 2: AI Scam Analysis + Voice Heuristic Guardrail on transcript ──
+        from api.utils.scam_rules import heuristic_score as _audio_hscore, match_patterns as _audio_match
+
+        audio_patterns = _audio_match(transcript) if transcript else []
+        rule_score = _audio_hscore(transcript) if transcript else 0
+        t_low = (transcript or '').lower()
+        if transcript:
+            if re.search(r'(?:bộ\s*phận\s*(?:bảo\s*mật|an\s*ninh)|nhân\s*viên\s*ngân\s*hàng|tổng\s*đài\s*ngân\s*hàng)', t_low):
+                audio_patterns.append('Tự xưng bộ phận bảo mật / nhân viên ngân hàng')
+                rule_score = max(rule_score, 35)
+            if re.search(r'(?:đọc|cung\s*cấp|nhập)[^.\n]{0,45}?(?:mật\s*khẩu|tên\s*đăng\s*nhập|mã\s*otp|otp)', t_low):
+                audio_patterns.append('Yêu cầu đọc mật khẩu hoặc mã OTP qua cuộc gọi')
+                rule_score = min(100, max(rule_score + 45, 75))
+            if re.search(r'(?:trong\s*vòng\s*\d+\s*phút|sẽ\s*bị\s*khóa|khóa\s*tài\s*khoản|hủy\s*giao\s*dịch)', t_low):
+                audio_patterns.append('Tạo áp lực thời gian dọa khóa tài khoản')
+                rule_score = min(100, rule_score + 15)
+            if re.search(r'(?:không\s*ngắt\s*máy|không\s*(?:liên\s*lạc|trao\s*đổi)[^.\n]{0,35}?chi\s*nhánh|xử\s*lý\s*nội\s*bộ|giữ\s*bí\s*mật)', t_low):
+                audio_patterns.append('Cô lập, ngăn người nghe kiểm chứng tại chi nhánh')
+                rule_score = min(100, rule_score + 15)
+            audio_patterns = list(dict.fromkeys(audio_patterns))
+
+        ai_available = False
         if transcript:
             send_progress("Đang phân tích dấu hiệu lừa đảo trong đoạn hội thoại bằng AI...", step="analyzing")
 
             ai_res = None
             consent_pii = _has_external_pii_consent(scan_event)
-            for attempt in range(3):
+            has_external_entity = bool(
+                re.search(
+                    r'https?://|\b[a-z0-9-]+\.(?:com|vn|net|org|top|xyz|vip|info|online|site|shop|app|gov|edu)\b|(?:\+?84|0)\d{8,10}|\b\d{9,19}\b',
+                    t_low,
+                )
+            )
+            for attempt in range(2):
                 try:
-                    ai_res = analyze_text_for_scam(
+                    candidate = analyze_text_for_scam(
                         transcript,
-                        use_web_search=True,
+                        use_web_search=has_external_entity,
                         external_consent=consent_pii,
                     )
-                    if ai_res and ai_res.get('risk_score') is not None:
+                    if candidate and not candidate.get('insufficient_input') and candidate.get('explanation'):
+                        ai_res = candidate
+                        ai_available = True
                         break
+                    ai_res = candidate
                 except Exception:
                     logger.warning(f"AI analysis attempt {attempt+1} failed for audio event {scan_event_id}")
 
-            if not ai_res:
-                ai_res = {
-                    'risk_score': 0,
-                    'risk_level': 'YELLOW',
-                    'insufficient_input': True,
-                    'explanation': 'Lỗi phân tích AI sau 3 lần thử nên chưa đủ căn cứ kết luận âm thanh này.',
-                }
+            if not ai_available:
+                if rule_score >= 70 and audio_patterns:
+                    joined_pats = '; '.join(audio_patterns[:4]).lower()
+                    fallback_exp = (
+                        f"Bạn bình tĩnh nhé. Dù dịch vụ phân tích ngữ nghĩa AI đang tạm thời gián đoạn kết nối, hệ thống kiểm tra quy tắc của ShieldCall VN đã ghi nhận rõ các dấu hiệu rủi ro cao ngay trong cuộc gọi của bạn ({joined_pats}).\n\n"
+                        "Trong quy trình thực tế, nhân viên ngân hàng hay cơ quan chức năng không bao giờ yêu cầu bạn đọc mật khẩu đăng nhập, mã OTP qua điện thoại, và càng không bao giờ cấm bạn ngắt máy hay ngăn bạn liên hệ chi nhánh chính thức để kiểm chứng.\n\n"
+                        "Bạn hãy yên tâm cúp máy ngay, tuyệt đối không cung cấp mật khẩu hay mã xác thực. Nếu muốn kiểm tra lại tài khoản cho thật yên tâm, bạn tự mở ứng dụng chính thức trên điện thoại hoặc gọi số tổng đài in trên mặt sau thẻ ngân hàng."
+                    )
+                    ai_res = {
+                        'risk_score': rule_score,
+                        'risk_level': 'RED',
+                        'insufficient_input': False,
+                        'explanation': fallback_exp,
+                    }
+                else:
+                    ai_res = {
+                        'risk_score': rule_score,
+                        'risk_level': 'YELLOW',
+                        'insufficient_input': True,
+                        'explanation': (
+                            "Bạn bình tĩnh nhé. Hiện dịch vụ phân tích chuyên sâu bằng AI đang tạm thời gián đoạn kết nối và bộ lọc quy tắc chưa ghi nhận dấu hiệu lừa đảo đặc trưng trong đoạn ghi âm này, nên hệ thống chưa đủ cơ sở để đưa ra kết luận chắc chắn.\n\n"
+                            "Nếu người gọi trong đoạn âm thanh có tự xưng là ngân hàng, cơ quan nhà nước hay đơn vị giao hàng để giục bạn chuyển khoản, nộp phí hoặc đọc mã OTP, bạn đừng vội làm theo mà hãy cúp máy và tự gọi lại qua số tổng đài chính thức để kiểm tra lại an toàn."
+                        ),
+                    }
 
-            ai_notice = ai_res.get('ai_notice')
-            if ai_notice:
+            ai_notice = (ai_res or {}).get('ai_notice')
+            if ai_notice and ai_available:
                 send_progress(ai_notice, step="ai_retry_notice")
 
             send_progress("AI đã hoàn tất phân tích dấu hiệu lừa đảo.", step="analyzed")
@@ -1201,15 +1248,24 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
                 'risk_score': 0,
                 'risk_level': 'YELLOW',
                 'insufficient_input': True,
-                'explanation': 'Không tìm thấy giọng nói để phân tích nên chưa đủ dữ liệu kết luận.',
+                'explanation': (
+                    "Hệ thống chưa nhận diện được lời nói rõ ràng trong tệp âm thanh bạn tải lên (có thể do âm lượng quá nhỏ hoặc nhiều tạp âm), nên hiện chưa đủ dữ liệu để thẩm định. "
+                    "Bạn có thể thử tải lại đoạn ghi âm rõ tiếng hơn, hoặc nếu cuộc gọi vừa rồi có yêu cầu cung cấp mã OTP hay chuyển tiền gấp thì bạn cứ bình tĩnh ngắt liên lạc và kiểm chứng qua tổng đài chính thức nhé."
+                ),
             }
 
         # ── Step 3: Determine risk level and save ──
-        score = ai_res.get('risk_score', 0)
-        insufficient_audio = bool(ai_res.get('insufficient_input'))
+        raw_ai_score = int((ai_res or {}).get('risk_score') or 0)
+        score = max(raw_ai_score, rule_score) if rule_score >= 70 else raw_ai_score
+        insufficient_audio = bool((ai_res or {}).get('insufficient_input')) and score < 40
         level = RiskLevel.YELLOW if (insufficient_audio and int(score or 0) < 10) else _level_from_score(score)
 
-        explanation = _sanitize_ai_explanation(ai_res.get('explanation') or ai_res.get('reason') or '')
+        explanation = _sanitize_ai_explanation((ai_res or {}).get('explanation') or (ai_res or {}).get('reason') or '')
+        ai_prevention = [
+            str(x).strip()
+            for x in ((ai_res or {}).get('prevention_measures') or [])
+            if str(x).strip()
+        ]
 
         result = {
             'transcript': transcript,
@@ -1218,18 +1274,27 @@ def perform_audio_scan_task(self, scan_event_id, audio_file_path):
             'segments': segments,
             'risk_score': score,
             'risk_level': level,
+            'patterns_found': audio_patterns,
+            'ai_available': ai_available,
             'insufficient_input': insufficient_audio,
             'explanation': explanation,
-            'ai_notice': ai_res.get('ai_notice', ''),
-            'ai_retry_used': ai_res.get('ai_retry_used', False),
-            'ai_retry_count': ai_res.get('ai_retry_count', 0),
-            'web_sources': ai_res.get('web_sources', []),
-            'web_context': ai_res.get('web_context', ''),
-            'searched_urls': ai_res.get('searched_urls', []),
-            'db_sources_consulted': ai_res.get('db_sources_consulted', []),
+            'advice': str((ai_res or {}).get('advice') or '').strip(),
+            'prevention_measures': ai_prevention,
+            'ai_notice': (ai_res or {}).get('ai_notice', '') if ai_available else '',
+            'ai_retry_used': (ai_res or {}).get('ai_retry_used', False),
+            'ai_retry_count': (ai_res or {}).get('ai_retry_count', 0),
+            'web_sources': (ai_res or {}).get('web_sources', []),
+            'web_context': (ai_res or {}).get('web_context', ''),
+            'searched_urls': (ai_res or {}).get('searched_urls', []),
+            'db_sources_consulted': (ai_res or {}).get('db_sources_consulted', []),
         }
 
         result = _apply_task_privacy_and_guardrail(scan_event, result, 'audio')
+        try:
+            from api.core.views.scan_views import _actions_for_guardrail
+            result['actions'] = _actions_for_guardrail(result.get('guardrail', {}), ai_prevention)
+        except Exception:
+            pass
         synced_level = _resolve_synced_risk_level(result, level)
         scan_event.result_json = result
         scan_event.risk_score = score
