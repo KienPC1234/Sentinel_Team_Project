@@ -1,0 +1,109 @@
+commit 2a852d1c1eedca3b770bc884a16c264d344d453e
+Author: Ha Tri Kien <kienhtfhl31796@gmail.com>
+Date:   2026-11-28 08:55:35 +0700
+
+    chore(chang2): silence faiss.loader noise and clean Stage 1 evidence out of docs
+
+ backend/api/utils/vector_db.py                     |   1 +
+ .../01_demo_mau_thuan_va_thieu_du_lieu.json        | 786 ---------------------
+ .../minh_chung/02_bang_nguon_va_ngay_cap_nhat.json | 249 -------
+ docs/minh_chung/03_danh_gia_vn_va_guardrail.json   | 264 -------
+ docs/minh_chung/04_kiem_tra_log_che_pii.txt        |  13 -
+ .../05_demo_xoa_du_lieu_va_kiem_thu_backend.txt    |  55 --
+ docs/minh_chung/06_demo_xoa_du_lieu_truoc_sau.txt  |  13 -
+ .../BAO_CAO_CAI_TIEN_PHIEN_BAN_1.md                |  51 --
+ .../screenshots/media_1795791171221_c353e5db.png   | Bin 58619 -> 0 bytes
+ .../screenshots/media_1795793116971_2b480e7b.png   | Bin 37106 -> 0 bytes
+ .../screenshots/media_1795794652902_ae299fc8.png   | Bin 113442 -> 0 bytes
+ .../screenshots/media_1795794670926_9442a917.png   | Bin 14518 -> 0 bytes
+ .../screenshots/media_1795823775948_ddbb40ff.png   | Bin 78456 -> 0 bytes
+ .../screenshots/media_1795823902004_85e509f9.png   | Bin 21728 -> 0 bytes
+ .../screenshots/media_1795824347429_a5509040.jpg   | Bin 43653 -> 0 bytes
+ .../ai_brain_history/transcript.jsonl              | 706 ------------------
+ .../git_commits_20261128.txt                       |  62 --
+ .../git_commits_since_0730.txt                     |   9 -
+ .../minh_chung_v1_20261128/test_results_e2e_v1.txt |  80 ---
+ 19 files changed, 1 insertion(+), 2288 deletions(-)
+
+commit d0a3c5f0dc9aeb1bf69870cb55c073ab58ecfc05
+Author: Ha Tri Kien <kienhtfhl31796@gmail.com>
+Date:   2026-11-28 08:53:19 +0700
+
+    docs(evidence): add v1 e2e resilience report, git logs, and AI brain history
+
+ .../BAO_CAO_CAI_TIEN_PHIEN_BAN_1.md                |  51 ++
+ .../screenshots/media_1795791171221_c353e5db.png   | Bin 0 -> 58619 bytes
+ .../screenshots/media_1795793116971_2b480e7b.png   | Bin 0 -> 37106 bytes
+ .../screenshots/media_1795794652902_ae299fc8.png   | Bin 0 -> 113442 bytes
+ .../screenshots/media_1795794670926_9442a917.png   | Bin 0 -> 14518 bytes
+ .../screenshots/media_1795823775948_ddbb40ff.png   | Bin 0 -> 78456 bytes
+ .../screenshots/media_1795823902004_85e509f9.png   | Bin 0 -> 21728 bytes
+ .../screenshots/media_1795824347429_a5509040.jpg   | Bin 0 -> 43653 bytes
+ .../ai_brain_history/transcript.jsonl              | 706 +++++++++++++++++++++
+ .../git_commits_20261128.txt                       |  62 ++
+ .../git_commits_since_0730.txt                     |   9 +
+ .../minh_chung_v1_20261128/test_results_e2e_v1.txt |  80 +++
+ 12 files changed, 908 insertions(+)
+
+commit 1c828c201a715ef17e0584e243e3d96bf4e8d7bc
+Author: Ha Tri Kien <kienhtfhl31796@gmail.com>
+Date:   2026-11-28 08:53:19 +0700
+
+    test(e2e): add end-to-end scan resilience suite and sync image scan actions with guardrail
+
+ backend/api/core/tasks.py                          |  14 +-
+ backend/api/core/tests/test_e2e_scan_resilience.py | 204 +++++++++++++++++++++
+ 2 files changed, 217 insertions(+), 1 deletion(-)
+
+commit eef1b8b5dcaeab74e61e9fdac5e73f0a4ef97690
+Author: Ha Tri Kien <kienhtfhl31796@gmail.com>
+Date:   2026-11-28 07:11:32 +0700
+
+    Replace technical source catalog labels (Heuristic, LLM, OSINT, RAG) with user-friendly Vietnamese
+
+ backend/api/utils/trust_guard.py | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+commit b3bc6953e76252e0a4fcc91905e0c4a766ad5b22
+Author: Ha Tri Kien <kienhtfhl31796@gmail.com>
+Date:   2026-11-28 07:08:15 +0700
+
+    Improve WsBadge Vietnamese status labels and expand scan AI explanations with actionable advice
+
+ backend/api/core/views/scan_views.py    | 10 +++++-
+ backend/api/utils/ollama_client.py      |  2 +-
+ backend/api/utils/prompts.py            |  6 ++--
+ frontend/src/components/ScanWidgets.tsx | 58 ++++++++++++++++++++++++---------
+ frontend/src/views/Scan/Message.tsx     | 21 +++++++++++-
+ 5 files changed, 76 insertions(+), 21 deletions(-)
+
+commit 5db6f1bcd4001c92443eab107ba0cab45ebe9020
+Author: Ha Tri Kien <kienhtfhl31796@gmail.com>
+Date:   2026-11-28 07:00:38 +0700
+
+    fix(scan,osint): make PrivacyReceiptBadge collapsible and filter 404/reCAPTCHA noise in threat intel lookups
+
+ backend/api/utils/ollama_client.py      | 88 +++++++++++++++++++++++++++------
+ frontend/src/components/ScanWidgets.tsx | 49 ++++++++++++------
+ 2 files changed, 107 insertions(+), 30 deletions(-)
+
+commit f3af2c531c26bae7bffd7e76bc431add743d651c
+Author: Ha Tri Kien <kienhtfhl31796@gmail.com>
+Date:   2026-11-28 06:51:24 +0700
+
+    ui(scan): localize technical labels to Vietnamese and clean up result layouts
+
+ backend/api/core/data/scamwave/meta.json       |   2 +-
+ backend/api/core/data/tinnhiemmang/app.sqlite  | Bin 77824 -> 77824 bytes
+ backend/api/core/data/tinnhiemmang/fake.sqlite | Bin 18354176 -> 18354176 bytes
+ backend/api/core/data/tinnhiemmang/org.sqlite  | Bin 6385664 -> 6385664 bytes
+ backend/api/core/data/tinnhiemmang/sys.sqlite  | Bin 28672 -> 28672 bytes
+ backend/api/core/data/tinnhiemmang/web.sqlite  | Bin 5582848 -> 5582848 bytes
+ frontend/src/views/Scan/Bank.tsx               | 199 +++++++++++-----------
+ frontend/src/views/Scan/Email.tsx              |  26 ++-
+ frontend/src/views/Scan/Message.tsx            |  80 ++++-----
+ frontend/src/views/Scan/Phone.tsx              | 222 +++++++++++++------------
+ frontend/src/views/Scan/Qr.tsx                 |  20 +--
+ frontend/src/views/Scan/Status.tsx             |   2 +-
+ frontend/src/views/Scan/Website.tsx            | 114 ++++++-------
+ 13 files changed, 337 insertions(+), 328 deletions(-)
