@@ -1,0 +1,80 @@
+Creating test database for alias 'default'...
+INFO 2026-11-28 08:52:53,862 faiss.loader: Loading faiss with AVX512 support.
+INFO 2026-11-28 08:52:53,862 faiss.loader: Could not load library with AVX512 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx512'")
+INFO 2026-11-28 08:52:53,862 faiss.loader: Loading faiss with AVX2 support.
+INFO 2026-11-28 08:52:53,863 faiss.loader: Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+INFO 2026-11-28 08:52:53,863 faiss.loader: Loading faiss.
+INFO 2026-11-28 08:52:53,898 faiss.loader: Successfully loaded faiss.
+INFO 2026-11-28 08:52:53,913 api.utils.vector_db: Loaded vector index with 299 items (dim=768)
+INFO 2026-11-28 08:52:54,049 api.core.tasks: Task started for event 1. Group: scan_1
+INFO 2026-11-28 08:52:54,051 api.core.tasks: Progress [1]: Bắt đầu xử lý 1 hình ảnh... (init)
+INFO 2026-11-28 08:52:54,056 api.core.tasks: Progress [1]: Đang phân tích ảnh 1/1 (OCR + QR)... (ocr)
+INFO 2026-11-28 08:52:54,059 api.core.tasks: Progress [1]: Ảnh 1: Trích xuất 33 ký tự (ocr_ok)
+INFO 2026-11-28 08:52:54,062 api.core.tasks: Progress [1]: Đang phân tích nội dung bằng Trí tuệ nhân tạo (AI)... (analyzing)
+WARNING 2026-11-28 08:52:54,065 api.core.tasks: AI analysis attempt 1 failed for event 1
+WARNING 2026-11-28 08:52:54,066 api.core.tasks: AI analysis attempt 2 failed for event 1
+WARNING 2026-11-28 08:52:54,066 api.core.tasks: AI analysis attempt 3 failed for event 1
+INFO 2026-11-28 08:52:54,066 api.core.tasks: Progress [1]: AI đã hoàn tất phân tích logic. (analyzing)
+INFO 2026-11-28 08:52:54,070 api.core.tasks: Progress [1]: Hoàn tất quét hình ảnh! (completed)
+..WARNING 2026-11-28 08:52:54,097 api.core.views.scan_views: _analyze_message_text: AI error (Ollama offline), falling back to rule-based scoring.
+.INFO 2026-11-28 08:52:54,100 api.core.tasks: Task started for event 2. Group: scan_2
+INFO 2026-11-28 08:52:54,101 api.core.tasks: Progress [2]: Bắt đầu xử lý 1 hình ảnh... (init)
+INFO 2026-11-28 08:52:54,104 api.core.tasks: Progress [2]: Đang phân tích ảnh 1/1 (OCR + QR)... (ocr)
+ERROR 2026-11-28 08:52:54,107 api.core.tasks: OCR Error in task for event 2: VietOCR crashed
+INFO 2026-11-28 08:52:54,107 api.core.tasks: Progress [2]: Cảnh báo: Lỗi xử lý ảnh 1. (ocr_warning)
+INFO 2026-11-28 08:52:54,110 api.core.tasks: Progress [2]: Không tìm thấy ký tự khả dụng trong ảnh. (analyzing)
+INFO 2026-11-28 08:52:54,114 api.core.tasks: Progress [2]: Hoàn tất quét hình ảnh! (completed)
+.INFO 2026-11-28 08:52:54,121 api.core.tasks: Task started for event 3. Group: scan_3
+INFO 2026-11-28 08:52:54,122 api.core.tasks: Progress [3]: Bắt đầu xử lý 1 hình ảnh... (init)
+INFO 2026-11-28 08:52:54,125 api.core.tasks: Progress [3]: Đang phân tích ảnh 1/1 (OCR + QR)... (ocr)
+INFO 2026-11-28 08:52:54,128 api.core.tasks: Progress [3]: Ảnh 1: Trích xuất 16 ký tự (ocr_ok)
+INFO 2026-11-28 08:52:54,130 api.core.tasks: Progress [3]: Đang phân tích nội dung bằng Trí tuệ nhân tạo (AI)... (analyzing)
+INFO 2026-11-28 08:52:54,133 api.core.tasks: Progress [3]: AI đã hoàn tất phân tích logic. (analyzing)
+INFO 2026-11-28 08:52:54,137 api.core.tasks: Progress [3]: Hoàn tất quét hình ảnh! (completed)
+......INFO 2026-11-28 08:52:54,236 api.utils.ollama_client: [generate_response] START model=deepseek-v4.1-flash:cloud, max_tokens=16384, format_schema=no, tools_param=explicit, skip_filter=False, prompt_len=27
+INFO 2026-11-28 08:52:54,236 api.utils.ollama_client: [generate_response] options={'temperature': 0.3, 'num_predict': 16384}, tools_count=0
+INFO 2026-11-28 08:52:54,236 api.utils.ollama_client: [generate_response iter=0] calling model 'deepseek-v4.1-flash:cloud' with 1 message(s), tools=no
+INFO 2026-11-28 08:52:54,237 api.utils.ollama_client: [generate_response iter=0] raw response: content_len=2, tool_calls=0, done_reason=stop, eval_count=N/A, prompt_eval_count=N/A
+INFO 2026-11-28 08:52:54,238 api.utils.ollama_client: [generate_response iter=1] ✅ final answer (no tools), reply_len=2, exiting loop
+WARNING 2026-11-28 08:52:54,238 api.utils.ollama_client: [generate_response] hit max_loop_iterations=1, returning best content so far
+INFO 2026-11-28 08:52:54,238 pkv.llm: LLM Call: {"system_prompt_length": 0, "prompt_length": 27, "response_length": 2, "pii_allowed": true}
+INFO 2026-11-28 08:52:54,239 api.utils.ollama_client: [generate_response] returning reply len=2, preview='ok'
+.INFO 2026-11-28 08:52:54,240 api.utils.ollama_client: [generate_response] START model=deepseek-v4.1-flash:cloud, max_tokens=16384, format_schema=no, tools_param=explicit, skip_filter=False, prompt_len=28
+INFO 2026-11-28 08:52:54,240 api.utils.ollama_client: [generate_response] options={'temperature': 0.3, 'num_predict': 16384}, tools_count=0
+INFO 2026-11-28 08:52:54,240 api.utils.ollama_client: [generate_response iter=0] calling model 'deepseek-v4.1-flash:cloud' with 1 message(s), tools=no
+INFO 2026-11-28 08:52:54,240 api.utils.ollama_client: [generate_response iter=0] raw response: content_len=2, tool_calls=0, done_reason=stop, eval_count=N/A, prompt_eval_count=N/A
+INFO 2026-11-28 08:52:54,241 api.utils.ollama_client: [generate_response iter=1] ✅ final answer (no tools), reply_len=2, exiting loop
+WARNING 2026-11-28 08:52:54,241 api.utils.ollama_client: [generate_response] hit max_loop_iterations=1, returning best content so far
+INFO 2026-11-28 08:52:54,241 pkv.llm: LLM Call: {"system_prompt_length": 0, "prompt_length": 28, "response_length": 2, "pii_allowed": false}
+INFO 2026-11-28 08:52:54,241 api.utils.ollama_client: [generate_response] returning reply len=2, preview='ok'
+..WARNING 2026-11-28 08:52:55,021 api.utils.ollama_client: analyze_text_for_scam: JSON parse failed on first pass; starting repair retry. Raw response: NOT_VALID_JSON
+WARNING 2026-11-28 08:52:55,022 api.utils.ollama_client: analyze_text_for_scam: Repair retry failed; rerunning primary analysis once.
+...WARNING 2026-11-28 08:52:56,220 django.request: Forbidden: /api/v1/user/scans/5/
+..........INFO 2026-11-28 08:52:57,297 api.core.tasks: [FileScan] Event 9: START — file='tmp49omxevr.bin', size=21 bytes
+INFO 2026-11-28 08:52:57,297 api.core.tasks: [FileScan] Event 9: Scanning with Local Zero-Trust Sandbox...
+INFO 2026-11-28 08:52:57,298 api.core.tasks: [FileScan] Event 9: Sandbox scan returned after 0.0s — result=OK
+INFO 2026-11-28 08:52:57,299 api.core.tasks: [FileScan] Event 9: COMPLETED in 0.0s. Risk: GREEN, Score: 0
+INFO 2026-11-28 08:52:57,299 api.core.tasks: [FileScan] Cleaned up temp file: /tmp/tmp49omxevr.bin
+...INFO 2026-11-28 08:52:58,362 api.core.views.stream_views: SSE Request: type=domain, mask_pii=True, raw_input=https://example-verify.top/login?token=%5B%C4%91%C...
+....INFO 2026-11-28 08:53:00,792 api.core.views.stream_views: SSE Request: type=account, mask_pii=False, raw_input=MBBank:[mã định danh đã ẩn]...
+.INFO 2026-11-28 08:53:00,794 pkv.llm: LLM Call: {"system_prompt_length": 0, "prompt_length": 20, "response_length": 104, "pii_allowed": false}
+...................WARNING 2026-11-28 08:53:01,807 api.utils.ollama_client: analyze_text_for_scam: Repair retry failed; rerunning primary analysis once.
+WARNING 2026-11-28 08:53:01,807 api.utils.ollama_client: analyze_text_for_scam: Primary model 'deepseek-v4.1-flash:cloud' failed; falling back to SMALL_MODEL 'gemma4:31b-cloud'.
+.INFO 2026-11-28 08:53:01,809 api.core.tasks: Task started for event 21. Group: scan_21
+INFO 2026-11-28 08:53:01,810 api.core.tasks: Progress [21]: Bắt đầu xử lý 1 hình ảnh... (init)
+INFO 2026-11-28 08:53:01,814 api.core.tasks: Progress [21]: Đang phân tích ảnh 1/1 (OCR + QR)... (ocr)
+INFO 2026-11-28 08:53:01,817 api.core.tasks: Progress [21]: Ảnh 1: Model vision đang nhìn trực tiếp... (vision)
+INFO 2026-11-28 08:53:01,820 api.core.tasks: Progress [21]: Ảnh 1: Vision đánh giá 65/100 (YELLOW) (vision_ok)
+INFO 2026-11-28 08:53:01,823 api.core.tasks: Progress [21]: Đang đối chiếu dấu hiệu hình ảnh trên nguồn công khai... (osint_enrichment)
+INFO 2026-11-28 08:53:01,826 api.core.tasks: Progress [21]: Đã hoàn tất phân tích hình ảnh và đối chiếu nguồn công khai. (analyzing)
+INFO 2026-11-28 08:53:01,831 api.core.tasks: Progress [21]: Hoàn tất quét hình ảnh! (completed)
+........
+----------------------------------------------------------------------
+Ran 62 tests in 8.350s
+
+OK
+Destroying test database for alias 'default'...
+Found 62 test(s).
+System check identified no issues (3 silenced).
