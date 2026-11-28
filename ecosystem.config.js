@@ -133,6 +133,7 @@ module.exports = {
         PYTHONUNBUFFERED: '1',
         AI_SERVICE_PORT: OCR_PORT,
         VIETOCR_DEVICE: getEnv('VIETOCR_DEVICE', 'auto'),
+        AI_EMBED_MODEL: getEnv('AI_EMBED_MODEL', 'BAAI/bge-m3'),
         AI_EMBED_DEVICE: getEnv('AI_EMBED_DEVICE', 'cpu'),
         AI_EMBED_PRELOAD: getEnv('AI_EMBED_PRELOAD', 'true'),
         WHISPER_DEVICE: getEnv('WHISPER_DEVICE', 'cuda'),

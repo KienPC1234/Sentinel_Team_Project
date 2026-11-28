@@ -120,7 +120,7 @@ GPU is optional: set `WHISPER_DEVICE=cpu`, `VIETOCR_DEVICE=cpu`, `VECTOR_DB_USE_
 | Web & API | Django 5.2, DRF, Daphne ASGI, Channels 4 |
 | Data | MariaDB 11 / MySQL 8 (PyMySQL), Redis 8 (django-redis, channels-redis) |
 | Tasks | Celery 5.6 (thread-pool worker + beat scheduler) |
-| AI & neural | Ollama, PyTorch 2 CUDA, FAISS (`nomic-embed-text-v1`), Faster-Whisper, VietOCR |
+| AI & neural | Ollama, PyTorch 2 CUDA, FAISS (`BAAI/bge-m3`), Faster-Whisper, VietOCR |
 | Sandbox | Docker ephemeral containers, YARA, OLETools, PEFile, PyPDF, ClamAV |
 | Browser | Puppeteer Extra + Chromium headless + stealth plugin + anti-SSRF relay |
 | Security | Cloudflare Turnstile, Django-OTP (TOTP/email MFA), Google OAuth2, WhiteNoise |

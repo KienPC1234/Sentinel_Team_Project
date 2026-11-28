@@ -41,7 +41,7 @@ flowchart TD
  subgraph NeuralTier["Hardware-Accelerated Neural Computing"]
  VietOCRNode["VietOCR Engine<br/>NVIDIA CUDA GPU / CPU (shared AI service)"]
  WhisperNode["Faster-Whisper STT<br/>NVIDIA CUDA GPU"]
- FAISSNode["FAISS Vector DB<br/>Nomic Embed 768-dim"]
+ FAISSNode["FAISS Vector DB<br/>BAAI/bge-m3 1024-dim"]
  end
 
  subgraph SandboxTier["Zero-Trust Execution Sandbox (Docker)"]

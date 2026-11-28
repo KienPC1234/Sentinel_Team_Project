@@ -34,7 +34,11 @@ _VECTOR_DIR = os.path.join(settings.BASE_DIR, 'vector_store')
 INDEX_PATH = os.path.join(_VECTOR_DIR, 'scam_index.faiss')
 METADATA_PATH = os.path.join(_VECTOR_DIR, 'metadata.pkl')
 EMB_CACHE_PATH = os.path.join(_VECTOR_DIR, 'embedding_cache.pkl')
-MODEL_NAME = 'nomic-ai/nomic-embed-text-v1'
+DEFAULT_EMBED_MODEL = 'BAAI/bge-m3'
+MODEL_NAME = str(
+    getattr(settings, 'AI_EMBED_MODEL', os.getenv('AI_EMBED_MODEL', DEFAULT_EMBED_MODEL))
+    or DEFAULT_EMBED_MODEL
+).strip()
 USE_GPU = getattr(settings, 'VECTOR_DB_USE_GPU', True)
 SCORE_THRESHOLD = float(getattr(settings, 'VECTOR_DB_SCORE_THRESHOLD', 0.45))
 QUERY_CACHE_SIZE = int(getattr(settings, 'VECTOR_DB_QUERY_CACHE', 256))
@@ -48,7 +52,8 @@ _REMOTE_EMBED_CHUNK = 64
 
 
 def _hash(text: str) -> str:
-    return hashlib.sha1(text.encode('utf-8', errors='ignore')).hexdigest()
+    payload = f"{MODEL_NAME}::{text}"
+    return hashlib.sha1(payload.encode('utf-8', errors='ignore')).hexdigest()
 
 
 def _remote_embed(texts: List[str], timeout: int = 180) -> List[List[float]]:
@@ -85,7 +90,7 @@ class ScamVectorDB:
     def _dim(self) -> int:
         m = self._model
         if m is None:
-            return int(getattr(self.index, 'd', 0) or 768)
+            return int(getattr(self.index, 'd', 0) or 1024)
         try:
             return int(m.get_embedding_dimension())
         except Exception:

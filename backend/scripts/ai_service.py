@@ -5,7 +5,7 @@ Một tiến trình duy nhất giữ các model local để **chia sẻ một CU
 (thay vì mỗi model nằm trong một process/venv riêng):
 
   - OCR (VietOCR)               -> POST /ocr
-  - Embedding RAG (nomic)       -> POST /embed      (mặc định CPU để tiết kiệm VRAM)
+  - Embedding RAG (BGE-M3)      -> POST /embed      (mặc định CPU để tiết kiệm VRAM)
   - Speech-to-text (Whisper)    -> POST /transcribe (lazy-load, tự unload khi rảnh)
 
 Chạy (venv chính đã có torch + sentence-transformers + faster-whisper + vietocr):
@@ -17,7 +17,7 @@ Biến môi trường:
   VIETOCR_DEVICE                       auto | cpu | cuda:0
   AI_EMBED_DEVICE                      cpu (mặc định) | cuda | auto
   AI_EMBED_PRELOAD                     true (mặc định) | false
-  AI_EMBED_MODEL                       mặc định nomic-ai/nomic-embed-text-v1
+  AI_EMBED_MODEL                       mặc định BAAI/bge-m3
   WHISPER_MODEL_SIZE                   mặc định small
   WHISPER_DEVICE                       cuda (mặc định) | cpu
   AI_WHISPER_IDLE_UNLOAD_SEC           mặc định 900 (0 = không unload)
@@ -45,7 +45,7 @@ import ocr_service as ocr_svc  # noqa: E402
 PORT = int(os.getenv("AI_SERVICE_PORT") or os.getenv("OCR_SERVICE_PORT") or "5010")
 MAX_BODY = int(os.getenv("AI_MAX_BODY_MB", "200")) * 1024 * 1024
 
-EMBED_MODEL = os.getenv("AI_EMBED_MODEL", "nomic-ai/nomic-embed-text-v1")
+EMBED_MODEL = os.getenv("AI_EMBED_MODEL", "BAAI/bge-m3")
 EMBED_DEVICE = (os.getenv("AI_EMBED_DEVICE", "cpu") or "cpu").strip().lower()
 EMBED_PRELOAD = os.getenv("AI_EMBED_PRELOAD", "true").strip().lower() in ("1", "true", "yes", "on")
 EMBED_BATCH = int(os.getenv("AI_EMBED_BATCH", "32"))

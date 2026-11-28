@@ -41,7 +41,7 @@
 | A3.1 | LLM cục bộ Ollama | `api/utils/ollama_client.py` (`_log_llm`, `generate_response`, `stream_response`) | ✅ |
 | A3.2 | OCR | VietOCR (venv `.venv-ocr` qua bridge; CER ~0.02) | ✅ |
 | A3.3 | STT | `faster_whisper.WhisperModel` | ✅ |
-| A3.4 | RAG / tra cứu | `api/utils/vector_db.py` (FAISS, nomic-embed 768-dim; log "Loaded vector index with 41 items") | ✅ |
+| A3.4 | RAG / tra cứu | `api/utils/vector_db.py` (FAISS, `BAAI/bge-m3` 1024-dim) | ✅ |
 | A3.5 | Chuỗi thu thập bằng chứng | `build_evidence()` chuẩn hoá → `evidence[]` | ✅ |
 | A3.6 | Giải thích + khuyến nghị + kịch bản từ chối | `explanation`, `actions`, `refusal_script` | ✅ |
 

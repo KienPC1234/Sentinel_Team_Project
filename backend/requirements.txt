@@ -39,9 +39,8 @@ whitenoise
 faiss-cpu
 pywebpush>=2.0.3
 sentence-transformers
-# nomic-embed-text-v1 ships remote code that calls
-# PreTrainedModel.get_extended_attention_mask, removed in transformers 5.17.
-# Cap below that to keep vector-index rebuilds working on fresh installs.
+# Default embedding model is BAAI/bge-m3 (native XLMRoberta, MIT license);
+# cap below 5.17 for backward compatibility if custom remote-code models are configured via AI_EMBED_MODEL.
 transformers>=5.0,<5.17
 torch
 # AI service dùng chung (backend/scripts/ai_service.py) cần VietOCR.
