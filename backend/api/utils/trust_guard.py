@@ -133,7 +133,7 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "network_analysis": {
-        "name": "Phân tích kết nối/SSL (network)",
+        "name": "Kiểm tra chứng chỉ SSL & kết nối",
         "reliability": _MEDIUM,
         "kind": "local_engine",
         "description": "Kiểm tra chứng chỉ SSL, chuyển hướng, header bảo mật, thời điểm tạo cert.",
@@ -170,7 +170,7 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "heuristic": {
-        "name": "Heuristic tiếng Việt (luật nội bộ)",
+        "name": "Bộ lọc mẫu dấu hiệu lừa đảo",
         "reliability": _MEDIUM,
         "kind": "local_engine",
         "description": "Từ điển dấu hiệu lừa đảo tiếng Việt + kiểm tra tên miền giả mạo.",
@@ -180,7 +180,7 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "rag": {
-        "name": "Kho tri thức ShieldCall (RAG)",
+        "name": "Kho tri thức phòng chống lừa đảo",
         "reliability": _MEDIUM,
         "kind": "internal_kb",
         "description": "Tài liệu & kịch bản phòng chống lừa đảo do hệ thống biên soạn.",
@@ -200,7 +200,7 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "web_search": {
-        "name": "Tìm kiếm/OSINT web",
+        "name": "Đối chiếu nguồn công khai trên web",
         "reliability": _MEDIUM,
         "kind": "external_ref",
         "description": "Đối chiếu thông tin công khai trên web.",
@@ -210,7 +210,7 @@ SOURCE_CATALOG: Dict[str, Dict[str, Any]] = {
         "updated_at": SOURCE_CATALOG_UPDATED_AT,
     },
     "ai_model": {
-        "name": "Mô hình ngôn ngữ (LLM)",
+        "name": "Trợ lý phân tích AI",
         "reliability": _LOW,
         "kind": "ai",
         "description": "Sinh giải thích, khuyến nghị hành động và kịch bản từ chối dựa trên bằng chứng.",
