@@ -55,7 +55,7 @@ SCAN_PHONE_PROMPT = """Phân tích và giải thích ngắn gọn, khách quan m
 Dữ liệu kiểm tra thực tế: {scan_data}
 
 YÊU CẦU:
-1. Viết 1-2 đoạn gọn (3-5 câu), đi thẳng vào kết quả thực tế: nhà mạng/loại đầu số (di động thông thường, cố định, tổng đài hay đầu số ảo VoIP), số lượng phản ánh từ cộng đồng đã kiểm duyệt hoặc nguồn cảnh báo (nếu có). Không lộ tên biến kỹ thuật nội bộ (`reputation_score`, `metadata_score`, `behavior_norm`).
+1. Viết 2 đoạn rõ ràng, dễ hiểu cho người dùng phổ thông: nêu trực diện nhà mạng/loại đầu số (di động thông thường, cố định, tổng đài hay đầu số ảo VoIP), số lượng phản ánh từ cộng đồng đã kiểm duyệt hoặc nguồn cảnh báo (nếu có), và giải thích ý nghĩa thực tế của các dấu hiệu đó. Không lộ tên biến kỹ thuật nội bộ (`reputation_score`, `metadata_score`, `behavior_norm`).
 2. Bám sát trạng thái bằng chứng:
    - Nếu có báo cáo xác thực hoặc mức rủi ro cao (`HIGH_RISK` / `SUSPICIOUS`): nêu rõ nội dung bị phản ánh và khuyến nghị chặn số, không chuyển khoản, không cung cấp OTP.
    - Nếu chưa ghi nhận phản ánh xấu (`INSUFFICIENT` / `LIKELY_SAFE`): nêu rõ hiện chưa có báo cáo tiêu cực trong hệ thống, đồng thời lưu ý đây chưa phải bảo chứng an toàn tuyệt đối; chỉ cần xác minh lại qua tổng đài chính thức nếu cuộc gọi yêu cầu chuyển tiền, đọc OTP hoặc cài ứng dụng lạ.
@@ -173,7 +173,7 @@ SCAN_DOMAIN_PROMPT = """Phân tích và giải thích khách quan mức độ an
 Dữ liệu kỹ thuật & đối soát: {scan_data}
 
 YÊU CẦU:
-1. Viết 1-2 đoạn gọn (3-5 câu) trực diện, chuyên nghiệp: nêu rõ kết quả kết nối thực tế, tuổi tên miền/chứng chỉ SSL, dữ liệu Tín nhiệm mạng (NCSC), xếp hạng phổ biến hoặc cảnh báo từ các bộ máy quét/cộng đồng có trong `scan_data`.
+1. Viết 2-3 đoạn ngắn hoặc gạch đầu dòng rõ ràng, thân thiện và dễ hiểu cho người dùng phổ thông: nêu rõ kết quả kết nối thực tế, tuổi tên miền/chứng chỉ SSL, dữ liệu Tín nhiệm mạng (NCSC), xếp hạng phổ biến hoặc cảnh báo từ các bộ máy quét/cộng đồng có trong `scan_data`, đồng thời giải thích vì sao các thông số này đáng tin hoặc đáng ngờ.
 2. Không bịa đặt dấu hiệu giả mạo nếu trang không truy cập được hoặc không có bằng chứng trong dữ liệu; không chép nguyên văn khóa JSON nội bộ.
 3. Khuyến nghị nhất quán với `guardrail.tier`:
    - `CONFIRMED_RISK` / `HIGH_RISK` / `SUSPICIOUS`: cảnh báo rõ lý do đáng ngờ, khuyên không nhập mật khẩu/OTP/thông tin thẻ và không tải tệp.
@@ -188,7 +188,7 @@ SCAN_ACCOUNT_PROMPT = """Phân tích và giải thích khách quan thông tin tr
 - Dữ liệu đối soát: {scan_data}
 
 YÊU CẦU:
-1. Viết 1-2 đoạn gọn (3-5 câu), rõ ràng và trung lập: nêu chính xác số lượng báo cáo đã kiểm duyệt hoặc đang chờ duyệt trong hệ thống (hoặc nêu rõ chưa có phản ánh nào được ghi nhận). Không lộ tên biến kỹ thuật nội bộ.
+1. Viết 2 đoạn rõ ràng, dễ hiểu cho người dùng phổ thông: nêu chính xác số lượng báo cáo đã kiểm duyệt hoặc đang chờ duyệt trong hệ thống (hoặc nêu rõ chưa có phản ánh nào được ghi nhận) và giải thích ý nghĩa của kết quả đó khi giao dịch thực tế. Không lộ tên biến kỹ thuật nội bộ.
 2. Nếu chưa có dữ liệu tố cáo xác thực, bắt buộc nêu "chưa đủ cơ sở kết luận an toàn hay lừa đảo", không quy kết chủ tài khoản nhưng nhắc xác minh danh tính người nhận qua kênh độc lập trước khi chuyển khoản (đặc biệt với giao dịch đặt cọc, làm nhiệm vụ, đầu tư hoặc tự xưng cơ quan chức năng).
 
 """ + PROMPT_GUARD + "\n"

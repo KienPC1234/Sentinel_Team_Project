@@ -352,9 +352,28 @@ export default function Message() {
                     </div>
                   </div>
 
-                  <MarkdownView html={renderMd(asStr(result['explanation']) || asStr(result['ai_insight']))} className="text-white/75 text-sm leading-relaxed" />
+                  <MarkdownView html={renderMd(asStr(result['explanation']) || asStr(result['ai_insight']))} className="text-white/80 text-sm leading-relaxed" />
                   {!result['explanation'] && !result['ai_insight'] && (
                     <p className="text-white/35 text-xs italic">Không có phân tích AI.</p>
+                  )}
+
+                  {(asStr(result['advice']) || asArr<string>(result['prevention_measures']).length > 0 || asArr<string>(result['actions']).length > 0) && (
+                    <div className="mt-5 pt-4 border-t border-white/10 space-y-2.5">
+                      <p className="text-xs font-bold text-brand-300">Khuyến nghị xử lý</p>
+                      {asStr(result['advice']) && (
+                        <p className="text-xs text-white/80 leading-relaxed">{asStr(result['advice'])}</p>
+                      )}
+                      {(asArr<string>(result['prevention_measures']).length > 0 || asArr<string>(result['actions']).length > 0) && (
+                        <ul className="space-y-1.5 text-xs text-white/75 list-disc pl-4">
+                          {(asArr<string>(result['prevention_measures']).length > 0
+                            ? asArr<string>(result['prevention_measures'])
+                            : asArr<string>(result['actions'])
+                          ).map((step, idx) => (
+                            <li key={idx}>{step}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   )}
                 </div>
 

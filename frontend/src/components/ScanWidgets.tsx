@@ -592,24 +592,52 @@ export function useScanTracker(
 
 /* ============ Khung trạng thái WS (badge + log) ============ */
 
-const WS_OK: Record<string, string> = {
-  connected: 'text-safe-400 border-safe-500/30 bg-safe-500/10',
-  reconnecting: 'text-warn-400 border-warn-500/30 bg-warn-500/10',
-  connecting: 'text-warn-400 border-warn-500/30 bg-warn-500/10',
+const WS_BADGE_STYLE: Record<string, { badge: string; dot: string; label: string }> = {
+  connected: {
+    badge: 'text-safe-300 border-safe-500/30 bg-safe-500/10',
+    dot: 'bg-safe-400 animate-pulse',
+    label: 'Trực tiếp',
+  },
+  completed: {
+    badge: 'text-safe-300 border-safe-500/30 bg-safe-500/10',
+    dot: 'bg-safe-400',
+    label: 'Hoàn tất',
+  },
+  reconnecting: {
+    badge: 'text-warn-300 border-warn-500/30 bg-warn-500/10',
+    dot: 'bg-warn-400 animate-pulse',
+    label: 'Đang kết nối lại',
+  },
+  connecting: {
+    badge: 'text-warn-300 border-warn-500/30 bg-warn-500/10',
+    dot: 'bg-warn-400 animate-pulse',
+    label: 'Đang kết nối',
+  },
+  idle: {
+    badge: 'text-white/60 border-white/15 bg-white/5',
+    dot: 'bg-white/40',
+    label: 'Chờ kết nối',
+  },
+  failed: {
+    badge: 'text-danger-300 border-danger-500/30 bg-danger-500/10',
+    dot: 'bg-danger-400',
+    label: 'Lỗi kết nối',
+  },
+  disconnected: {
+    badge: 'text-danger-300 border-danger-500/30 bg-danger-500/10',
+    dot: 'bg-danger-400',
+    label: 'Mất kết nối',
+  },
 };
 
-export function WsBadge({ state, connectedLabel = 'WS Connected' }: { state: WsState; connectedLabel?: string }): ReactNode {
-  const label =
-    state === 'connected'
-      ? connectedLabel
-      : state === 'reconnecting'
-        ? 'Reconnecting'
-        : state === 'connecting'
-          ? 'Connecting'
-          : 'Disconnected';
-  const cls = WS_OK[state] || 'text-danger-400 border-danger-500/30 bg-danger-500/10';
+export function WsBadge({ state, connectedLabel = 'Trực tiếp' }: { state: WsState; connectedLabel?: string }): ReactNode {
+  const cfg = WS_BADGE_STYLE[state] || WS_BADGE_STYLE['disconnected'];
+  const label = state === 'connected' ? connectedLabel : cfg.label;
   return (
-    <div className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded border ${cls}`}>{label}</div>
+    <div className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${cfg.badge}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} aria-hidden="true"></span>
+      <span>{label}</span>
+    </div>
   );
 }
 

@@ -1004,7 +1004,7 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
     if clean_text:
         import copy
         consent_flag = 1 if external_consent else 0
-        cache_key = f"msg_analysis:{consent_flag}:{hashlib.sha256(clean_text.encode('utf-8')).hexdigest()}"
+        cache_key = f"msg_analysis:v2:{consent_flag}:{hashlib.sha256(clean_text.encode('utf-8')).hexdigest()}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return copy.deepcopy(cached_result)
@@ -1126,8 +1126,14 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
                    'Vẫn nên cẩn thận với liên kết hoặc người gửi lạ']
 
     # Build explanation — prefer AI's if available, else use rule summary
+    ai_advice = ''
+    ai_prevention = []
     if ai_available and ai_explanation and (not ai_result or not ai_result.get('ai_notice')):
         explanation = ai_explanation
+        ai_advice = (ai_result.get('advice') or '').strip() if isinstance(ai_result, dict) else ''
+        raw_prev = ai_result.get('prevention_measures') if isinstance(ai_result, dict) else None
+        if isinstance(raw_prev, list):
+            ai_prevention = [str(item).strip() for item in raw_prev if str(item).strip()]
     elif effective_patterns or domain_risks:
         explanation = f'Phát hiện {len(effective_patterns + domain_risks)} dấu hiệu đáng ngờ từ nội dung tin nhắn và liên kết đính kèm.'
     else:
@@ -1140,6 +1146,8 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
         'patterns_found': list(set(effective_patterns + domain_risks)),
         'explanation': explanation,
         'ai_insight': ai_explanation,
+        'advice': ai_advice,
+        'prevention_measures': ai_prevention,
         'ai_available': ai_available,
         'actions': actions,
         'rule_score': rule_score,
