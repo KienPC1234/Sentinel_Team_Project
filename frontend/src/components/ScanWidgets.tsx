@@ -304,30 +304,51 @@ export function ScanPrivacyToggle({
 }
 
 export function PrivacyReceiptBadge({ result }: { result: ScanResult | null | undefined }): ReactNode {
+  const [expanded, setExpanded] = useState(false);
+
   if (!result || typeof result !== 'object') return null;
   if (typeof result['privacy_masked'] !== 'boolean') return null;
   const masked = Boolean(result['privacy_masked']);
   const fields = asArr<string>(result['privacy_protected_fields']);
   const note = asStr(result['privacy_note']);
   const mappedFields = fields.map((f) => PRIVACY_FIELD_LABELS[f] || f);
+  const detailText =
+    masked && mappedFields.length > 0
+      ? `Trường đã bảo vệ: ${mappedFields.join(', ')}.`
+      : note ||
+        (masked
+          ? 'Dữ liệu định danh đã được tối thiểu hóa trước khi lưu và gửi AI ngoài.'
+          : 'Lưu và gửi AI theo lựa chọn nguyên văn của bạn; nhật ký hệ thống vẫn tự động che thông tin cá nhân.');
 
   return (
-    <div
-      className={`mt-4 inline-flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-2 rounded-xl border text-left max-w-2xl mx-auto ${
-        masked
-          ? 'bg-safe-500/10 border-safe-500/25 text-safe-200'
-          : 'bg-warn-500/10 border-warn-500/25 text-warn-200'
-      }`}
-    >
-      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider shrink-0">
+    <div className="mt-4 flex flex-col items-center">
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-bold transition-colors cursor-pointer ${
+          masked
+            ? 'bg-safe-500/10 border-safe-500/25 text-safe-200 hover:bg-safe-500/15'
+            : 'bg-warn-500/10 border-warn-500/25 text-warn-200 hover:bg-warn-500/15'
+        }`}
+      >
         <i className={`bi ${masked ? 'bi-shield-check text-safe-400' : 'bi-incognito text-warn-400'}`}></i>
         <span>{masked ? 'Đã che thông tin nhạy cảm' : 'Chế độ nguyên văn'}</span>
-      </div>
-      <span className="text-[11px] text-white/65 leading-snug">
-        {masked && mappedFields.length > 0
-          ? `Trường đã bảo vệ: ${mappedFields.join(', ')}.`
-          : note || (masked ? 'Dữ liệu định danh đã được tối thiểu hóa trước khi lưu và gửi AI ngoài.' : 'Lưu và gửi AI theo lựa chọn nguyên văn của bạn; nhật ký hệ thống vẫn tự động che thông tin cá nhân.')}
-      </span>
+        <span className="text-[11px] opacity-70 font-medium">· Chi tiết</span>
+        <i className={`bi bi-chevron-down text-[10px] transition-transform ${expanded ? 'rotate-180' : ''}`}></i>
+      </button>
+
+      {expanded && (
+        <div
+          className={`mt-2 px-4 py-2.5 rounded-xl border text-left max-w-2xl text-xs text-white/75 leading-relaxed ${
+            masked
+              ? 'bg-safe-500/[0.06] border-safe-500/20'
+              : 'bg-warn-500/[0.06] border-warn-500/20'
+          }`}
+        >
+          {detailText}
+        </div>
+      )}
     </div>
   );
 }

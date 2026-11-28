@@ -3248,6 +3248,9 @@ def lookup_scamadviser(domain: str) -> Optional[Dict]:
         logger.debug(f"lookup_scamadviser: direct HTML parse failed ({exc})")
 
     # 2) Keep existing web relay extraction as primary content source.
+    if _is_noise_or_error_page(page_text) and trust_score_from_page is None and not verdict_from_page:
+        page_text = f"Không lấy được dữ liệu chi tiết từ ScamAdviser cho {clean} (trang yêu cầu xác minh trình duyệt)."
+
     result = {
         'title': f'ScamAdviser report for {clean}',
         'content': page_text,
@@ -3288,6 +3291,29 @@ def lookup_scamwave(query: str) -> Optional[Dict]:
         return None
 
 
+_NOISE_PAGE_MARKERS = (
+    "whoops! the page you're looking for could not be found",
+    "the page you're looking for could not be found",
+    "this site is protected by recaptcha",
+    "we collect device and interaction signals",
+    "attention required! | cloudflare",
+    "just a moment...",
+    "enable javascript and cookies to continue",
+    "verify you are human",
+    "checking your browser before accessing",
+    "404 not found",
+    "page not found",
+)
+
+
+def _is_noise_or_error_page(text: str) -> bool:
+    """Detect 404, reCAPTCHA, or Cloudflare anti-bot interstitial pages."""
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(marker in lowered for marker in _NOISE_PAGE_MARKERS)
+
+
 def lookup_trustpilot(domain: str) -> Optional[Dict]:
     """
     Look up a domain's reviews on Trustpilot with fallback to web search.
@@ -3304,23 +3330,38 @@ def lookup_trustpilot(domain: str) -> Optional[Dict]:
         return None
     url = f"{SCAM_DB_URLS['trustpilot']}{clean}"
     result = web_fetch_url(url)
-    if result and result.get('content') and len(result['content']) > 100:
-        result['source'] = 'trustpilot'
-        result['query_url'] = url
-        return result
+    if result:
+        raw_content = result.get('content', '') or ''
+        raw_title = result.get('title', '') or ''
+        if _is_noise_or_error_page(raw_content) or _is_noise_or_error_page(raw_title):
+            result = None
+        elif len(raw_content) > 100:
+            result['source'] = 'trustpilot'
+            result['query_url'] = url
+            return result
 
     # Fallback to search query
     search_hits = web_search_query(f"site:trustpilot.com/review/{clean} OR Trustpilot {clean} reviews", max_results=3)
-    if search_hits:
-        combined = "\n".join([f"- {h.get('title')}: {h.get('content')}" for h in search_hits])
+    clean_hits = [
+        h for h in (search_hits or [])
+        if not _is_noise_or_error_page(h.get('content', '') or '') and not _is_noise_or_error_page(h.get('title', '') or '')
+    ]
+    if clean_hits:
+        combined = "\n".join([f"- {h.get('title')}: {h.get('content')}" for h in clean_hits])
         return {
             'source': 'trustpilot',
             'query_url': url,
             'title': f"Trustpilot reviews for {clean}",
             'content': combined,
-            'links': [h.get('url') for h in search_hits if h.get('url')],
+            'links': [h.get('url') for h in clean_hits if h.get('url')],
         }
-    return result or {'source': 'trustpilot', 'query_url': url, 'title': f'Trustpilot {clean}', 'content': f'Không tìm thấy đánh giá cụ thể trên Trustpilot cho {clean}.', 'links': []}
+    return {
+        'source': 'trustpilot',
+        'query_url': url,
+        'title': f'Trustpilot {clean}',
+        'content': f'Không tìm thấy đánh giá cụ thể trên Trustpilot cho {clean}.',
+        'links': [],
+    }
 
 
 def lookup_sitejabber(domain: str) -> Optional[Dict]:
@@ -3339,23 +3380,38 @@ def lookup_sitejabber(domain: str) -> Optional[Dict]:
         return None
     url = f"{SCAM_DB_URLS['sitejabber']}{clean}"
     result = web_fetch_url(url)
-    if result and result.get('content') and len(result['content']) > 100:
-        result['source'] = 'sitejabber'
-        result['query_url'] = url
-        return result
+    if result:
+        raw_content = result.get('content', '') or ''
+        raw_title = result.get('title', '') or ''
+        if _is_noise_or_error_page(raw_content) or _is_noise_or_error_page(raw_title):
+            result = None
+        elif len(raw_content) > 100:
+            result['source'] = 'sitejabber'
+            result['query_url'] = url
+            return result
 
     # Fallback to search query
     search_hits = web_search_query(f"site:sitejabber.com/reviews/{clean} OR Sitejabber {clean} reviews", max_results=3)
-    if search_hits:
-        combined = "\n".join([f"- {h.get('title')}: {h.get('content')}" for h in search_hits])
+    clean_hits = [
+        h for h in (search_hits or [])
+        if not _is_noise_or_error_page(h.get('content', '') or '') and not _is_noise_or_error_page(h.get('title', '') or '')
+    ]
+    if clean_hits:
+        combined = "\n".join([f"- {h.get('title')}: {h.get('content')}" for h in clean_hits])
         return {
             'source': 'sitejabber',
             'query_url': url,
             'title': f"Sitejabber reviews for {clean}",
             'content': combined,
-            'links': [h.get('url') for h in search_hits if h.get('url')],
+            'links': [h.get('url') for h in clean_hits if h.get('url')],
         }
-    return result or {'source': 'sitejabber', 'query_url': url, 'title': f'Sitejabber {clean}', 'content': f'Không tìm thấy đánh giá cụ thể trên Sitejabber cho {clean}.', 'links': []}
+    return {
+        'source': 'sitejabber',
+        'query_url': url,
+        'title': f'Sitejabber {clean}',
+        'content': f'Không tìm thấy đánh giá cụ thể trên Sitejabber cho {clean}.',
+        'links': [],
+    }
 
 
 def lookup_tranco(domain: str) -> Optional[Dict]:
