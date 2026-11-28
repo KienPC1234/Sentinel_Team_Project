@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Unmocked End-to-End API Pipeline Verification (Real HTTP -> Celery -> OCR -> DB -> AI).
+"""Unmocked Integration Verification via Django REST APIClient (3 scan cases).
 
 Complements `evaluate_e2e_chang2.py` (which injects mocked faults) by running
-4 real unmocked requests through Django's REST APIClient with eager Celery execution,
-real VietOCR/Tesseract image extraction, real SQLite NCSC/ScamWave databases, and
-live LLM configuration, recording actual wall-clock latency and responses.
+3 unmocked scan cases through Django's in-process REST APIClient with eager
+Celery execution (`CELERY_TASK_ALWAYS_EAGER=True`), real VietOCR/Tesseract image
+extraction, real SQLite NCSC/ScamWave databases, and live LLM configuration,
+recording processing time measured in this test setup. Does not exercise an
+external HTTP server, Redis broker, standalone Celery worker, or browser UI.
 """
 from __future__ import annotations
 
@@ -137,7 +139,13 @@ def run_real_e2e() -> dict:
                 user.delete()
 
     return {
-        "scope": "unmocked_rest_api_to_celery_ocr_db_llm_pipeline",
+        "scope": "unmocked_django_apiclient_eager_celery_ocr_db_llm",
+        "execution_mode": {
+            "client": "rest_framework.test.APIClient (in-process)",
+            "celery_task_always_eager": True,
+            "mocks_used": False,
+            "not_covered": ["http_network_server", "redis_broker", "standalone_celery_worker", "browser_ui"],
+        },
         "total_cases": len(results),
         "cases": results,
     }

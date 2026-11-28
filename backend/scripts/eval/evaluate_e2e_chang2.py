@@ -12,8 +12,9 @@ Design principles for auditability:
 - Scope note: external faults (OCR crash/noise, VirusTotal error, Trustpilot 404,
   Ollama timeout) are injected via unittest.mock onto real task/view entrypoints
   (`perform_image_scan_task`, `perform_message_scan_task`, `_analyze_message_text`,
-  `lookup_*`, `apply_guardrail`). For unmocked end-to-end API + OCR + DB + LLM
-  execution, see `verify_real_pipeline_chang2.py`.
+  `lookup_*`, `apply_guardrail`). For unmocked integration via Django REST
+  APIClient (eager Celery in-process + real OCR/DB/LLM), see
+  `verify_real_pipeline_chang2.py`.
 """
 from __future__ import annotations
 
@@ -443,6 +444,8 @@ def merge_comparison(before_data: dict, after_data: dict) -> dict:
     return {
         "scope": "automated_git_worktree_before_vs_after_comparison",
         "total_cases": after_data["total_cases"],
+        "before_elapsed_ms_mocked": before_data.get("total_elapsed_ms_mocked"),
+        "after_elapsed_ms_mocked": after_data.get("total_elapsed_ms_mocked"),
         "before_full_pass_cases": before_data["full_pass_cases"],
         "after_full_pass_cases": after_data["full_pass_cases"],
         "before_mean_quality_score": before_data["mean_quality_score"],
