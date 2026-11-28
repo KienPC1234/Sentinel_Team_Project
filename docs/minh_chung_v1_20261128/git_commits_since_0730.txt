@@ -1,9 +1,0 @@
-commit 1c828c201a715ef17e0584e243e3d96bf4e8d7bc
-Author: Ha Tri Kien <kienhtfhl31796@gmail.com>
-Date:   2026-11-28 08:53:19 +0700
-
-    test(e2e): add end-to-end scan resilience suite and sync image scan actions with guardrail
-
- backend/api/core/tasks.py                          |  14 +-
- backend/api/core/tests/test_e2e_scan_resilience.py | 204 +++++++++++++++++++++
- 2 files changed, 217 insertions(+), 1 deletion(-)

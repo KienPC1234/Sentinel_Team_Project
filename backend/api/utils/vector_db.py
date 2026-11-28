@@ -18,6 +18,7 @@ import warnings
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 
+logging.getLogger("faiss.loader").setLevel(logging.ERROR)
 import faiss
 import numpy as np
 from django.conf import settings
