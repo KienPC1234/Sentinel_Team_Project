@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/icon.png" alt="ShieldCall VN Logo" width="220" />
+</p>
+
 # ShieldCall VN (Sentinel Core)
 
 Multi-modal anti-fraud and cyber threat analysis platform built for Vietnamese digital channels.
@@ -30,22 +34,18 @@ ShieldCall VN evaluates suspicious inputs across eight verification vectors, cro
 
 ## 2. Architecture & Runtime Services
 
-```text
-Browser / API Client / MCP Host
-        |
-        v
-Next.js 16 Frontend (:3000)  --->  Daphne ASGI Backend (:8001)  --->  MariaDB / SQLite + Redis (:6379)
-                                           |
-                    +----------------------+----------------------+
-                    |                                             |
-                    v                                             v
-        Puppeteer SSRF Relay (:3010)                  Celery Worker + Beat
-                                                                  |
-                                      +---------------------------+---------------------------+
-                                      |                           |                           |
-                                      v                           v                           v
-                           Unified AI Service (:5010)   Docker Sandbox (:5005)       Ollama API (:11434)
-                           (VietOCR + BGE-M3 + Whisper) (ClamAV + YARA + Static)  (DeepSeek / Gemma4)
+```mermaid
+flowchart TD
+    Client["Web Browser / REST Client / MCP Host"] --> Frontend["Next.js 16 Frontend (:3000)"]
+    Client --> Web["Daphne ASGI Backend (:8001)"]
+    Frontend --> Web
+    Web --> State["MariaDB or SQLite + Redis (:6379)"]
+    Web --> Puppeteer["Puppeteer SSRF Relay (:3010)"]
+    State --> Celery["Celery Worker + Beat"]
+    Celery --> AIService["Unified AI Service (:5010) - VietOCR, BGE-M3, Whisper"]
+    Celery --> Sandbox["Zero-Trust Docker Sandbox (:5005) - ClamAV, YARA, Static"]
+    Celery --> Ollama["Ollama Inference (:11434) - DeepSeek, Gemma4"]
+    Celery --> Intel["Threat Feeds - NCSC, ScamWave, Tranco, VirusTotal"]
 ```
 
 | Service Name | Default Port | Directory & Entrypoint | Responsibility |
