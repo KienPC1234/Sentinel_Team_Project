@@ -296,9 +296,29 @@ def source_catalog() -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# 2. Chuẩn hoá bằng chứng (điểm #4)
+# 2. Chuẩn hoá bằng chứng & kiểm tra độ tươi nguồn (điểm #4 & Chặng 2)
 # ---------------------------------------------------------------------------
 _SEV_WEIGHT = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0, "INFO": 0}
+STALE_SOURCE_MAX_DAYS = 90
+
+
+def _compute_source_staleness(updated_at: Optional[str]) -> tuple[bool, Optional[int]]:
+    """Đánh giá xem mốc cập nhật của nguồn (`YYYY-MM-DD` hoặc `DD/MM/YYYY`) đã quá hạn chưa."""
+    raw = str(updated_at or "").strip()
+    if not raw:
+        return False, None
+    from datetime import date, datetime
+    parsed: Optional[date] = None
+    for fmt, sample in (("%Y-%m-%d", raw[:10]), ("%d/%m/%Y", raw[:10])):
+        try:
+            parsed = datetime.strptime(sample, fmt).date()
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        return False, None
+    age_days = max(0, (date.today() - parsed).days)
+    return age_days > STALE_SOURCE_MAX_DAYS, age_days
 
 
 def _mk_evidence(
@@ -312,6 +332,8 @@ def _mk_evidence(
     citation: Optional[str] = None,
 ) -> Dict[str, Any]:
     meta = source_meta(source)
+    eff_updated = updated_at or meta.get("updated_at") or SOURCE_CATALOG_UPDATED_AT
+    is_stale, age_days = _compute_source_staleness(eff_updated)
     return {
         "source": source,
         "source_name": meta["name"],
@@ -322,7 +344,9 @@ def _mk_evidence(
         "url": url or meta.get("url"),
         "limits": meta.get("limits"),
         "citation": citation or meta.get("citation") or meta["name"],
-        "updated_at": updated_at or meta.get("updated_at") or SOURCE_CATALOG_UPDATED_AT,
+        "updated_at": eff_updated,
+        "is_stale": is_stale,
+        "age_days": age_days,
     }
 
 
@@ -357,7 +381,12 @@ def build_evidence(result: Dict[str, Any]) -> List[Dict[str, Any]]:
     if isinstance(tk, dict) and tk.get("status") in ("scam", "trusted"):
         rec = tk.get("record") or {}
         try:
-            tn_updated = rec.get("updated_at") or tinnhiem_dataset_stats().get("updated_at") or SOURCE_CATALOG_UPDATED_AT
+            tn_updated = (
+                tk.get("updated_at")
+                or rec.get("updated_at")
+                or tinnhiem_dataset_stats().get("updated_at")
+                or SOURCE_CATALOG_UPDATED_AT
+            )
         except Exception:
             tn_updated = SOURCE_CATALOG_UPDATED_AT
         if tk.get("status") == "scam":
@@ -547,7 +576,9 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
 
     mal_ev = [e for e in evidence if e.get("supports") == "malicious"]
     benign_ev = [e for e in evidence if e.get("supports") == "benign"]
-    high_benign = [e for e in benign_ev if e.get("reliability") == "high"]
+    stale_sources = sorted({e.get("source") for e in evidence if e.get("is_stale") and e.get("source")})
+    # Nguồn tin cậy cao nhưng đã lỗi thời (> STALE_SOURCE_MAX_DAYS) KHÔNG được dùng để khẳng định LIKELY_SAFE
+    high_benign = [e for e in benign_ev if e.get("reliability") == "high" and not e.get("is_stale")]
 
     # Phân loại bằng chứng xác thực độc lập (verified sources):
     # 1. Cơ quan chính thống (tinnhiemmang.vn)
@@ -651,6 +682,11 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
     cautions: List[str] = []
     if has_contradiction and contradiction_details:
         cautions.append(contradiction_details[0])
+    if stale_sources:
+        cautions.append(
+            f"Nguồn đối chiếu ({', '.join(stale_sources)}) đã quá hạn cập nhật (> {STALE_SOURCE_MAX_DAYS} ngày); "
+            "hệ thống không kết luận an toàn dựa trên dữ liệu lỗi thời."
+        )
     if tier == "INSUFFICIENT":
         cautions.append(
             "Hệ thống chưa thu thập đủ bằng chứng nhất quán để kết luận. KHÔNG xem đây là 'an toàn' hay 'chắc chắn lừa đảo', "
@@ -683,6 +719,7 @@ def assess(result: Dict[str, Any], *, kind: str = "generic") -> Dict[str, Any]:
         "requires_verification": (kind in ("account", "phone")) or (tier in ("INSUFFICIENT", "SUSPICIOUS", "LIKELY_SAFE")),
         "has_contradiction": has_contradiction,
         "contradiction_details": contradiction_details,
+        "stale_sources": stale_sources,
         "cautions": cautions,
         "disclaimer": DISCLAIMER,
         "official_channels": _official_channels_for(result),

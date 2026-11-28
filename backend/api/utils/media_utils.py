@@ -72,10 +72,12 @@ def clean_ocr_text(text: str) -> str:
     text = unicodedata.normalize('NFC', text)
     # Fix spacing around punctuation
     text = re.sub(r'\s+([,.:;?!])', r'\1', text)
-    # Fix broken URL schemes like https:/ / or https: //
-    text = re.sub(r'https?\s*:\s*/+\s*', 'https://', text, flags=re.IGNORECASE)
-    # Fix broken domain extensions like .top/ or .com/
-    text = re.sub(r'([a-zA-Z0-9_-]+)\s+(top|com|vn|net|org|xyz|vip)\b', r'\1.\2', text, flags=re.IGNORECASE)
+    # Fix broken URL schemes like https:/ / or http : I/ while preserving http vs https
+    text = re.sub(r'(https?)\s*:\s*(?:/+\s*/?|[Il|]/)', r'\1://', text, flags=re.IGNORECASE)
+    # Fix OCR comma-for-dot or space-after-dot inside URLs & common TLDs
+    _tld_pat = r'(?:com|vn|net|org|top|xyz|vip|info|online|site|club|shop|icu|buzz|click|link|app|dev|io|me|gov|edu|invalid)'
+    text = re.sub(rf'(https?://[a-zA-Z0-9._-]+)[,\s]+\.?({_tld_pat})\b', r'\1.\2', text, flags=re.IGNORECASE)
+    text = re.sub(rf'([a-zA-Z0-9_-]+)(?:\.\s+|\s+)({_tld_pat})\b', r'\1.\2', text, flags=re.IGNORECASE)
     # Fix numbers with spaces before dots: 800 .000 -> 800.000
     text = re.sub(r'(\d+)\s*\.\s*(\d+)', r'\1.\2', text)
     # Fix common Vietnamese OCR character confusion (dấu thanh)
@@ -90,6 +92,27 @@ def clean_ocr_text(text: str) -> str:
     text = re.sub(r'[ \t]+', ' ', text)
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
+
+def is_garbled_ocr_text(text: str) -> bool:
+    """Return True if OCR text is empty or symbol-dominated noise without readable words/entities."""
+    cleaned = (text or '').strip()
+    cleaned = re.sub(r'(?m)^---+\s*$', '', cleaned).strip()
+    if not cleaned:
+        return True
+    if re.search(r'https?://[^\s<>"]{4,}|(?:\+?84|0)\d{8,10}|\b\d{8,19}\b', cleaned, flags=re.IGNORECASE):
+        return False
+    non_space = re.sub(r'\s+', '', cleaned)
+    if not non_space:
+        return True
+    alnum_chars = sum(1 for ch in non_space if ch.isalnum())
+    symbol_ratio = 1.0 - (alnum_chars / len(non_space))
+    words = re.findall(r'[^\W\d_]{2,}', cleaned, flags=re.UNICODE)
+    if symbol_ratio > 0.45 and len(words) < 3:
+        return True
+    if len(words) == 0 and alnum_chars < 4:
+        return True
+    return False
 
 
 def extract_ocr_text(image_file) -> str:

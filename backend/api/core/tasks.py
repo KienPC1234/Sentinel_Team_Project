@@ -957,41 +957,57 @@ def perform_image_scan_task(self, scan_event_id, images_data):
                     logger.warning(f"Vision OSINT enrichment failed for event {scan_event_id}: {osint_err}")
             send_progress("Đã hoàn tất phân tích hình ảnh và đối chiếu nguồn công khai.", step="analyzing")
         elif full_ocr or all_qr_contents:
-            # Build analysis text including QR contents
-            analysis_text = full_ocr
-            if all_qr_contents:
-                analysis_text += "\n[QR CODE CONTENTS]:\n" + "\n".join(all_qr_contents) + "\n"
-            
-            send_progress("Đang phân tích nội dung bằng Trí tuệ nhân tạo (AI)...", step="analyzing")
-            
-            # Retry mechanism for AI analysis
-            ai_res = None
-            consent_pii = _has_external_pii_consent(scan_event)
-            for attempt in range(3):
-                try:
-                    ai_res = analyze_text_for_scam(
-                        analysis_text,
-                        use_web_search=True,
-                        external_consent=consent_pii,
-                    )
-                    if ai_res and (ai_res.get('risk_score') is not None):
-                        break
-                except Exception:
-                    logger.warning(f"AI analysis attempt {attempt+1} failed for event {scan_event_id}")
-            
-            if not ai_res:
+            from api.utils.media_utils import clean_ocr_text, is_garbled_ocr_text
+            cleaned_full_ocr = clean_ocr_text(full_ocr)
+            if cleaned_full_ocr:
+                full_ocr = cleaned_full_ocr
+                for repaired_url in re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', cleaned_full_ocr):
+                    all_urls.add(repaired_url)
+
+            if not all_qr_contents and is_garbled_ocr_text(full_ocr):
+                send_progress("Nội dung chữ trong ảnh quá mờ hoặc nhiễu ký tự.", step="analyzing")
                 ai_res = {
                     'risk_score': 0,
                     'risk_level': 'YELLOW',
                     'insufficient_input': True,
-                    'explanation': 'Lỗi phân tích AI sau 3 lần thử nên chưa đủ căn cứ kết luận ảnh này.',
+                    'explanation': 'Nội dung chữ trích xuất từ ảnh bị mờ hoặc nhiễu ký tự nên chưa đủ dữ liệu để phân tích chính xác.',
                 }
+            else:
+                # Build analysis text including QR contents
+                analysis_text = full_ocr
+                if all_qr_contents:
+                    analysis_text += "\n[QR CODE CONTENTS]:\n" + "\n".join(all_qr_contents) + "\n"
 
-            ai_notice = ai_res.get('ai_notice')
-            if ai_notice:
-                send_progress(ai_notice, step="ai_retry_notice")
-            
-            send_progress("AI đã hoàn tất phân tích logic.", step="analyzing")
+                send_progress("Đang phân tích nội dung bằng Trí tuệ nhân tạo (AI)...", step="analyzing")
+
+                # Retry mechanism for AI analysis
+                ai_res = None
+                consent_pii = _has_external_pii_consent(scan_event)
+                for attempt in range(3):
+                    try:
+                        ai_res = analyze_text_for_scam(
+                            analysis_text,
+                            use_web_search=True,
+                            external_consent=consent_pii,
+                        )
+                        if ai_res and (ai_res.get('risk_score') is not None):
+                            break
+                    except Exception:
+                        logger.warning(f"AI analysis attempt {attempt+1} failed for event {scan_event_id}")
+
+                if not ai_res:
+                    ai_res = {
+                        'risk_score': 0,
+                        'risk_level': 'YELLOW',
+                        'insufficient_input': True,
+                        'explanation': 'Lỗi phân tích AI sau 3 lần thử nên chưa đủ căn cứ kết luận ảnh này.',
+                    }
+
+                ai_notice = ai_res.get('ai_notice')
+                if ai_notice:
+                    send_progress(ai_notice, step="ai_retry_notice")
+
+                send_progress("AI đã hoàn tất phân tích logic.", step="analyzing")
         else:
             send_progress("Không tìm thấy ký tự khả dụng trong ảnh.", step="analyzing")
             expl = (
@@ -1649,6 +1665,8 @@ def perform_web_scrapping_task(self, scan_event_id, url):
                     ai_res = future.result(timeout=5)
                     break
                 except FutureTimeout:
+                    if future.done():
+                        raise
                     elapsed = time.time() - start_time
                     if elapsed - last_keepalive >= keepalive_every_seconds:
                         send_progress("AI đang phân tích...", step="ping")
@@ -2150,10 +2168,11 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         # 1. OCR Processing
         combined_ocr_text = []
         annotated_images = []
+        msg_ocr_errors = 0
 
         if images_b64:
             send_progress(f"Đang đọc nội dung chữ từ {len(images_b64)} ảnh...", step="ocr")
-            from api.utils.media_utils import extract_ocr_with_boxes
+            from api.utils.media_utils import clean_ocr_text, extract_ocr_with_boxes, is_garbled_ocr_text
 
             for idx, item in enumerate(images_b64):
                 send_progress(f"Đang đọc chữ từ ảnh {idx+1}/{len(images_b64)}...", step="ocr")
@@ -2178,20 +2197,59 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
 
                     ocr_result = extract_ocr_with_boxes(img_file)
                     if ocr_result.get("text"):
-                        combined_ocr_text.append(ocr_result["text"])
+                        cleaned_chunk = clean_ocr_text(ocr_result["text"])
+                        if cleaned_chunk:
+                            combined_ocr_text.append(cleaned_chunk)
                         send_progress(f"Ảnh {idx+1}: Đã đọc {len(ocr_result['text'])} ký tự", step="ocr_ok")
                     else:
                         send_progress(f"Ảnh {idx+1}: Không thấy chữ rõ trong ảnh", step="ocr_ok")
                     if ocr_result.get("annotated_image_b64"):
                         annotated_images.append(ocr_result["annotated_image_b64"])
                 except Exception as e:
+                    msg_ocr_errors += 1
                     logger.error(f"[MsgScan] OCR Error for image {idx}: {e}")
                     send_progress(f"Ảnh {idx+1}: Không đọc được nội dung - {str(e)[:50]}", step="ocr_warning")
 
         # 2. Combine text & normalize OCR-wrapped URLs cleanly
-        full_text = message_text or ''
+        from api.utils.media_utils import clean_ocr_text as _clean_ocr_fn, is_garbled_ocr_text as _is_garbled_fn
+        raw_msg_text = (message_text or '').strip()
+        full_text = raw_msg_text
         if combined_ocr_text:
             full_text = (full_text + '\n' + '\n'.join(combined_ocr_text)).strip()
+
+        ocr_only_unusable = bool(images_b64) and not raw_msg_text and (not full_text or _is_garbled_fn(full_text))
+        if ocr_only_unusable:
+            from api.core.views.scan_views import _actions_for_guardrail
+            expl_ocr = (
+                'Quá trình nhận dạng chữ trên ảnh gặp lỗi nên chưa đủ dữ liệu để đánh giá.'
+                if msg_ocr_errors > 0 and not full_text
+                else 'Nội dung chữ trích xuất từ ảnh quá mờ hoặc nhiễu ký tự nên chưa đủ cơ sở phân tích.'
+            )
+            result = {
+                'risk_score': 0,
+                'risk_level': 'YELLOW',
+                'insufficient_input': True,
+                'scam_type': 'other',
+                'patterns_found': [],
+                'explanation': expl_ocr,
+                'ai_insight': '',
+                'ai_available': False,
+                'ocr_text': '\n'.join(combined_ocr_text) if combined_ocr_text else '',
+                'annotated_images': annotated_images,
+                'annotated_image': annotated_images[0] if annotated_images else '',
+            }
+            result = _apply_task_privacy_and_guardrail(scan_event, result, 'message')
+            result['actions'] = _actions_for_guardrail(result.get('guardrail', {}), [])
+            synced_level = _resolve_synced_risk_level(result, 'YELLOW')
+            scan_event.result_json = {
+                k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')
+            }
+            scan_event.risk_score = 0
+            scan_event.risk_level = synced_level
+            scan_event.status = ScanStatus.COMPLETED
+            scan_event.save()
+            send_progress("Hoàn tất phân tích tin nhắn!", step="completed", data=result)
+            return result
 
         if not full_text:
             send_progress("Không có nội dung để phân tích.", step="error")
@@ -2200,10 +2258,11 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             scan_event.save()
             return
 
-        analysis_text = re.sub(r'(https?)\s*:\s*(?:/\s*/|[Il|]/)', r'\1://', full_text, flags=re.IGNORECASE)
+        analysis_text = _clean_ocr_fn(full_text) if images_b64 else full_text
+        analysis_text = re.sub(r'(https?)\s*:\s*(?:/\s*/|[Il|]/)', r'\1://', analysis_text, flags=re.IGNORECASE)
         analysis_text = re.sub(r'([a-zA-Z0-9-])-\s*\n\s*([a-zA-Z0-9-]+\.[a-z]{2,})', r'\1-\2', analysis_text)
 
-        # 3. Pattern Analysis (shared scam_rules) + Domain check
+        # 3. Pattern Analysis (shared scam_rules) + Domain check (isolated per tool)
         send_progress("Đang rà soát dấu hiệu bất thường và liên kết...", step="pattern_analysis")
 
         from api.utils.scam_rules import heuristic_score, match_patterns
@@ -2222,25 +2281,34 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                 domain = normalize_domain(url)
                 if domain:
                     send_progress(f"Đang kiểm tra liên kết: {domain}...", step="domain_check")
-                    tn_info = tn_lookup(domain)
-                    if tn_info and tn_info.get('status') == 'scam':
-                        max_domain_score = max(max_domain_score, 90)
-                        has_verified_threat = True
-                        domain_risks.append(f"Tên miền {domain} nằm trong danh sách lừa đảo NCSC")
-                    sw_info = lookup_scamwave(domain, include_articles=False, refresh_if_empty=False)
-                    if sw_info and sw_info.get('matched'):
-                        max_domain_score = max(max_domain_score, 55)
-                        domain_risks.append(f"Tên miền {domain} có cảnh báo từ cộng đồng")
-                    vt_res = vt.scan_url(url)
-                    if vt_res:
-                        score = vt_res.get('risk_score', 0)
-                        max_domain_score = max(max_domain_score, score)
-                        vt_mal = int(vt_res.get('malicious', 0) or 0)
-                        vt_sus = int(vt_res.get('suspicious', 0) or 0)
-                        if vt_mal >= 2 or (vt_mal >= 1 and vt_sus >= 2):
+                    try:
+                        tn_info = tn_lookup(domain)
+                        if tn_info and tn_info.get('status') == 'scam':
+                            max_domain_score = max(max_domain_score, 90)
                             has_verified_threat = True
-                        if score > 0:
-                            domain_risks.append(f"Tên miền {domain} có cảnh báo bảo mật ({score}/100)")
+                            domain_risks.append(f"Tên miền {domain} nằm trong danh sách lừa đảo NCSC")
+                    except Exception as tn_err:
+                        logger.warning(f"[MsgScan] NCSC lookup error for {domain}: {tn_err}")
+                    try:
+                        sw_info = lookup_scamwave(domain, include_articles=False, refresh_if_empty=False)
+                        if sw_info and sw_info.get('matched'):
+                            max_domain_score = max(max_domain_score, 55)
+                            domain_risks.append(f"Tên miền {domain} có cảnh báo từ cộng đồng")
+                    except Exception as sw_err:
+                        logger.warning(f"[MsgScan] ScamWave lookup error for {domain}: {sw_err}")
+                    try:
+                        vt_res = vt.scan_url(url)
+                        if vt_res:
+                            score = vt_res.get('risk_score', 0)
+                            max_domain_score = max(max_domain_score, score)
+                            vt_mal = int(vt_res.get('malicious', 0) or 0)
+                            vt_sus = int(vt_res.get('suspicious', 0) or 0)
+                            if vt_mal >= 2 or (vt_mal >= 1 and vt_sus >= 2):
+                                has_verified_threat = True
+                            if score > 0:
+                                domain_risks.append(f"Tên miền {domain} có cảnh báo bảo mật ({score}/100)")
+                    except Exception as vt_err:
+                        logger.warning(f"[MsgScan] VT scan error for {url}: {vt_err}")
         finally:
             vt.close()
 
@@ -2309,6 +2377,8 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
                     ai_result_data = future.result(timeout=3)
                     break
                 except FutureTimeout:
+                    if future.done():
+                        raise
                     elapsed = time.time() - start_time
                     if elapsed - last_keepalive >= keepalive_every_seconds:
                         send_progress("AI đang phân tích...", step="ping")
@@ -2377,12 +2447,24 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         elif domain_risks:
             scam_type = 'phishing'
 
+        ai_advice = ''
+        ai_prevention = []
         if ai_available and ai_explanation:
             explanation = ai_explanation
+            if isinstance(ai_result_data, dict):
+                ai_advice = str(ai_result_data.get('advice') or '').strip()
+                raw_prev = ai_result_data.get('prevention_measures')
+                if isinstance(raw_prev, list):
+                    ai_prevention = [str(x).strip() for x in raw_prev if str(x).strip()]
         elif patterns_found or domain_risks:
             explanation = f'Phát hiện {len(patterns_found + domain_risks)} dấu hiệu bất thường trong nội dung.'
+        elif not ai_available:
+            explanation = (
+                'Hệ thống phân tích ngữ nghĩa AI tạm thời gián đoạn và bộ lọc mẫu chưa ghi nhận dấu hiệu lừa đảo đã biết; '
+                'chưa đủ cơ sở để kết luận nội dung này.'
+            )
         else:
-            explanation = 'Không phát hiện dấu hiệu lừa đảo rõ ràng.'
+            explanation = 'Chưa ghi nhận dấu hiệu lừa đảo rõ ràng từ các nguồn đối chiếu hiện có.'
 
         result = {
             'risk_score': final_score,
@@ -2391,6 +2473,8 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
             'patterns_found': list(set(patterns_found + domain_risks)),
             'explanation': explanation,
             'ai_insight': ai_explanation,
+            'advice': ai_advice,
+            'prevention_measures': ai_prevention,
             'ai_available': ai_available,
             'osint_entities': _extract_osint_entities(analysis_text),
             'ocr_text': '\n'.join(combined_ocr_text) if combined_ocr_text else '',
@@ -2405,6 +2489,11 @@ def perform_message_scan_task(self, scan_event_id: int, message_text: str, image
         # Gắn guardrail + che PII NGAY trên `result` (để payload WS cũng đồng nhất), rồi lưu DB
         # bỏ ảnh annotate cho nhẹ JSON field.
         result = _apply_task_privacy_and_guardrail(scan_event, result, 'message')
+        try:
+            from api.core.views.scan_views import _actions_for_guardrail
+            result['actions'] = _actions_for_guardrail(result.get('guardrail', {}), [])
+        except Exception:
+            pass
         synced_level = _resolve_synced_risk_level(result, level)
         scan_event.result_json = {
             k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')

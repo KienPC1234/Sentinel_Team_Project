@@ -1027,22 +1027,28 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
         for url in found_urls:
             domain = normalize_domain(url)
             if domain:
-                tn_info = tn_lookup(domain)
-                if tn_info and tn_info.get('status') == 'scam':
-                    max_domain_score = max(max_domain_score, 90)
-                    has_verified_threat = True
-                    domain_risks.append(f"Domain {domain} nằm trong danh sách lừa đảo NCSC")
-                vt_res = vt.scan_url(url)
-                if vt_res:
-                    score = vt_res.get('risk_score', 0)
-                    max_domain_score = max(max_domain_score, score)
-                    vt_malicious = int(vt_res.get('malicious', 0) or 0)
-                    vt_suspicious = int(vt_res.get('suspicious', 0) or 0)
-                    # Audit P1: Đồng thuận xác minh đòi hỏi tối thiểu 2 engine độc lập (hoặc 1 malicious + 2 suspicious)
-                    if vt_malicious >= 2 or (vt_malicious >= 1 and vt_suspicious >= 2):
+                try:
+                    tn_info = tn_lookup(domain)
+                    if tn_info and tn_info.get('status') == 'scam':
+                        max_domain_score = max(max_domain_score, 90)
                         has_verified_threat = True
-                    if score > 0:
-                        domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
+                        domain_risks.append(f"Domain {domain} nằm trong danh sách lừa đảo NCSC")
+                except Exception as tn_err:
+                    logger.warning(f"_analyze_message_text: NCSC lookup failed for {domain}: {tn_err}")
+                try:
+                    vt_res = vt.scan_url(url)
+                    if vt_res:
+                        score = vt_res.get('risk_score', 0)
+                        max_domain_score = max(max_domain_score, score)
+                        vt_malicious = int(vt_res.get('malicious', 0) or 0)
+                        vt_suspicious = int(vt_res.get('suspicious', 0) or 0)
+                        # Audit P1: Đồng thuận xác minh đòi hỏi tối thiểu 2 engine độc lập (hoặc 1 malicious + 2 suspicious)
+                        if vt_malicious >= 2 or (vt_malicious >= 1 and vt_suspicious >= 2):
+                            has_verified_threat = True
+                        if score > 0:
+                            domain_risks.append(f"Domain {domain} rủi ro cao ({score}/100)")
+                except Exception as vt_err:
+                    logger.warning(f"_analyze_message_text: VT scan failed for {url}: {vt_err}")
     finally:
         vt.close()
 
@@ -1136,8 +1142,13 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
             ai_prevention = [str(item).strip() for item in raw_prev if str(item).strip()]
     elif effective_patterns or domain_risks:
         explanation = f'Phát hiện {len(effective_patterns + domain_risks)} dấu hiệu đáng ngờ từ nội dung tin nhắn và liên kết đính kèm.'
+    elif not ai_available:
+        explanation = (
+            'Hệ thống phân tích ngữ nghĩa AI tạm thời gián đoạn và bộ lọc mẫu chưa ghi nhận dấu hiệu lừa đảo đã biết; '
+            'chưa đủ cơ sở để kết luận nội dung này.'
+        )
     else:
-        explanation = 'Không phát hiện dấu hiệu lừa đảo rõ ràng.'
+        explanation = 'Chưa ghi nhận dấu hiệu lừa đảo rõ ràng từ các nguồn đối chiếu hiện có.'
 
     result = {
         'risk_score': final_score,
