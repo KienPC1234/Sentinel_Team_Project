@@ -814,6 +814,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         all_urls = set()
         all_emails = set()
         all_bank_accounts = set()
+        ocr_errors = 0
 
         for i, item in enumerate(images_data):
             try:
@@ -890,6 +891,7 @@ def perform_image_scan_task(self, scan_event_id, images_data):
                             all_bank_accounts.add(acc)
                 
             except Exception as e:
+                ocr_errors += 1
                 logger.error(f"OCR Error in task for event {scan_event_id}: {e}")
                 send_progress(f"Cảnh báo: Lỗi xử lý ảnh {i+1}.", step="ocr_warning")
 
@@ -992,11 +994,16 @@ def perform_image_scan_task(self, scan_event_id, images_data):
             send_progress("AI đã hoàn tất phân tích logic.", step="analyzing")
         else:
             send_progress("Không tìm thấy ký tự khả dụng trong ảnh.", step="analyzing")
+            expl = (
+                'Quá trình nhận dạng chữ trên ảnh gặp lỗi nên chưa đủ dữ liệu để đánh giá.'
+                if ocr_errors > 0
+                else 'Không tìm thấy chữ hoặc mã QR trong ảnh nên chưa đủ dữ liệu phân tích.'
+            )
             ai_res = {
                 'risk_score': 0,
                 'risk_level': 'YELLOW',
                 'insufficient_input': True,
-                'explanation': 'Không tìm thấy chữ hoặc mã QR trong ảnh nên chưa đủ dữ liệu phân tích.',
+                'explanation': expl,
             }
 
         # Determine level correctly (vision trực tiếp và OCR-AI lấy verdict nặng hơn)
@@ -1047,6 +1054,11 @@ def perform_image_scan_task(self, scan_event_id, images_data):
         # Gắn guardrail + che PII NGAY trên `result` (để payload WS cũng đồng nhất), rồi lưu DB
         # bỏ ảnh annotate cho nhẹ JSON field.
         result = _apply_task_privacy_and_guardrail(scan_event, result, 'qr')
+        try:
+            from api.core.views.scan_views import _actions_for_guardrail
+            result['actions'] = _actions_for_guardrail(result.get('guardrail', {}), result.get('actions') or [])
+        except Exception:
+            pass
         synced_level = _resolve_synced_risk_level(result, level)
         scan_event.result_json = {
             k: v for k, v in result.items() if k not in ('annotated_images', 'annotated_image')
