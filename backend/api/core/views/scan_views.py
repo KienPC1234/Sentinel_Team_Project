@@ -1004,7 +1004,7 @@ def _analyze_message_text(text: str, *, external_consent: bool = False) -> dict:
     if clean_text:
         import copy
         consent_flag = 1 if external_consent else 0
-        cache_key = f"msg_analysis:v2:{consent_flag}:{hashlib.sha256(clean_text.encode('utf-8')).hexdigest()}"
+        cache_key = f"msg_analysis:v3:{consent_flag}:{hashlib.sha256(clean_text.encode('utf-8')).hexdigest()}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return copy.deepcopy(cached_result)
