@@ -431,6 +431,7 @@ WHISPER_MODEL_SIZE = os.getenv('WHISPER_MODEL_SIZE', 'large-v3-turbo')
 WHISPER_FALLBACK_MODEL_SIZE = os.getenv('WHISPER_FALLBACK_MODEL_SIZE', 'small')
 WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'auto')  # auto | vi | en | ...
 WHISPER_INITIAL_PROMPT = os.getenv('WHISPER_INITIAL_PROMPT', 'Đây là cuộc hội thoại tiếng Việt.')
+AI_EMBED_MODEL = os.getenv('AI_EMBED_MODEL', 'BAAI/bge-m3')
 VECTOR_DB_USE_GPU = os.getenv('VECTOR_DB_USE_GPU', 'False').lower() in ('true', '1', 'yes')
 
 # Optional: local Node Puppeteer host used by web-scan fallback
