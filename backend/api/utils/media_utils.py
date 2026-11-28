@@ -48,9 +48,12 @@ def preprocess_image_for_ocr(image_bytes: bytes) -> bytes:
 
         lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
         l_channel, a_channel, b_channel = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=1.6, tileGridSize=(8, 8))
         cl = clahe.apply(l_channel)
-        enhanced_lab = cv2.merge((cl, a_channel, b_channel))
+        # Gentle unsharp mask on luminance channel to recover blurred chat text
+        gaussian_l = cv2.GaussianBlur(cl, (0, 0), 1.2)
+        cl_sharp = cv2.addWeighted(cl, 1.45, gaussian_l, -0.45, 0)
+        enhanced_lab = cv2.merge((cl_sharp, a_channel, b_channel))
         enhanced_bgr = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
 
         is_success, buffer = cv2.imencode('.png', enhanced_bgr)
@@ -72,10 +75,21 @@ def clean_ocr_text(text: str) -> str:
     text = unicodedata.normalize('NFC', text)
     # Fix spacing around punctuation
     text = re.sub(r'\s+([,.:;?!])', r'\1', text)
-    # Fix broken URL schemes like https:/ / or http : I/ while preserving http vs https
-    text = re.sub(r'(https?)\s*:\s*(?:/+\s*/?|[Il|]/)', r'\1://', text, flags=re.IGNORECASE)
+    # Fix broken URL schemes like https:/ /, http : I/, or blurred httpsi/ll while preserving http vs https
+    text = re.sub(r'(https?)\s*(?::|[i1l|;])\s*(?:/+\s*[Il|/]*|[Il|]+/+)', r'\1://', text, flags=re.IGNORECASE)
     # Fix OCR comma-for-dot or space-after-dot inside URLs & common TLDs
     _tld_pat = r'(?:com|vn|net|org|top|xyz|vip|info|online|site|club|shop|icu|buzz|click|link|app|dev|io|me|gov|edu|invalid)'
+    # Rejoin URLs wrapped across a single chat-bubble line break before domain/TLD continuation
+    text = re.sub(
+        rf'(https?://[a-zA-Z0-9._-]+)\s*\n\s*([a-zA-Z0-9._-]+\.{_tld_pat}\b[^\s]*)',
+        lambda m: (
+            f"{m.group(1)}{m.group(2)}"
+            if m.group(1).endswith(('-', '.'))
+            else f"{m.group(1)}-{m.group(2)}"
+        ),
+        text,
+        flags=re.IGNORECASE,
+    )
     text = re.sub(rf'(https?://[a-zA-Z0-9._-]+)[,\s]+\.?({_tld_pat})\b', r'\1.\2', text, flags=re.IGNORECASE)
     text = re.sub(rf'([a-zA-Z0-9_-]+)(?:\.\s+|\s+)({_tld_pat})\b', r'\1.\2', text, flags=re.IGNORECASE)
     # Fix numbers with spaces before dots: 800 .000 -> 800.000
